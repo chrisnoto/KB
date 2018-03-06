@@ -1,0 +1,322 @@
+#######配置k8s客戶端訪問k8s集群#######
+拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
+特別注意： 客戶端如有配置http proxy會導致無法訪問機器。
+#######k8s使用cinder做存儲後端#####
+这需要两个前提：
+1. OpenStack作为Kubernetes Provider，因为需要从Nova查询Pod所在的机器
+2. 官方文档中所说的那些要求
+###### k8s的各種port #######
+<cluster ip>:port 是提供给集群内部客户访问service的入口
+<nodeIP>:nodePort 是提供给集群外部客户访问service的入口
+targetPort很好理解，targetPort是pod上的端口，从port和nodePort上到来的数据最终经过kube-proxy流入到后端pod的targetPort上进入容器。
+######綁定機器運行pod######
+A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
+ If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes and set nodeSelector in the pod to look for such label.
+
+Attach the label to each of your special use nodes:
+
+kubectl label nodes name_of_your_node dedicated=master
+Kubernetes 1.6 and above syntax
+Add the nodeSelector to your pod:
+
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        k8s-app: nginx-ingress-lb
+        name: nginx-ingress-lb
+      annotations:
+    spec:
+      nodeSelector:
+        dedicated: master
+      tolerations:
+        key: dedicated
+        operator: Equal
+        value: master
+        effect: NoSchedule
+    […]
+
+ ###############     
+下面生成客户端私钥和证书：
+
+# openssl genrsa -out dashboard.key 2048
+# chmod 600 dashboard.key
+# openssl req -new -key dashboard.key -subj "/CN=10.67.37.234" -out dashboard.csr
+# openssl x509 -req -in dashboard.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -CAcreateserial -out dashboard.crt -days 365
+# openssl verify -CAfile /etc/kubernetes/pki/ca.crt dashboard.crt
+
+############murano image udpate metadata ##########
+nova image-meta 2c74763a-22f2-41a8-a205-7d9727b9bb6a set murano_image_info='{"title": "ubuntu14.04-x64-kubernetes", "type": "linux.kubernetes"}'
+
+###############kubernetes install on centos7##################
+1 repo
+現在使用的是centos7 extra repo
+
+2 yum install
+yum install docker etcd kubernetes
+for SERVICE in docker etcd kube-apiserver kube-controller-manager kube-scheduler kube-proxy kubelet; do systemctl enable $SERVICE;done
+for SERVICE in docker etcd kube-apiserver kube-controller-manager kube-scheduler kube-proxy kubelet; do systemctl restart $SERVICE;done
+yum install cockpit cockpit-kubernetes
+
+3 remove ServiceAccount    
+###解決如下錯誤：
+###Error from server: error when creating "nginx-pod.yaml": Pod "nginx" is forbidden:
+###no API token found for service account default/default,
+###retry after the token is automatically created and added to the service account
+vi /etc/kubernetes/apiserver
+# default admission control policies
+KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota"
+
+4 手動添加pod-infra-container-image: registry.access.redhat.com/rhel7/pod-infrastructure:latest
+###这个是一个基础容器，每一个Pod启动的时候都会启动一个这样的容器。
+如果你的本地没有这个镜像，kubelet会连接外网把这个镜像下载下来
+###registry server上操作
+docker pull registry.access.redhat.com/rhel7/pod-infrastructure:latest
+docker save -o pod-infrastructure.tar registry.access.redhat.com/rhel7/pod-infrastructure
+gzip pod-infrastructure.tar
+scp pod-infrastructure.tar.gz 10.67.44.110:~
+###kub 上導入image
+docker load -i pod-infrastructure.tar.gz
+
+5 指定insecure-registry 
+###訪問私有registry server
+vi /etc/sysconfig/docker
+INSECURE_REGISTRY='--insecure-registry 10.67.51.161:5000'
+
+6 創建kube secret key
+###
+kubectl create secret docker-registry registrykey-51-161 --docker-server=10.67.51.161:5000 --docker-username=root --docker-password=Foxconn123 --docker-email=team@domain.com
+
+########刪除kub的deployment###
+kubectl delete deployments mynginx
+#################################kubernets 使用###########################################
+##########使用rc-nginx.yml創建rc#####
+###定義rc
+[root@kub ~]# cat rc-nginx.yml
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: rc-nginx-2
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx-2
+    spec:
+      containers:
+      - name: nginx-2
+        image: 10.67.51.161:5000/chensen/nginx:1.11
+        ports:
+        - containerPort: 80
+      imagePullSecrets:
+      - name: registrykey-51-161
+###使用rc-nginx.yml創建rc,pod
+kubectl create -f rc-nginx.yml
+###使用rc-nginx.yml銷毀rc,pod
+kubectl delete -f rc-nginx.yml
+
+##########使用svc-nginx.yml為rc-nginx創建服務##########
+###定義
+[root@kub ~]# cat svc-nginx.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginxsvc
+spec:
+  ports:
+  - port: 8081
+    targetPort: 80
+  selector:
+    app: nginx-2
+###創建service
+kubectl create -f svc-nginx.yml
+###get svc
+[root@kub ~]# kubectl get svc
+NAME         CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+kubernetes   10.254.0.1     <none>        443/TCP    4d
+nginxsvc     10.254.14.10   <none>        8081/TCP   10s
+---------------kub describe----------------------------------
+[root@kub ~]# kubectl describe svc nginxsvc
+Name:                   nginxsvc
+Namespace:              default
+Labels:                 <none>
+Selector:               app=nginx-2
+Type:                   ClusterIP
+IP:                     10.254.14.10
+Port:                   <unset> 8081/TCP
+Endpoints:              172.17.0.3:80,172.17.0.4:80
+Session Affinity:       None
+
+--------------------curl 測試------------------------------
+[root@kub ~]# curl 10.254.14.10:8081
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+--------------------curl 測試------------------------------
+[root@kub ~]# curl 127.0.0.1:8081
+curl: (7) Failed connect to 127.0.0.1:8081; Connection refused
+
+##############etcdctl command#############
+etcdctl ls /registry/services/specs/default
+etcdctl get /registry/services/specs/default/nginxsvc
+
+-----------------Docker & K8s 存儲----------------------
+named volume
+volume container
+ceph rbd & ceph fuse
+LVM
+UFS
+
+-----------------Docker & K8s 網絡----------------------
+在Docker 1.9 出世前，跨多主机的容器通信方案大致有如下三种：
+
+1、端口映射
+
+将宿主机A的端口P映射到容器C的网络空间监听的端口P’上，仅提供四层及以上应用和服务使用。
+这样其他主机上的容器通过访问宿主机A的端口P实 现与容器C的通信。显然这个方案的应用场景很有局限。
+
+2、将物理网卡桥接到虚拟网桥，使得容器与宿主机配置在同一网段下
+
+在各个宿主机上都建立一个新虚拟网桥设备br0，将各自物理网卡eth0桥接br0上，
+eth0的IP地址赋给br0；同时修改Docker daemon的DOCKER_OPTS，设置-b=br0（替代docker0），
+并限制Container IP地址的分配范围为同物理段地址（–fixed-cidr）。
+重启各个主机的Docker Daemon后，处于与宿主机在同一网段的Docker容器就可以实现跨主机访问了。
+这个方案同样存在局限和扩展性差的问题：比如需将物理网段的地址划分 成小块，分布到各个主机上，
+防止IP冲突；子网划分依赖物理交换机设置；Docker容器的主机地址空间大小依赖物理网络划分等。
+
+3、使用第三方的基于SDN的方案：比如 使用Open vSwitch – OVS 或CoreOS的Flannel 等。
+
+关于这些第三方方案的细节大家可以参考O’Reilly的《Docker Cookbook》 一书。
+
+Docker在1.9版本中给大家带来了一种原生的跨多主机容器网络的解决方案，
+该方案的实质是采用了基于VXLAN 的覆盖网技术。方案的使用有一些前提条件：
+
+1、Linux Kernel版本 >= 3.16；
+2、需要一个外部Key-value Store（官方例子中使用的是consul）；
+3、各物理主机上的Docker Daemon需要一些特定的启动参数；
+4、物理主机允许某些特定TCP/UDP端口可用。
+
+本文将带着大家一起利用Docker 1.9.1创建一个跨多主机容器网络，并分析基于该网络的容器间通信原理。
+
+VIP PaaS在接近两年时间里，基于kubernetes主要经历四次网络方案的变迁：
+
+1. kubernetes + flannel
+
+2. 基于Docker libnetwork的网络定制
+
+3. kubernetes + contiv + kube-haproxy
+
+4. 应用容器IP固定
+在k8s + flannel的模型下，容器网络是封闭子网，可以提供平台内部应用之间基于4层和7层的调用，
+同时对外部提供应用基于域名（工作在七层）的直接访问，但无法满足用户在平台外部需要直接使用IP访问的需求。
+在flannel网络稳定使用后，开始研究network plugin以使应用服务实例以public IP 方式供用户直接使用。
+当时docker的版本为1.8, 本身还不支持网络插件.同时 kubernetes本身提供一套基于CNI的网络插件, 但本身有bug
+Docker 1.10版本支持指定IP启动容器，并且由于部分应用对实例IP固定有需求，我们开始着手容器IP固定方案的设计与开发
+
+
+openssl genrsa -out ca-key.pem 2048
+openssl req -x509 -new  -nodes -key ca-key.pem -days 10000 -out ca.pem -subj "/CN=kube-ca"
+openssl genrsa -out admin-key.pem 2048
+openssl req -new -key admin-key.pem -out admin.csr -subj "/CN=kube-admin"
+openssl x509 -req -in admin.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -out admin.pem -days 365
+kubectl config set-cluster default-cluster --server=http://10.67.37.233:8080 --certificate-authority=/root/ca.pem
+kubectl config set-credentials default-admin --certificate-authority=/root/ca.pem --client-key=/root/admin-key.pem --client-certificate=/root/admin.pem
+kubectl config set-context default-system --cluster=default-cluster --user=default-admin
+kubectl config use-context default-system
+kubectl cluster-info
+
+
+##############
+kubectl run my-nginx --image=nginx --replicas=1 --port=80
+kubectl expose deployment my-nginx --target-port=80 --type=NodePort
+kubectl describe service my-nginx
+kubectl scale deployment my-nginx --replicas=2
+#####################2018-1-25
+使用私有registry:
+1 需要在每個node上手動docker load pause-amd64:3.0
+2 ###訪問私有registry server
+vi /etc/default/docker
+INSECURE_REGISTRY='--insecure-registry 10.67.51.161:5000'
+重啟docker生效
+#####################################################################################
+在K8S运行的服务，从简单到复杂可以分成三类：无状态服务、普通有状态服务和有状态集群服务。
+下面分别来看K8S是如何运行这三类服务的。
+
+- 无状态服务，K8S使用RC（或更新的Replica Set）来保证一个服务的实例数量，如果说某个Pod实例由于某种原因Crash了，
+RC会立刻用这个Pod的模版新启一个Pod来替代它，由于是无状态的服务，新启的Pod与原来健康状态下的Pod一模一样。
+在Pod被重建后它的IP地址可能发生变化，为了对外提供一个稳定的访问接口，K8S引入了Service的概念。一个Service后面可以挂多个Pod，实现服务的高可用。
+- 普通有状态服务，和无状态服务相比，它多了状态保存的需求。Kubernetes提供了以Volume和Persistent Volume为基础的存储系统，可以实现服务的状态保存。
+- 有状态集群服务，与普通有状态服务相比，它多了集群管理的需求。K8S为此开发了一套以Pet Set为核心的全新特性，方便了有状态集群服务在K8S上的部署和管理。
+具体来说是通过Init Container来做集群的初始化工作，用 Headless Service 来维持集群成员的稳定关系，用动态存储供给来方便集群扩容，最后用Pet Set来综合管理整个集群。
+要运行有状态集群服务要解决的问题有两个,一个是状态保存，另一个是集群管理。
+ 我们先来看如何解决第一个问题：状态保存。Kubernetes 有一套以Volume插件为基础的存储系统，通过这套存储系统可以实现应用和服务的状态保存。
+
+K8S的存储系统从基础到高级又大致分为三个层次：普通Volume，Persistent Volume 和动态存储供应。
+Kubernetes与有状态集群服务相关的两个新特性：Init Container 和 Pet Set  
+我们在什么地方会用到 Init Container呢？
+
+第一种场景是等待其它模块Ready，比如我们有一个应用里面有两个容器化的服务，一个是Web Server，另一个是数据库。
+其中Web Server需要访问数据库。但是当我们启动这个应用的时候，并不能保证数据库服务先启动起来，所以可能出现在一段时间内Web Server有数据库连接错误。
+为了解决这个问题，我们可以在运行Web Server服务的Pod里使用一个Init Container，去检查数据库是否准备好，直到数据库可以连接，
+Init Container才结束退出，然后Web Server容器被启动，发起正式的数据库连接请求。
+
+第二种场景是做初始化配置，比如集群里检测所有已经存在的成员节点，为主容器准备好集群的配置信息，这样主容器起来后就能用这个配置信息加入集群。
+
+还有其它使用场景，如将pod注册到一个中央数据库、下载应用依赖等。
+这些东西能够放到主容器里吗？从技术上来说能，但从设计上来说，可能不是一个好的设计。首先不符合单一职责原则，
+其次这些操作是只执行一次的，如果放到主容器里，还需要特殊的检查来避免被执行多次。
+
+什么是Pet Set？在数据结构里Set是集合的意思，所以顾名思义Pet Set就是Pet的集合，那什么是Pet呢？
+我们提到过Cattle和Pet的概念，Cattle代表无状态服务，而Pet代表有状态服务。
+具体在K8S资源对象里，Pet是一种需要特殊照顾的Pod。它有状态、有身份、当然也比普通的Pod要复杂一些。
+Pet有三个特征。
+
+一是有稳定的存储，这是通过我们前面介绍的PV/PVC 来实现的。
+二是稳定的网络身份，这是通过一种叫 Headless Service 的特殊Service来实现的。
+普通Service的Cluster IP 是对外的，用于外部访问多个Pod实例。而Headless Service的作用是对内的，
+用于为一个集群内部的每个成员提供一个唯一的DNS名字，这样集群成员之间就能相互通信了。
+所以Headless Service没有Cluster IP，这是它和普通Service的区别。
+三是序号命名规则。Pet是一种特殊的Pod，那么Pet能不能用Pod的命名规则呢？
+答案是不能，因为Pod的名字是不稳定的。Pod的命名规则是，如果一个Pod是由一个RC创建的，那么Pod的名字是RC的名字加上一个随机字符串。
+为了解决名字不稳定的问题，K8S对Pet的名字不再使用随机字符串，而是为每个Pet分配一个唯一不变的序号，
+比如 Pet Set 的名字叫 mysql，那么第一个启起来的Pet就叫 mysql-0，第二个叫 mysql-1，如此下去。
+当一个Pet down 掉后，新创建的Pet 会被赋予跟原来Pet一样的名字。由于Pet名字不变所以DNS名字也跟以前一样，同时通过名字还能匹配到原来Pet用到的存储，实现状态保存。
+
+更新 ConfigMap 后：
+
+使用该 ConfigMap 挂载的 Env 不会同步更新
+使用该 ConfigMap 挂载的 Volume 中的数据需要一段时间（实测大概10秒）才能同步更新
+ENV 是在容器启动的时候注入的，启动之后 kubernetes 就不会再改变环境变量的值，且同一个 namespace 中的 pod 的环境变量是不断累加的，
+参考 Kubernetes中的服务发现与docker容器间的环境变量传递源码探究。为了更新容器中使用 ConfigMap 挂载的配置，
+可以通过滚动更新 pod 的方式来强制重新挂载 ConfigMap，也可以在更新了 ConfigMap 后，先将副本数设置为 0，然后再扩容。

@@ -1,0 +1,99 @@
+Registry vs Index
+The next weird thing is the idea of a Registry and an Index, and how these are separate things.
+An index manages user accounts, permissions, search, tagging, and all that nice stuff that's in the public web interface.
+
+A registry stores and serves up the actual image assets, and it delegates authentication to the index.
+
+When you run docker search, it's searching the index, not the registry. In fact, it might be searching multiple registries that the index is aware of.
+
+When you run docker push or docker pull, the index determines if you are allowed to access or modify the image, 
+but the registry is the piece that stores it or sends it down the wire to you after the index approves the operation. 
+Also, the index figures out which registry that particular image lives in and forwards the request appropriately.
+
+Beyond that, when you're working locally and running commands like docker images, you're interacting with 
+something that is neither an index or a registry, but a little of both.
+#########docker rmi清除的是本地image####
+清除步驟
+untag  當有多個tag關聯到同一個image ID
+delete  只有一個tag關聯到image ID
+#########docker清除無用的volume####
+docker volume rm $(docker volume ls -qf dangling=true)
+#########docker容器里使用apt-get####
+export http_proxy=
+
+#########build image時使用apt-get####
+docker build -t curl:v1.0.0 --build-arg http_proxy=http://10.62.32.27:33128 .
+
+docker build -t chrisnoto/mysql-client-alpine:v1.0.0 --build-arg http_proxy=http://10.62.32.27:33128 .
+
+或dockerfile里設置
+ENV http_proxy <HTTP_PROXY>
+ENV https_proxy <HTTPS_PROXY>
+############docker repo#################
+[root@registry yum.repos.d]# cat docker.repo
+[dockerrepo]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/7/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.dockerproject.org/gpg
+
+##############docker api##################
+[root@cobbler ~]# curl http://10.67.51.161:5000/v2/_catalog
+{"repositories":["chensen/nginx","chensen/ubuntu"]}
+[root@cobbler ~]# curl http://10.67.51.161:5000/v2/chensen/ubuntu/tags/list
+{"name":"chensen/ubuntu","tags":["14.04"]}
+[root@cobbler ~]# curl http://10.67.51.161:5000/v2/chensen/nginx/tags/list
+{"name":"chensen/nginx","tags":["1.11"]}
+
+
+############setup docker proxy  for centos7.2 docker-engine1.13#######
+[root@registry docker.service.d]# cat http-proxy.conf
+[Service]
+Environment="HTTP_PROXY=http://h7108579:pqhkr88ctw@10.36.6.65:3128" "NO_PROXY=localhost,127.0.0.1,10.67.51.161,registry"
+[root@registry docker.service.d]# pwd
+/etc/systemd/system/docker.service.d
+
+########### docker registry swift backend############
+[root@registry ~]# cat start_registry.sh
+#!/bin/bash
+docker run -d --name registry -p 5000:5000 \
+-e "REGISTRY_STORAGE=swift" \
+-e "REGISTRY_STORAGE_SWIFT_USERNAME=admin" \
+-e "REGISTRY_STORAGE_SWIFT_PASSWORD='F0xconn!23'" \
+-e "REGISTRY_STORAGE_SWIFT_AUTHURL=https://10.67.44.66:5000/v2.0" \
+-e "REGISTRY_STORAGE_SWIFT_CONTAINER=docker-image" \
+-e "REGISTRY_STORAGE_SWIFT_REGION=RegionOne" \
+-e "REGISTRY_STORAGE_SWIFT_TENANT=admin" \
+-e "REGISTRY_STORAGE_SWIFT_TENANTID=31e6d008df414104ac5e1d42beae316c" \
+-e "REGISTRY_STORAGE_SWIFT_INSECURESKIPVERIFY=true" \
+registry:2.4
+
+#############docker acc & insecure-registries############
+docker daemon.json
+[root@registry docker]# cat daemon.json
+{
+  "registry-mirrors": ["https://aasx6lzt.mirror.aliyuncs.com"],
+  "insecure-registries":["10.67.51.161:5000"]
+}
+
+############docker push image##################
+docker tag nginx 10.67.51.161:5000/chensen/nginx:1.11
+docker push 10.67.51.161:5000/chensen/nginx
+
+docker history ubuntu:14.04
+docker history 10.67.51.161:5000/chensen/nginx:1.11
+
+#############docker run#####################
+docker run -d --name mynginx -p 8080:80 -it  10.67.51.161:5000/chensen/nginx:1.11
+docker进入到正在运行的容器内部
+docker exec -it test_redis_1 /bin/bash
+
+用docker inspect查看容器的PID
+[root@kub ~]# docker inspect --format '{{ .State.Pid }}' 978b5d190b7e
+2703
+若不存在/var/run/netns目錄則創建它，在該目錄下創建軟連接
+ln -s /proc/2703/ns/net /var/run/netns/k8s_nginx-2.549907a9_rc-nginx-2-ksj7g_default_79c4ff77-f804-11e6-a924-fa163e6c70f1_6fcc8701
+測試是否成功
+[root@kub ~]# ip netns
+k8s_nginx-2.549907a9_rc-nginx-2-ksj7g_default_79c4ff77-f804-11e6-a924-fa163e6c70f1_6fcc8701 (id: 1)

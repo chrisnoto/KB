@@ -1,0 +1,544 @@
+OS版本   CentOS7.4
+kubenetes 1.7.5
+機器  k8sv17   node-1  node-2
+[root@k8sv17 influxdb]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+k8sv17 10.67.37.234
+node-1 10.67.37.235
+node-2 10.67.37.236
+===============================================================================
+第一部份： 安裝k8s集群
+
+準備工作：
+1 禁掉selinux
+~]# setenforce 0
+~]# sed -i --follow-symlinks 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/sysconfig/selinux
+2 [root@k8sv17 sysctl.d]# cat /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables =1
+net.bridge.bridge-nf-call-iptables =1
+   [root@k8sv17 sysctl.d]#sysctl --system
+--------------------------------------------------------------------------------
+安裝步驟
+一 安裝docker 1.12 所有節點
+1 [root@k8sv17 influxdb]# cat /etc/yum.repos.d/docker.repo
+[dockerrepo]
+name=Docker Repository
+baseurl=https://yum.dockerproject.org/repo/main/centos/7/
+enabled=1
+gpgcheck=1
+gpgkey=https://yum.dockerproject.org/gpg
+2  yum install docker
+3  systemctl enbale docker && systemctl start docker
+二 調整docker mtu，設置docker http proxy
+1 [root@k8sv17 influxdb]# cat /etc/sysconfig/docker-network
+# /etc/sysconfig/docker-network
+DOCKER_NETWORK_OPTIONS="--mtu=1450"
+2 # cat /etc/systemd/system/docker.service.d/http-proxy.conf
+[Service]
+Environment="HTTP_PROXY=http://10.62.32.27:33128" "NO_PROXY=localhost,127.0.0.1,10.67.51.161,registry"
+3  systemctl daemon-reload & systemctl restart docker
+三 下載k8s所需鏡像
+docker login
+docker pull以下鏡像， 對照/etc/kubernetes/manifests目錄下的文件，可以找出鏡像名
+gcr.io/google_containers/pause-amd64:3.0
+gcr.io/google_containers/kube-proxy-amd64:v1.7.5
+gcr.io/google_containers/etcd-amd64:3.0.17
+gcr.io/google_containers/kube-apiserver-amd64:v1.7.5
+gcr.io/google_containers/kube-controller-manager-amd64:v1.7.5
+gcr.io/google_containers/kube-scheduler-amd64:v1.7.5
+gcr.io/google_containers/k8s-dns-sidecar-amd64:v1.14.4
+gcr.io/google_containers/k8s-dns-kube-dns-amd64:v1.14.4
+gcr.io/google_containers/k8s-dns-dnsmasq-nanny-amd64:v1.14.4
+quay.io/coreos/flannel:v0.10.0-amd64 
+以上鏡像需要所有機器上都有
+如果無私有registry，也不想重複下載，可以docker save -o所有鏡像，然後copy至其他server，docker load -i
+
+二 安裝kubeadm (所有節點)
+1 [root@k8sv17 sysctl.d]# cat /etc/yum.repos.d/k8s.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=0
+2 yum install kubectl kubelet kubeadm ethtool ebtables 
+  yum install kubernetes-cni  (缺portmap文件)
+  wget https://github.com/containernetworking/cni/releases/download/v0.6.0/cni-amd64-v0.6.0.tgz
+  解壓cni-amd64-v0.6.0.tgz, copy portmap to /opt/bin/bin/portmap
+三 master節點上初始化k8s集群  
+kubeadm init --kubernetes-version=v1.7.5 --pod-network-cidr=10.96.0.0/12
+默認安裝了etcd, kube-apiserver,kube-controller-manager,kube-proxy,kube-scheduler-amd64
+還會安裝 kube-dns, 此時kube-dns安裝會有問題，需要安裝flannel
+wget https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+wget https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel-rbac.yml
+修改kube-flannel.yml文件的net-conf.json   network 為實際的CIDR：
+  net-conf.json: |
+    {
+      "Network": "10.96.0.0/12",
+      "Backend": {
+        "Type": "vxlan"
+      }
+kubectl create -f /root/kube-flannel-rbac.yml
+kubectl create -f /root/kube-flannel.yml
+查看kubectl -n kube-system get po -o wide
+是否kube-flannel 和kube-dns running
+四 加入worker節點至k8s集群
+add worker in /etc/hosts on k8s master
+kubeadm join --token 60a22c.a62453d2c826fbf8 10.67.37.234:6443
+===============================================================================================================
+第二部份： 安裝k8s插件
+一  安裝kubernetes-dashboard
+1 docker pull以下image
+gcr.io/google_containers/kubernetes-dashboard-amd64:v1.7.1
+gcr.io/google_containers/kubernetes-dashboard-init-amd64:v1.0.0
+2 下載yaml文件：
+wget https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
+上面為最新的dashboard 1.8版本，對於k8s 1.7不可用  （坑一）
+自己找了dashboard1.7的版本
+kubernetes-dashboard-admin.rbac.yaml
+yak8s-dashboard1.7.yaml
+修改yak8s-dashboard1.7.yaml，加入nodeport
+spec:
+  type: NodePort
+  ports:
+    - port: 443
+      targetPort: 8443
+      nodePort: 30080
+3 需要手動創建dashboard.crt和dashboard.key  (坑二：默認kubernetes-dashboard-certs建好之後，沒有證書)
+# mkidr /root/certs && cd !$
+# openssl genrsa -out dashboard.key 2048
+# chmod 600 dashboard.key
+# openssl req -new -key dashboard.key -subj "/CN=10.67.37.234" -out dashboard.csr
+# openssl x509 -req -in dashboard.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key -CAcreateserial -out dashboard.crt -days 365
+# openssl verify -CAfile /etc/kubernetes/pki/ca.crt dashboard.crt
+# kubectl create secret generic kubernetes-dashboard-certs --from-file=/root/certs -n kube-system
+查看kubernetes-dashboard-certs
+[root@k8sv17 ~]# kubectl -n kube-system get secrets|grep dashboard-certs
+kubernetes-dashboard-certs               Opaque                                2         1d
+[root@k8sv17 ~]# kubectl -n kube-system describe secret kubernetes-dashboard-certs
+Name:           kubernetes-dashboard-certs
+Namespace:      kube-system
+Labels:         k8s-app=kubernetes-dashboard
+Annotations:
+Type:           Opaque
+
+Data
+====
+dashboard.crt:  981 bytes
+dashboard.key:  1679 bytes
+
+#- --apiserver-host=https://10.67.37.234:6443 (坑三：曾經手動指定apiserver-host，始終無法與apiserver進行tls證書雙向認證)
+####在yak8s-dashboard.1.7.yaml自定義了node綁定，通過node-selector實現：
+# kubectl label nodes k8sv17.novalocal dedicated=master
+# ------------------- Dashboard Deployment ------------------- #
+
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  labels:
+    k8s-app: kubernetes-dashboard
+  name: kubernetes-dashboard
+  namespace: kube-system
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      k8s-app: kubernetes-dashboard
+  template:
+    metadata:
+      labels:
+        k8s-app: kubernetes-dashboard
+    spec:
+      initContainers:
+      - name: kubernetes-dashboard-init
+        image: gcr.io/google_containers/kubernetes-dashboard-init-amd64:v1.0.0
+        volumeMounts:
+
+        - name: kubernetes-dashboard-certs
+          mountPath: /certs
+      containers:
+      - name: kubernetes-dashboard
+        image: gcr.io/google_containers/kubernetes-dashboard-amd64:v1.7.1
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        args:
+          - --tls-key-file=/certs/dashboard.key
+          - --tls-cert-file=/certs/dashboard.crt
+          # Uncomment the following line to manually specify Kubernetes API server Host
+          # If not specified, Dashboard will attempt to auto discover the API server and connect
+          # to it. Uncomment only if the default does not work.
+          #- --apiserver-host=https://10.67.37.234:6443
+        volumeMounts:
+        - name: kubernetes-dashboard-certs
+          mountPath: /certs
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /
+            port: 8443
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+      volumes:
+      - name: kubernetes-dashboard-certs
+        secret:
+          secretName: kubernetes-dashboard-certs
+      serviceAccountName: kubernetes-dashboard
+      # Comment the following tolerations if Dashboard must not be deployed on master
+      nodeSelector:
+        dedicated: master
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: master
+        effect: NoSchedule
+
+4 apply yaml文件
+# kubectl apply -f kubernetes-dashboard-admin.rbac.yaml
+# kubectl apply -f yak8s-dashboard1.7.yaml
+5 查看pod是否running正常
+[root@k8sv17 ~]# kubectl -n kube-system get po -o wide|grep dashboard
+kubernetes-dashboard-3460743422-b4w5z      1/1       Running   0          23h       10.96.0.7      k8sv17.novalocal
+6 訪問dashboard
+[root@k8sv17 ~]# kubectl -n kube-system get svc |grep dashboard
+kubernetes-dashboard   10.109.152.237   <nodes>       443:30080/TCP   1d
+登入https://10.67.37.234:30080
+採用token登入, 粘貼下面token
+kubectl -n kube-system describe secret/kubernetes-dashboard-token-qktf0
+Name:           kubernetes-dashboard-token-qktf0
+Namespace:      kube-system
+Labels:         <none>
+Annotations:    kubernetes.io/service-account.name=kubernetes-dashboard
+                kubernetes.io/service-account.uid=07bc5ef9-0632-11e8-879d-fa163eb34721
+
+Type:   kubernetes.io/service-account-token
+
+Data
+====
+namespace:      11 bytes
+token:          eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3Rl
+bSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJrdWJlcm5ldGVzLWRhc2hib2FyZC10b2tlbi1xa3RmMCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50L
+m5hbWUiOiJrdWJlcm5ldGVzLWRhc2hib2FyZCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjA3YmM1ZWY5LTA2MzItMTFlOC04NzlkLWZhMTYzZWIzNDcyMSIsInN1YiI6In
+N5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlLXN5c3RlbTprdWJlcm5ldGVzLWRhc2hib2FyZCJ9.Yut1KWVYtc3UJN0rdWE4qQxHGCbbwKUBU86NMXKrtOCnjq5ansS8PqYY6HLGS_QZdKugMGBjnHuqBdwuzuzOtFlCXomIdO
+vUdLb_VRUzClBGkuKgMtUId2FcwTWAgMARPfTPeQ02I4ILO0v50_BHLfIS3IyQxl8iNBKmJ1vYQwlDXfpbjK8vmHFGjqo2u7uCnYJM8S4Z_5uAlMMXGrCqHLTiwWYl9YrztLAjysNerg42IZfCRjkux4V6KcyeF6qspUAA3xx
+rS3w1UUNKsKFtpNfG_RCigQVkL44hx4ETpG48wGDDiJJKg1g4WmDz2GEJZZGBWRqSR507HmGx-ZM3Dw
+ca.crt:         1025 bytes
+-----------------------------------------------------------------------------------------------
+二 安裝heapster監控插件
+1 docker pull以下image
+gcr.io/google_containers/heapster-grafana-amd64:v4.0.2
+gcr.io/google_containers/heapster-influxdb-amd64:v1.1.1
+gcr.io/google_containers/heapster-amd64:v1.3.0
+坑一： grafana需要使用4.0.2的鏡像，yaml文件里指定的是4.2.0，經測試出錯。
+2 下載yaml文件：
+# wget https://github.com/kubernetes/heapster/archive/v1.4.3.tar.gz
+# tar zxvf v1.4.3.tar.gz
+# cd heapster-1.4.3/deploy/kube-config/influxdb
+修改 grafana.yaml,  4.2.0  -> 4.0.2
+          # If you're only using the API Server proxy, set this value instead:
+          value: /api/v1/proxy/namespaces/kube-system/services/monitoring-grafana/     （大坑：在該版本，不需要做這一步。 撤銷這一步）
+          #value: /
+新增heapster-rbac.yaml
+[root@k8sv17 influxdb]# cat heapster-rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: heapster
+subjects:
+  - kind: ServiceAccount
+    name: heapster
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+3 建立pod
+[root@k8sv17 influxdb]# pwd
+/root/heapster-1.4.3/deploy/kube-config/influxdb
+[root@k8sv17 influxdb]# ls
+grafana.yaml  heapster-rbac.yaml  heapster.yaml  influxdb.yaml  rbac.yaml
+[root@k8sv17 influxdb]# kubectl apply -f .
+建好pod后，如果pod正常運行，則修改yak8s-dashboard.yaml,增加
+          - --heapster-host=http://heapster.kube-system.svc.cluster.local        （大坑：在該版本，不能手動指定heapster-host，自動發現才會出現CPU 內存的監控數據）
+之後，重新apply yak8s-dashboard.yaml
+
+目前問題： dashboard里看不到監控主機和pod的cpu,mem
+原因： k8s1.7.5版本的cadvisor-port=0 cadvisor被禁掉了。  即使開啟，也只能by host訪問，heapster無法收集cadvisor的數據，yaml文件里沒有配置job去收集數據。
+
+
+三  設置nfs storageclass
+1 設置external nfs-server
+2 所有k8s node上yum install -y rpcbind nfs-utils
+3 下載并部署 nfs-client-provisioner
+docker pull quay.io/external_storage/nfs-client-provisioner:v2.0.1
+建立 nfs-client-provisioner-rbac.yaml  nfs-client-provisioner.yaml  
+kubectl apply -f .
+建立nfs-storageclass.yaml
+kubectl apply -f nfs-storageclass.yaml
+
+四  安裝traefik ingress插件
+1 docker pull docker.io/traefik:1.5.1
+https://github.com/containous/traefik/blob/master/examples/k8s/traefik-ds.yaml
+2 download traefik-rbac.yaml traefik-ds.yaml
+3 cd traefik/;  kubectl apply -f .
+4 利用ingress，配置ui   /root/traefik/ui.yaml
+5 建立ingress規則， /root/traefik.yaml
+curl -H Host:traefik.nginx.io 10.67.37.234
+
+
+五 安裝harbor  （docker-compose）
+0  prepare
+域控里添加DNS A記錄指向harbor.cesbg.foxconn
+設置主機名
+hostnamectl set-hostname harbor.cesbg.foxconn
+安裝docker-engine > 1.10
+安裝docker-compose: 
+curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+確認python版本>2.7
+下載harbor offline版本
+wget https://storage.googleapis.com/harbor-releases/release-1.4.0/harbor-offline-installer-v1.4.0.tgz
+解壓之，然後找到harbor.cfg
+配置hostname = harbor.cesbg.foxconn
+    ssl_cert = /root/cert/cesbg.foxconn.crt
+    ssl_cert_key = /root/cert/cesbg.foxconn.key
+1 swift storage
+1.1 在docker-compose.yml增加extra host；否則registry將無法與openstack的域名fuel.public.local通信
+  registry:
+    image: vmware/registry-photon:v2.6.2-v1.4.0
+    container_name: registry
+    restart: always
+    extra_hosts:
+      - "public.fuel.local:10.67.36.80"
+1.2 配置swift storage
+[root@harbor registry]# cat config.yml
+version: 0.1
+log:
+  level: info
+  fields:
+    service: registry
+storage:
+  swift:                           #移除原來的storage,增加swift這一段
+    username: admin
+    password: F0xconn!23
+    authurl: https://10.67.36.80:5000/v2.0
+    tenant: admin
+    tenantid: 3def5a869d0b4e5abd04c55ad3962bfb
+    region: RegionOne
+    container: docker-images
+    insecureskipverify: true
+http:
+  addr: :5000
+  secret: placeholder
+  debug:
+    addr: localhost:5001
+auth:
+  token:
+    issuer: harbor-token-issuer
+    realm: $ui_url/service/token
+    rootcertbundle: /etc/registry/root.crt
+    service: harbor-registry
+notifications:
+  endpoints:
+  - name: harbor
+    disabled: false
+    url: http://ui:8080/service/notifications
+    timeout: 3000ms
+    threshold: 5
+    backoff: 1s
+[root@harbor registry]# pwd
+/root/harbor/common/templates/registry
+
+2 啟用https                      
+
+2.1 生成證書
+Create your own CA certificate:       （CN NAME填senchen）
+  openssl req \
+    -newkey rsa:4096 -nodes -sha256 -keyout ca.key \
+    -x509 -days 365 -out ca.crt
+Generate a Certificate Signing Request:           （CN NAME填harbor.cesbg.foxconn）
+If you use FQDN like reg.yourdomain.com to connect your registry host, then you must use reg.yourdomain.com as CN (Common Name). 
+Otherwise, if you use IP address to connect your registry host, CN can be anything like your name and so on:
+
+  openssl req \
+    -newkey rsa:4096 -nodes -sha256 -keyout cesbg.foxconn.key \
+    -out cesbg.foxconn.csr
+Generate the certificate of your registry host:
+If you're using FQDN like reg.yourdomain.com to connect your registry host, then run this command to generate the certificate of your registry host:
+
+  openssl x509 -req -days 365 -in cesbg.foxconn.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cesbg.foxconn.crt
+2.2  拷貝crt和key至/root/cert
+  cp cesbg.foxconn.crt /root/cert/
+  cp cesbg.foxconn.key /root/cert/  
+2.3 Generate configuration files for Harbor:
+  ./prepare  
+2.4   執行./install.sh  或者 docker-compose up
+3 網頁中訪問  https://harbor.cesbg.foxconn
+
+4 docker客戶端登陸 （centos）
+增加/etc/hosts  
+10.67.37.242 harbor.cesbg.foxconn
+4.1 配置docker proxy忽略 harbor.cesbg.foxconn
+[root@k8sv17 docker.service.d]# cat http-proxy.conf
+[Service]
+Environment="HTTP_PROXY=http://10.62.32.27:33128" "NO_PROXY=localhost,127.0.0.1,harbor.cesbg.foxconn,registry"
+4.2  拷貝ca.crt
+mkdir /etc/docker/certs.d/harbor.cesbg.foxconn
+scp 10.67.37.242:/root/ca.crt .
+4.3  systemctl daemon-reload; systemctl restart docker
+4.4 On some systems where docker daemon runs, you may need to trust the certificate at OS level.
+On Ubuntu, this can be done by below commands:
+
+cp cesbg.foxconn.crt /usr/local/share/ca-certificates/reg.yourdomain.com.crt
+update-ca-certificates
+On Red Hat (CentOS etc), the commands are:
+
+cp cesbg.foxconn.crt /etc/pki/ca-trust/source/anchors/reg.yourdomain.com.crt
+update-ca-trust
+4.5 try:  docker login harbor.cesbg.foxconn
+
+六 安裝配置helm & tiller     
+要求：Kubernetes1.5以上版本
+1 首先需要安装helm客户端
+curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get > get_helm.sh
+chmod 700 get_helm.sh
+./get_helm.sh
+2 创建tiller的serviceaccount和clusterrolebinding
+kubectl create serviceaccount --namespace kube-system tiller
+kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
+3 然后安装helm服务端tiller
+docker pull gcr.io/kubernetes-helm/tiller:v2.3.1
+docker tag gcr.io/kubernetes-helm/tiller:v2.3.1 harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.3.1
+docker push harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.3.1
+helm init -i harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.3.1
+kubectl -n kube-system get po -o wide
+4 为应用程序设置serviceAccount
+kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
+5 检查是否安装成功
+[root@k8sv17 ~]# helm version
+Client: &version.Version{SemVer:"v2.8.1", GitCommit:"6af75a8fd72e2aa18a2b278cfe5c7a1c5feca7f2", GitTreeState:"clean"}
+Server: &version.Version{SemVer:"v2.3.1", GitCommit:"32562a3040bb5ca690339b9840b6f60f8ce25da4", GitTreeState:"clean"}
+[root@k8sv17 ~]# kubectl -n kube-system get po |grep tiller
+tiller-deploy-3678517254-vctt7             1/1       Running   0          5m
+####發現安裝的client, server版本不匹配，進行升級
+docker pull gcr.io/kubernetes-helm/tiller:v2.8.1
+docker tag gcr.io/kubernetes-helm/tiller:v2.8.1 harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.8.1
+docker push harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.8.1
+kubectl --namespace=kube-system set image deployments/tiller-deploy tiller=harbor.cesbg.foxconn/library/kubernetes-helm-tiller:v2.8.1
+kubectl -n kube-system get po
+[root@k8sv17 ~]# helm version
+Client: &version.Version{SemVer:"v2.8.1", GitCommit:"6af75a8fd72e2aa18a2b278cfe5c7a1c5feca7f2", GitTreeState:"clean"}
+Server: &version.Version{SemVer:"v2.8.1", GitCommit:"6af75a8fd72e2aa18a2b278cfe5c7a1c5feca7f2", GitTreeState:"clean"}             升級成功
+helm簡單部署mysql
+helm fetch stable/mysql --version 0.3.4 --untar
+vi mysql/values.yaml
+'''
+[root@k8sv17 ~]# cat mysql/values.yaml |egrep -v '#|^$'
+image: "mysql"
+imageTag: "5.6"
+mysqlRootPassword: testing
+mysqlUser: chensen
+mysqlPassword: Foxconn123
+mysqlDatabase: itasset
+imagePullPolicy: IfNotPresent
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+persistence:
+  enabled: true
+  storageClass: "nfs-storage"
+  accessMode: ReadWriteOnce
+  size: 2Gi
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 100m
+configurationFiles:
+service:
+  type: ClusterIP
+  port: 3306
+
+'''
+helm install ./mysql
+[root@k8sv17 ~]# helm status bailing-joey
+LAST DEPLOYED: Tue Feb 27 03:19:18 2018
+NAMESPACE: default
+STATUS: DEPLOYED
+
+RESOURCES:
+==> v1/Secret
+NAME                TYPE    DATA  AGE
+bailing-joey-mysql  Opaque  2     24m
+
+==> v1/PersistentVolumeClaim
+NAME                STATUS  VOLUME                                    CAPACITY  ACCESS MODES  STORAGECLASS  AGE
+bailing-joey-mysql  Bound   pvc-093f96aa-1b6d-11e8-9156-fa163eb34721  2Gi       RWO           nfs-storage   24m
+
+==> v1/Service
+NAME                TYPE       CLUSTER-IP     EXTERNAL-IP  PORT(S)   AGE
+bailing-joey-mysql  ClusterIP  10.101.144.55  <none>       3306/TCP  24m
+
+==> v1beta1/Deployment
+NAME                DESIRED  CURRENT  UP-TO-DATE  AVAILABLE  AGE
+bailing-joey-mysql  1        1        1           1          24m
+
+==> v1/Pod(related)
+NAME                                 READY  STATUS   RESTARTS  AGE
+bailing-joey-mysql-2774195899-0clcj  1/1    Running  0         24m
+
+
+NOTES:
+MySQL can be accessed via port 3306 on the following DNS name from within your cluster:
+bailing-joey-mysql.default.svc.cluster.local
+
+To get your root password run:
+
+    MYSQL_ROOT_PASSWORD=$(kubectl get secret --namespace default bailing-joey-mysql -o jsonpath="{.data.mysql-root-password}" | base64 --decode; echo)
+
+To connect to your database:
+
+1. Run an Ubuntu pod that you can use as a client:
+
+    kubectl run -i --tty ubuntu --image=ubuntu:16.04 --restart=Never -- bash -il
+
+2. Install the mysql client:
+
+    $ apt-get update && apt-get install mysql-client -y
+
+3. Connect using the mysql cli, then provide your password:
+    $ mysql -h bailing-joey-mysql -p
+
+To connect to your database directly from outside the K8s cluster:
+    MYSQL_HOST=127.0.0.1
+    MYSQL_PORT=3306
+
+    # Execute the following commands to route the connection:
+    export POD_NAME=$(kubectl get pods --namespace default -l "app=bailing-joey-mysql" -o jsonpath="{.items[0].metadata.name}")
+    kubectl port-forward $POD_NAME 3306:3306
+
+    mysql -h ${MYSQL_HOST} -P${MYSQL_PORT} -u root -p${MYSQL_ROOT_PASSWORD}
+
+依赖管理
+Helm 支持两种方式管理依赖的方式：
+
+直接把依赖的 package 放在 charts/ 目录中
+使用 requirements.yaml 并用 helm dep up foochart 来自动下载依赖的 packages
+dependencies:
+  - name: apache
+    version: 1.2.3
+    repository: http://example.com/charts
+  - name: mysql
+    version: 3.2.1
+    repository: http://another.example.com/charts
+
+
