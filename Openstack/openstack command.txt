@@ -1,0 +1,692 @@
+ #####fix instance error state##########
+ nova list --all-tenants
+ nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
+
+#####怎麼進入rabbitmq監控頁面##########
+1 在node-18上面新增防火牆規則如下, 
+root@node-18:~# iptables -I INPUT 7 -s 10.20.0.0/24 -p tcp -m multiport --sports 15672 -m comment --comment "005 public network rabbitmq admin" -j ACCEPT
+2 從cobbler上通過10.20.0.0網段去做ssh正向tunnel
+# ssh -Nf -L 10.67.51.164:15672:localhost:15672 10.20.0.3
+3 用curl測試
+# curl -i -u tjadmin:tjadmin http://10.67.51.164:15672/api/vhosts
+HTTP/1.1 200 OK
+Server: MochiWeb/1.1 WebMachine/1.10.0 (never breaks eye contact)
+Date: Tue, 19 Dec 2017 07:59:13 GMT
+Content-Type: application/json
+Content-Length: 335
+Cache-Control: no-cache
+
+[{"messages":3,"messages_details":{"rate":0.0},"messages_ready":0,"messages_ready_details":{"rate":0.0},"messages_unacknowledged":3,
+"messages_unacknowledged_details":{"rate":0.0},"recv_oct":51693979911,"recv_oct_details":{"rate":9887.8},"send_oct":51547527142,
+"send_oct_details":{"rate":11537.333333333334},"name":"/","tracing":false}]
+4 從我的電腦登陸10.67.51.164:15672
+
+#######怎樣進入haproxy監控頁面#####
+1 在cobbler上執行
+[root@cobbler ~]# ssh -Nf -L 10.67.51.164:10000:192.168.0.2:10000 10.20.0.3
+2 從我的電腦上登陸 10.67.51.164:10000
+
+
+新增節點時注意及時修改時區：  ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+*****Bug1******#########2017-8-10 部署2臺新增的compute節點時，compute節點上執行ceph-deploy config pull node-1拉取不到ceph配置文件######
+懷疑通過192.168.0.0（br-mgmt）網段進行拉取，而該網段ssh不通。故加入規則從192.168.0.0網段可以訪問22端口。
+ iptables -A INPUT -s 192.168.0.0/24 -p tcp -m multiport --ports 22 -m comment --comment "021 ssh from 192.168.0.0/24" -j ACCEPT
+*****Bug2******#########2017-7-x 解決nagios無法訪問問題，多了一個走mgmt網段的默認路由##############
+ip netns exec infrastructure_alerting route del default gw 192.168.0.1
+*****Bug3******#########2017-9-29 部署2臺新增的compute節點時
+1  node-6提示os空間不足，沒有滿足部署要求  解決辦法： lvextend -L +20G -r /dev/mapper/os-root   接著更新fuel節點上的postgresql數據庫，見last line
+2  故障：  All nodes are finished. Failed tasks: Task[rsync_core_puppet/7] Stopping the deployment process!       
+           正常部署完畢時，是沒有puppet agent運行的；觀察此時node-7上是否運行puppet agent，如有說明它可能僵死，停掉；并重啟mcollectived
+           service puppet stop;  stop mcollective; start mcollective
+*****Bug4******#########2017-12-2 部署2臺新增的ceph節點時
+1 ceph-deploy config pull node-1 failed   node-1防火牆配置可能丟失， 新增"021 ssh from 192.168.0.0/24"
+2 /bin/bash "/etc/puppet/shell_manifests/sync_time_command.sh" returned 1 instead of one of [0]    更改每台節點的/etc/ntp.conf  設置server為10.21.0.2
+3 Failed tasks: Task[ceph_ready_check/1], Task[enable_rados/3], Task[enable_rados/2] Stopping the deployment process!   ceph集群狀態不ok, overall_status不是health_ok
+ceph問題：  node-5 日誌盤掛掉，使用該日誌盤的osd全部down掉。  需要更換日誌盤
+            node-4  ping vlan里的3個網段，發現丟包。  osd啟動的時候，丟包非常嚴重,導致其他節點的osd與node-4上的osd heartbeat不成功，pg狀態flapping, 在active+clean和down+peering之間擺動；
+			osd不啟動的時候，丟前5，6個包，後面的包持續
+			node-4 解決辦法： 設置node-4所有osd crush weight為0， 強制數據往其他節點rebalance
+
+****openstack bug1****
+nagios報警： Status Information:	cinder-api.http_errors WARN
+Too many 5xx HTTP errors have been detected on cinder-api (WARN, rule='diff(haproxy_backend_response_5xx[backend="cinder-api"])>0', current=1.00)
+# grep dee565926aad48b589de72dbc4ccec36 cinder-api.log |grep 'returned with HTTP'
+2017-12-09 16:50:29.193 8562 INFO cinder.api.middleware.fault [req-8d3d52d8-1f3d-44af-ae6e-8c25b02bf4f0 d53735d247fe456f81329ff73fbeee7d dee565926aad48b589de72dbc4ccec36 - - -]
+ http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/volumes/detail?all_tenants=1 returned with HTTP 500
+2017-12-09 16:50:29.221 8555 INFO cinder.api.openstack.wsgi [req-ec85e65e-ccfd-4164-9449-a74e4ac8386f d53735d247fe456f81329ff73fbeee7d dee565926aad48b589de72dbc4ccec36 - - -]
+ http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/snapshots/detail?all_tenants=1 returned with HTTP 200
+從log得知，每次用restful api查看volumes的狀態會報500，但是查看snaphosts是正常的。
+
+****openstack bug2****			
+haproxy監控頁面看到 heat-api-cloudwatch 中node-1 lastcheck失敗，查看其他controller得知防火牆規則缺失
+添加防火牆規則
+root@node-1:~# iptables -A INPUT -p tcp -m multiport --ports 8003 -m comment --comment "206 heat-api-cloudwatch" -j ACCEPT
+
+			
+Workaround update:
+running:
+
+  250 fuel rel --sync-deployment-tasks --dir /etc/puppet
+  257 fuel node --node 1,2,3,4,5,6,7,8,9,10 --tasks rsync_core_puppet
+  258 fuel node --node 1,2,3,4,5,6,7,8,9,10 --tasks pre_deployment_start
+
+seems to get the deployment past it's issue.
+
+ nova flavor-create amd_6C_8G_60G auto 8192 60 6
+ovs-vsctl set-controller xenbr2 tcp:10.67.51.161:6653
+############允許cobbler主機訪問FUEL上的dante 增加1080 port##############
+iptables -A INPUT -s 10.67.50.0/23 -p tcp -m multiport --dports 1080 -m comment --comment "1080 dante" -m state --state NEW -j ACCEPT
+#############臨時給openstack節點增加ssh訪問的網段#############
+iptables -A INPUT -s 10.67.50.0/23 -p tcp -m multiport --dports 22 -m comment --comment "011 ssh" -m state --state NEW -j ACCEPT
+
+#######fuel -> neutron L3 -> guest os dns servers  10.67.50.111
+#######fuel -> other -> Host OS dns servers  10.67.50.111
+######virsh run locally and remotely ####
+for u in `virsh list|awk '/running/{print $1}'`;do virsh dominfo $u|egrep 'Name|UUID';done
+for u in `virsh -c qemu+ssh://root@10.20.0.16/system list|awk '/running/{print $1}'`;do virsh -c qemu+ssh://root@10.20.0.16/system dominfo $u|egrep 'Name|UUID';done
+##############################
+[root@vstjmariadb-2-1 ~]# nc -zuv 192.168.111.2 53-67
+Connection to 192.168.111.2 53 port [udp/domain] succeeded!
+Connection to 192.168.111.2 67 port [udp/bootps] succeeded!
+root@node-14:~# ip netns exec qdhcp-2d9c24e4-cd78-499f-a9de-b0587fb790d2 nc -zuv 192.168.111.2 53-67
+Connection to 192.168.111.2 53 port [udp/domain] succeeded!
+Connection to 192.168.111.2 67 port [udp/bootps] succeeded!
+
+
+for i in $(ovs-vsctl list-ports br-int); do echo $i && ovs-vsctl get interface $i external_ids; done
+###  openstack sql statement ###
+mysql cinder -t -e "select volumes.id,volumes.size,volumes.status,volumes.attach_status,volumes.display_name,volume_attachment.instance_uuid,volumes.bootable,volumes.created_at from volumes,volume_attachment where volumes.id=volume_attachment.volume_id and volumes.deleted='false';"
+mysql glance -t -e "select name,round(size/1024/1024) as size_mb,status,is_public,disk_format,container_format,protected,created_at from images where status='active';"
+mysql nova -t -e "select host,count(hostname),sum(vcpus),sum(memory_mb),sum(root_gb) from instances where vm_state='active' group by host;"
+mysql nova -t -e "select host,hostname,vcpus,memory_mb,root_gb,vm_state,created_at from instances where vm_state='active' and memory_mb>4000 order by host;"
+
+######################openvswitch command ###########################
+ovs-appctl用来查询和控制正在运行的后台进程：ovs-vswitchd，ovsdb-server
+ovs-dpctl增删改查kernel-based datapath。
+ovs-vswitchd内部的属于userspace datapath，需要用ovs-appctl dpctl/*命令来操作
+ovs-ofctl用来监控和管理OpenFlow交换机，不局限于OpenVSwitch。可以查看流表等各种操作
+ovs-vsctl会连接ovsdb-server进程，操纵数据库，如果对数据库有变更操作，会等待ovs-vswitchd先做完，如果ovs-vswitchd没启动，可以用–no-wait参数不等待。
+
+ovs-ofctl dump-flows br-tun |grep 'dl_vlan=2'              #open flow control
+ovs-ofctl dump-flows br-tun table=21
+ovs-ofctl dump-tables br-tun
+ovs-dpctl dump-dps                                         # datapath control
+ovs-dpctl show system@ovs-system
+ovs-dpctl dump-flows system@ovs-system|grep ip
+
+##########flow tables###########
+ovs-appctl fdb/show br-floating     forward DB
+ovs-appctl fdb/show br-int
+
+ovs-dpctl show   查看port
+ovs-dpctl dump-flows      查看flow
+
+man ovs-ofctl查看流表關鍵詞
+priority 7 6 5 4 3 2 1 優先   priority 0 默認
+mac / mask
+dl_dst=00:00:00:00:00:00/01:00:00:00:00:00   單播
+dl_dst=01:00:00:00:00:00/01:00:00:00:00:00   多播&廣播
+arp,dl_dst=ff:ff:ff:ff:ff:ff               arp 地址完全匹配
+
+arp_tpa=ip[/netmask] 当dl_type是arp/rarp时，arp_tpa代表目标ip地址
+arp_spa=ip[/netmask] 当dl_type是arp/rarp时，arp_spa代表源ip地址
+arp_sha=mac/mask    当dl_type是arp/rarp时，arp_sha代表源mac地址
+arp_tha=mac/mask    当dl_type是arp/rarp时，arp_tpa代表目标mac地址
+load:value−>dst[start..end]: 写数据到指定的字段
+
+Ethernet                      ARP
+        <----------->   <---------------------------------->
+        48  48   16     16   16    8   8  16 48  16  48  16
+       +---+---+-----+ +---+-----+---+---+--+---+---+---+---+
+       |dst|src|type | |hrd| pro |hln|pln|op|sha|spa|tha|tpa|
+       +---+---+-----+ +---+-----+---+---+--+---+---+---+---+
+                0x806    1  0x800  6   4
+
+ovsdb-client list-dbs
+ovsdb-client list-tables Open_vSwitch
+ovsdb-client get-schema Open_vSwitch
+
+root@node-18:~# neutron net-show 88a82539-db0d-409a-a9bf-8158806e5070
++---------------------------+--------------------------------------+
+| Field                     | Value                                |
++---------------------------+--------------------------------------+
+| admin_state_up            | True                                 |
+| id                        | 88a82539-db0d-409a-a9bf-8158806e5070 |
+| mtu                       | 1400                                 |
+| name                      | admin_2nd_net                        |
+| port_security_enabled     | True                                 |
+| provider:network_type     | vxlan                                |
+| provider:physical_network |                                      |
+| provider:segmentation_id  | 61                                   |
+| router:external           | False                                |
+| shared                    | False                                |
+| status                    | ACTIVE                               |
+| subnets                   | 7ed7870c-a509-4e01-bbdc-20f7cb9decb4 |
+| tenant_id                 | 31e6d008df414104ac5e1d42beae316c     |
++---------------------------+--------------------------------------+
+root@node-18:~# neutron net-show 2d9c24e4-cd78-499f-a9de-b0587fb790d2
++---------------------------+--------------------------------------+
+| Field                     | Value                                |
++---------------------------+--------------------------------------+
+| admin_state_up            | True                                 |
+| id                        | 2d9c24e4-cd78-499f-a9de-b0587fb790d2 |
+| mtu                       | 1400                                 |
+| name                      | admin_internal_net                   |
+| port_security_enabled     | True                                 |
+| provider:network_type     | vxlan                                |
+| provider:physical_network |                                      |
+| provider:segmentation_id  | 2                                    |
+| router:external           | False                                |
+| shared                    | False                                |
+| status                    | ACTIVE                               |
+| subnets                   | 10c50479-008a-4da3-a13e-937bdc2e8eba |
+| tenant_id                 | 31e6d008df414104ac5e1d42beae316c     |
++---------------------------+--------------------------------------+
+root@node-18:~# neutron net-show 0814b405-58f3-4f6f-8bc7-c2235219cdd3
++---------------------------+--------------------------------------+
+| Field                     | Value                                |
++---------------------------+--------------------------------------+
+| admin_state_up            | True                                 |
+| id                        | 0814b405-58f3-4f6f-8bc7-c2235219cdd3 |
+| mtu                       | 1500                                 |
+| name                      | admin_floating_net                   |
+| port_security_enabled     | True                                 |
+| provider:network_type     | flat                                 |
+| provider:physical_network | physnet1                             |
+| provider:segmentation_id  |                                      |
+| router:external           | True                                 |
+| shared                    | False                                |
+| status                    | ACTIVE                               |
+| subnets                   | 3ca1558f-9d53-47fb-870c-8431885aa5f1 |
+| tenant_id                 | 31e6d008df414104ac5e1d42beae316c     |
++---------------------------+--------------------------------------+
+root@node-18:~# neutron net-show 13cc939e-83b1-41cd-b9dd-4a458af5c66e
++---------------------------+----------------------------------------------------+
+| Field                     | Value                                              |
++---------------------------+----------------------------------------------------+
+| admin_state_up            | True                                               |
+| id                        | 13cc939e-83b1-41cd-b9dd-4a458af5c66e               |
+| mtu                       | 1400                                               |
+| name                      | HA network tenant 31e6d008df414104ac5e1d42beae316c |
+| port_security_enabled     | True                                               |
+| provider:network_type     | vxlan                                              |
+| provider:physical_network |                                                    |
+| provider:segmentation_id  | 59                                                 |
+| router:external           | False                                              |
+| shared                    | False                                              |
+| status                    | ACTIVE                                             |
+| subnets                   | 5ce543dd-f307-49f9-9272-31ffad68f230               |
+| tenant_id                 |                                                    |
++---------------------------+----------------------------------------------------+
+
+###################neutron DHCP agent#######################
+root@node-18:~# neutron net-list
++--------------------------------------+----------------------------------------------------+-------------------------------------------------------+
+| id                                   | name                                               | subnets                                               |
++--------------------------------------+----------------------------------------------------+-------------------------------------------------------+
+| 88a82539-db0d-409a-a9bf-8158806e5070 | admin_2nd_net                                      | 7ed7870c-a509-4e01-bbdc-20f7cb9decb4 192.168.112.0/24 |
+| 13cc939e-83b1-41cd-b9dd-4a458af5c66e | HA network tenant 31e6d008df414104ac5e1d42beae316c | 5ce543dd-f307-49f9-9272-31ffad68f230 169.254.192.0/18 |
+| 0814b405-58f3-4f6f-8bc7-c2235219cdd3 | admin_floating_net                                 | 3ca1558f-9d53-47fb-870c-8431885aa5f1 10.67.44.0/23    |
+| 2d9c24e4-cd78-499f-a9de-b0587fb790d2 | admin_internal_net                                 | 10c50479-008a-4da3-a13e-937bdc2e8eba 192.168.111.0/24 |
++--------------------------------------+----------------------------------------------------+-------------------------------------------------------+
+root@node-18:~# neutron dhcp-agent-list-hosting-net 2d9c24e4-cd78-499f-a9de-b0587fb790d2
++--------------------------------------+--------------------+----------------+-------+
+| id                                   | host               | admin_state_up | alive |
++--------------------------------------+--------------------+----------------+-------+
+| 26407287-038e-4abc-9747-1fdb6bc76d32 | node-14.domain.tld | True           | :-)   |
+| c5dd2230-5d32-43cc-9189-ef894a7001bd | node-18.domain.tld | True           | :-)   |
++--------------------------------------+--------------------+----------------+-------+
+root@node-18:~# neutron dhcp-agent-list-hosting-net 88a82539-db0d-409a-a9bf-8158806e5070
++--------------------------------------+--------------------+----------------+-------+
+| id                                   | host               | admin_state_up | alive |
++--------------------------------------+--------------------+----------------+-------+
+| 26407287-038e-4abc-9747-1fdb6bc76d32 | node-14.domain.tld | True           | :-)   |
+| c5dd2230-5d32-43cc-9189-ef894a7001bd | node-18.domain.tld | True           | :-)   |
++--------------------------------------+--------------------+----------------+-------+
+root@node-18:~# neutron dhcp-agent-list-hosting-net 0814b405-58f3-4f6f-8bc7-c2235219cdd3
++--------------------------------------+--------------------+----------------+-------+
+| id                                   | host               | admin_state_up | alive |
++--------------------------------------+--------------------+----------------+-------+
+| c5dd2230-5d32-43cc-9189-ef894a7001bd | node-18.domain.tld | True           | :-)   |
++--------------------------------------+--------------------+----------------+-------+
+
+root@node-18:~# neutron agent-list|grep DHCP
+| 0b38e558-6694-47c8-a554-c57bf29b3020 | DHCP agent         | node-10.domain.tld | :-)   | True           | neutron-dhcp-agent        |
+| 26407287-038e-4abc-9747-1fdb6bc76d32 | DHCP agent         | node-14.domain.tld | :-)   | True           | neutron-dhcp-agent        |
+| c5dd2230-5d32-43cc-9189-ef894a7001bd | DHCP agent         | node-18.domain.tld | :-)   | True           | neutron-dhcp-agent        |
+root@node-18:~# neutron net-list-on-dhcp-agent 0b38e558-6694-47c8-a554-c57bf29b3020
++--------------------------------------+--------------------+-------------------------------------------------------+
+| id                                   | name               | subnets                                               |
++--------------------------------------+--------------------+-------------------------------------------------------+
+| 88a82539-db0d-409a-a9bf-8158806e5070 | admin_2nd_net      | 7ed7870c-a509-4e01-bbdc-20f7cb9decb4 192.168.112.0/24 |
+| 0814b405-58f3-4f6f-8bc7-c2235219cdd3 | admin_floating_net | 3ca1558f-9d53-47fb-870c-8431885aa5f1 10.67.44.0/23    |
+| 2d9c24e4-cd78-499f-a9de-b0587fb790d2 | admin_internal_net | 10c50479-008a-4da3-a13e-937bdc2e8eba 192.168.111.0/24 |
++--------------------------------------+--------------------+-------------------------------------------------------+
+root@node-18:~# neutron net-list-on-dhcp-agent 26407287-038e-4abc-9747-1fdb6bc76d32
++--------------------------------------+--------------------+-------------------------------------------------------+
+| id                                   | name               | subnets                                               |
++--------------------------------------+--------------------+-------------------------------------------------------+
+| 88a82539-db0d-409a-a9bf-8158806e5070 | admin_2nd_net      | 7ed7870c-a509-4e01-bbdc-20f7cb9decb4 192.168.112.0/24 |
+| 0814b405-58f3-4f6f-8bc7-c2235219cdd3 | admin_floating_net | 3ca1558f-9d53-47fb-870c-8431885aa5f1 10.67.44.0/23    |
+| 2d9c24e4-cd78-499f-a9de-b0587fb790d2 | admin_internal_net | 10c50479-008a-4da3-a13e-937bdc2e8eba 192.168.111.0/24 |
++--------------------------------------+--------------------+-------------------------------------------------------+
+
+
+###################neutron L3 agent#######################
+root@node-18:/var/lib/neutron/dhcp# neutron agent-list |grep L3
+| 124f4804-b31c-4928-8394-9dff9eecf78a | L3 agent           | node-10.domain.tld | :-)   | True           | neutron-l3-agent          |
+| 762c08cc-f4ee-4960-897e-36a80dca3348 | L3 agent           | node-18.domain.tld | :-)   | True           | neutron-l3-agent          |
+| e1dfcb67-f3e8-4706-a2a6-8b8580ea69e1 | L3 agent           | node-14.domain.tld | :-)   | True           | neutron-l3-agent          |
+root@node-18:/var/lib/neutron/dhcp# neutron router-list-on-l3-agent 124f4804-b31c-4928-8394-9dff9eecf78a
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| id                                   | name     | external_gateway_info                                                                                                                                                                    |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 0e9b9dda-dc2e-4f25-8fee-5ebc28796539 | router04 | {"network_id": "0814b405-58f3-4f6f-8bc7-c2235219cdd3", "enable_snat": true, "external_fixed_ips": [{"subnet_id": "3ca1558f-9d53-47fb-870c-8431885aa5f1", "ip_address": "10.67.44.106"}]} |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+root@node-18:/var/lib/neutron/dhcp# neutron router-list-on-l3-agent 762c08cc-f4ee-4960-897e-36a80dca3348
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| id                                   | name     | external_gateway_info                                                                                                                                                                    |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 0e9b9dda-dc2e-4f25-8fee-5ebc28796539 | router04 | {"network_id": "0814b405-58f3-4f6f-8bc7-c2235219cdd3", "enable_snat": true, "external_fixed_ips": [{"subnet_id": "3ca1558f-9d53-47fb-870c-8431885aa5f1", "ip_address": "10.67.44.106"}]} |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+root@node-18:/var/lib/neutron/dhcp# neutron router-list-on-l3-agent e1dfcb67-f3e8-4706-a2a6-8b8580ea69e1
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| id                                   | name     | external_gateway_info                                                                                                                                                                    |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 0e9b9dda-dc2e-4f25-8fee-5ebc28796539 | router04 | {"network_id": "0814b405-58f3-4f6f-8bc7-c2235219cdd3", "enable_snat": true, "external_fixed_ips": [{"subnet_id": "3ca1558f-9d53-47fb-870c-8431885aa5f1", "ip_address": "10.67.44.106"}]} |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+root@node-18:/var/lib/neutron/dhcp# neutron router-list
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+------+
+| id                                   | name     | external_gateway_info                                                                                                                                                                    | distributed | ha   |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+------+
+| 0e9b9dda-dc2e-4f25-8fee-5ebc28796539 | router04 | {"network_id": "0814b405-58f3-4f6f-8bc7-c2235219cdd3", "enable_snat": true, "external_fixed_ips": [{"subnet_id": "3ca1558f-9d53-47fb-870c-8431885aa5f1", "ip_address": "10.67.44.106"}]} | False       | True |
++--------------------------------------+----------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+------+
+root@node-18:/var/lib/neutron/dhcp# neutron l3-agent-list-hosting-router 0e9b9dda-dc2e-4f25-8fee-5ebc28796539
++--------------------------------------+--------------------+----------------+-------+----------+
+| id                                   | host               | admin_state_up | alive | ha_state |
++--------------------------------------+--------------------+----------------+-------+----------+
+| 762c08cc-f4ee-4960-897e-36a80dca3348 | node-18.domain.tld | True           | :-)   | active   |
+| e1dfcb67-f3e8-4706-a2a6-8b8580ea69e1 | node-14.domain.tld | True           | :-)   | standby  |
+| 124f4804-b31c-4928-8394-9dff9eecf78a | node-10.domain.tld | True           | :-)   | standby  |
++--------------------------------------+--------------------+----------------+-------+----------+
+
+nova-manage vm list|awk '{print $1,$2,$3,$4,$5}'
+
+[root@cobbler ~]# ansible controller -m shell -a "cat /var/lib/neutron/ha_confs/0e9b9dda-dc2e-4f25-8fee-5ebc28796539/state"
+10.20.0.3 | SUCCESS | rc=0 >>
+backup
+
+10.20.0.15 | SUCCESS | rc=0 >>
+backup
+
+10.20.0.8 | SUCCESS | rc=0 >>
+master
+
+ansible controller -m shell -a "ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ip a"
+ansible controller -m shell -a "ip netns exec vrouter ip a"
+
+
+ #####error  Connection to libvirt failed: Failed to connect socket to '/var/run/libvirt/libvirt-sock': No such file or directory###
+service nova-compute stop
+service libvirtd stop
+service libvirtd start
+service nova-compute start
+
+###############manually remove fuel node which is dicovered############
+fuel node --user=admin --password='' --node-id 17 --delete-from-db --force
+
+#################manually remove openstack service#########################
+Due to a current limitation in Fuel, when a node is removed from an OpenStack environment through the Fuel web UI or CLI, 
+the services that were running on that node are not automatically removed from the database. 
+To resolve this issue, remove these services manually.
+  938  nova service-delete 5
+  940  nova service-delete 8
+  941  nova service-delete 17
+  942  nova service-delete 20
+  943  nova service-list
+
+  945  neutron agent-delete 441aaec9-dd99-48e4-95f5-20252cad8e09
+  947  neutron agent-delete ffab30c6-e715-4de6-be6e-feca4ea43f4e
+  949  neutron agent-delete 646ac9d3-c62b-49df-905b-5eebcaa15bc1
+  951  neutron agent-delete 895f98d7-a84e-4374-80eb-392df24a219a
+  952  neutron agent-list
+  heat service-list
+  heat-manage service clean
+pcs resource delete sysinfo_node-11.domain.tld
+  
+ rbd import --pool compute /var/lib/nova/instances/_base/626929051b03d5357a60aa4aa663124aa77d65d1 c85ac08f-74d1-4b5d-b143-6affdb6223ac_disk --image-format=2 --id compute
+
+ ####swift API####
+ curl -o 1.png --insecure -s -H "X-Auth-Token:"gAAAAAxxxx" -i https://10.67.44.66:8080/swift/v1/picture/ceph-knowledge-tree.png
+ 
+ curl --insecure -s -H "X-Auth-Token:"gAAAAAxxxx" -X PUT -i https://10.67.44.66:8080/swift/v1/picture/1.png -T 1.png
+ ####allocate floating IP####
+for u in `seq 1 50`;do echo $u;nova floating-ip-create;done
+ ########rbd map disk without LVM################
+  If you have multipath installed on your system, make sure it is stopped before mounting the volume.
+ There is a bug which prevents the unmapping of RBD volumes.
+ # service multipath-tools stop
+ rbd map compute/309e1cca-69b4-468a-8455-91c2c80a0127_disk
+  fdisk -l /dev/rbd1
+  rbd showmapped
+  rbd unmap /dev/rbd1
+###########rbd map disk with LVM ###########
+ rbd map volumes/volume-e491793b-c42a-49dd-8861-af7541225815
+ kpartx -av /dev/rbd0
+ pvscan
+ mount /dev/mapper/ubuntu--vg-root /mnt
+ ...fix files in the filesystem..
+ umount /mnt
+ vi /etc/lvm/lvm.conf
+ pvscan
+ dmsetup ls
+ dmsetup remove ubuntu--vg-swap_1 ubuntu--vg-root
+ dmsetup ls
+ dmsetup remove rbd0p5
+ rbd unmap /dev/rbd0
+
+ 
+dockerctl shell appname command
+#######################################################################################
+#1 create image
+glance image-create --name Windows2008R2 --file windows_server_2008_r2_x64.qcow2 
+--disk-format qcow2 --container-format bare --visibility public --progress
+#2 userdata & metadata
+[root@fedora03 ~]# curl 169.254.169.254/latest/user-data
+#!/bin/bash
+myip=`curl 169.254.169.254/latest/meta-data/local-ipv4`
+echo $myip > ~/ip.txt
+
+#3 when compute node is down, evacuate all instances on that host to other host.
+nova host-evacuate --target_host node-8.domain.tld --on-shared-storage node-12.domain.tld
+
+#4 qemu agent command
+virsh list --all
+virsh qemu-agent-command 39 '{"execute":"guest-network-get-interfaces"}'
+
+######fix for fuel8.0 compute node to use hw_qemu_guest_agent#############
+For Ubuntu, you need to apply this fix since AppArmor will not allow the creation of the socket:
+
+# echo "/var/lib/libvirt/qemu/*.sock rw," >> /etc/apparmor.d/abstractions/libvirt-qemu
+# service nova-compute restart
+# service apparmor reload
+#5
+usage: nova image-meta <image> <action> <key=value> [<key=value> ...]
+Set or Delete metadata on an image.
+Positional arguments:
+  <image>      Name or ID of image
+  <action>     Actions: 'set' or 'delete'
+  <key=value>  Metadata to add/update or delete (only key is necessary on
+               delete)
+nova image-meta 6410b84d-a473-4ece-83e5-09848a545645 set hw_qemu_guest_agent=yes
+
+ ####monitor haproxy
+ echo "help" |socat /var/lib/haproxy/stats stdio
+ echo "show stat"|socat /var/lib/haproxy/stats stdio |awk -F"," '{print $1,$2,$18}'|grep glance-api
+ echo "show stat"|socat /var/lib/haproxy/stats stdio |grep BACKEND|awk -F"," '{print $1,$2,$18}'
+ 
+ ####mysql
+ mysql -e 'show status;' |grep wsrep
+ mysql -e 'show variables;' |grep wsrep
+ mysql -e "show status like 'wsrep_local_state_comment'"
+ mysql -e "show status like 'wsrep_cluster_size'"
+ 
+ ####corosync/pacemaker
+ corosync-cfgtool -s
+ crm status
+ pcs status
+ crm_mon --group-by-node --inactive
+ 
+ 
+
+
+/var/lib/nova/instances
+/etc/libvirt/qemu/             vm definition xml
+nova-compute 创建 instance 的过程可以分为 4 步： 
+1.为 instance 准备资源 
+nova-compute 首先会根据指定的 flavor 依次为 instance 分配内存、磁盘空间和 vCPU。网络资源也会提前分配
+2.创建 instance 的镜像文件 
+资源准备好之后，nova-compute 会为 instance 创建镜像文件。 
+OpenStack 启动一个 instance 时，会选择一个 image，这个 image 由 Glance 管理。 
+nova-compute会： 1.首先将该 image 下载到计算节点 
+                 2.然后将其作为 backing file 创建 instance 的镜像文件
+从 Glance 下载 image 
+		nova-compute 首先会检查 image 是否已经下载（比如之前已经创建过基于相同 image 的 instance）。
+		如果没有，就从 Glance 下载 image 到本地。 
+		由此可知，如果计算节点上要运行多个相同 image 的 instance，
+		只会在启动第一个 instance 的时候从 Glance 下载 image，后面的 instance 启动速度就大大加快了。
+		image（ID为 917d60ef-f663-4e2d-b85b-e4511bb56bc2）是 qcow2 格式，nova-compute 将其下载，
+		然后通过 qemu-img 转换成 raw 格式。 
+		转换的原因是下一步需要将其作为 instance 的镜像文件的 backing file，而 backing file不能是 qcow2 格式。
+为 instance 创建镜像文件 
+		有了 image 之后，instance 的镜像文件直接通过 qemu-img 命令创建，backing file 就是下载的 image。
+这里有两个容易搞混淆的术语，在此特别说明一下： 
+		1.image，指的是 Glance 上保存的镜像，作为 instance 运行的模板。 计算节点将下载的 image 存放在 /var/lib/nova/instances/_base 目录下。 
+		2.镜像文件，指的是 instance 启动盘所对应的文件 
+		3.二者的关系是：image 是镜像文件 的 backing file。image 不会变，而镜像文件会发生变化。比如安装新的软件后，镜像文件会变大。 
+		因为英文中两者都叫 “image”，为避免混淆，我们用 “image” 和 “镜像文件” 作区分。 
+3.创建 instance 的 XML 定义文件 
+		创建的 XML 文件会保存到该 instance 目录 /opt/stack/data/nova/instances/f1e22596-6844-4d7a-84a3-e41e6d7618ef，命名为 libvirt.xml 
+4.创建虚拟网络并启动虚拟机 
+libvirt base目錄里image默認緩存時間86400秒
+Because 86400 seconds (24 hours) is the default time for remove_unused_original_minimum_age_seconds,
+ you can either wait for that time interval to see the base image removed, 
+ or set the value to a shorter time period in the nova.conf file.
+ Restart all nova services after changing a setting in the nova.conf file.
+
+ [root@fuel ~]# p2.sh -f compute -c "cat /var/lib/nova/instances/*-*-*/libvirt.xml|egrep '<uuid>|<name>|nova:name|flavor|memory|nova:disk|swap|ephe|vcpu|disk|rbd|qbr'"
+ 
+ boot from vol snapshot
+ root@node-12:/var/lib/nova/instances/cf97c70f-4f01-4020-ab19-efc75408a4e3# rbd info volumes/volume-ed0d6136-d17a-40dc-928e-4220471de658
+rbd image 'volume-ed0d6136-d17a-40dc-928e-4220471de658':
+        size 10240 MB in 2560 objects
+        order 22 (4096 kB objects)
+        block_name_prefix: rbd_data.2e943593cc301
+        format: 2
+        features: layering, striping
+        flags:
+        parent: volumes/volume-a21d5231-5731-4f19-bf77-68a2cd85bcdb@snapshot-23515648-4c8c-4c7f-aa60-519f4db27d53
+        overlap: 1024 MB
+        stripe unit: 4096 kB
+        stripe count: 1
+Swap
+root@node-12:/var/lib/nova/instances/cf97c70f-4f01-4020-ab19-efc75408a4e3# rbd info compute/cf97c70f-4f01-4020-ab19-efc75408a4e3_disk.swap
+2016-12-24 03:39:05.528857 7f6421ce1700  0 -- :/1028607 >> 192.168.0.3:6789/0 pipe(0x7f64243701b0 sd=3 :0 s=1 pgs=0 cs=0 l=1 c=0x7f642436cf70).fault
+rbd image 'cf97c70f-4f01-4020-ab19-efc75408a4e3_disk.swap':
+        size 2048 MB in 512 objects
+        order 22 (4096 kB objects)
+        block_name_prefix: rbd_data.2e95574b0dc51
+        format: 2
+        features: layering
+        flags:
+boot from volume
+root@node-8:/var/lib/nova/instances/8ec1d4d3-f911-4e37-8376-34b3bfe9a665# rbd info volumes/volume-48353247-dfe0-4355-8ef9-2f5fd005f26d
+rbd image 'volume-48353247-dfe0-4355-8ef9-2f5fd005f26d':
+        size 1024 MB in 256 objects
+        order 22 (4096 kB objects)
+        block_name_prefix: rbd_data.2e5ad2ae8944a
+        format: 2
+        features: layering
+        flags:
+boot from snapshot
+root@node-15:/var/lib/nova/instances/b5e4d40f-708c-47fe-adff-9ad12ce74331# rbd info compute/b5e4d40f-708c-47fe-adff-9ad12ce74331_disk
+rbd image 'b5e4d40f-708c-47fe-adff-9ad12ce74331_disk':
+        size 20480 MB in 2560 objects
+        order 23 (8192 kB objects)
+        block_name_prefix: rbd_data.f0b84bf3937a
+        format: 2
+        features: layering, striping
+        flags:
+        parent: images/5e369e5c-dd94-4fc6-8d2b-603f22aaa857@snap
+        overlap: 10240 MB
+        stripe unit: 8192 kB
+        stripe count: 1
+boot from image(create a new volume)
+root@node-15:/var/lib/nova/instances/4fa54ba7-020d-4180-b09a-5bb56662884c# rbd info volumes/volume-57be0ad5-0e08-42b5-8c3d-97e637ec3855
+2016-12-24 04:22:34.771600 7f98bc770700  0 -- :/1006027 >> 192.168.0.3:6789/0 pipe(0x7f98c01cd1b0 sd=3 :0 s=1 pgs=0 cs=0 l=1 c=0x7f98c01c9f70).fault
+rbd image 'volume-57be0ad5-0e08-42b5-8c3d-97e637ec3855':
+        size 1024 MB in 256 objects
+        order 22 (4096 kB objects)
+        block_name_prefix: rbd_data.2ea7b2ae8944a
+        format: 2
+        features: layering
+        flags:
+boot from image
+root@node-12:/var/lib/nova/instances/a084ce4e-8222-4bfb-9427-52f5e1706b94# rbd info compute/a084ce4e-8222-4bfb-9427-52f5e1706b94_disk
+rbd image 'a084ce4e-8222-4bfb-9427-52f5e1706b94_disk':
+        size 81920 MB in 20480 objects
+        order 22 (4096 kB objects)
+        block_name_prefix: rbd_data.86c82ae8944a
+        format: 2
+        features: layering
+        flags:
+做過shelve和unshelve操作
+ rbd info compute/34ac92f9-e0ee-4421-a728-c71968e57409_disk
+rbd image '34ac92f9-e0ee-4421-a728-c71968e57409_disk':
+        size 81920 MB in 10240 objects
+        order 23 (8192 kB objects)
+        block_name_prefix: rbd_data.ef5074030fd
+        format: 2
+        features: layering, striping
+        flags:
+        parent: images/c2a716b3-1b2f-47af-a63a-dee8cf331cf8@snap
+        overlap: 20480 MB
+        stripe unit: 8192 kB
+        stripe count: 1
+
+6.故障排查
+当Openstack不正常工作时，我们经常会首先查看下服务状态，比如执行nova service-list命令查看Nova相关的服务状态。
+如果服务状态为down，根据Openstack服务的心跳机制和状态监控原理，可能有以下几种故障情形：
+
+数据库访问错误导致心跳更新失败，这种情况看日志就能发现错误日志。
+Rabbitmq连接失败，nova-compute不能直接访问数据库，更新时是通过RPC调用nova-conductor完成的，
+如果rabbitmq连接失败，RPC将无法执行，导致心跳发送失败。
+nova-conductor故障，原因同上，不过这种情况概率很低，除非人为关闭了该服务。
+时间不同步。这种情况排查非常困难，因为你在日志中是发现不了任何错误信息的，
+我们知道数据库操作由nova-conductor组件完成的，而计算心跳间隔是在nova-api服务完成的，
+假如这两个服务所在的主机时间不同步，将可能导致服务误判为down。
+对于多API节点部署时尤其容易出现这种情况，所有节点务必保证时间同步，NTP服务必须能够正常工作，
+否则将影响Openstack服务的心跳机制和状态监控。
+7. 总结
+本文从源码入手分析了Openstack服务的心跳机制和状态监控，每个服务每隔10秒都会向数据库发送心跳包，
+根据downtime时间窗口内是否存在心跳判断服务的状态。其实这种方法效率是非常低的，
+并且当服务众多时，数据库的压力将会非常大，因此有人提出引入Zookeeper服务发现机制维护Openstack服务状态，
+参考Services Heartbeat with ZooKeeper。
+###############Filter flavor metadata & host aggregate metadata###########
+1 Since we are going to use host aggregates we need special scheduler filters, 
+so configure your Nova scheduler with:
+scheduler_default_filters=RetryFilter,AvailabilityZoneFilter,RamFilter,ComputeFilter,
+ImagePropertiesFilter,ServerGroupAntiAffinityFilter,
+ServerGroupAffinityFilter,AggregateInstanceExtraSpecsFilter
+
+2 Now we need to logically separate these two hypervisors using host aggregates. 
+For this we will create two aggregates:
+nova aggregate-create ceph-compute-storage1
+nova aggregate-create ceph-compute-storage2
+
+3 Now we add our hypervisors to their respective aggregates:
+nova aggregate-add-host ceph-compute-storage1 compute-ceph1
+nova aggregate-add-host ceph-compute-storage2 compute-ceph2
+
+4 Finally we set a special metadata that will be recognized by our Nova flavor later
+nova aggregate-set-metadata 1 cephcomputestorage1=true
+nova aggregate-set-metadata 2 cephcomputestorage2=true
+
+5 One last step is to create new flavors so we can decide on which logical hypervisor 
+(and then on which Ceph pool we want our instances to run on):
+nova flavor-create m1.ceph-compute-storage1 8 128 40 1
+nova flavor-create m1.ceph-compute-storage2 9 128 40 1
+
+6 We assign our aggregate special metadata to the flavours so we can distinguish them:
+nova flavor-key m1.ceph-compute-storage1 set aggregate_instance_extra_specs:cephcomputestorage1=true
+nova flavor-key m1.ceph-compute-storage2 set aggregate_instance_extra_specs:cephcomputestorage2=true
+
+7 ur configuration is complete so let’s see how things work :). 
+Now, I’m booting to instances on two different flavours:
+nova boot --image 96ebf966-c7c3-4715-a536-a1eb8fc106df --flavor 8 --key-name admin ceph1
+nova boot --image 96ebf966-c7c3-4715-a536-a1eb8fc106df --flavor 9 --key-name admin ceph2
+
+
+
+Volume backups are different from snapshots. Backups preserve the data contained in the volume, 
+whereas snapshots preserve the state of a volume at a specific point in time. 
+In addition, you cannot delete a volume if it has existing snapshots.
+ Volume backups are used to prevent data loss, whereas snapshots are used to facilitate cloning.
+
+For this reason, snapshot back ends are typically co-located with volume back ends in order to minimize latency during cloning. 
+By contrast, a backup repository is usually located in a different location 
+(eg. different node, physical storage, or even geographical location) in a typical enterprise deployment.
+ This is to protect the backup repository from any damage that might occur to the volume back end.
+ 
+ ####postgresql on fuel###
+ update "volume_manager_node_volumes" set "volumes"='[{"name": "sda", "extra": ["disk/by-id/wwn-0x614187705e22960020e641090a424272", "disk/by-id/scsi-3614187705e22960020e641090a424272"],
+ "bootable": true, "free_space": 285004, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 0}, {"size": 103008, "type": "pv", "lvm_meta_size": 64, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", 
+ "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d",
+ "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:0:0", 
+ "size": 285568}, {"name": "sdb", "extra": ["disk/by-id/wwn-0x614187705e22960020e641150afdd3fe", "disk/by-id/scsi-3614187705e22960020e641150afdd3fe"], "bootable": false, 
+ "free_space": 456780, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", 
+ "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d",
+ "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 456780}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:1:0", 
+ "size": 457344}, {"name": "sdc", "extra": ["disk/by-id/wwn-0x614187705e22960020e641210bad20dc", "disk/by-id/scsi-3614187705e22960020e641210bad20dc"], "bootable": false, 
+ "free_space": 456780, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", 
+ "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", 
+ "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 456780}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:2:0",
+ "size": 457344}, {"name": "sdd", "extra": ["disk/by-id/wwn-0x614187705e22960020e6412d0c647be3", "disk/by-id/scsi-3614187705e22960020e6412d0c647be3"], "bootable": false, 
+ "free_space": 857292, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", 
+ "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", 
+ "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857292}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:3:0", 
+ "size": 857856}, {"name": "sde", "extra": ["disk/by-id/wwn-0x614187705e22960020e641390d1e08d9", "disk/by-id/scsi-3614187705e22960020e641390d1e08d9"], "bootable": false, 
+ "free_space": 857292, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64},
+ {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", "disk_label": null, 
+ "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", "disk_label": null, 
+ "type": "partition", "file_system": "none", "size": 857292}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:4:0", "size": 857856}, {"name": "sdf",
+ "extra": ["disk/by-id/wwn-0x614187705e22960020e641470dfcedfc", "disk/by-id/scsi-3614187705e22960020e641470dfcedfc"], "bootable": false, "free_space": 857292, 
+ "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64},
+ {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", 
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", 
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 857292}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:5:0", "size": 857856}, 
+ {"name": "sdg", "extra": ["disk/by-id/wwn-0x614187705e22960020e6415a0f1210e3", "disk/by-id/scsi-3614187705e22960020e6415a0f1210e3"], "bootable": false, "free_space": 857292, 
+ "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64},
+ {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", 
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", 
+ "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857292}], "type": "disk", "id": "disk/by-path/pci-0000:02:00.0-scsi-0:2:6:0", "size": 857856},
+ {"name": "sdh", "extra": ["disk/by-id/wwn-0x5000c50059c3d7af", "disk/by-id/scsi-35000c50059c3d7af"], "bootable": false, "free_space": 857919, "volumes": 
+ [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64}, 
+ {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", "disk_label": null,
+ "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", "disk_label": null, 
+ "type": "partition", "file_system": "none", "size": 857919}], "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:0:0", "size": 858483}, 
+ {"name": "sdi", "extra": ["disk/by-id/wwn-0x5000c50059bf0bc3", "disk/by-id/scsi-35000c50059bf0bc3"], "bootable": false, "free_space": 857919, "volumes": [{"type": "boot", "size": 300}, 
+ {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"},
+ {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, 
+ {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], 
+ "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:1:0", "size": 858483}, {"name": "sdj", "extra": ["disk/by-id/wwn-0x5000c5003aac269b", "disk/by-id/scsi-35000c5003aac269b"],
+ "bootable": false, "free_space": 857919, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", 
+ "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", 
+ "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:2:0",
+ "size": 858483}, {"name": "sdk", "extra": ["disk/by-id/wwn-0x5000c500435a788f", "disk/by-id/scsi-35000c500435a788f"], "bootable": false, "free_space": 857919, 
+ "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64}, 
+ {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none",
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none",
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:3:0", "size": 858483},
+ {"name": "sdl", "extra": ["disk/by-id/wwn-0x5000c5004358d27b", "disk/by-id/scsi-35000c5004358d27b"], "bootable": false, "free_space": 857919, "volumes": [{"type": "boot", "size": 300},
+ {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"},
+ {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, 
+ {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], 
+ "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:4:0", "size": 858483}, {"name": "sdn", "extra": ["disk/by-id/wwn-0x5000c500435692cf", "disk/by-id/scsi-35000c500435692cf"],
+ "bootable": false, "free_space": 857919, "volumes": [{"type": "boot", "size": 300}, {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, 
+ {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"}, {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal",
+ "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none",
+ "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:6:0", "size": 858483}, 
+ {"name": "sdo", "extra": ["disk/by-id/wwn-0x5000c50059c3b6a7", "disk/by-id/scsi-35000c50059c3b6a7"], "bootable": false, "free_space": 857919, "volumes": [{"type": "boot", "size": 300}, 
+ {"mount": "/boot", "size": 200, "type": "raid", "file_system": "ext2", "name": "Boot"}, {"type": "lvm_meta_pool", "size": 64}, {"size": 0, "type": "pv", "lvm_meta_size": 0, "vg": "os"},
+ {"partition_guid": "45b0969e-9b03-4f30-b4c6-b4b80ceff106", "name": "cephjournal", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 0}, 
+ {"partition_guid": "4fbd7e29-9d25-41b8-afd0-062c0ceff05d", "name": "ceph", "mount": "none", "disk_label": null, "type": "partition", "file_system": "none", "size": 857919}], 
+ "type": "disk", "id": "disk/by-path/pci-0000:42:00.0-scsi-0:0:7:0", "size": 858483}, {"_allocate_size": "min", "label": "Base System", "min_size": 82944, 
+ "volumes": [{"mount": "/", "size": 51200, "type": "lv", "name": "root", "file_system": "ext4"}, {"mount": "swap", "size": 31744, "type": "lv", "name": "swap", "file_system": "swap"}],
+ "type": "vg", "id": "os"}]' where node_id=6;

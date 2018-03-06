@@ -1,0 +1,36 @@
+Ansible adhoc ©R¥O
+
+ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
+ansible controller -m shell -a "ps -ef|grep rbd"
+ansible controller -m script -a '/root/monitor.sh'
+
+
+###no need sudo#####
+ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
+ansible openstack-prod -m apt -a "name=zabbix-sender state=present"
+ansible openstack-prod -m cron -a "user=root minute=*/1 job='/etc/zabbix/zabbix_agentd.d/pageinout.sh'"
+
+ansible 10.20.0.21 -m apt_repository -a "repo='deb [arch=amd64] http://10.67.51.164/zabbix3.2 trusty main' state=present filename=zabbix3.2"
+ansible 10.20.0.21 -m apt_key -a "id=A14FE591 url=http://10.67.51.164/aptkey/082AB56BA14FE591 state=present"
+
+
+###need sudo ###
+ansible 10.67.49.161 -u tjadmin -b -m apt -a "name=zabbix-sender state=present"
+ansible 10.67.49.161 -u tjadmin -b -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
+ansible 10.67.49.161 -u tjadmin -b -m cron -a "user=root minute=*/1 job='/etc/zabbix/zabbix_agentd.d/pageinout.sh'"
+
+
+
+
+# Update repositories cache and install "foo" package
+- apt: name=foo update_cache=yes
+# Run the equivalent of "apt-get update" as a separate step
+- apt: update_cache=yes
+
+cat astute.yaml |grep '^[a-z].*:'
+hiera nodes
+
+
+facter
+facter ipaddress
+

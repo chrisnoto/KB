@@ -1,0 +1,80 @@
+=======================HEAT Template===================
+heat_template_version: 2015-10-15
+description: Launch a basic instance using the ``m1.custom-small`` flavor and one network.
+
+parameters:
+  InstanceID:
+    type: string
+    description: Name of Instance.
+  ImageID:
+    type: string
+    description: Image to use for the instance.
+  NetID:
+    type: string
+    description: Network ID to use for the instance.
+  SecGroupID:
+    type: string
+    description: SecGroup ID to use for the instance.
+  FlavorID:
+    type: string
+    description: Flavor ID tu use for the instance.
+    default: m1.custom-small
+  Count:
+    type: number
+    description: number of instance.
+    default: 1
+
+resources:
+  floating_ip:
+    type: OS::Nova::FloatingIP
+    properties:
+      pool: admin_floating_net
+
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param: InstanceID}
+      image: { get_param: ImageID }
+      key_name: key1
+      flavor: { get_param: FlavorID }
+      networks:
+      - network: { get_param: NetID }
+      security_groups:
+        - { get_param: SecGroupID}
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            uptime > test.txt
+            cat /etc/*release >>test.txt
+
+  association:
+    type: OS::Nova::FloatingIPAssociation
+    properties:
+      floating_ip: { get_resource: floating_ip }
+      server_id: { get_resource: instance1 }
+
+outputs:
+  instance_name:
+    description: Name of the instance.
+    value: { get_attr: [ instance1, name ] }
+  instance_ip:
+    description: IP address of the instance.
+    value: { get_attr: [ instance1, first_address ] }
+
+=======================HEAT Template===================
+=======================HEAT env===================
+parameters:  
+  InstanceID: myinstance
+  ImageID: TestVM
+  NetID: admin_internal_net
+  SecGroupID: linux
+  FlavorID: m1.custom-small
+  Count: 1
+ =======================HEAT env=================== 
+    rg:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: Count }
+  

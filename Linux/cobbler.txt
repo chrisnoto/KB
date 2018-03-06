@@ -1,0 +1,68 @@
+﻿net.ifnames=0 biosdevname=0
+#####################reposync for CentOS7  ##############################################################
+#####centos-base  centos-updates centos-openstack-mitaka centos-ceph-jewel centos-qemu-ev epel###########
+/bin/reposync --repoid=base --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/base
+
+/bin/reposync --repoid=updates --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/updates
+
+/bin/reposync --repoid=centos-openstack-mitaka --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/centos-openstack-mitaka
+
+/bin/reposync --repoid=centos-openstack-mitaka-test --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/centos-openstack-mitaka-test
+
+/bin/reposync --repoid=epel --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/epel
+
+/bin/reposync --repoid=centos-ceph-jewel --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/centos-ceph-jewel
+
+/bin/reposync --repoid=centos-qemu-ev --download_path=/var/www/html -a x86_64 |tee -a /root/yumreposync.log
+/bin/createrepo --update /var/www/html/centos-qemu-ev
+
+Repo-id      : centos-ceph-jewel
+Repo-id      : centos-openstack-newton
+Repo-id      : centos-qemu-ev
+
+
+/bin/rsync -avrt rsync://mirrros.tuna.tsinghua.edu.cn/centos/6/os/x86_64 /var/www/html/centos/6/os/x86_64
+/bin/rsync -avrt rsync://mirrors.yun-idc.com/centos/6/updates/x86_64 /var/www/html/centos/6/updates/x86_64
+/bin/rsync -avrt rsync://mirrors.yun-idc.com/centos/6/extras/x86_64 /var/www/html/centos/6/extras/x86_64
+========================================================================================================================
+yum install fence-agents-all ipmitool OpenIPMI -y
+
+ipmitool -I lanplus -H 10.67.63.168 -U root -P calvin chassis power status/reset
+
+ipmitool -I lanplus -H 10.67.62.199 -U itsa -P 'cesbgILO!!#' chassis power status
+/sbin/fence_ipmilan --ip=10.67.63.168 --username=root --lanplus --password=calvin --action=status
+
+-------------------------------------------------------------------------------------------------------------------------------------------
+cobbler repo add --name=Centos7-x86_64-epel --mirror=http://epel.mirror.net.in/epel/7/x86_64/ --arch=x86_64 --breed=yum
+
+cobbler repo add --name=Centos7-x86_64-base --mirror=http://ftp.sjtu.edu.cn/centos/7.2.1511/os/x86_64/ --arch=x86_64 --breed=yum
+
+cobbler repo add --name=Centos7-x86_64-updates --mirror=http://centos.ustc.edu.cn/centos/7.2.1511/updates/x86_64/ --arch=x86_64 --breed=yum
+
+cobbler repo add --name=Centos7-x86_64-extras --mirror=http://centos.ustc.edu.cn/centos/7.2.1511/extras/x86_64/ --arch=x86_64 --breed=yum
+
+cobbler repo add --name=centos-openstack-mitaka --mirror=http://mirror.centos.org/centos/7/cloud/x86_64/openstack-mitaka/ --arch=x86_64 --breed=yum
+
+cobbler repo add --name=centos-ceph-jewel/7/x86_64 --mirror=http://mirror.centos.org/centos/7/storage/x86_64/ceph-jewel/ --arch=x86_64 --breed=yum
+----------------------------------------------------------------------------------------------------------------------------------------------------
+#####cobbler system add --name=controller01 --power-address=10.67.63.167 --power-type='idrac' --power-user=root --power-pass=calvin --profile=CentOS7.2-x86_64
+
+
+cobbler system add --name=yumrepo_server --hostname=yumrepo_server --mac=e6:60:bf:bc:a3:12 --interface=eth0 --ip-address=10.67.51.162 --subnet=255.255.254.0 --gateway=10.67.50.1 --static=1 --profile=CentOS6.5-x86_64
+
+cobbler system add --name=compute01 --hostname=compute01 --mac=52:54:00:d6:79:8d --interface=eth0 --ip-address=10.67.51.157 --subnet=255.255.254.0 --gateway=10.67.50.1 --static=1 --profile=CentOS7.2-x86_64
+
+
+cobbler system add --name=compute02 --hostname=compute02 --mac=52:54:00:cb:a2:da --interface=eth0 --ip-address=10.67.51.158 --subnet=255.255.254.0 --gateway=10.67.50.1 --static=1 --profile=CentOS7.2-x86_64
+
+
+cobbler system add --name=controller --hostname=controller --mac=52:54:00:44:a7:02 --interface=eth0 --ip-address=10.67.51.156 --subnet=255.255.254.0 --gateway=10.67.50.1 --static=1 --profile=CentOS7.2-x86_64
+
+------------------------------------------------------------------------------------------------------------
+

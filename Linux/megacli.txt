@@ -1,0 +1,55 @@
+######發現及導入外來磁盤####
+root@node-5:~# megacli -CfgForeign -Scan -aALL      掃描
+
+There are 1 foreign configuration(s) on controller 0.
+There is no foreign configuration on controller 1.
+
+Exit Code: 0x00
+
+root@node-5:~# megacli -pdlist -aall|grep 'Firmware state'    查看外來磁盤
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Unconfigured(good), Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+
+root@node-5:~# megacli -cfgforeign -import -aall        導入
+
+Foreign configuration is imported on controller 0.
+There is no foreign configuration on controller 1.
+
+Exit Code: 0x00
+
+root@node-5:~# megacli -pdlist -aall|grep 'Firmware state'
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: Online, Spun Up
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+Firmware state: JBOD
+
+root@node-5:~# megacli -CfgForeign -Scan -aALL
+
+There is no foreign configuration on controller 0.
+There is no foreign configuration on controller 1.

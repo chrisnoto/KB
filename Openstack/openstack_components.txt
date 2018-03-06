@@ -1,0 +1,527 @@
+﻿itsa/cesbgILO!!#
+
+引入 MACVTAP 设备的目标是：简化虚拟化环境中的交换网络，代替传统的 Linux TAP 设备加 Bridge 设备组合，
+同时支持新的虚拟化网络技术，如 802.1 Qbg。
+MACVLAN替代VETH+Bridge一样，
+MACVTAP能替代TAP+Bridge
+
+     An Example of NIC Aggregation using Fuel CLI tools
+Suppose you have a node with 4 NICs and you want to bond two of them with LACP enabled ("eth2" and "eth3" here) and then assign Private and Storage networks to them. 
+The Admin network uses a dedicated NIC ("eth0"). The Management and Public networks use the last NIC ("eth1").
+To create bonding interface using Open vSwitch, do the following:
+Create a separate OVS bridge "br-bondnew" instead of "br-eth2" and "br-eth3".
+Connect "eth2" and "eth3" to "br-bondnew" as a bonded port with property "lacp=active".
+Connect "br-prv" and "br-storage" bridges to "br-bondnew" by OVS patches.
+Leave all of the other things unchanged.
+See the example of OVS network scheme section in the node configuration.
+If you are going to use Linux native bonding, follow these steps:
+Create a new interface "bondnew" instead of "br-eth2" and "br-eth3".
+Connect "eth2" and "eth3" to "bondnew" as a bonded port.
+Add 'provider': 'lnx' to choose Linux native mode.
+Add properties as a hash instead of an array used in ovs mode. Properties are same as options used during the bonding kernel modules loading. 
+You should provide which mode this bonding interface should use. Any other options are not mandatory. You can find all these options in the Linux Kernel Documentation.
+'properties':
+'mode': 1
+Connect "br-prv" and "br-storage" bridges to "br-bondnew" by OVS patches.
+Leave all of the other things unchanged.
+
+!!!Important
+Ceph doesn't support QCOW2 for hosting a virtual machine disk. IF you want to boot vms in Ceph
+(ephemeral backend or boot from volume), the Glance image format must be RAW.
+-----------------------------------------------Glance-----------------------------------------------------
+Glance
+理解 Image
+云环境下需要更高效的解决方案，这就是 Image。 Image 是一个模板，里面包含了基本的操作系统和其他的软件。 
+举例来说，有家公司需要为每位员工配置一套办公用的系统，一般需要一个 Win7 系统再加 MS office 软件。 
+OpenStack 是这么玩的： 
+1.先手工安装好这么一个虚机 
+2.然后对虚机执行 snapshot，这样就得到了一个 image 
+3.当有新员工入职需要办公环境时，立马启动一个或多个该 image 的 instance（虚机）就可以了 
+
+在这个过程中，第 1 步跟传统方式类似，需要手工操作和一定时间。
+但第 2、3 步非常快，全自动化，一般都是秒级别。 而且 2、3 步可以循环做。 
+比如公司新上了一套 OA 系统，每个员工的 PC 上都得有客户端软件。 那么可以在某个员工的虚机中手工安装好 OA 客户端，然后执行 snapshot ，得到新的 image，
+以后就直接使用新 image 创建虚机就可以了。 另外，snapshot 还有备份的作用，能够非常方便的恢复系统
+
+在 OpenStack 中，提供 Image Service 的是 Glance，其具体功能如下： 
+1.提供 REST API 让用户能够查询和获取 image 的元数据和 image 本身 
+2.支持多种方式存储 image，包括普通的文件系统、Swift、Amazon S3 等 
+3.对 Instance 执行 Snapshot 创建新的 image 
+
+glance-api 
+glance-api 是系统后台运行的服务进程。 对外提供 REST API，响应 image 查询、获取和存储的调用。 
+glance-api 不会真正处理请求。 如果是与 image metadata（元数据）相关的操作，glance-api 会把请求转发给 glance-registry； 
+如果是与 image 自身存取相关的操作，glance-api 会把请求转发给该 image 的 store backend
+
+glance-registry 
+glance-registry 是系统后台运行的服务进程。 负责处理和存取 image 的 metadata，例如 image 的大小和类型。
+
+Database 
+Image 的 metadata 会保持到 database 中，默认是 MySQL。 在控制节点上可以查看 glance 的 database 信息
+
+Store backend 
+Glance 自己并不存储 image。 真正的 image 是存放在 backend 中的。 Glance 支持多种 backend，包括 
+1.A directory on a local file system（这是默认配置） 
+2.GridFS 
+3.Ceph RBD 
+4.Amazon S3 
+5.Sheepdog 
+6.OpenStack Block Storage (Cinder) 
+7.OpenStack Object Storage (Swift) 
+8.VMware ESX 
+具体使用哪种 backend，是在 /etc/glance/glance-api.conf 中配置的
+
+Glance 主要有两个日志，glance_api.log 和 glance_registry.log，保存在 /var/log/apache2/ 目录里。
+
+-------------------------------------------Nova---------------------------------------------------
+Nova
+API
+nova-api
+接收和响应客户的 API 调用。 除了提供 OpenStack 自己的API，nova-api 还支持 Amazon EC2 API。 
+也就是说，如果客户以前使用 Amazon EC2，并且用 EC2 的 API 开发了些工具来管理虚机，
+那么如果现在要换成 OpenStack，这些工具可以无缝迁移到 OpenStack，因为 nova-api 兼容 EC2 API，无需做任何修改。
+Compute Core 
+nova-scheduler
+虚机调度服务，负责决定在哪个计算节点上运行虚机 
+nova-compute
+管理虚机的核心服务，通过调用 Hypervisor API 实现虚机生命周期管理 
+Hypervisor
+计算节点上跑的虚拟化管理程序，虚机管理最底层的程序。 不同虚拟化技术提供自己的 Hypervisor。 常用的 Hypervisor 有 KVM，Xen， VMWare 等 
+nova-conductor
+nova-compute 经常需要更新数据库，比如更新虚机的状态。 出于安全性和伸缩性的考虑，nova-compute 并不会直接访问数据库，而是将这个任务委托给 nova-conductor
+Console Interface 
+nova-console
+用户可以通过多种方式访问虚机的控制台： 
+nova-novncproxy，基于 Web 浏览器的 VNC 访问 
+nova-spicehtml5proxy，基于 HTML5 浏览器的 SPICE 访问 
+nova-xvpnvncproxy，基于 Java 客户端的 VNC 访问 
+nova-consoleauth
+负责对访问虚机控制台请亲提供 Token 认证 
+nova-cert
+提供 x509 证书支持
+Database 
+Nova 会有一些数据需要存放到数据库中，一般使用 MySQL。 数据库安装在控制节点上。 Nova 使用命名为 “nova” 的数据库
+Message Queue 
+在前面我们了解到 Nova 包含众多的子服务，这些子服务之间需要相互协调和通信。 
+为解耦各个子服务，Nova 通过 Message Queue 作为子服务的信息中转站。 
+所以在架构图上我们看到了子服务之间没有直接的连线，它们都通过 Message Queue 联系
+OpenStack 默认是用 RabbitMQ 作为 Message Queue。 MQ 是 OpenStack 的核心基础组件
+
+对于 Nova，这些服务会部署在两类节点上：计算节点和控制节点。 
+计算节点上安装了 Hypervisor，上面运行虚拟机。 
+由此可知： 1. 只有 nova-compute 需要放在计算节点上。 2. 其他子服务则是放在控制节点上的。
+计算节点 devstack-compute1 上只运行了 nova-compute 子服务
+控制节点 devstack-controller 上运行了若干 nova-* 子服务
+RabbitMQ 和 MySQL 也是放在控制节点上的 
+可能细心的同学已经发现我们的控制节点上也运行了 nova-compute。 
+这实际上也就意味着 devstack-controller 既是一个控制节点，同时也是一个计算节点，也可以在上面运行虚机。 
+这也向我们展示了 OpenStack 这种分布式架构部署上的灵活性： 可以将所有服务都放在一台物理机上，作为一个 All-in-One 的测试环境； 
+也可以将服务部署在多台物理机上，获得更好的性能和高可用。 另外，也可以用 nova service-list 查看 nova-* 子服务都分布在哪些节点上
+
+nova-api 
+Nova-api 是整个 Nova 组件的门户，所有对 Nova 的请求都首先由 nova-api 处理。 
+Nova-api 向外界暴露若干 HTTP REST API 接口。 在 keystone 中我们可以查询 nova-api 的 endponits。 
+客户端就可以将请求发送到 endponits 指定的地址，向 nova-api 请求操作。 
+当然，作为最终用户的我们不会直接发送 Rest AP I请求。 OpenStack CLI，Dashboard 和其他需要跟 Nova 交换的组件会使用这些 API。 
+Nova-api 对接收到的 HTTP API 请求会做如下处理： 
+1. 检查客户端传入的参数是否合法有效 
+2. 调用 Nova 其他子服务的处理客户端 HTTP 请求 
+3. 格式化 Nova 其他子服务返回的结果并返回给客户端 
+nova-api 接收哪些请求？ 简单的说，只要是跟虚拟机生命周期相关的操作，nova-api 都可以响应。 大部分操作都可以在 Dashboard 上找到。
+
+nova-conductor 
+nova-compute 需要获取和更新数据库中 instance 的信息。 但 nova-compute 并不会直接访问数据库，而是通过 nova-conductor 实现数据的访问。
+这样做有两个显著好处： 
+1.更高的系统安全性 
+
+2.更好的系统伸缩性
+nova-conductor 将 nova-compute 与数据库解耦之后还带来另一个好处：
+提高了 nova 的伸缩性。 nova-compute 与 conductor 是通过消息中间件交互的。 
+这种松散的架构允许配置多个 nova-conductor 实例。 
+在一个大规模的 OpenStack 部署环境里，管理员可以通过增加 nova-conductor 的数量来应对日益增长的计算节点对数据库的访问。
+
+nova-scheduler
+Flavor 主要定义了 VCPU，RAM，DISK 和 Metadata 这四类。 nova-scheduler 会按照 flavor 去选择合适的计算节点。
+nova-scheduler 的很多 Filter 是根据算节点的资源使用情况进行过滤的。 
+比如 RamFilter 要检查计算节点当前可以的内存量；CoreFilter 检查可用的 vCPU 数量；DiskFilter 则会检查可用的磁盘空间。
+
+nova-compute
+nova-compute 在计算节点上运行，负责管理节点上的 instance。 
+OpenStack 对 instance 的操作，最后都是交给 nova-compute 来完成的。 
+nova-compute 与 Hypervisor 一起实现 OpenStack 对 instance 生命周期的管理。
+
+nova-compute 的功能可以分为两类： 
+1.定时向 OpenStack 报告计算节点的状态 
+2.实现 instance 生命周期的管理 
+
+nova-compute 创建 instance 的过程可以分为 4 步： 
+1.为 instance 准备资源 
+nova-compute 首先会根据指定的 flavor 依次为 instance 分配内存、磁盘空间和 vCPU。网络资源也会提前分配
+2.创建 instance 的镜像文件 
+资源准备好之后，nova-compute 会为 instance 创建镜像文件。 
+OpenStack 启动一个 instance 时，会选择一个 image，这个 image 由 Glance 管理。 
+nova-compute会： 1.首先将该 image 下载到计算节点 
+                 2.然后将其作为 backing file 创建 instance 的镜像文件
+从 Glance 下载 image 
+		nova-compute 首先会检查 image 是否已经下载（比如之前已经创建过基于相同 image 的 instance）。
+		如果没有，就从 Glance 下载 image 到本地。 
+		由此可知，如果计算节点上要运行多个相同 image 的 instance，
+		只会在启动第一个 instance 的时候从 Glance 下载 image，后面的 instance 启动速度就大大加快了。
+		image（ID为 917d60ef-f663-4e2d-b85b-e4511bb56bc2）是 qcow2 格式，nova-compute 将其下载，
+		然后通过 qemu-img 转换成 raw 格式。 
+		转换的原因是下一步需要将其作为 instance 的镜像文件的 backing file，而 backing file不能是 qcow2 格式。
+为 instance 创建镜像文件 
+		有了 image 之后，instance 的镜像文件直接通过 qemu-img 命令创建，backing file 就是下载的 image。
+这里有两个容易搞混淆的术语，在此特别说明一下： 
+		1.image，指的是 Glance 上保存的镜像，作为 instance 运行的模板。 计算节点将下载的 image 存放在 /opt/stack/data/nova/instances/_base 目录下。 
+		2.镜像文件，指的是 instance 启动盘所对应的文件 
+		3.二者的关系是：image 是镜像文件 的 backing file。image 不会变，而镜像文件会发生变化。比如安装新的软件后，镜像文件会变大。 
+		因为英文中两者都叫 “image”，为避免混淆，我们用 “image” 和 “镜像文件” 作区分。 
+3.创建 instance 的 XML 定义文件 
+		创建的 XML 文件会保存到该 instance 目录 /opt/stack/data/nova/instances/f1e22596-6844-4d7a-84a3-e41e6d7618ef，命名为 libvirt.xml 
+4.创建虚拟网络并启动虚拟机 
+
+Because 86400 seconds (24 hours) is the default time for remove_unused_original_minimum_age_seconds,
+ you can either wait for that time interval to see the base image removed, 
+ or set the value to a shorter time period in the nova.conf file.
+ Restart all nova services after changing a setting in the nova.conf file.
+
+本质上讲：Resize 是在 Migrate 的同时应用新的 flavor
+Migrate 可以看做是 resize 的一个特例： flavor 没发生变化的 resize，
+这也是为什么我们在上一节日志中看到 migrate 实际上是在执行 resize 操作。
+
+Resize 分两种情况：
+1.nova-scheduler 选择的目标节点与源节点是不同节点。
+操作过程跟上一节 Migrate 几乎完全一样，只是在目标节点启动 instance 的时候按新的 flavor 分配资源。 
+同时，因为要跨节点复制文件，也必须要保证 nova-compute 进程的启动用户（通常是 nova，也可能是 root，可以通过 ps 命令确认）能够在计算节点之间无密码访问。
+ 对这一种情况我们不再赘述，请参看前面 Migrate 小节。
+2.目标节点与源节点是同一个节点。则不需要 migrate。下面我们重点讨论这一种情况。
+
+Migrate 操作会先将 instance 停掉，也就是所谓的“冷迁移”。
+而 Live Migrate 是“热迁移”，也叫“在线迁移”，instance不会停机。
+
+Live Migrate 分两种： 
+1.源和目标节点没有共享存储，instance 在迁移的时候需要将其镜像文件从源节点传到目标节点，这叫做 Block Migration（块迁移）
+2.源和目标节点共享存储，instance 的镜像文件不需要迁移，只需要将 instance 的状态迁移到目标节点。
+源和目标节点需要满足一些条件才能支持 Live Migration： 
+1.源和目标节点的 CPU 类型要一致。 
+2.源和目标节点的 Libvirt 版本要一致。
+3.源和目标节点能相互识别对方的主机名称，比如可以在 /etc/hosts 中加入对方的条目。
+4.在源和目标节点的 /etc/nova/nova.conf 中指明在线迁移时使用 TCP 协议。
+5.Instance 使用 config driver 保存其 metadata。在 Block Migration 过程中，该 config driver 也需要迁移到目标节点。
+由于目前 libvirt 只支持迁移 vfat 类型的 config driver，
+所以必须在 /etc/nova/nova.conf 中明确指明 launch instance 时创建 vfat 类型的 config driver。
+6.源和目标节点的 Libvirt TCP 远程监听服务得打开，需要在下面两个配置文件中做一点配置。
+
+Rebuild 可以恢复损坏的 instance。
+那如果是宿主机坏了怎么办呢？ 比如硬件故障或者断电造成整台计算节点无法工作，该节点上运行的 instance 如何恢复呢？ 
+用 Shelve 或者 Migrate 可不可以？ 很不幸，这两个操作都要求 instance 所在计算节点的 nova-compute 服务正常运行。 
+幸运的是，还有 Evacuate 操作。 Evacuate 可在 nova-compute 无法工作的情况下将节点上的 instance 迁移到其他计算节点上。
+但有个前提： Instance 的镜像文件必须放在共享存储上。
+
+evacuate 实际上是通过 rebuild 操作实现的。 这是可以理解的，因为 evacuate 是用共享存储上 instance 的镜像文件重新创建虚机
+
+我们把对 Instance 的管理按运维工作的场景分为两类：常规操作和故障处理。常规操作
+常规操作中，Launch、Start、Reboot、Shut Off 和 Terminate 都很好理解。 
+下面几个操作重点回顾一下：
+Resize
+通过应用不同的 flavor 调整分配给 instance 的资源。 
+Lock/Unlock
+可以防止对 instance 的误操作。 
+Pause/Suspend/Resume
+暂停当前 instance，并在以后恢复。 Pause 和 Suspend 的区别在于 Pause 将 instance 的运行状态保存在计算节点的内存中，
+而 Suspend 保存在磁盘上。 Pause 的优点是 Resume 的速度比 Suspend 快；缺点是如果计算节点重启，内存数据丢失，就无法 Resume 了，而 Suspend 则没有这个问题。 
+Snapshot 
+备份 instance 到 Glance。产生的 image 可用于故障恢复，或者以此为模板部署新的 instance。 
+
+故障处理 
+故障处理有两种场景：计划内和计划外。 
+计划内是指提前安排时间窗口做的维护工作，比如服务器定期的微码升级，添加更换硬件等。 
+计划外是指发生了没有预料到的突发故障，比如强行关机造成 OS 系统文件损坏，服务器掉电，硬件故障等。 
+计划内故障处理 
+对于计划内的故障处理，可以在维护窗口中将 instance 迁移到其他计算节点。 涉及如下操作： 
+Migrate
+将 instance 迁移到其他计算节点。 迁移之前，instance 会被 Shut Off，支持共享存储和非共享存储。 
+Live Migrate
+与 Migrate 不同，Live Migrate 能不停机在线地迁移 instance，保证了业务的连续性。也支持共享存储和非共享存储（Block Migration） 
+Shelve/Unshelve 
+Shelve 将 instance 保存到 Glance 上，之后可通过 Unshelve 重新部署。 
+Shelve 操作成功后，instance 会从原来的计算节点上删除。 Unshelve 会重新选择节点部署，可能不是原节点。 
+计划外故障处理 
+计划外的故障按照影响的范围又分为两类：Instance 故障和计算节点故障 
+Instance 故障 
+Instance 故障只限于某一个 instance 的操作系统层面，系统无法正常启动。 
+可以使用如下操作修复 instance： 
+Rescue/Unrescue
+用指定的启动盘启动，进入 Rescue 模式，修复受损的系统盘。成功修复后，通过 Unrescue 正常启动 instance。 
+Rebuild
+如果 Rescue 无法修复，则只能通过 Rebuild 从已有的备份恢复。Instance 的备份是通过 snapshot 创建的，所以需要有备份策略定期备份。 
+计算节点故障 
+Instance 故障的影响范围局限在特定的 instance，计算节点本身是正常工作的。如果计算节点发生故障，
+OpenStack 则无法与节点的 nova-compute 通信，其上运行的所有 instance 都会受到影响。
+这个时候，只能通过 Evacuate 操作在其他正常节点上重建 Instance。 
+Evacuate 
+利用共享存储上 Instance 的镜像文件在其他计算节点上重建 Instance。 所以提前规划共享存储是关键。
+
+--------------------------------------------Cinder-------------------------------------------------------
+Cinder
+OpenStack 提供 Block Storage Service 的是 Cinder，其具体功能是： 
+1.提供 REST API 使用户能够查询和管理 volume、volume snapshot 以及 volume type 
+2.提供 scheduler 调度 volume 创建请求，合理优化存储资源的分配 
+3.通过 driver 架构支持多种 back-end（后端）存储方式，包括 LVM，NFS，Ceph,GlusterFS 和其他诸如 EMC、IBM 等商业存储产品和方案
+
+Cinder 包含如下几个组件： 
+cinder-api
+接收 API 请求，调用 cinder-volume 执行操作。 
+cinder-volume
+管理 volume 的服务，与 volume provider 协调工作，管理 volume 的生命周期。运行 cinder-volume 服务的节点被称作为存储节点。 
+cinder-scheduler
+scheduler 通过调度算法选择最合适的存储节点创建 volume。 
+volume provider
+数据的存储设备，为 volume 提供物理存储空间。 cinder-volume 支持多种 volume provider，
+每种 volume provider 通过自己的 driver 与cinder-volume 协调工作。 
+Message Queue
+Cinder 各个子服务通过消息队列实现进程间通信和相互协作。因为有了消息队列，子服务之间实现了解耦，
+这种松散的结构也是分布式系统的重要特征。 
+Database 
+Cinder 有一些数据需要存放到数据库中，一般使用 MySQL。数据库是安装在控制节点上的，比如在我们的实验环境中，可以访问名称为“cinder”的数据库
+
+Cinder 的服务会部署在两类节点上，控制节点和存储节点。
+cinder-api 和 cinder-scheduler 部署在控制节点上，这个很合理。 
+无论是哪个节点，只要上面运行了 cinder-volume，它就是一个存储节点，当然，该节点上也可以运行其他 OpenStack服务。
+RabbitMQ 和 MySQL 通常是放在控制节点上的。
+一般来讲，volume provider 是独立的。cinder-volume 使用 driver 与 volume provider 通信并协调工作。
+所以只需要将 driver 与 cinder-volume 放到一起就可以了。在 cinder-volume 的源代码目录下有很多 driver，支持不同的 volume provider
+存储节点上本地的 LV 如何挂载到计算节点的 instance 上呢？通常情况存储节点和计算节点是不同的物理节点。解决方案是使用 iSCSI
+
+Volume 除了可以用作 instance 的数据盘，也可以作为启动盘（Bootable Volume）
+我们 launch instance 要么直接从 image launch（Boot from image），要么从 instance 的 snapshot launch（Boot from snapshot）。
+这两种 launch 方式下，instance 的启动盘 vda 均为镜像文件，存放路径为计算节点 /opt/stack/data/nova/instances/<Instance ID>/disk
+下拉列表的后三项则可以将 volume 作为 instance 的启动盘 vda，分别为： 
+Boot from volume
+直接从现有的 bootable volume launch 
+Boot from image (create a new volume)
+创建一个新的 volume，将 image 的数据 copy 到 volume，然后从该 volume launch 
+Boot from volume snapshot (create a new volume)
+通过指定的 volume snapshot 创建 volume，然后从该 volume launch，当然前提是该snapshot 对应的源 volume 是 bootable 的。 
+下面我们以 Boot from image (create a new volume)为例，看如何从 volume 启动。  
+选择 cirros 作为 image，instance 命名为“c3” 如果希望 terminate instant 的时候同时删除 volume，可以勾选“Delete on Terminate” 
+c3 成功 Launch 后，volume 列表中可以看到一个新 bootable volume，以 volume ID 命名，并且已经 attach 到 c3。
+该 volume 已经配置为 c3 的启动盘 vda。  如果用该 volume 创建 snapshot，之后就可以通过 Boot from volume snapshot (create a new volume) 部署新的 instance
+
+1.在 Cinder 的 driver 架构中，运行 cinder-volume 的存储节点和 Volume Provider 可以是完全独立的两个实体。 
+cinder-volume 通过 driver 与 Volume Provider 通信，控制和管理 volume。
+2.Instance 读写 volume 时，数据流不需要经过存储节点，而是直接对 Volume Provider 中的 volume 进行读写。 
+正如上图所示，存储节点与 NFS Volume Provider 的连接只用作 volume 的管理和控制（绿色连线）；
+真正的数据读写，是通过计算节点和 NFS Volume Proiver 之间的连接完成的（紫色连线）。
+这种设计减少了中间环节，存储节点不直接参与数据传输，保证了读写效率。
+3.其他 Volume Provider（例如 ceph，swift，商业存储等）均遵循这种控制流与数据流分离的设计。
+
+---------------------------------------Neutron-----------------------------------------------------
+Neutron
+Neutron 由如下组件构成： 
+Neutron Server
+对外提供 OpenStack 网络 API，接收请求，并调用 Plugin 处理请求。 
+Plugin
+处理 Neutron Server 发来的请求，维护 OpenStack 逻辑网络的状态， 并调用 Agent 处理请求。 
+Agent
+处理 Plugin 的请求，负责在 network provider 上真正实现各种网络功能。 
+network provider
+提供网络服务的虚拟或物理网络设备，例如 Linux Bridge，Open vSwitch 或者其他支持 Neutron 的物理交换机。 
+Queue
+Neutron Server，Plugin 和 Agent 之间通过 Messaging Queue 通信和调用。 
+Database
+存放 OpenStack 的网络状态信息，包括 Network, Subnet, Port, Router 等。
+
+以创建一个 VLAN100 的 network 为例，假设 network provider 是 linux bridge， 流程如下： 
+1.Neutron Server 接收到创建 network 的请求，通过 Message Queue（RabbitMQ）通知已注册的 Linux Bridge Plugin。 
+2.Plugin 将要创建的 network 的信息（例如名称、VLAN ID等）保存到数据库中，并通过 Message Queue 通知运行在各节点上的 Agent。 
+3.Agent 收到消息后会在节点上的物理网卡（比如 eth2）上创建 VLAN 设备（比如 eth2.100），并创建 bridge （比如 brqXXX） 桥接 VLAN 设备。
+
+这里进行几点说明： 
+1.plugin 解决的是 What 的问题，即网络要配置成什么样子？而至于如何配置 How 的工作则交由 agent 完成。 
+2.plugin，agent 和 network provider 是配套使用的，比如上例中 network provider 是 linux bridge，那么就得使用 linux bridge 的 plungin 和 agent；
+如果 network provider 换成了 OVS 或者物理交换机，plugin 和 agent 也得替换。 
+3.plugin 的一个主要的职责是在数据库中维护 Neutron 网络的状态信息，这就造成一个问题：所有 network provider 的 plugin 都要编写一套非常类似的数据库访问代码。
+为了解决这个问题，Neutron 在 Havana 版本实现了一个 ML2（Modular Layer 2）plugin，对 plgin 的功能进行抽象和封装。
+有了 ML2 plugin，各种 network provider 无需开发自己的 plugin，只需要针对 ML2 开发相应的 driver 就可以了，工作量和难度都大大减少。ML2 会在后面详细讨论。 
+4.plugin 按照功能分为两类： core plugin 和 service plugin。
+core plugin 维护 Neutron 的 netowrk, subnet 和 port 相关资源的信息，与 core plugin 对应的 agent 包括 linux bridge, OVS 等； 
+service plugin 提供 routing, firewall, load balance 等服务，也有相应的 agent
+
+不同节点部署不同的 Neutron 服务组件。 
+
+方案1：控制节点 + 计算节点 
+在这个部署方案中，OpenStack 由控制节点和计算节点组成。 
+控制节点
+部署的服务包括：neutron server, core plugin 的 agent 和 service plugin 的 agent。 
+计算节点
+部署 core plugin 的agent，负责提供二层网络功能。 
+这里有两点需要说明： 
+1. core plugin 和 service plugin 已经集成到 neutron server，不需要运行独立的 plugin 服务。 
+2. 控制节点和计算节点都需要部署 core plugin 的 agent，因为通过该 agent 控制节点与计算节点才能建立二层连接。 
+3. 可以部署多个控制节点和计算节点。 
+ 
+方案2：控制节点 + 网络节点 + 计算节点 
+在这个部署方案中，OpenStack 由控制节点，网络节点和计算节点组成。 
+控制节点
+部署 neutron server 服务。 
+网络节点
+部署的服务包括：core plugin 的 agent 和 service plugin 的 agent。 
+计算节点
+部署 core plugin 的agent，负责提供二层网络功能。 
+这个方案的要点是将所有的 agent 从控制节点分离出来，部署到独立的网络节点上。 
+1.控制节点只负责通过 neutron server 响应 API 请求。 
+2.由独立的网络节点实现数据的交换，路由以及 load balance等高级网络服务。 
+3.可以通过增加网络节点承担更大的负载。 
+4.可以部署多个控制节点、网络节点和计算节点。 
+该方案特别适合规模较大的 OpenStack 环境。
+
+Neutron Server 包括两部分： 1. 提供 API 服务。 2. 运行 Plugin。 
+即 Neutron Server = API + Plugins 
+上图是 Neutron Server 的分层结构，至上而下依次为： 
+Core API
+对外提供管理 network, subnet 和 port 的 RESTful API。 
+Extension API
+对外提供管理 router, load balance, firewall 等资源 的 RESTful API。 
+Commnon Service
+认证和校验 API 请求。 
+Neutron Core
+Neutron server 的核心处理程序，通过调用相应的 Plugin 处理请求。 
+Core Plugin API
+定义了 Core Plgin 的抽象功能集合，Neutron Core 通过该 API 调用相应的 Core Plgin。 
+Extension Plugin API
+定义了 Service Plgin 的抽象功能集合，Neutron Core 通过该 API 调用相应的 Service Plgin。 
+Core Plugin
+实现了 Core Plugin API，在数据库中维护 network, subnet 和 port 的状态，并负责调用相应的 agent 在 network provider 上执行相关操作，比如创建 network。 
+Service Plugin
+实现了 Extension Plugin API，在数据库中维护 router, load balance, security group 等资源的状态，
+并负责调用相应的 agent 在 network provider 上执行相关操作，比如创建 router。
+
+随着支持的 network provider 数量的增加，开发人员发现了两个突出的问题： 
+1.只能在 OpenStack 中使用一种 core plugin，多种 network provider 无法共存。 
+2.不同 plugin 之间存在大量重复代码，开发新的 plugin 工作量大。
+
+ML2 作为新一代的 core plugin，提供了一个框架，允许在 OpenStack 网络中同时使用多种 Layer 2 网络技术，
+不同的节点可以使用不同的网络实现机制。  如上图所示，采用 ML2 plugin 后，
+可以在不同节点上分别部署 linux bridge agent, open vswitch agent, hyper-v agent 以及其他第三方 agent。 
+ML2 不但支持异构部署方案，同时能够与现有的 agent 无缝集成：
+以前用的 agent 不需要变，只需要将 Neutron server 上的传统 core plugin 替换为 ML2
+
+ML2 对二层网络进行抽象和建模，引入了 type driver 和 mechansim driver。
+Type Driver 
+Neutron 支持的每一种网络类型都有一个对应的 ML2 type driver。 
+type driver 负责维护网络类型的状态，执行验证，创建网络等。 
+ML2 支持的网络类型包括 local, flat, vlan, vxlan 和 gre。
+Mechansim Driver 
+Neutron 支持的每一种网络机制都有一个对应的 ML2 mechansim driver。 
+mechanism driver 负责获取由 type driver 维护的网络状态，并确保在相应的网络设备（物理或虚拟）上正确实现这些状态。
+
+举一个具体的例子： type driver 为 vlan，mechansim driver 为 linux bridge，我们要完成的操作是创建 network vlan100，那么： 
+1.vlan type driver 会确保将 vlan100 的信息保存到 Neutron 数据库中，包括 network 的名称，vlan ID 等。 
+2.linux bridge mechanism driver 会确保各节点上的 linux brige agent 在物理网卡上创建 ID 为 100 的 vlan 设备 和 brige 设备，并将两者进行桥接。
+
+mechanism driver 有三种类型：
+Agent-based
+包括 linux bridge, open vswitch 等。 
+Controller-based
+包括 OpenDaylight, VMWare NSX 等。 
+基于物理交换机
+包括 Cisco Nexus, Arista, Mellanox 等。 
+比如前面那个例子如果换成 Cisco 的 mechanism driver，则会在 Cisco 物理交换机的指定 trunk 端口上添加 vlan100。 
+本教程讨论的 mechanism driver 将涉及 linux bridge, open vswitch 和 L2 population。 
+linux bridge 和 open vswitch 的 ML2 mechanism driver 的作用是配置各节点上的虚拟交换机。 
+linux bridge driver 支持的 type 包括 local, flat, vlan, and vxlan。 
+open vswitch driver 除了这 4 种 type 还支持 gre。 
+L2 population driver 作用是优化和限制 overlay 网络中的广播流量。 vxlan 和 gre 都属于 overlay 网络
+
+Core Plugin/Agent 负责管理核心实体：net, subnet 和 port。而对于更高级的网络服务，则由 Service Plugin/Agent 管理
+Service Plugin 及其 Agent 提供更丰富的扩展功能，包括路由，load balance，firewall等
+DHCP
+dhcp agent 通过 dnsmasq 为 instance 提供 dhcp 服务。 
+Routing
+l3 agent 可以为 project（租户）创建 router，提供 Neutron subnet 之间的路由服务。路由功能默认通过 IPtables 实现。 
+Firewall
+l3 agent 可以在 router 上配置防火墙策略，提供网络安全防护。 
+另一个与安全相关的功能是 Security Group，也是通过 IPtables 实现。 
+Firewall 与 Security Group 的区别在于： 
+1.Firewall 安全策略位于 router，保护的是某个 project 的所有 network。 
+2.Security Group 安全策略位于 instance，保护的是单个 instance。 
+Firewall 与 Security Group 后面会详细分析。 
+Load Balance
+Neutron 默认通过 HAProxy 为 project 中的多个 instance 提供 load balance 服务
+
+Neutron 采用的是分布式架构，包括 Neutorn Server、各种 plugin/agent、database 和 message queue。 
+1.Neutron server 接收 api 请求。 
+2.plugin/agent 实现请求。 
+3.database 保存 neutron 网络状态。 
+4.message queue 实现组件之间通信。 
+
+metadata-agent 之前没有讲到，这里做个补充：
+instance 在启动时需要访问 nova-metadata-api 服务获取 metadata 和 userdata，
+这些 data 是该 instance 的定制化信息，比如 hostname, ip， public key 等。 
+但 instance 启动时并没有 ip，如何能够通过网络访问到 nova-metadata-api 服务呢？
+答案就是 neutron-metadata-agent
+该 agent 让 instance 能够通过 dhcp-agent 或者 l3-agent 与 nova-metadata-api 通信
+如果我们将 Neutron 架构展开，则会得到下面第二张图：  
+1.Neutron 通过 plugin 和 agent 提供的网络服务。 
+2.plugin 位于 Neutron server，包括 core plugin 和 service plugin。 
+3.agent 位于各个节点，负责实现网络服务。 
+4.core plugin 提供 L2 功能，ML2 是推荐的 plugin。 
+5.使用最广泛的 L2 agent 是 linux bridage 和 open vswitch。 
+6.service plugin 和 agent 提供扩展功能，包括 dhcp, routing, load balance, firewall, vpn 等。 
+
+OpenStack 至少包含下面几类网络流量 (逻辑上的划分)
+Management 
+API 
+VM 
+External
+Management 网络
+用于节点之间 message queue 内部通信以及访问 database 服务，所有的节点都需要连接到 management 网络。 
+API 网络
+OpenStack 各组件通过该网络向用户暴露 API 服务。Keystone, Nova, Neutron, Glance, Cinder, Horizon 的 endpoints 均配置在 API 网络上。 
+通常，管理员也通过 API 网络 SSH 管理各个节点。 
+VM 网络
+VM 网络也叫 tenant 网络，用于 instance 之间通信。 VM 网络可以选择的类型包括 local, flat, vlan, vxlan 和 gre。 
+VM 网络由 Neutron 配置和管理。 
+External 网络
+External 网络指的是 VM 网络之外的网络，该网络不由 Neutron 管理。 
+Neutron 可以将 router attach 到 External 网络，为 instance 提供访问外部网络的能力。 
+External 网络可能是企业的 intranet，也可能是 internet。 
+
+ML2 与运行在各个 OpenStack 节点上的 L2 agents 是有区别的。
+ML2 是 Neutron server 上的模块，而运行在各个 OpenStack 节点上的 L2 agents 是实际与虚拟化 Layer 2 技术交互的服务。
+ML2 与运行在各个 OpenStack 节点上的 L2 agent 通过 AMQP（Advanced Message Queuing Protocol）进行交互，下发命令并获取信息。
+
+An OpenStack environment includes multiple data pools for the VMs:
+
+Ephemeral storage is allocated for an instance and is deleted when the instance is deleted. The Compute service manages ephemeral storage. By default, Compute stores ephemeral drives as files on local disks on the Compute node but Ceph RBD can instead be used as the storage back end for ephemeral storage.
+Persistent storage exists outside all instances. Two types of persistent storage are provided:
+Block Storage service (cinder) can use LVM or Ceph RBD as the storage back end.
+Image service (glance) can use the Object Storage service (swift) or Ceph RBD as the storage back end.
+
+无状态和有状态服务
+
+无状态服务是指，当该服务对一个请求作出响应之后，不会再有任何相关操作。实现无状态服务的高可用，只需要同时运行该服务的多个实例，并保证这些实例的负载均衡即可。OpenStack 中无状态的服务包括： nova-api, nova-conductor, glance-api, keystone-api, neutron-api and nova-scheduler 。
+
+有状态服务，是指客户端发送的后续请求依赖于之前相关请求的处理结果。由于单独一项操作可能涉及若干相关请求，有状态服务相对难于管理，只是通过多个实例和负载均衡无法实现高可用。例如，如果每次访问 Horizon 时都是打开一个全新的页面（之前的操作都消失了），对于用户来说是毫无意义的。OpenStack 中有状态服务包括 OpenStack 数据库和消息队列。
+
+实现有状态服务高可用的方案有“主/从”和“主/主” 2 种模式。
+
+主/从
+
+在“主/从”模式中，当系统中的资源失效时，新的资源会被激活，替代失效部份继续提供服务。例如，在 OpenStack 集群中，可以在主数据库之外维护一套灾备数据库，当主数据库发生故障时，激活灾备数据库可以保证集群继续正常运行。
+
+通常情况下，针对无状态服务实现“主/从”模式的高可用是维护该服务的一个冗余实例，在必要时，这一实例会被激活。客户端的请求统一发送到一个虚拟的 IP 地址（该地址指向实际的后端服务），这样当发生切换时，后端服务和客户端几乎不需要进行任何改动。
+
+有状态服务的“主/从”模式高可用则是维护一套额外的备份资源，当故障发生时，可以直接替代失效部份继续工作。单独的应用程序（如 Pacemaker 、Corosync 等）负责监控各项服务，并在发生故障时激活备份资源。
+
+主/主
+
+在“主/主”模式中，服务的冗余实例和主实例会同时工作。这样主实例发生故障，不会对用户产生影响，因为冗余实例一直处于在线状态，后续客户端的请求直接由冗余实例处理，而主实例的故障恢复可以同步进行。
+
+通常，无状态服务“主/主”模式的高可用会维护冗余的服务实例，同时通过虚拟 IP 地址以及负载调度程序（如 HAProxy ）对客户端的请求进行负载均衡。
+
+而有状态服务的“主/主”模式高可用则是维护多个完全相同的冗余实例。例如，更新其中一个数据库实例时，其它所有实例都会被更新。这样客户端发送给其中一个实例的请求相当于发给了所有实例。负载调度程序管理客户端和这些实例之间的连接，确保请求发送到正常运行的服务实例。
+
+上面提到的是较为常见的高可用实现方案，但是并非只有这些方案可以实现系统的高可用。基本原则只是保证服务冗余和可用，具体如何实现则是视需求而定的。本文档会提供如何实现高可用系统的一些通用建议。

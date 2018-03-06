@@ -1,0 +1,73 @@
+Another important piece of information here is ocf:heartbeat:IPaddr2. This tells Pacemaker three things about the resource you want to add:
+The first field (ocf in this case) is the standard to which the resource script conforms and where to find it.
+The second field (heartbeat in this case) is standard-specific; for OCF resources, it tells the cluster which OCF namespace the resource script is in.
+The third field (IPaddr2 in this case) is the name of the resource script.
+To obtain a list of the available resource standards (the ocf part of ocf:heartbeat:IPaddr2), run:
+[root@pcmk-1 ~]# pcs resource standards
+ocf
+lsb
+service
+systemd
+stonith
+To obtain a list of the available OCF resource providers (the heartbeat part of ocf:heartbeat:IPaddr2), run:
+[root@pcmk-1 ~]# pcs resource providers
+heartbeat
+openstack
+pacemaker
+Finally, if you want to see all the resource agents available for a specific OCF provider (the IPaddr2 part of ocf:heartbeat:IPaddr2), run:
+[root@pcmk-1 ~]# pcs resource agents ocf:heartbeat
+CTDB
+Delay
+Dummy
+Filesystem
+IPaddr
+IPaddr2
+.
+. (skipping lots of resources to save space)
+.
+rsyncd
+slapd
+symlink
+tomcat
+
+##Add a resource
+[root@pcmk-1 ~]# pcs resource create ClusterIP ocf:heartbeat:IPaddr2 \
+    ip=192.168.122.120 cidr_netmask=32 op monitor interval=30s
+	
+[root@pcmk-1 ~]# pcs resource create WebSite ocf:heartbeat:apache  \
+      configfile=/etc/httpd/conf/httpd.conf \
+      statusurl="http://localhost/server-status" \
+      op monitor interval=1min
+##
+we can tell the cluster that two resources are related and need to run on the same host (or not at all). 
+Here, we instruct the cluster that WebSite can only run on the host that ClusterIP is active on.
+To achieve this, we use a colocation constraint that indicates it is mandatory for WebSite to run on the same node as ClusterIP. 
+The "mandatory" part of the colocation constraint is indicated by using a score of INFINITY. 
+The INFINITY score also means that if ClusterIP is not active anywhere, WebSite will not be permitted to run.
+
+[root@pcmk-1 ~]# pcs constraint colocation add WebSite with ClusterIP INFINITY
+##Ensure Resources Start and Stop in Order
+[root@pcmk-1 ~]# pcs constraint order ClusterIP then WebSite
+Adding ClusterIP WebSite (kind: Mandatory) (Options: first-action=start then-action=start)
+[root@pcmk-1 ~]# pcs constraint
+Location Constraints:
+Ordering Constraints:
+  start ClusterIP then start WebSite (kind:Mandatory)
+Colocation Constraints:
+  WebSite with ClusterIP (score:INFINITY)
+
+##Prefer One Node Over Another
+Pacemaker does not rely on any sort of hardware symmetry between nodes, so it may well be that one machine is more powerful than the other. 
+In such cases, it makes sense to host the resources on the more powerful node if it is available. 
+To do this, we create a location constraint.
+In the location constraint below, we are saying the WebSite resource prefers the node pcmk-1 with a score of 50. 
+Here, the score indicates how badly we’d like the resource to run at this location.
+[root@pcmk-1 ~]# pcs constraint location WebSite prefers pcmk-1=50
+[root@pcmk-1 ~]# pcs constraint
+Location Constraints:
+  Resource: WebSite
+    Enabled on: pcmk-1 (score:50)
+Ordering Constraints:
+  start ClusterIP then start WebSite (kind:Mandatory)
+Colocation Constraints:
+  WebSite with ClusterIP (score:INFINITY)

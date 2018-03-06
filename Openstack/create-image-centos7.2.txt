@@ -1,0 +1,123 @@
+本文以制作Centos7.2镜像为例，详细介绍制作镜像的步骤，该镜像上传到Openstack Glance中，
+相对于官方镜像，增加如下几个功能：
+
+支持密码注入功能(nova boot时通过--admin-pass参数指定设置初始密码）
+支持根分区自动调整(根分区自动调整为flavor disk大小，而不是原始镜像分区大小)
+支持动态修改密码(使用nova set-password命令可以修改管理员密码)
+本文制作镜像的宿主机操作系统为Ubuntu14.04，开启了VT功能(使用kvm-ok命令验证）并安装了libvirt系列工具，
+包括virsh、virt-manager、libguestfs-tools等
+
+qemu-img create -f qcow2 centos7.qcow2 10G
+
+SOFTWARE SELECTION选择Minimal Install，INSTALLATION DESTINATION需要选择手动配置分区，
+我们只需要一个根分区即可，不需要swap分区，
+文件系统选择ext4，存储驱动选择Virtio Block Device
+
+客户的云主机需要支持root ssh远程登录，因此需要开启root远程ssh登录功能，
+修改配置文件/etc/ssh/sshd_config并修改，重启ssh服务生效:
+PermitRootLogin yes
+useDNS no
+sudo systemctl restart sshd
+
+SELINUX=disabled
+为了加快安装速度，建议配置本地软件源仓库，若没有本地镜像仓库，
+则选择国内的软件源，会相对官网的速度下载要快，提高执行效率。
+
+cd /etc/yum.repos.d/
+rm -f *.repo
+curl -o local.repo http://10.67.51.164/centos7.repo
+yum repolist
+yum install -y acpid
+systemctl enable acpid
+systemctl stop NetworkManager
+systemctl disable NetworkManager
+systemctl restart network
+chkconfig --level 2345 network on
+yum install -y chrony
+systemctl status chronyd
+systemctl enable chronyd
+
+为了方便调试排错，虚拟机需要打开boot日志功能，并指定console，
+这样nova console-log才能获取虚拟机启动时的日志。修改配置文件/etc/default/grub，
+设置GRUB_CMDLINE_LINUX为：
+
+GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0,115200n8"
+grub2-mkconfig -o /boot/grub2/grub.cfg
+
+Openstack动态修改root密码以及密钥，需要虚拟机内部安装agent程序，
+agent会创建一个虚拟串行字符设备，用于和外部qemu通信，qemu通过这个虚拟字符设备向agent发送事件指令，
+agent接收事件并执行相应的指令完成用户功能，更多关于qemu-guest-agent请参考官方文档。
+ISO镜像中默认没有预安装agent，我们需要手动安装qemu-guest-agent：
+
+yum install -y qemu-guest-agent
+
+配置qemu-ga，修改/etc/sysconfig/qemu-ga，配置内容为:
+
+TRANSPORT_METHOD="virtio-serial"
+DEVPATH="/dev/virtio-ports/org.qemu.guest_agent.0"
+LOGFILE="/var/log/qemu-ga/qemu-ga.log"
+PIDFILE="/var/run/qemu-ga.pid"
+BLACKLIST_RPC=""
+FSFREEZE_HOOK_ENABLE=1
+
+虚拟机需要从metadata服务中获取元数据，比如启动时的主机名、初始化密码等，
+了使虚拟机能够和外部的metadata service通信，需要禁用默认的zeroconf route：
+
+echo "NOZEROCONF=yes" >> /etc/sysconfig/network
+
+最后安装cloud-init，cloud-init是虚拟机第一次启动时执行的脚本，
+主要负责从metadata服务中拉取配置信息，完成虚拟机的初始化工作，
+比如设置主机名、初始化密码以及注入密钥等。我们通常会实现自己的cloud-init，
+用来完成虚拟机的一些定制化初始化工作，如果没有自己的cloud-init，直接从官方源下载即可。
+
+yum install -y cloud-init
+vi /etc/cloud/cloud.cfg
+users:
+ - default
+
+disable_root: 0  #default 1
+ssh_pwauth:   1  #default 0
+
+
+虚拟机制作镜像时指定了根分区大小（比如我们设置为10GB），
+为了使虚拟机能够自动调整为flavor disk指定的根磁盘大小，即自动扩容, 
+我们需要安装glowpart(老版本叫growroot)并完成以下配置：
+
+yum install -y cloud-utils-growpart.x86_64
+rpm -qa kernel | sed 's/^kernel-//'  | xargs -I {} dracut -f /boot/initramfs-{}.img {}
+
+自此，镜像基本制作完成了，最后执行关机操作。
+
+/sbin/shutdown -h now
+
+5.清理工作
+在宿主机上运行以下命名，移除宿主机信息，比如mac地址等。
+
+virt-sysprep -d centos
+cleanup tasks such as removing the MAC address references
+最后，删除虚拟机，因为镜像已经制作完成，可以上传到glance了。
+
+virsh undefine centos删除虚拟机
+
+virt-sparsify --compress centos6-lvm.qcow2 centos6-cloud-lvm.qcow2
+
+
+glance image-create --name CentOS7-LVM --file centos7-lvm.qcow2 --disk-format qcow2 --container-format bare --visibility public --progress
+nova image-meta xxxxx set hw_qemu_guest_agent=yes
+
+# guestfish --rw -a centos63_desktop.img
+><fs> run
+><fs> list-filesystems
+><fs> mount /dev/vg_centosbase/lv_root /
+
+virt-customize -a centos6-cloud-lvm.qcow2 --install openssh-clients
+virt-customize -a ubuntu1404-cloud.qcow2 --run-command 'update-grub' -v
+#cloud-config
+ssh_pwauth: True
+password: passw0rd
+chpasswd: { expire: False }
+
+import yaml
+file = open("/tmp/pf9-user-data.txt")
+obj = yaml.load(file)
+print obj
