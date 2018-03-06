@@ -1,14 +1,17 @@
 #######配置k8s客戶端訪問k8s集群#######
 拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
 特別注意： 客戶端如有配置http proxy會導致無法訪問機器。
+
 #######k8s使用cinder做存儲後端#####
 这需要两个前提：
 1. OpenStack作为Kubernetes Provider，因为需要从Nova查询Pod所在的机器
 2. 官方文档中所说的那些要求
+
 ###### k8s的各種port #######
 <cluster ip>:port 是提供给集群内部客户访问service的入口
 <nodeIP>:nodePort 是提供给集群外部客户访问service的入口
 targetPort很好理解，targetPort是pod上的端口，从port和nodePort上到来的数据最终经过kube-proxy流入到后端pod的targetPort上进入容器。
+
 ######綁定機器運行pod######
 A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
  If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes and set nodeSelector in the pod to look for such label.
@@ -158,34 +161,6 @@ Session Affinity:       None
 
 --------------------curl 測試------------------------------
 [root@kub ~]# curl 10.254.14.10:8081
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-<style>
-    body {
-        width: 35em;
-        margin: 0 auto;
-        font-family: Tahoma, Verdana, Arial, sans-serif;
-    }
-</style>
-</head>
-<body>
-<h1>Welcome to nginx!</h1>
-<p>If you see this page, the nginx web server is successfully installed and
-working. Further configuration is required.</p>
-
-<p>For online documentation and support please refer to
-<a href="http://nginx.org/">nginx.org</a>.<br/>
-Commercial support is available at
-<a href="http://nginx.com/">nginx.com</a>.</p>
-
-<p><em>Thank you for using nginx.</em></p>
-</body>
-</html>
---------------------curl 測試------------------------------
-[root@kub ~]# curl 127.0.0.1:8081
-curl: (7) Failed connect to 127.0.0.1:8081; Connection refused
 
 ##############etcdctl command#############
 etcdctl ls /registry/services/specs/default

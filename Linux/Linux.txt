@@ -77,6 +77,7 @@ ibase是输入数字的进制，而obase就是输出数字的进制了。很好�
  docker pull harbor.cesbg.foxconn/library/mysql:5.6
  vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
  
+ #########mysql#########
  查看表大小（MB）并排序
  select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
  
@@ -654,8 +655,10 @@ Max realtime timeout      unlimited            unlimited            us
     Edit the contents (if needed)
     Finally repack and compress the initrd image:
 # find . | cpio -o -c | gzip -9 > /boot/test.img
+
 #####################array_vpn client############3
 /usr/local/array_vpn/array_vpnc64 -hostname vpn.hkg02.softlayer.com --username djsen -passwd Aq1sw@de3 -port 443
+
 ##############test socks ruleset############################
 connect -d -S 129.39.109.217 10.225.0.175 22
 code:
@@ -668,19 +671,25 @@ code:
              o  X'06' TTL expired
              o  X'07' Command not supported
              o  X'08' Address type not supported
+			 
 ######################check all cronjob on server#############################
 for u in `grep -v '#' /etc/cron.allow`;do echo "========$u=========";crontab -u $u -l|egrep -v '^#|^$';done
+
 #######################################
-If you upgrade from RHEL 5 to an unsupported kernel, you might not be able to access data on the virtual machine's PVSCSI disks. You can run vmware-config-tools.pl with the kernel-version parameter to regain access. 
+If you upgrade from RHEL 5 to an unsupported kernel, you might not be able to access data on the virtual machine's PVSCSI disks. 
+You can run vmware-config-tools.pl with the kernel-version parameter to regain access. 
+
 ###########run in background######
 nohup cmd &
 setsid cmd
 (cmd &)
 CTRL-z    disown -h %1      https://linux.cn/article-7170-1.html
 screen
+
 ##########backup file permission#########
 backup:   getfacl -R . > permission.txt
 restore:  setfacl --restore=permission.txt
+
 #####################SHC#######################
 #1   b23leimysql01:~/shc_no_ep           # modify it and distribute it
 pssh -h djs_srvlist --inline-stdout "rm -rf prerequisites/"
@@ -710,6 +719,7 @@ zip `hostname -s`_shc_20160510.zip `find ~chensen/prerequisites ! -type d -a  -n
 
 ####################scan sparse file larger than 1GB##########
 while read num file;do if [[ $(($num)) -lt 0 ]];then echo $file $(($num));fi;done< <(find / -type f -size +1G -print0|tee|xargs -0 stat -c "%b*%B-%s %n" --)
+
 ##################koan######################
 [root@localhost ~]# koan --list=profiles --server=192.168.124.200
 - looking for Cobbler at http://192.168.124.200:80/cobbler_api
@@ -729,6 +739,7 @@ url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
 - ['/sbin/grubby', '--update-kernel', '/boot/vmlinuz_koan', '--remove-args=root']
 - reboot to apply changes
 [root@localhost ~]# reboot
+
 ###################cobbler定制安装系统############
 # cobbler system add --name=test1 --mac=52:54:00:72:66:1a --interface=eth1 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test1.example.com --netboot-enabled=true --name-servers="192.168.124.1"
 # cobbler system edit --name=test1 --interface=eth1 --ip-address=192.168.124.209
@@ -781,21 +792,27 @@ dsmc rest "/usr/*" /media/target/usr -sub=yes
 dsmc q backup "/etc/openldap/slapd.conf"
 dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
 scp -r au04qws001djsr2 chensen@cn.ibm.com@w3-transfer.boulder.ibm.com:/w3/ibmconf/CSIRT_AU/2957
+
 ############awk with external variable######
 var=999
 echo |awk -v A=$var '{print A}'
 or
 awk '{print $0 A}' A=$var filename
+
 ############sed with variable#########
 cat test.txt |sed "s/$a/ABC/g"
 cat test.txt |sed 's/'$a'/ABC/g'
+
 ###################when there's much difference between df and du############
 lsof | grep "(deleted)"            then restart app
+
 ##################pssh with tunnel#################
 pssh -h djs_uat -x '-t -t -R 1880:b23leilapp01:80' --inline-stdout "sudo /usr/bin/yum list httpd"
+
 ##################cssh with tunnel#################
 add below in .csshrc
 ssh_args=-R 1880:mrepos:80
+
 #################parellel #########################
 echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
 seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
@@ -821,6 +838,7 @@ for u in `cat ID`;do grep $u /etc/passwd;done |grep -oP '\S+@in.ibm.com'
 eth0 9.115.106.177
 [sam@oc1181188062 ~]$ a=`ifconfig eth0`;a=${a#eth*addr:};a=${a%Bcast*};echo $a
 9.115.106.177
+
 #################script & scriptreplay##################
 script -t 2> timing.log -a output.session
 scriptreplay timing.log output.session
@@ -834,8 +852,10 @@ cat djs_uat1 |(while read srv user;do echo "=====$srv=====";ssh $srv "id $user" 
 csplit status /SERVER/ -n 2 -s {*} -f server -b "%02d.log"
 [sam@oc1181188062 tmp]$ cat 1|echo $[ $(tr '\n' '+') 0 ]
 [sam@oc1181188062 tmp]$ cat 1|awk 'BEGIN{a=0}{a+=$0}END{print a}'
+
 ################awk print new line every 9 line####################
 dsh -M -f djs_uat -c "sudo /sbin/ip a"|awk '!(NR%9){print $0"\n";next}1'
+
 ##################join###################sort the file first
 join -j 1 -a1 -e " " -o '1.1,2.2' filea  fileb 
 -a filenumber  # 1 or 2   -a1   all output for file num 1
@@ -847,6 +867,7 @@ join -j 1 -a1 -e " " -o '1.1,2.2' filea  fileb
 -t CHAR    # use CHAR as input and output field separator
 -i         # ignore lower/upper case
 -v         # like grep -v    ignore matched data
+
 ############check 100GB+ file sytem################
 for u in `cat djs_srvlist`;do echo "------$u------";ssh $u "bash -c $(printf '%q' "df -h|grep -v Size|xargs -n 6|grep '[0-9]\{3,\}G'")";done
 
@@ -861,6 +882,7 @@ find . -name "*.mef3" -print0|xargs -0 -tI{} mv {} {}.bak
 cat BAU|xargs -n1 -P5 -i{} ssh {} uptime
 echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
 seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
 ############vmware tool version############
 # dsh -M -f djs_srvlist -c "sudo /usr/bin/vmware-config-tools.pl --help 2>&1|grep Tools"
 
@@ -892,10 +914,11 @@ NETMASK=255.255.252.0
 #############diff sdiff##########
 ifconfig |diff -y - 123.txt
 ifconfig |sdiff -w 132 - 123.txt
+
 ############ksar###########
 # LC_TIME="POSIX" sar -f sa30 -A  | tee sar30 
-
 # ksar -input file:///home/sam/sar25 -outputPDF sar25.pdf
+
 ####################swap#################
 top -> O -> p
 smem  -rs swap
@@ -928,15 +951,12 @@ RUN /usr/sbin/vmware-tools-upgrader
 ./useradd_linux -u list2 -r -s racv-l508 -g wasadmin
 ssh racv-l506 "sudo su - --command='find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
 ssh racv-l400 "sudo su - -c 'find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
+
 ########查IO########
 /etc/init.d/syslog stop
-
 echo 1 > /proc/sys/vm/block_dump
-
 dmesg | awk '/(READ|WRITE|dirtied)/ {process[$1]++} END {for (x in process) print process[x],x}' |sort -nr |awk '{print $2 " " $1}' | head -n 10
-
 echo 0 > /proc/sys/vm/block_dump
-
 /etc/init.d/syslog start
 
 ############racv############
@@ -953,6 +973,7 @@ sed -i '/^%desktop_admin_r/r IPSOFT' sudoers   匹配行后插入文本
 perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}print;if(/^%desktop_admin_r/){print "\n\n @f \n\n"}' sudoers    匹配行后
 
 perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}if(/^%desktop_admin_r/){print "\n\n @f \n\n"};print' sudoers    匹配行前
+
 ##########option D#############
 /etc/pam.d/password-auth:auth        required      /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
 /etc/pam.d/system-auth:auth	    required	  /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
@@ -993,29 +1014,21 @@ slapd.confのグローバルセクションに以下の1行を記載する。
 # OpenLDAP 2.4.36未満では「TLSProtocolMin 769」と指定する。
 # OpenLDAP 2.4.36以降では「TLSProtocolMin 3.1」と指定する。
 TLSProtocolMin 3.1
+
 #####################outputs of "ssh -V"##############
 ssh -V outputs to STDERR, not STDOUT.
-
 Instead of saying
-
 ssh -V > /tmp/ssh_version_check.txt
-
 say
-
 ssh -V >& /tmp/ssh_version_check.txt
-
 or
-
 ssh -V > /tmp/ssh_version_check.txt 2>&1
-
 In order to save to a variable, say:
-
 ssh_version=$(ssh -V 2>&1)
 
-
-
 pssh -h nci2 -t 0 -x '-t -t' --inline-stdout "sudo `which lsof` -i:443,636" >scan
-##############operate variable #######
+
+##############operate shell variable #######
 for u in `cat 2`;do echo ${u%%.*};done      abc.cn.ibm.com ==>  abc
 for u in `cat 2`;do echo ${u#*.};done       abc.cn.ibm.com ==> cn.ibm.com
 a=abc.cn.ibm.com;echo ${a/abc/ABC}          abc.cn.ibm.com ==> ABC.cn.ibm.com
@@ -1026,10 +1039,12 @@ sed -i.bk 's/^%usrmgt/#%usrmgt/' /etc/sudoers
 
 ###############sudo###################
 sudo cat /etc/sudoers |grep '='|egrep -vi 'alias|default|^#'|awk '{print $1}'
+
 ##########chpasswd############
 pssh -h racv20160229 -x '-t -t' --inline-stdout "echo 'ycfang:new.pa550' |sudo /usr/sbin/chpasswd"
 perl -e 'print crypt("pqhkR#8ctw",q($6$3eSjHzih)),"\n"'
 pssh -h djs_1 -x '-t -t' --inline-stdout sudo /usr/sbin/usermod -p "\$1\$SOWUrC9k\$aqc8hu0xZVUI7QveI5QrY/" xujintao  #ssh need escape, local doesn't need escape.
+
 ############run EP2##############  
 EP2 4 check types:
 [chensen@cfibml08 ep2_mci]$ grep -ir violation *|awk '{print $NF}'|cut -d',' -f2|grep [^0-9]|sort -u
@@ -1038,14 +1053,10 @@ checkPermsHomeDir
 checkProcessPerms
 checkWorldWritePerm
 
-
 pscp -h mcilist.txt -t 0 -p 20 -r EP2/ /home/chensen
 pssh -h srv_ep2 -x '-t -t' -t 0 -p 30 "cd EP2;sudo ./EP2_Driver_V2.1.1.sh -o /home/chensen/EP2"
 pssh -h srv_ep2 -t 0 -p 30 -x '-t -t' "sudo chown -R chensen EP2/EP2_Driver_V2.1.1.sh.files"
 pslurp -h ../2 -t 0 -p 30 -l chensen -r /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files .
-##########vagrant##############
-download box location:  /root/.vagrant.d/boxes/centos6.5/virtualbox
-built vm location: /root/VirtualBox VMs
 
 ###########docker error####################
 $ sudo docker run -i -t centos /bin/bash  
@@ -1053,12 +1064,13 @@ unable to remount sys readonly: unable to mount sys as readonly max retries reac
 Need to vi /etc/sysconfig/docker
 other_args="--exec-driver=lxc --selinux-enabled"
 /etc/init.d/docker restart
+
 #############change timezone to Asia Shanghai#############
 sudo sed -i 's:Etc/UTC:Asia/Shanghai:' /etc/sysconfig/clock
 sudo rm -f /etc/localtime
 sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
-#######transfer time from one TZ to another TZ###########
+#######transfer time from one format to another format###########
 [sam@oc1181188062 test]$ ssh chensen@vader "date +%s;date"
 1412036236
 Tue Sep 30 10:17:16 EST 2014
@@ -1066,11 +1078,14 @@ Tue Sep 30 10:17:16 EST 2014
 2014-09-30 08:17:16
 [sam@oc1181188062 test]$ date -d@1412036236 
 Tue Sep 30 08:17:16 CST 2014
+
 ###########IBM ServeRAID tools###########
 ./ipssend getconfig 1
 ./ipssend getstatus 1
+
 ############sed add prefix for each line in file##########
 sed -i 's/^.*$/chensen@&/' r6
+
 #############eval##############
 #!/bin/bash
 a="ls | wc -l"
@@ -1091,6 +1106,7 @@ pssh -x '-t -t' --inline-stdout -Hb28leidbp0{5..8} -Hy23lexlmc0{1..6} "uptime;un
 pssh -x '-t -t' --inline-stdout --host=b28leidbp0{5..8} --host=y23lexlmc0{1..6} "uptime;uname -n"
 pssh --inline-stdout --host=b28leidbp0{5..8} -I < 1.sh
 pssh --inline-stdout --host=b28leidbp0{5..8} -I         ####enter commands
+
 ###################ssh#######################################
 run complex remote shell commands over ssh,without escaping quotes
 # ssh user@host $(<cmd.txt)   or ssh -t
@@ -1099,6 +1115,7 @@ run complex remote shell commands over ssh,without escaping quotes
 run local script against remote machines,without copy it to server
 # ssh -T user@host < local.sh
 # ssh user@host 'bash -s arg1 arg2' < local.sh
+
 #####################################################
 ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
 本机：
@@ -1116,6 +1133,7 @@ ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 ##############firefox###########
 ssh -D 7071 chensen@cfibml10
+
 ######## KVM ########
 [root@oc1181188062 ~]# virsh start Windows_XP-KVM
 [root@oc1181188062 ~]# virsh -c qemu:///system start Windows_XP-KVM
@@ -1183,6 +1201,7 @@ udevadm info -a -p /sys/class/net/eth0
 
 ################ iconv ############
 iconv -f UTF-16LE -t UTF-8 -o Cirats_records ALL\ Records\ -\ Department\ Specific.csv
+
 ################# Reformat RHSA record ###############
 while read adid rhsa day;do echo -en "\t\t$adid\t $rhsa\t";date -d "$day" +"%d %b %Y";done< <(grep 'RHSA' aubsqsk02umilr2\(mci\)|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
 
@@ -1272,13 +1291,12 @@ mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux
 
 find peoplever.rpm | cpio -t
 rpm2cpio mysql-server.rpm | cpio -ivd "file name"
+
 ################time zone################
 [root@cfibml08 Asia]# ls -l /etc/localtime
 lrwxrwxrwx 1 root root 36 Oct  2  2009 /etc/localtime -> /usr/share/zoneinfo/Australia/Sydney
 
 ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime
-=======================================================================================
-Health Check
 =======================================================================================
 
 =======================change password=================================================
