@@ -1,0 +1,12 @@
+场竝wordpress┮惠image
+wordpress:4.8-apache
+mysql:5.6
+
+ㄏノstatefulsetの笆篈纗 ﹚竡storage-class nfs-storage
+
+1  承mysql secret
+kubectl create secret generic mysql-pass --from-literal=password=YOUR_PASSWORD
+
+2 ㄏノ家狾场竝wordpress
+
+wordpress家狾

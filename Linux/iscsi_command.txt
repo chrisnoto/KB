@@ -1,0 +1,25 @@
+#################tgt server######################
+###add target and lun and acl###
+
+tgtadm --lld iscsi --mode target --op new --tid 1 --targetname iqn.2013-11.com.example:gpfs-data
+tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 1 -b /dev/vdb1
+tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 2 -b /dev/vdc1
+tgtadm --lld iscsi --op new --mode logicalunit --tid 1 --lun 3 -b /dev/vdc2
+tgtadm --lld iscsi --op bind --mode target --tid 1 -I 192.168.122.11
+tgtadm --lld iscsi --op bind --mode target --tid 1 -I 192.168.122.12
+
+###remove lun and target###
+tgtadm --lld iscsi --op show --mode target
+tgtadm --lld iscsi --op delete --mode=logicalunit --tid=1 --lun=1
+tgtadm --lld iscsi --op delete --mode=logicalunit --tid=1 --lun=2
+tgtadm --lld iscsi --op delete --mode=logicalunit --tid=1 --lun=3
+tgtadm --lld iscsi --op delete --mode target --tid=1
+
+##################iscsi client ######################
+####discover and login#########
+iscsiadm -m discovery -t sendtargets -p 192.168.122.13:3260
+iscsiadm -m node -T iqn.2013-11.com.example:gpfs-data -p 192.168.122.13:3260 -l
+
+#### logout and remove target ####
+iscsiadm -m node -T iqn.2013-11.com.example:gpfs-data -p 192.168.122.13:3260 -u
+iscsiadm -m node -o delete -T iqn.2013-11.com.example:gpfs-data -p 192.168.122.13:3260
