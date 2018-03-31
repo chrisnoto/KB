@@ -1,0 +1,132 @@
+###############################
+1 (both nodes)  setup vg, install gluster package
+[root@nfs-1 ~]# cat /etc/hosts
+10.67.38.17 nfs-1
+10.67.38.18 nfs-2
+
+yum -y install centos-release-gluster310
+yum install -y glusterfs-server
+systemctl enable glusterd
+systemctl start glusterd
+
+pvcreate /dev/vdd
+vgcreate vg_gluster /dev/vdd
+lvcreate -n brick1 -L 50G vg_gluster
+mkfs.xfs /dev/vg_gluster/brick1
+mkdir -p /bricks/brick1
+mount /dev/vg_gluster/brick1 /bricks/brick1
+echo "/dev/vg_gluster/brick1  /bricks/brick1    xfs     defaults  0 0" >>/etc/fstab
+
+
+##############################
+2 (on node nfs-1) setup gluster,create volume
+gluster peer probe nfs-2
+gluster peer status
+
+Use the /bricks/brick1 XFS partition on both nodes to create a highly available Replicated Volume. 
+First create a sub-directory in /bricks/brick1 mount point. It will be necessary for GlusterFS.
+mkdir /bricks/brick1/brick
+[root@nfs-1 ~]# gluster volume create nfsvol1 replica 2 transport tcp nfs-1:/bricks/brick1/brick nfs-2:/bricks/brick1/brick
+volume create: nfsvol1: success: please start the volume to access data
+[root@nfs-1 ~]# gluster volume start nfsvol1
+volume start: nfsvol1: success
+[root@nfs-1 ~]# gluster volume info nfsvol1
+Volume Name: nfsvol1
+Type: Distribute
+Volume ID: 1af66d2a-e33a-4b51-a8ab-f9312e709c76
+Status: Started
+Snapshot Count: 0
+Number of Bricks: 2
+Transport-type: tcp
+Bricks:
+Brick1: nfs-1:/bricks/brick1/brick
+Brick2: nfs-2:/bricks/brick1/brick
+Options Reconfigured:
+transport.address-family: inet
+nfs.disable: on
+
+3 (on both nodes)
+yum install glusterfs-ganesha -y
+systemctl enable pcsd
+systemctl enable pacemaker
+需要關閉selinux     貌似bug centos7.4 or 7.5
+on node nfs-1
+ssh-keygen -f /var/lib/glusterd/nfs/secret.pem -t rsa 
+chmod 600 /var/lib/glusterd/nfs/secret.pem.pub
+ssh-copy-id -i /var/lib/glusterd/nfs/secret.pem.pub nfs-1
+ssh-copy-id -i /var/lib/glusterd/nfs/secret.pem.pub nfs-2
+scp -i /var/lib/glusterd/nfs/secret.pem.pub /var/lib/glusterd/nfs/secret.* nfs-2:/var/lib/glusterd/nfs/
+(##單機版nfs-ganesha
+```
+#Create export config file for the volume
+/usr/libexec/ganesha/create-export-ganesha.sh /etc/ganesha on nfsvol1
+#Export the volume via nfs-ganesha
+/usr/libexec/ganesha/dbus-send.sh /etc/ganesha on nfsvol1
+#To verify if the volume is exported
+[root@nfs-1 ganesha]# showmount -e
+Export list for nfs-1.novalocal:
+/nfsvol1 (everyone)
+##to unexport and delete export config file for the volume
+/usr/libexec/ganesha/dbus-send.sh /etc/ganesha off nfsvol1
+/usr/libexec/ganesha/create-export-ganesha.sh /etc/ganesha off nfsvol1
+```
+##)
+on both nodes
+# systemctl start pcsd
+
+# passwd hacluster
+# pcs cluster auth nfs-1 nfs-2
+on node nfs-1
+#Create and mount a gluster shared volume.
+gluster volume set all cluster.enable-shared-storage enable
+#Create a directory named "nfs-ganesha" in shared storage path and create ganesha.conf & ganesha-ha.conf in it(from glusterfs 3.9 onwards)
+mkdir /run/gluster/shared_storage/nfs-ganesha
+[root@nfs-1 nfs-ganesha]# cat ganesha.conf
+#/var/run/gluster/shared_storage/nfs-ganesha/ganesha.conf
+EXPORT
+{
+        # Export Id (mandatory, each EXPORT must have a unique Export_Id)
+        Export_Id = 69;
+
+        # Exported path (mandatory)
+        Path = /nfsvol1;
+
+        # Exporting FSAL
+       FSAL {
+            Name = GLUSTER;
+            Hostname = localhost;
+            Volume = nfsvol1;
+            }
+        # Pseudo Path (required for NFS v4)
+        Pseudo = /nfsvol1;
+
+        # Required for access (default is None)
+        # Could use CLIENT blocks instead
+        Access_Type = RW;
+        Squash = No_root_squash #remove this for root squash
+}
+[root@nfs-1 nfs-ganesha]# cat ganesha-ha.conf
+# Name of the HA cluster created.
+# must be unique within the subnet and 15 characters or less in length
+HA_NAME="ganesha-ha-360"
+#
+# N.B. you may use short names or long names; you may not use IP addrs.
+# Once you select one, stay with it as it will be mildly unpleasant to
+# clean up if you switch later on. Ensure that all names - short and/or
+# long - are in DNS or /etc/hosts on all machines in the cluster.
+#
+# The subset of nodes of the Gluster Trusted Pool that form the ganesha
+# HA cluster. Hostname is specified.
+HA_CLUSTER_NODES="nfs-1.novalocal,nfs-2.novalocal"
+#HA_CLUSTER_NODES="server1.lab.redhat.com,server2.lab.redhat.com,..."
+#
+# Virtual IPs for each of the nodes specified above.
+VIP_nfs-1.novalocal="10.67.38.50"
+VIP_nfs-2.novalocal="10.67.38.51"
+
+ ##To setup the HA cluster, enable NFS-Ganesha by executing the following command
+ gluster nfs-ganesha enable
+ ##Exporting Volumes through NFS-Ganesha
+ gluster volume set nfsvol1 ganesha.enable on
+ ##Check if the volume is exported.
+ showmount -e

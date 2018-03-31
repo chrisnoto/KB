@@ -42,6 +42,11 @@ DOCKER_NETWORK_OPTIONS="--mtu=1450"
 [Service]
 Environment="HTTP_PROXY=http://10.62.32.27:33128" "NO_PROXY=localhost,127.0.0.1,10.67.51.161,registry"
 3  systemctl daemon-reload & systemctl restart docker
+(####另一種方式設置mtu##### docker-ce版本
+ vi /etc/systemd/system/docker.service
+<tuncated>
+ExecStart=/usr/bin/docker daemon -H fd:// –mtu=1450
+<truncated>)
 
 三 下載k8s所需鏡像
 docker login
@@ -554,4 +559,184 @@ dependencies:
     version: 3.2.1
     repository: http://another.example.com/charts
 
+容器部署
+
+##################heketi & gluster#################
+1 node-1 node-2 node-3上安裝glusterfs
+yum -y install centos-release-gluster312
+yum -y install glusterfs-server glusterfs glusterfs-fuse
+systemctl enable glusterd
+systemctl start glusterd
+[root@node-3 glusterfs]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.67.37.242 harbor.cesbg.foxconn
+10.67.37.235   node-1
+10.67.37.236   node-2
+10.67.37.239   node-3
+10.67.37.234 k8sv17
+2 在node-1上安裝heketi heketi-client
+yum -y install heketi heketi-client
+systemctl daemon-reload
+systemctl start heketi
+3 Heketi使用SSH来配置GlusterFS的所有节点。创建SSH密钥对，将公钥拷贝到所有3个节点上（包括你登陆的第一个节点）：
+
+[root@node-1 ~]# ssh-keygen -f /etc/heketi/heketi_key -t rsa -N ''
+[root@node-1 ~]# ssh-copy-id -i /etc/heketi/heketi_key.pub root@node-1
+[root@node-1 ~]# ssh-copy-id -i /etc/heketi/heketi_key.pub root@node-2
+[root@node-1 ~]]# ssh-copy-id -i /etc/heketi/heketi_key.pub root@node-3
+[root@node-1 ~]# chown heketi:heketi /etc/heketi/heketi_key*
+剩下唯一要做的事情就是配置heketi来使用SSH。 编辑/etc/heketi/heketi.json文件
+
+{
+   "_port_comment":"Heketi Server Port Number",
+   "port":"8083",                          # modify
+   "_use_auth":"Enable JWT authorization. Please enable for deployment",
+   "use_auth":false,
+   "_jwt":"Private keys for access",
+   "jwt":{
+      "_admin":"Admin has access to all APIs",
+      "admin":{
+         "key":"My Secret"
+      },
+      "_user":"User only has access to /volumes endpoint",
+      "user":{
+         "key":"My Secret"
+      }
+   },
+   "_glusterfs_comment":"GlusterFS Configuration",
+   "glusterfs":{
+      "_executor_comment":[
+         "Execute plugin. Possible choices: mock, ssh",
+         "mock: This setting is used for testing and development.",
+         " It will not send commands to any node.",
+         "ssh: This setting will notify Heketi to ssh to the nodes.",
+         " It will need the values in sshexec to be configured.",
+         "kubernetes: Communicate with GlusterFS containers over",
+         " Kubernetes exec api."
+      ],
+      "executor":"ssh",                       #modify
+      "_sshexec_comment":"SSH username and private key file information",
+      "sshexec":{
+         "keyfile":"/etc/heketi/heketi_key",         #modify
+         "user":"root",                              #modify
+         "port":"22",                                #modify
+         "fstab":"/etc/fstab"                        #modify
+      },
+      "_kubeexec_comment":"Kubernetes configuration",
+      "kubeexec":{
+         "host":"https://kubernetes.host:8443",
+         "cert":"/path/to/crt.file",
+         "insecure":false,
+         "user":"kubernetes username",
+         "password":"password for kubernetes user",
+         "namespace":"OpenShift project or Kubernetes namespace",
+         "fstab":"Optional: Specify fstab file on node. Default is /etc/fstab"
+      },
+      "_db_comment":"Database file name",
+      "db":"/var/lib/heketi/heketi.db",
+      "_loglevel_comment":[
+         "Set log level. Choices are:",
+         " none, critical, error, warning, info, debug",
+         "Default is warning"
+      ],
+      "loglevel":"debug"
+   }
+}
+重启heketi：
+# systemctl enable heketi
+# systemctl restart heketi
+测试它是否在运行：
+
+# curl http://10.67.37.235:8083/hello
+Hello from Heketi
+
+編輯/etc/heketi/topology.json
+該文件告诉heketi要创建一个3节点的集群，其中每个节点包含的配置有FQDN，IP地址以及
+至少一个将用作GlusterFS块的备用块设备
+[root@node-1 heketi]# cat topology.json
+{
+  "clusters": [
+    {
+      "nodes": [
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "node-1"
+              ],
+              "storage": [
+                "10.67.37.235"
+              ]
+            },
+            "zone": 1
+          },
+          "devices": [
+            "/dev/vdd"
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "node-2"
+              ],
+              "storage": [
+                "10.67.37.236"
+              ]
+            },
+            "zone": 1
+          },
+          "devices": [
+            "/dev/vdd"
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "node-3"
+              ],
+              "storage": [
+                "10.67.37.239"
+              ]
+            },
+            "zone": 1
+          },
+          "devices": [
+            "/dev/vdd"
+          ]
+        }
+      ]
+    }
+  ]
+}
+載入gluster cluster配置
+# export HEKETI_CLI_SERVER=http://10.67.37.235:8083
+# heketi-cli topology load --json=topology.json
+查看拓扑：
+heketi-cli topology info
+gluster peer status
+建个大小为2G的volume试试：
+heketi-cli volume create --size=2
+查看：
+heketi-cli volume list
+gluster volume list
+删除：
+heketi-cli volume delete <id>
+Kubernetes创建StorageClass
+[root@k8sv17 ~]# cat glusterfs-storageclass.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: glusterfs
+provisioner: kubernetes.io/glusterfs
+parameters:
+  resturl: "http://10.67.37.235:8083"
+  volumetype: "replicate:3"
+# kubectl apply -f glusterfs-storageclass.yaml
+[root@k8sv17 ~]# kubectl get sc
+NAME          TYPE
+glusterfs     kubernetes.io/glusterfs
+nfs-storage   fuseim.pri/ifs
 

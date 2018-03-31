@@ -1,0 +1,97 @@
+root@node-1:~# neutron port-create --fixed-ip ip_address=10.67.38.50 --tenant-id=3def5a869d0b4e5abd04c55ad3962bfb --security-group 3fd7bcf2-e739-47a4-a30f-f121ab3275f1 admin_floating_net
+Created a new port:
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| Field                 | Value                                                                                                     |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| admin_state_up        | True                                                                                                      |
+| allowed_address_pairs |                                                                                                           |
+| binding:host_id       |                                                                                                           |
+| binding:profile       | {}                                                                                                        |
+| binding:vif_details   | {}                                                                                                        |
+| binding:vif_type      | unbound                                                                                                   |
+| binding:vnic_type     | normal                                                                                                    |
+| created_at            | 2018-03-29T09:29:00                                                                                       |
+| description           |                                                                                                           |
+| device_id             |                                                                                                           |
+| device_owner          |                                                                                                           |
+| dns_assignment        | {"hostname": "host-10-67-38-50", "ip_address": "10.67.38.50", "fqdn": "host-10-67-38-50.openstacklocal."} |
+| dns_name              |                                                                                                           |
+| extra_dhcp_opts       |                                                                                                           |
+| fixed_ips             | {"subnet_id": "9bc0b01a-7f94-47db-9b61-3a18bf71d8c7", "ip_address": "10.67.38.50"}                        |
+| id                    | d52ee27b-bcc2-464d-8155-2a67a80f8058                                                                      |
+| mac_address           | fa:16:3e:df:4c:e3                                                                                         |
+| name                  |                                                                                                           |
+| network_id            | 2d7bc1a8-1616-4251-b7ac-3ca42f31ffd1                                                                      |
+| port_security_enabled | True                                                                                                      |
+| security_groups       | 3fd7bcf2-e739-47a4-a30f-f121ab3275f1                                                                      |
+| status                | DOWN                                                                                                      |
+| tenant_id             | 3def5a869d0b4e5abd04c55ad3962bfb                                                                          |
+| updated_at            | 2018-03-29T09:29:00                                                                                       |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+root@node-1:~# neutron port-create --fixed-ip ip_address=10.67.38.51 --tenant-id=3def5a869d0b4e5abd04c55ad3962bfb --security-group 3fd7bcf2-e739-47a4-a30f-f121ab3275f1 admin_floating_net
+Created a new port:
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| Field                 | Value                                                                                                     |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| admin_state_up        | True                                                                                                      |
+| allowed_address_pairs |                                                                                                           |
+| binding:host_id       |                                                                                                           |
+| binding:profile       | {}                                                                                                        |
+| binding:vif_details   | {}                                                                                                        |
+| binding:vif_type      | unbound                                                                                                   |
+| binding:vnic_type     | normal                                                                                                    |
+| created_at            | 2018-03-29T09:34:28                                                                                       |
+| description           |                                                                                                           |
+| device_id             |                                                                                                           |
+| device_owner          |                                                                                                           |
+| dns_assignment        | {"hostname": "host-10-67-38-51", "ip_address": "10.67.38.51", "fqdn": "host-10-67-38-51.openstacklocal."} |
+| dns_name              |                                                                                                           |
+| extra_dhcp_opts       |                                                                                                           |
+| fixed_ips             | {"subnet_id": "9bc0b01a-7f94-47db-9b61-3a18bf71d8c7", "ip_address": "10.67.38.51"}                        |
+| id                    | 88a25d9d-2e51-4fb7-86e2-2834395d1c1d                                                                      |
+| mac_address           | fa:16:3e:f7:c7:bc                                                                                         |
+| name                  |                                                                                                           |
+| network_id            | 2d7bc1a8-1616-4251-b7ac-3ca42f31ffd1                                                                      |
+| port_security_enabled | True                                                                                                      |
+| security_groups       | 3fd7bcf2-e739-47a4-a30f-f121ab3275f1                                                                      |
+| status                | DOWN                                                                                                      |
+| tenant_id             | 3def5a869d0b4e5abd04c55ad3962bfb                                                                          |
+| updated_at            | 2018-03-29T09:34:28                                                                                       |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+
+root@node-1:~# neutron port-list |grep 10.67.38.12
+| 041100dc-bec3-461d-b91a-e621713e881a |      | fa:16:3e:1f:10:a1 | {"subnet_id": "9bc0b01a-7f94-47db-9b61-3a18bf71d8c7", "ip_address": "10.67.38.12"}     |
+root@node-1:~# neutron port-update 041100dc-bec3-461d-b91a-e621713e881a --allowed_address_pairs list=true type=dict ip_address=10.67.38.50 ip_address=10.67.38.51
+Updated port: 041100dc-bec3-461d-b91a-e621713e881a
+root@node-1:~# neutron port-show 041100dc-bec3-461d-b91a-e621713e881a
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| Field                 | Value                                                                                                     |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+| admin_state_up        | True                                                                                                      |
+| allowed_address_pairs | {"ip_address": "10.67.38.50", "mac_address": "fa:16:3e:1f:10:a1"}                                         |
+|                       | {"ip_address": "10.67.38.51", "mac_address": "fa:16:3e:1f:10:a1"}                                         |
+| binding:host_id       | node-9.domain.tld                                                                                         |
+| binding:profile       | {}                                                                                                        |
+| binding:vif_details   | {"port_filter": true, "ovs_hybrid_plug": false}                                                           |
+| binding:vif_type      | ovs                                                                                                       |
+| binding:vnic_type     | normal                                                                                                    |
+| created_at            | 2018-03-29T08:38:22                                                                                       |
+| description           |                                                                                                           |
+| device_id             | a579e26e-4aa4-4979-8d65-46c763f9c79b                                                                      |
+| device_owner          | compute:AMD_RoomA                                                                                         |
+| dns_assignment        | {"hostname": "host-10-67-38-12", "ip_address": "10.67.38.12", "fqdn": "host-10-67-38-12.openstacklocal."} |
+| dns_name              |                                                                                                           |
+| extra_dhcp_opts       |                                                                                                           |
+| fixed_ips             | {"subnet_id": "9bc0b01a-7f94-47db-9b61-3a18bf71d8c7", "ip_address": "10.67.38.12"}                        |
+| id                    | 041100dc-bec3-461d-b91a-e621713e881a                                                                      |
+| mac_address           | fa:16:3e:1f:10:a1                                                                                         |
+| name                  |                                                                                                           |
+| network_id            | 2d7bc1a8-1616-4251-b7ac-3ca42f31ffd1                                                                      |
+| port_security_enabled | True                                                                                                      |
+| security_groups       | 3fd7bcf2-e739-47a4-a30f-f121ab3275f1                                                                      |
+| status                | ACTIVE                                                                                                    |
+| tenant_id             | 3def5a869d0b4e5abd04c55ad3962bfb                                                                          |
+| updated_at            | 2018-03-29T09:37:08                                                                                       |
++-----------------------+-----------------------------------------------------------------------------------------------------------+
+
+

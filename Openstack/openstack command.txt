@@ -1,3 +1,6 @@
+ neutron port-update 99f2fac4-188b-4e62-bc8f-64929ea4a5ca --allowed-address-pairs type=dict list=true ip_address=192.168.111.17
+
+ 
  #####fix instance error state##########
  nova list --all-tenants
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
