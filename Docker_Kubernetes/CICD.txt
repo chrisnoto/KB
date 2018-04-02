@@ -1,0 +1,103 @@
+CICD流程
+
+user  -commit-> gitlab server --clone--> gitlab runner(k8s master) <--push/pull--> Docker Registry
+
+gitlab runner配置(在k8s master上)
+curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh | bash
+yum install -y gitlab-runner
+usermod -aG docker gitlab-runner
+gitlab-runner register
+配置gitlab-runner用戶能訪問k8s
+cp /etc/kubernetes/admin.conf /home/gitlab-runner/.kube/config
+
+user:  cobbler server
+文件：
+curl-util.yaml  Dockerfile  entrypoint.sh  .git  .gitlab-ci.yml  README.md
+#####cat .gitlab-ci.yml#####
+image: alpine:3.5
+
+stages:
+- build
+- test
+- push
+- deploy
+
+before_script:
+  - docker login -u chensen -p Quake331 harbor.cesbg.foxconn
+
+build:
+  stage: build
+  script:
+  - docker build -t my-curl:$CI_COMMIT_TAG --build-arg http_proxy=http://10.62.32.27:33128 --build-arg https_proxy=http://10.62.32.27:33128 .
+  except:
+  - master
+
+test:
+  stage: test
+  script:
+  - docker run --rm my-curl:$CI_COMMIT_TAG http://10.67.51.164/
+  except:
+  - master
+
+push_to_registry:
+  stage: push
+  script:
+  - docker tag my-curl:$CI_COMMIT_TAG harbor.cesbg.foxconn/chensen/curl:$CI_COMMIT_TAG
+  - docker tag my-curl:$CI_COMMIT_TAG harbor.cesbg.foxconn/chensen/curl:latest
+  - docker push harbor.cesbg.foxconn/chensen/curl:$CI_COMMIT_TAG
+  - docker push harbor.cesbg.foxconn/chensen/curl:latest
+  - docker rmi my-curl:$CI_COMMIT_TAG
+  except:
+  - master
+
+deploy_to_k8s:
+  stage: deploy
+  script:
+  - kubectl apply -f curl-util.yaml
+  - kubectl get po curl-util -o wide
+  except:
+  - master
+######cat curl-util.yaml####
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl-util
+  namespace: default
+spec:
+  containers:
+  - name: curl-util
+    image: harbor.cesbg.foxconn/chensen/curl:latest
+    imagePullPolicy: IfNotPresent
+    command:
+    - sh
+    - -c
+    - while true; do sleep 1; done
+######cat Dockerfile####
+FROM alpine:3.5
+RUN apk add --no-cache curl
+COPY entrypoint.sh /
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["curl"]
+######cat entrypoint.sh####
+#!/bin/sh
+set -e
+
+# Prepend "curl" if the first argument is not an executable
+if ! type -- "$1" &> /dev/null; then
+        set -- curl "$@"
+fi
+
+exec "$@"
+
+#############git 命令############
+git clone http://10.67.37.48/gitlab/root/curl.git        初始化
+cd /curl
+copy以上文件，建README.md
+git add .
+git commit -m "use except"
+git push origin master
+git tag -a 1.3.2 -m "Version 1.3.2"
+git push origin 1.3.2
