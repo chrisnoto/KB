@@ -1,0 +1,21 @@
+節點 node-8 上vm網絡不通， 意外發現node-8上的br-tun流表消失
+root@node-8:~# ovs-ofctl dump-flows br-tun
+NXST_FLOW reply (xid=0x4):
+root@node-8:~# ovs-ofctl dump-flows br-tun
+NXST_FLOW reply (xid=0x4):
+
+root@node-8:~# /etc/init.d/openvswitch-switch restart
+ * Killing ovs-vswitchd (3718)
+ * Killing ovsdb-server (3708)
+ * Starting ovsdb-server
+ * Configuring Open vSwitch system IDs
+ * Starting ovs-vswitchd
+ * Enabling remote OVSDB managers
+
+重啟openvswitch,然後重啟nova-compute和libvirtd
+service nova-compute stop
+service libvirtd stop
+service libvirtd start
+service nova-compute start
+
+node-8上的vm有一部份需要重啟網絡服務才能重新獲取IP

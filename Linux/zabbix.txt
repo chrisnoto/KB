@@ -1,0 +1,128 @@
+zabbix優化及配置
+
+###########zabbix優化點#########
+1 客戶端使用zabbix agent active模式
+
+2  zabbix db優化innodb引擎的默認配置
+
+innodb_buffer_pool_size = 10G           主機內存的60%-70%
+innodb_buffer_pool_instances=8
+innodb_flush_method=O_DIRECT           不使用文件系統緩存，避免double cache
+innodb_log_file_size=400M                       根據一個小時的數據量，來評估 log file大小
+innodb_buffer_pool_dump_pct=75
+innodb_io_capacity=800
+innodb_io_capacity_max=4000
+innodb_flush_log_at_trx_commit=0
+innodb_lru_scan_depth=256
+
+character-set-server=utf8                            支持中文
+collation-server=utf8_general_ci
+max_connections=2048                前提：設置ulimit
+
+slow_query_log=1                                       開啟慢查詢
+slow_query_log_file = /var/log/mysql/mysql-slow.log
+long_query_time = 1
+
+3  zabbix db啟用分區，例如存放28天數據。并在dashboard里關閉history和trends的housekeeping
+
+具體做法：參考 https://www.kancloud.cn/devops-centos/centos-linux-devops/375488
+
+#########zabbix 收集數據########
+1 zabbix agent active
+
+自定義腳本，要注意sudo權限和!requiretty，及配置zabbix用戶的權限。默認是zabbix用戶啟動服務，不是root。 同時有些命令需要加sudo。
+
+調試zabbix-agent,  zabbix_agentd.conf文件 啟用DebugLevel=3
+
+2 zabbix agent
+
+3 trapper              使用腳本調用zabbix_sender發送key, value，  并設置cron
+
+4 snmp:
+
+dell idrac模板與配置啟用idrac snmp
+
+hp ilo較低版本，需要在主機上安裝snmp及hp health, hp snmp 等
+
+5  web scenario
+
+1 配置apache /nginx stat模塊
+
+2 在web scenario中，需要設置http head的json格式，并填寫網站用戶密碼
+
+6 simple-check   例如vmware模板
+
+########自動發現和自動註冊#######
+1 自動發現， zabbix agent是被動模式，添加discovery rule
+2 自動註冊，zabbix agent是主動模式，并添加action，關聯模板
+
+需要配置agent interfaces地址為0.0.0.0
+
+##########low-level discovery#########
+實現自動發現諸如網卡，文件系統，tomcat instance, container 硬件如fan, power-supply，
+
+實現方式：
+
+1 snmp   注意：lld是snmp walk,  但是item的值是snmp get
+
+處理不好，經常找不到oid
+
+2 low level discovery腳本，需要輸出為json格式，并配置userparameter. 如：
+
+[root@node-3 zabbix_agentd.d]# cat userparameter_diskstats.conf
+UserParameter=custom.vfs.discover_disks,/usr/local/bin/lld-disks.py
+
+UserParameter=custom.vfs.dev.read.ops[*],awk ‘{print $$1}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.read.merged[*],awk ‘{print $$2}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.read.sectors[*],awk ‘{print $$3}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.read.ms[*],awk ‘{print $$4}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.write.ops[*],awk ‘{print $$5}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.write.merged[*],awk ‘{print $$6}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.write.sectors[*],awk ‘{print $$7}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.write.ms[*],awk ‘{print $$8}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.io.active[*],awk ‘{print $$9}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.io.ms[*],awk ‘{print $$10}’ /sys/class/block/$1/stat
+UserParameter=custom.vfs.dev.weight.io.ms[*],awk ‘{print $$11}’ /sys/class/block/$1/stat
+
+#######使用Ansible自動部署zabbix agent#########
+# ansible-playbook -i hosts site.yaml
+
+ansible playbook的目錄結構
+
+[root@cobbler ansible-zabbix]# tree
+.
+├── common.yml
+├── group_vars
+│   ├── trusty
+│   └── xenial
+├── hosts
+├── host_vars
+├── roles
+│   ├── base_inst_zbclient_linux
+│   │   ├── files
+│   │   │   ├── centos6.repo
+│   │   │   ├── centos7.repo
+│   │   │   ├── lld-disks-3.py
+│   │   │   ├── lld-disks.py
+│   │   │   ├── pageinout.sh
+│   │   │   ├── sources.list-1404
+│   │   │   ├── sources.list-1604
+│   │   │   └── userparameter_diskstats.conf
+│   │   ├── handlers
+│   │   │   └── main.yml
+│   │   ├── tasks
+│   │   │   └── main.yml
+│   │   └── templates
+│   │   └── zabbix_agentd.conf.j2
+│   └── common
+│   ├── files
+│   │   ├── centos6.repo
+│   │   ├── centos7.repo
+│   │   ├── sources.list-1404
+│   │   └── sources.list-1604
+│   ├── handlers
+│   ├── tasks
+│   │   └── main.yml
+│   └── templates
+├── site.yml
+└── zabbix.yml

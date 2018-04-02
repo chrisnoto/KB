@@ -1,0 +1,167 @@
+Description: instance can not get IP
+compute down due to memory error. instances on node-15 can't get IP, after compute node rebooted.
+nova-compute service ok, neutron agents ok,
+dnsmasq no log
+
+resolution:   restart pacemaker to let pacemaker get dnsmasq restarted.
+
+healthy dnsmasq  tcpdump
+
+root@node-18:~# ip netns exec qdhcp-2d9c24e4-cd78-499f-a9de-b0587fb790d2 tcpdump -i tap9115c423-46 -nnvvvNXs 512
+08:15:17.572681 IP (tos 0x0, ttl 128, id 11809, offset 0, flags [none], proto UDP (17), length 356)
+    192.168.111.172.68 > 192.168.111.3.67: [udp sum ok] BOOTP/DHCP, Request from fa:16:3e:b0:12:1f, length 328, xid 0xd5d27ee0, Flags [none] (0x0000)
+          Client-IP 192.168.111.172
+          Client-Ethernet-Address fa:16:3e:b0:12:1f
+          Vendor-rfc1048 Extensions
+            Magic Cookie 0x63825363
+            DHCP-Message Option 53, length 1: Request
+            Client-ID Option 61, length 7: ether fa:16:3e:b0:12:1f
+            Hostname Option 12, length 15: "vstjpcascodetes"
+            FQDN Option 81, length 32: "vstjpcascodetes.CESBG.FOXCONN"
+            Vendor-Class Option 60, length 8: "MSFT 5.0"
+            Parameter-Request Option 55, length 12:
+              Subnet-Mask, Domain-Name, Default-Gateway, Domain-Name-Server
+              Netbios-Name-Server, Netbios-Node, Netbios-Scope, Router-Discovery
+              Static-Route, Classless-Static-Route, Classless-Static-Route-Microsoft, Vendor-Option
+            END Option 255, length 0
+08:15:17.609779 IP (tos 0xc0, ttl 64, id 28326, offset 0, flags [none], proto UDP (17), length 416)
+    192.168.111.3.67 > 192.168.111.172.68: [udp sum ok] BOOTP/DHCP, Reply, length 388, xid 0xd5d27ee0, Flags [none] (0x0000)
+          Client-IP 192.168.111.172
+          Your-IP 192.168.111.172
+          Server-IP 192.168.111.3
+          Client-Ethernet-Address fa:16:3e:b0:12:1f
+          Vendor-rfc1048 Extensions
+            Magic Cookie 0x63825363
+            DHCP-Message Option 53, length 1: ACK
+            Server-ID Option 54, length 4: 192.168.111.3
+            Lease-Time Option 51, length 4: 600
+            RN Option 58, length 4: 279
+            RB Option 59, length 4: 504
+            Subnet-Mask Option 1, length 4: 255.255.255.0
+            BR Option 28, length 4: 192.168.111.255
+            Domain-Name Option 15, length 14: "openstacklocal"
+            FQDN Option 81, length 38: [SO] 255/255 "host-192-168-111-172.openstacklocal"
+            Default-Gateway Option 3, length 4: 192.168.111.1
+            Classless-Static-Route-Microsoft Option 249, length 14: (169.254.169.254/32:192.168.111.1),(default:192.168.111.1)
+            Classless-Static-Route Option 121, length 14: (169.254.169.254/32:192.168.111.1),(default:192.168.111.1)
+            Domain-Name-Server Option 6, length 8: 8.8.4.4,8.8.8.8
+            MTU Option 26, length 2: 1400
+            END Option 255, length 0
+
+			######abnormal dnsmasq#####
+root@node-10:~# ip netns exec qdhcp-2d9c24e4-cd78-499f-a9de-b0587fb790d2 tcpdump -i tap870633c6-47 -nnvvvNXs 512
+tcpdump: listening on tap870633c6-47, link-type EN10MB (Ethernet), capture size 512 bytes
+03:23:05.555052 IP (tos 0x0, ttl 64, id 0, offset 0, flags [DF], proto UDP (17), length 328)
+    192.168.111.157.68 > 192.168.111.2.67: [udp sum ok] BOOTP/DHCP, Request from fa:16:3e:df:f0:36, length 300, xid 0xd06da03c, Flags [none] (0x0000)
+          Client-IP 192.168.111.157
+          Client-Ethernet-Address fa:16:3e:df:f0:36
+          Vendor-rfc1048 Extensions
+            Magic Cookie 0x63825363
+            DHCP-Message Option 53, length 1: Request
+            Parameter-Request Option 55, length 13:
+              Subnet-Mask, BR, Time-Zone, Classless-Static-Route
+              Domain-Name, Domain-Name-Server, Hostname, YD
+              YS, NTP, MTU, Option 119
+              Default-Gateway
+00:09:48.516645 IP (tos 0x0, ttl 128, id 16846, offset 0, flags [none], proto UDP (17), length 328)
+    192.168.111.178.68 > 255.255.255.255.67: [udp sum ok] BOOTP/DHCP, Request from fa:16:3e:55:4a:b0, length 300, xid 0xe7a8f244, Flags [none] (0x0000)
+          Client-IP 192.168.111.178
+          Client-Ethernet-Address fa:16:3e:55:4a:b0
+          Vendor-rfc1048 Extensions
+            Magic Cookie 0x63825363
+            DHCP-Message Option 53, length 1: Inform
+            Client-ID Option 61, length 7: ether fa:16:3e:55:4a:b0
+            Hostname Option 12, length 13: "vSTJPLMtest01"
+            Vendor-Class Option 60, length 8: "MSFT 5.0"
+            Parameter-Request Option 55, length 13:
+              Subnet-Mask, Domain-Name, Default-Gateway, Domain-Name-Server
+              Netbios-Name-Server, Netbios-Node, Netbios-Scope, Router-Discovery
+              Static-Route, Classless-Static-Route, Classless-Static-Route-Microsoft, Vendor-Option
+              Option 252
+            END Option 255, length 0
+            PAD Option 0, length 0, occurs 7
+
+00:09:48.516967 IP (tos 0xc0, ttl 64, id 15903, offset 0, flags [none], proto UDP (17), length 358)
+    192.168.111.3.67 > 192.168.111.178.68: [udp sum ok] BOOTP/DHCP, Reply, length 330, xid 0xe7a8f244, Flags [none] (0x0000)
+          Client-IP 192.168.111.178
+          Server-IP 192.168.111.3
+          Client-Ethernet-Address fa:16:3e:55:4a:b0
+          Vendor-rfc1048 Extensions
+            Magic Cookie 0x63825363
+            DHCP-Message Option 53, length 1: ACK
+            Server-ID Option 54, length 4: 192.168.111.3
+            Subnet-Mask Option 1, length 4: 255.255.255.0
+            BR Option 28, length 4: 192.168.111.255
+            Domain-Name Option 15, length 14: "openstacklocal"
+            Default-Gateway Option 3, length 4: 192.168.111.1
+            Classless-Static-Route-Microsoft Option 249, length 14: (169.254.169.254/32:192.168.111.1),(default:192.168.111.1)
+            Classless-Static-Route Option 121, length 14: (169.254.169.254/32:192.168.111.1),(default:192.168.111.1)
+            Domain-Name-Server Option 6, length 8: 8.8.4.4,8.8.8.8
+            MTU Option 26, length 2: 1400
+            END Option 255, length 0
+#############dhcpdump##########
+root@node-18:~# ip netns exec qdhcp-2d9c24e4-cd78-499f-a9de-b0587fb790d2 dhcpdump -i tap9115c423-46 -h ^fa:16:3e:ae:73:6a
+  TIME: 2017-06-13 08:26:02.997
+    IP: 192.168.111.185 (fa:16:3e:ae:73:6a) > 255.255.255.255 (ff:ff:ff:ff:ff:ff)
+    OP: 1 (BOOTPREQUEST)
+ HTYPE: 1 (Ethernet)
+  HLEN: 6
+  HOPS: 0
+   XID: f8bb4b6a
+  SECS: 0
+ FLAGS: 0
+CIADDR: 192.168.111.185
+YIADDR: 0.0.0.0
+SIADDR: 0.0.0.0
+GIADDR: 0.0.0.0
+CHADDR: fa:16:3e:ae:73:6a:00:00:00:00:00:00:00:00:00:00
+ SNAME: .
+ FNAME: .
+OPTION:  53 (  1) DHCP message type         8 (DHCPINFORM)
+OPTION:  61 (  7) Client-identifier         01:fa:16:3e:ae:73:6a
+OPTION:  12 (  8) Host name                 lin-test
+OPTION:  60 (  8) Vendor class identifier   MSFT 5.0
+OPTION:  55 ( 13) Parameter Request List      1 (Subnet mask)
+                                             15 (Domainname)
+                                              3 (Routers)
+                                              6 (DNS server)
+                                             44 (NetBIOS name server)
+                                             46 (NetBIOS node type)
+                                             47 (NetBIOS scope)
+                                             31 (Perform router discovery)
+                                             33 (Static route)
+                                            121 (Classless Static Route)
+                                            249 (MSFT - Classless route)
+                                             43 (Vendor specific info)
+                                            252 (MSFT - WinSock Proxy Auto Detect)
+
+---------------------------------------------------------------------------
+
+  TIME: 2017-06-13 08:26:02.997
+    IP: 192.168.111.3 (fa:16:3e:36:cc:ea) > 192.168.111.185 (fa:16:3e:ae:73:6a)
+    OP: 2 (BOOTPREPLY)
+ HTYPE: 1 (Ethernet)
+  HLEN: 6
+  HOPS: 0
+   XID: f8bb4b6a
+  SECS: 0
+ FLAGS: 0
+CIADDR: 192.168.111.185
+YIADDR: 0.0.0.0
+SIADDR: 192.168.111.3
+GIADDR: 0.0.0.0
+CHADDR: fa:16:3e:ae:73:6a:00:00:00:00:00:00:00:00:00:00
+ SNAME: .
+ FNAME: .
+OPTION:  53 (  1) DHCP message type         5 (DHCPACK)
+OPTION:  54 (  4) Server identifier         192.168.111.3
+OPTION:   1 (  4) Subnet mask               255.255.255.0
+OPTION:  28 (  4) Broadcast address         192.168.111.255
+OPTION:  15 ( 14) Domainname                openstacklocal
+OPTION:   3 (  4) Routers                   192.168.111.1
+OPTION: 249 ( 14) MSFT - Classless route    20a9fea9fec0a86f  ......o
+                                            0100c0a86f01     ....o.
+OPTION: 121 ( 14) Classless Static Route    20a9fea9fec0a86f  ......o
+                                            0100c0a86f01     ....o.
+OPTION:   6 (  8) DNS server                8.8.4.4,8.8.8.8
+OPTION:  26 (  2) Interface MTU             1400

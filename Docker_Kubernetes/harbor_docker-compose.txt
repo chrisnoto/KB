@@ -1,0 +1,123 @@
+使用docker-compose安裝harbor
+
+一  prepare
+域控里添加DNS A記錄指向harbor.cesbg.foxconn
+設置主機名
+hostnamectl set-hostname harbor.cesbg.foxconn
+安裝docker-engine > 1.10
+安裝docker-compose:
+curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+確認python版本>2.7
+下載harbor offline版本
+wget https://storage.googleapis.com/harbor-releases/release-1.4.0/harbor-offline-installer-v1.4.0.tgz
+解壓之，然後找到harbor.cfg
+配置hostname = harbor.cesbg.foxconn
+ssl_cert = /root/cert/cesbg.foxconn.crt
+ssl_cert_key = /root/cert/cesbg.foxconn.key
+
+二  swift storage
+1.1 在docker-compose.yml增加extra host；否則registry將無法與openstack的域名fuel.public.local通信
+registry:
+image: vmware/registry-photon:v2.6.2-v1.4.0
+container_name: registry
+restart: always
+extra_hosts:
+– “public.fuel.local:10.67.36.80″
+
+1.2 配置swift storage
+[root@harbor registry]# cat config.yml
+version: 0.1
+log:
+level: info
+fields:
+service: registry
+storage:
+swift: #移除原來的storage,增加swift這一段
+username: admin
+password: F0xconn!23
+authurl: https://10.67.36.80:5000/v2.0
+tenant: admin
+tenantid: 3def5a869d0b4e5abd04c55ad3962bfb
+region: RegionOne
+container: docker-images
+insecureskipverify: true
+http:
+addr: :5000
+secret: placeholder
+debug:
+addr: localhost:5001
+auth:
+token:
+issuer: harbor-token-issuer
+realm: $ui_url/service/token
+rootcertbundle: /etc/registry/root.crt
+service: harbor-registry
+notifications:
+endpoints:
+– name: harbor
+disabled: false
+url: http://ui:8080/service/notifications
+timeout: 3000ms
+threshold: 5
+backoff: 1s
+[root@harbor registry]# pwd
+/root/harbor/common/templates/registry
+
+三 啟用https
+
+2.1 生成證書
+Create your own CA certificate: （CN NAME填senchen）
+openssl req \
+-newkey rsa:4096 -nodes -sha256 -keyout ca.key \
+-x509 -days 365 -out ca.crt
+Generate a Certificate Signing Request: （CN NAME填harbor.cesbg.foxconn）
+If you use FQDN like reg.yourdomain.com to connect your registry host, then you must use reg.yourdomain.com as CN (Common Name).
+Otherwise, if you use IP address to connect your registry host, CN can be anything like your name and so on:
+
+openssl req \
+-newkey rsa:4096 -nodes -sha256 -keyout cesbg.foxconn.key \
+-out cesbg.foxconn.csr
+Generate the certificate of your registry host:
+If you’re using FQDN like reg.yourdomain.com to connect your registry host, then run this command to generate the certificate of your registry host:
+
+openssl x509 -req -days 365 -in cesbg.foxconn.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cesbg.foxconn.crt
+
+2.2 拷貝crt和key至/root/cert
+cp cesbg.foxconn.crt /root/cert/
+cp cesbg.foxconn.key /root/cert/
+
+2.3 Generate configuration files for Harbor:
+./prepare
+
+2.4 執行./install.sh 或者 docker-compose up
+
+三 網頁中訪問 https://harbor.cesbg.foxconn
+
+默認登陸： admin/Harbor12345
+
+四 docker客戶端登陸 （centos）
+增加/etc/hosts
+10.67.37.242 harbor.cesbg.foxconn
+
+4.1 配置docker proxy忽略 harbor.cesbg.foxconn
+[root@k8sv17 docker.service.d]# cat http-proxy.conf
+[Service]
+Environment=”HTTP_PROXY=http://10.62.32.27:33128” “NO_PROXY=localhost,127.0.0.1,harbor.cesbg.foxconn,registry”
+
+4.2 拷貝ca.crt
+mkdir /etc/docker/certs.d/harbor.cesbg.foxconn
+scp 10.67.37.242:/root/ca.crt .
+
+4.3 systemctl daemon-reload; systemctl restart docker
+
+4.4 On some systems where docker daemon runs, you may need to trust the certificate at OS level.
+On Ubuntu, this can be done by below commands:
+
+cp cesbg.foxconn.crt /usr/local/share/ca-certificates/reg.yourdomain.com.crt
+update-ca-certificates
+On Red Hat (CentOS etc), the commands are:
+
+cp cesbg.foxconn.crt /etc/pki/ca-trust/source/anchors/reg.yourdomain.com.crt
+update-ca-trust
+
+4.5 try: docker login harbor.cesbg.foxconn

@@ -1,0 +1,131 @@
+常见磁盘平均物理寻道时间为：
+7200转/分的STAT硬盘平均物理寻道时间是9ms
+10000转/分的STAT硬盘平均物理寻道时间是6ms
+15000转/分的SAS硬盘平均物理寻道时间是4ms
+
+常见硬盘的旋转延迟时间为：
+7200   rpm的磁盘平均旋转延迟大约为60*1000/7200/2 = 4.17ms
+10000 rpm的磁盘平均旋转延迟大约为60*1000/10000/2 = 3ms，
+15000 rpm的磁盘其平均旋转延迟约为60*1000/15000/2 = 2ms。
+
+最大IOPS的理论计算方法
+--------------------------------------
+IOPS = 1000 ms/ (寻道时间 + 旋转延迟)。可以忽略数据传输时间。
+
+7200   rpm的磁盘 IOPS = 1000 / (9 + 4.17)  = 76 IOPS
+10000 rpm的磁盘IOPS = 1000 / (6+ 3) = 111 IOPS
+15000 rpm的磁盘IOPS = 1000 / (4 + 2) = 166 IOPS
+
+average seek time overcome by queing
+elevator algorithms re-sort request queues
+filesystem metadata is usually stored in buffer cache
+file data is usually sotred in page cache
+most drives also contain internal cache
+
+Tuning sequential read access
+kernel automatically reads ahead sequentially
+blockdev --getra /dev/sda
+blockdev --setra 512 /dev/sda
+Also exposed in /sys/block/sda/queue/read_ahead_kb
+tuneable sets the max window size
+initial read-ahead window is half the tunable
+persist in /etc/rc.local
+[root@oc1181188062 ~]# blockdev --getra /dev/sda
+256
+[root@oc1181188062 ~]# cat /sys/block/sda/queue/read_ahead_kb 
+128                      预先读128K，后写
+considerations
+1 fewer seeks, but longer service time per visit
+2 fewer openrations issued to disk controller
+3 stopeed when random file access is detected
+
+Tuning the disk queue
+queue length
+/sys/block/sda/queue/nr_requests
+scheduler algorithm
+/sys/block/sda/queue/scheduler  调度算法
+/sys/block/sda/queue/iosched     相应参数
+longer queues...
+1 allow reads to be merged before writes
+2 enable more efficient merging but add latency
+
+tuning the deadline scheduler   适合小文件
+goal: predictable wait time
+echo deadline > /sys/block/sda/queue/scheduler
+
+primary tunables in /sys/block/sda/queue/iosched/
+max queue time
+read_expire
+write_expire
+should we attempt to front-merge contiguous requests?
+front_merges
+
+tuning the anticipatory scheduler  适合大文件
+goal:optimize completion rate for dependent reads
+echo anticipatory >/sys/block/sda/queue/scheduler
+primary tunables n /sys/block/sda/queue/scheduler
+how long to wait for another,nearby read
+antic_expire
+max queue time
+read_expire
+write_expire
+
+tuning the noop scheduler
+goal:conserve cpu clock cycles
+echo noop >/sys/block/sda/queue/scheduler
+no tunable settings required
+use when cpu clock cycles are too expensive
+host cpu cycles are usually cheaper than SAN cpu cycles
+some controllers perform elevator functions
+tagged command queueing
+available on scsi and some stat drives
+sorting is still useful for iscsi and gnbd
+
+tuning the cfq scheduler
+goal:differentiated IO service per application
+echo cfq >/sys/block/sda/queue/scheduler
+class- and priority-based IO queuing
+uses 64 internal queues
+fills internal queues using round-robin
+request are dispached from non-empty queues
+sort occurs at dispatch queue
+primary tunables in /sys/block/sda/queue/iosched/
+max requests per internal queue
+queued
+number of requests dispatched to device per cycle
+quantum
+
+方法一
+如果一个进程使用 taskset 命令明确的被固定（pinned）到 CPU 的特定内核上，你可以使用 taskset 命令找出被固定的 CPU 内核：
+
+$ taskset -c -p <pid>
+
+例如, 如果你对 PID 5357 这个进程有兴趣:
+
+$ taskset -c -p 5357
+pid 5357's current affinity list: 5
+
+输出显示这个过程被固定在 CPU 内核 5上。
+
+但是，如果你没有明确固定进程到任何 CPU 内核，你会得到类似下面的亲和力列表。
+
+pid 5357's current affinity list: 0-11
+
+输出表明该进程可能会被安排在从0到11中的任何一个 CPU 内核。在这种情况下，taskset 不能识别该进程当前被分配给哪个 CPU 内核，你应该使用如下所述的方法。
+
+方法二
+ps 命令可以告诉你每个进程/线程目前分配到的 （在“PSR”列）CPU ID。
+
+$ ps -o pid,psr,comm -p <pid>
+  PID PSR COMMAND
+5357  10 prog
+
+输出表示进程的 PID 为 5357（名为”prog”）目前在CPU 内核 10 上运行着。如果该过程没有被固定，PSR 列会根据内核可能调度该进程到不同内核而改变显示。
+
+方法三
+top 命令也可以显示 CPU 被分配给哪个进程。首先，在top 命令中使用“P”选项。然后按“f”键，显示中会出现 “Last used CPU” 列。目前使用的 CPU 内核将出现在 “P”（或“PSR”）列下。
+方法四
+另一种来检查一个进程/线程当前使用的是哪个 CPU 内核的方法是使用 htop 命令。
+
+从命令行启动 htop。按 键，进入”Columns”，在”Available Columns”下会添加 PROCESSOR。
+请注意，所有以前使用的命令 taskset，ps 和 top 分配CPU 内核的 IDs 为 0，1，2，…，N-1。然而，htop 分配 CPU 内核 IDs 从 1开始（直到 N）。

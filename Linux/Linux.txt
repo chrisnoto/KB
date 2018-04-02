@@ -1118,6 +1118,7 @@ run local script against remote machines,without copy it to server
 
 #####################################################
 ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
+ssh -R 1880:9.190.26.244:80 racv-l402
 本机：
 1   install squid
 2   #ssh -Nf -R 7001:localhost:3128 master  本地运行

@@ -1,3 +1,7 @@
+docker-compose -f prometheus.yml build
+docker-compose -f prometheus.yml push
+docker stack deploy prometheus --compose-file prometheus.yml
+
 Registry vs Index
 The next weird thing is the idea of a Registry and an Index, and how these are separate things.
 An index manages user accounts, permissions, search, tagging, and all that nice stuff that's in the public web interface.

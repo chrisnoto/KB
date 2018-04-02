@@ -1,0 +1,210 @@
+#######Create a new repository
+git clone git@cicd.efoxconn.com:poc_internal/Test_Lamei.git
+cd Test_Lamei
+touch README.md
+git add README.md
+git commit -m "add README"
+git push -u origin master
+
+########Existing folder
+cd existing_folder
+git init
+git remote add origin git@cicd.efoxconn.com:poc_internal/Test_Lamei.git
+git add .
+git commit -m "Initial commit"
+git push -u origin master
+
+#########Existing Git repository
+cd existing_repo
+git remote add origin git@cicd.efoxconn.com:poc_internal/Test_Lamei.git
+git push -u origin --all
+git push -u origin --tags
+
+#########git ##########
+git checkout -b test
+git status
+git branch
+vi README.md
+git status
+git add README.md
+git commit README.md
+git status
+git log --branches --not --remotes
+git push origin test
+git config --global credential.helper 'cache --timeout=7200'
+
+fork：在github页面，点击fork按钮。将别人的仓库复制一份到自己的仓库。
+clone：将github中的仓库克隆到自己本地电脑中
+git clone 本地沒有repository時，將遠程repository整個下載過來，包括裏面的日誌信息，git項目里
+的分支
+git pull  本地有repository時，將遠程repository里新的commit數據下載過來，並且將文件與本地分支進行merge
+git pull = git fetch + merge
+git fetch 拿到了远程所有分支的更新，我用 cat .git/FETCH_HEAD 可以看到其状态，
+若都是 not-for-merge 则不会有接下来的 merge 动作
+merge 动作的默认目标是当前分支，若要切换目标，可以直接切换分支
+merge 动作的来源则取决于你是否有 tracking，若有则读取配置自动完成，若无则请指明【来源】
+
+#####getconfig.sh#########
+#!/bin/bash
+
+srvname=`uname -n`
+sospath=`pwd`
+user=`who ami i|cut -d' ' -f1`
+sosfile="sosreport*.tar.[a-z][a-z]*"
+decomdir=""
+
+CHECKSOS() {
+  type sosreport
+  if [ $? -eq 0 ]
+  then
+    echo "sosreport is installed"
+  else
+    echo "sosreport need to be installed before running the script!!"
+    exit 1
+  fi
+}
+
+DECOM () {
+f=$1
+result=`file $f`
+for t in XZ gzip bzip2
+do
+  echo $result |grep -qi "$t compressed data"
+  if [ $? -eq 0 ]
+  then
+    ctype=$t
+  fi
+done
+
+case "$ctype" in
+  XZ)
+    decomdir=`tar tJvf $f|head -1|awk '{print $NF}'`
+    tar Jxvf $f
+    ;;
+  gzip)
+    decomdir=`tar tzvf $f|head -1|awk '{print $NF}'`
+    tar zxvf $f
+    ;;
+  bzip2)
+    decomdir=`tar tjvf $f|head -1|awk '{print $NF}'`
+    tar jxvf $f
+    ;;
+esac
+}
+
+CHECKSOS
+type rpm
+if [ $? -eq 0 ]
+then
+  sec="selinux"
+else
+  sec="apparmor"
+fi
+
+if [ -d ~/sos* ]
+then
+  rm -rf ~/sos*
+fi
+
+if [ ! -d ~/SA ]
+then
+  mkdir ~/SA
+fi
+
+SOS=`which sosreport`
+$SOS --batch --tmp-dir=$sospath -n memory,system,hardware,process,$sec
+cd ~
+DECOM $sosfile
+rm -f ~/$sosfile ~/sosreport*md5
+mv ~/$decomdir ~/sosreport
+rm -rf ~/sosreport/var
+find ~/sosreport -name '*.log' -print0 | xargs -0 rm -f
+find ~/sosreport -type f -size +512k -print0 | xargs -0 rm -f
+
+cp -r ~/sosreport/etc ~/SA
+if [ ${user} != root ]
+then
+  chown -R ${user}.${user} ~/SA
+fi
+
+
+#####git-conf.sh#########
+#!/bin/bash
+
+srvname="`uname -n`"
+repopath="/SA"
+
+CHECKGIT() {
+  type git
+  if [ $? -eq 0 ]
+  then
+    echo "git is installed"
+  else
+    echo "git need to be installed before running the script!!"
+    exit 1
+  fi
+}
+
+INITREPO() {
+echo "cloning git repo"
+cd /
+
+expect -c "
+set timeout 10;
+spawn git clone git@10.67.50.42:SA;
+        expect {
+                \"*yes/no*\" {send \"yes\r\";}
+        }
+expect eof "
+
+mkdir -p ${repopath}/${srvname}
+git config --global user.name "chensen"
+git config --global user.email root@localhost
+git config --global push.default simple
+}
+
+GITREPO() {
+  if [ -d ${repopath} ]
+  then
+    ls ${repopath}/${srvname}
+    if [ $? -ne 0 ]
+    then
+      INITREPO
+    fi
+  else
+    INITREPO
+fi
+}
+
+CHECKGIT
+GITREPO
+
+type rpm
+if [ $? -eq 0 ]
+then
+  sec="selinux"
+else
+  sec="apparmor"
+fi
+
+if [ -d /var/tmp/sos* ]
+then
+  rm -rf /var/tmp/sos*
+fi
+
+SOS=`which sosreport`
+$SOS --batch --tmp-dir=/var/tmp -n logs,processor,memory,sar,cgroups,dbus,system,hardware,process,$sec
+cd /var/tmp
+xz -d /var/tmp/sosreport*.tar.xz
+tar xvf /var/tmp/sosreport-*.tar
+rm -f /var/tmp/sosreport*.tar /var/tmp/sosreport*md5
+mv /var/tmp/sosreport* /var/tmp/sosreport
+rm -rf /var/tmp/sosreport/var
+find /var/tmp/sosreport -name '*.log' -print0 | xargs -0 rm -f
+find /var/tmp/sosreport -type f -size +512k -print0 | xargs -0 rm -f
+
+cd ${repopath}
+cp -r /var/tmp/sosreport/etc ${srvname}
+git add .
+git commit -m "initial server configuration files"
+git push

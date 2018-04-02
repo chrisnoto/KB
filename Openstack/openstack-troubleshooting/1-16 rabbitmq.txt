@@ -1,0 +1,149 @@
+node-10  根目錄滿，  pcs status發現node-10上的資源stopped
+
+node-8 和node-12 的nova-compute state 一下up 一下down
+
+node-15 的nova-compute狀態有1個小時沒有更新。
+
+node-10上ceph-mon沒有起來
+
+root@node-10:/var/log/nova# pcs status
+Cluster name:
+Last updated: Mon Jan 16 03:04:52 2017
+Last change: Mon Dec 12 12:01:29 2016
+Stack: corosync
+Current DC: node-14.domain.tld (14) - partition with quorum
+Version: 1.1.12-561c4cf
+3 Nodes configured
+46 Resources configured
+
+
+Online: [ node-10.domain.tld node-14.domain.tld ]
+OFFLINE: [ node-11.domain.tld ]
+
+Full list of resources:
+
+ Clone Set: clone_p_vrouter [p_vrouter]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ sysinfo_node-10.domain.tld     (ocf::pacemaker:SysInfo):       Stopped
+ vip__management        (ocf::fuel:ns_IPaddr2): Started node-14.domain.tld
+ vip__vrouter_pub       (ocf::fuel:ns_IPaddr2): Started node-14.domain.tld
+ vip__vrouter   (ocf::fuel:ns_IPaddr2): Started node-14.domain.tld
+ vip__public    (ocf::fuel:ns_IPaddr2): Started node-14.domain.tld
+ Master/Slave Set: master_p_conntrackd [p_conntrackd]
+     Masters: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_haproxy [p_haproxy]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Master/Slave Set: master_p_rabbitmq-server [p_rabbitmq-server]
+     Masters: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_dns [p_dns]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_mysql [p_mysql]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_neutron-plugin-openvswitch-agent [p_neutron-plugin-openvswitch-agent]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_neutron-l3-agent [p_neutron-l3-agent]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_neutron-dhcp-agent [p_neutron-dhcp-agent]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_neutron-metadata-agent [p_neutron-metadata-agent]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_p_heat-engine [p_heat-engine]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ sysinfo_node-11.domain.tld     (ocf::pacemaker:SysInfo):       Stopped
+ sysinfo_node-14.domain.tld     (ocf::pacemaker:SysInfo):       Started node-14.domain.tld
+ Clone Set: clone_p_ntp [p_ntp]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+ Clone Set: clone_ping_vip__public [ping_vip__public]
+     Started: [ node-14.domain.tld ]
+     Stopped: [ node-10.domain.tld ]
+
+PCSD Status:
+  192.168.0.3: Offline
+  192.168.0.6: Offline
+  192.168.0.5: Offline
+
+/var/log/nova/nova-conductor.log 日誌
+2017-01-16 01:54:52.259 7343 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.259 7301 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.257 7312 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.259 7287 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.263 7283 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.274 7280 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:52.276 7286 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: (0, 0): (320) CONNECTION_FORCED - broker forced connection closure with reason 'shutdown'. Trying again in 5 seconds.
+2017-01-16 01:54:57.315 7343 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.316 7287 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.320 7286 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.325 7301 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.326 7283 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.329 7280 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:54:57.329 7312 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:55:02.348 7301 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:02.357 7312 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:02.362 7280 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:04.858 7283 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 113] EHOSTUNREACH. Trying again in 5 seconds.
+2017-01-16 01:55:04.858 7287 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 113] EHOSTUNREACH. Trying again in 5 seconds.
+2017-01-16 01:55:04.859 7343 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 113] EHOSTUNREACH. Trying again in 5 seconds.
+2017-01-16 01:55:04.859 7286 ERROR oslo.messaging._drivers.impl_rabbit [-] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 113] EHOSTUNREACH. Trying again in 5 seconds.
+2017-01-16 01:55:09.882 7283 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:09.883 7343 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:09.884 7287 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:55:09.891 7286 INFO oslo.messaging._drivers.impl_rabbit [-] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:57:24.067 7292 ERROR oslo.messaging._drivers.impl_rabbit [req-9776799b-a3d6-4caa-ae5c-7b2489ca09db 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+2017-01-16 01:57:24.405 7305 ERROR oslo.messaging._drivers.impl_rabbit [req-75183eb3-c0c7-4b90-9eb5-833add2cbf7b 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+2017-01-16 01:57:29.075 7292 ERROR oslo.messaging._drivers.impl_rabbit [req-9776799b-a3d6-4caa-ae5c-7b2489ca09db 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:57:29.420 7305 ERROR oslo.messaging._drivers.impl_rabbit [req-75183eb3-c0c7-4b90-9eb5-833add2cbf7b 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 01:57:34.442 7305 INFO oslo.messaging._drivers.impl_rabbit [req-75183eb3-c0c7-4b90-9eb5-833add2cbf7b 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 01:57:34.519 7292 ERROR oslo.messaging._drivers.impl_rabbit [req-9776799b-a3d6-4caa-ae5c-7b2489ca09db 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 113] EHOSTUNREACH. Trying again in 5 seconds.
+2017-01-16 01:57:39.543 7292 INFO oslo.messaging._drivers.impl_rabbit [req-9776799b-a3d6-4caa-ae5c-7b2489ca09db 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Reconnected to AMQP server on 192.168.0.5:5673
+2017-01-16 02:02:39.594 7301 ERROR oslo.messaging._drivers.impl_rabbit [req-df7245fc-8384-44dc-90e9-6ed170975082 - - - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+2017-01-16 02:02:44.612 7301 ERROR oslo.messaging._drivers.impl_rabbit [req-df7245fc-8384-44dc-90e9-6ed170975082 - - - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 111] ECONNREFUSED. Trying again in 5 seconds.
+2017-01-16 02:02:49.648 7301 INFO oslo.messaging._drivers.impl_rabbit [req-df7245fc-8384-44dc-90e9-6ed170975082 - - - - -] Reconnected to AMQP server on 192.168.0.5:5673
+  
+  
+node-10  根目錄滿
+root@node-10:/var/log/nova# df -h
+Filesystem                      Size  Used Avail Use% Mounted on
+udev                             16G   12K   16G   1% /dev
+tmpfs                           3.2G  1.1M  3.2G   1% /run
+/dev/dm-3                        50G   47G     0 100% /
+none                            4.0K     0  4.0K   0% /sys/fs/cgroup
+none                            5.0M     0  5.0M   0% /run/lock
+none                             16G   45M   16G   1% /run/shm
+none                            100M     0  100M   0% /run/user
+/dev/sda3                       196M   58M  129M  32% /boot
+/dev/mapper/logs-log            9.8G  6.5G  2.8G  70% /var/log
+/dev/mapper/mysql-root           20G  2.9G   16G  16% /var/lib/mysql
+/dev/mapper/horizon-horizontmp   11G   33M   11G   1% /var/lib/horizon
+
+node-10 rabbitmq服務沒有起來
+root@node-10:/var/log/nova# rabbitmqctl status
+Status of node 'rabbit@messaging-node-10' ...
+Error: unable to connect to node 'rabbit@messaging-node-10': nodedown
+
+DIAGNOSTICS
+===========
+
+attempted to contact: ['rabbit@messaging-node-10']
+
+rabbit@messaging-node-10:
+  * connected to epmd (port 4369) on messaging-node-10
+  * epmd reports: node 'rabbit' not running at all
+                  other nodes on messaging-node-10: ['rabbitmq-cli-15696']
+  * suggestion: start the node
+
+current node details:
+- node name: 'rabbitmq-cli-15696@node-10'
+- home dir: /var/lib/rabbitmq
+- cookie hash: soeIWU2jk2YNseTyDSlsEA==

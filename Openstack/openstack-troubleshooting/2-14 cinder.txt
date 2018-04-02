@@ -1,0 +1,182 @@
+故障：
+openstack集群的服務不可用 所有VM無法ping通
+檢查服務：
+控制節點node-10上的所有pacemaker資源stopped, 包括wsrep, rabbitmq, openstack service, ceph-mon
+三台控制節點上的各個neutron agent down
+三台計算節點上的nova compute狀態down
+原因：
+從image(78GB大小)創建volume導致控制節點node-10根目錄被image cache撐爆，導致rabbitmq down
+rabbitmq down后，導致openstack一些service不正常  (應該是整個rabbitmq集群都無法通信)
+2017-02-15 06:25:44	ERR	oslo.messaging._drivers.impl_rabbit [req-c83bcc9e-e3c7-4ab2-8a57-9537a5288e19 - - - - -] AMQP server on 192.168.0.5:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+2017-02-15 04:20:14	ERR	oslo.messaging._drivers.impl_rabbit [req-ce7dded1-c999-43f2-9ed0-ff7d53fda6f7 - - - - -] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+2017-02-15 04:09:54	ERR	oslo.messaging._drivers.impl_rabbit [req-ce7dded1-c999-43f2-9ed0-ff7d53fda6f7 - - - - -] AMQP server on 192.168.0.6:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+恢復步驟：
+1 恢復controller上所有的服務
+在node-10節點重啟pacemaker來恢復各種資源, 查看rabbitmq,ceph-mon,wsrep,openstack 所有service
+（此時pacemaker資源看起來恢復正常，但是所有的controller節點上的neutron agents依然全部down掉）
+在另一台controller節點上重啟pacemaker /rabbitmq后，部份節點上的neutron agent恢復正常
+此類問題一般是重啟controller上的pacemaker/rabbitmq    
+要查看/var/log/rabbitmq里的日誌
+2 恢復三台compute上的nova-compute服務（重啟了server，或許不需要重啟）
+重啟后發現三台compute上的nova-compute狀態依然不正常
+（error  Connection to libvirt failed: Failed to connect socket to '/var/run/libvirt/libvirt-sock': No such file or directory）
+service nova-compute stop
+service libvirtd stop
+service libvirtd start
+service nova-compute start
+
+root@node-18:/var/log/cinder# grep req-36aaf95c-53ed-4b77-8b *.log
+cinder-scheduler.log:2017-02-14 10:35:53.231 29058 ERROR cinder.scheduler.filter_scheduler 
+[req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Error scheduling None from last vol-service: rbd:volumes#RBD-backend : [u'Traceback (most recent call last):\n', 
+u'lib/python2.7/dist-packages/cinder/volume/flows/manager/create_volume.py", line 834, in execute\n    **volume_spec)\n', 
+u'  File "/usr/lib/python2.7/dist-packages/cinder/volume/flows/manager/create_volume.py", line 737, in _create_from_image\n    image_service, context, image_id) as tmp_image:\n', 
+u'  File "/usr/lib/python2.7/contextlib.py", line 17, in __enter__\n    return self.gen.next()\n', 
+u'  File "/usr/lib/python2.7/dist-packages/cinder/image/image_utils.py", line 522, in fetch\nfetch_verify_image(context, image_service, image_id, tmp)\n', 
+u'  File "/usr/lib/python2.7/dist-packages/cinder/image/image_utils.py", line 186, in fetch_verify_image\n    None, None)\n', 
+u'  File "/usr/lib/python2.7/dist-packages/cinder/image/image_utils.py", line 164, in fetch\n    image_service.download(context, image_id, image_file)\n',
+u'  File "/usr/lib/python2.7/dist-packages/cinder/image/glance.py", line 324, in download\n   data.write(chunk)\n', u'IOError: [Errno 28] No space left on device\n']
+cinder-scheduler.log:2017-02-14 10:35:53.323 29058 ERROR oslo.messaging._drivers.impl_rabbit [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] AMQP server on 192.168.0.3:5673 is unreachable: [Errno 32] Broken pipe. Trying again in 5 seconds.
+cinder-scheduler.log:2017-02-14 10:35:58.344 29058 INFO oslo.messaging._drivers.impl_rabbit [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Reconnected to AMQP server on 192.168.0.3:5673
+cinder-volume.log:2017-02-14 10:36:00.880 28591 INFO cinder.volume.flows.manager.create_volume [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] 
+Volume 343f9c5a-bea6-4503-a862-6ffc7d2e7ee5: being created as image with specification: {'status': u'creating', 'image_location': 
+(u'rbd://05761444-f55c-42ca-a0b0-97145898c3bc/images/c99a47d5-3f75-448b-bb6d-1c67134e11a3/snap', None),
+ 'volume_size': 78, 'volume_name': u'volume-343f9c5a-bea6-4503-a862-6ffc7d2e7ee5', 
+'image_id': u'c99a47d5-3f75-448b-bb6d-1c67134e11a3', 'image_service': <cinder.image.glance.GlanceImageService object at 0x7fb9f2de3a50>, 
+'image_meta': {u'status': u'active', u'virtual_size': None, u'name': u'lin-51.45-d', u'tags': [], u'container_format': u'bare', 
+u'created_at': datetime.datetime(2017, 2, 14, 2, 56, 54, tzinfo=<iso8601.iso8601.Utc object at 0x7fb9f2d939d0>), u'disk_format': u'qcow2', 
+u'updated_at': datetime.datetime(2017, 2, 14, 3, 31, 35, tzinfo=<iso8601.iso8601.Utc object at 0x7fb9f2d939d0>), u'visibility': u'public', 'properties': {}, 
+u'owner': u'31e6d008df414104ac5e1d42beae316c', u'protected':False, u'id': u'c99a47d5-3f75-448b-bb6d-1c67134e11a3', 
+u'file': u'/v2/images/c99a47d5-3f75-448b-bb6d-1c67134e11a3/file', u'checksum': u'db18da481d758b7f3a4a488838c312e6', u'min_disk': 0, 
+u'direct_url': u'rbd://05761444-f55c-42ca-a0b0-97145898c3bc/images/c99a47d5-3f75-448b-bb6d-1c67134e11a3/snap', u'min_ram': 0, u'size': 83690057216}}
+cinder-volume.log:2017-02-14 10:36:00.919 28591 WARNING cinder.context [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Unable to get internal tenant context: Missing required config parameters.
+cinder-volume.log:2017-02-14 10:36:00.920 28591 WARNING cinder.volume.flows.manager.create_volume [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Unable to get Cinder internal context, will not use image-volume cache.
+cinder-volume.log:2017-02-14 10:54:21.346 28591 INFO cinder.image.image_utils [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Image download 79813.00 MB at 72.53 MB/s
+cinder-volume.log:2017-02-14 10:54:24.411 28591 ERROR cinder.volume.flows.manager.create_volume [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Failed to copy image to volume: 343f9c5a-bea6-4503-a862-6ffc7d2e7ee5
+cinder-volume.log:2017-02-14 10:54:27.323 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.CreateVolumeFromSpecTask;volume:create' (8ac44c81-2051-45de-b5b0-fcb1f1b60633) transitioned into state 'FAILURE' from state 'RUNNING'
+cinder-volume.log:2017-02-14 10:54:27.337 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.CreateVolumeFromSpecTask;volume:create' (8ac44c81-2051-45de-b5b0-fcb1f1b60633) transitioned into state 'REVERTED' from state 'REVERTING'
+cinder-volume.log:2017-02-14 10:54:27.342 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.NotifyVolumeActionTask;volume:create, create.start' (908d4ea2-fd9c-4d58-b004-6a528fac52cd) transitioned into state 'REVERTED' from state 'REVERTING'
+cinder-volume.log:2017-02-14 10:54:27.348 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.ExtractVolumeSpecTask;volume:create' (dea7e529-8be7-4a0c-8033-34e278249613) transitioned into state 'REVERTED' from state 'REVERTING'
+cinder-volume.log:2017-02-14 10:54:27.451 28591 ERROR cinder.volume.flows.manager.create_volume [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Volume 343f9c5a-bea6-4503-a862-6ffc7d2e7ee5: create failed
+cinder-volume.log:2017-02-14 10:54:27.454 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.OnFailureRescheduleTask;volume:create' (8187b7fe-c5fd-4bb4-8599-0e5468421a1d) transitioned into state 'REVERTED' from state 'REVERTING'
+cinder-volume.log:2017-02-14 10:54:27.460 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Task 'cinder.volume.flows.manager.create_volume.ExtractVolumeRefTask;volume:create' (c8dc7aa2-45e0-450b-859c-e7cdb231bf49) transitionedinto state 'REVERTED' from state 'REVERTING'
+cinder-volume.log:2017-02-14 10:54:27.464 28591 WARNING cinder.volume.manager [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Flow 'volume_create_manager' (20e644f0-37bb-408a-9a20-4a6a1fe2759e) transitioned into state 'REVERTED' from state 'RUNNING'
+cinder-volume.log:2017-02-14 10:54:27.541 28591 ERROR oslo_messaging.rpc.dispatcher [req-36aaf95c-53ed-4b77-8bc9-9cc0f6d90feb 215cd438b5fb41b585cc53e29ed22ca7 31e6d008df414104ac5e1d42beae316c - - -] Exception during message handling: Image c99a47d5-3f75-448b-bb6d-1c67134e11a3 is unacceptable: Size is 100GB and doesn't fit in avolume of size 78GB.
+
+root@node-10:/var/log/cinder# grep -i ioerror cinder-volume.log
+2017-02-14 10:35:53.066 6225 ERROR cinder.volume.manager IOError: [Errno 28] No space left on device
+2017-02-14 10:35:53.221 6225 ERROR oslo_messaging.rpc.dispatcher IOError: [Errno 28] No space left on device
+
+###rabbitmq down#####
+=INFO REPORT==== 14-Feb-2017::05:49:45 ===
+Disk free space insufficient. Free bytes:0 Limit:5000000
+
+=WARNING REPORT==== 14-Feb-2017::05:49:45 ===
+disk resource limit alarm set on node 'rabbit@messaging-node-10'.
+
+**********************************************************
+*** Publishers will be blocked until this alarm clears ***
+**********************************************************
+
+=WARNING REPORT==== 14-Feb-2017::05:49:45 ===
+closing AMQP connection <0.12480.0> (192.168.0.6:53835 -> 192.168.0.6:5673):
+connection_closed_abruptly
+
+=WARNING REPORT==== 14-Feb-2017::05:49:45 ===
+closing AMQP connection <0.12387.0> (192.168.0.6:53834 -> 192.168.0.6:5673):
+connection_closed_abruptly
+=INFO REPORT==== 14-Feb-2017::05:49:58 ===
+Stopping RabbitMQ
+
+=INFO REPORT==== 14-Feb-2017::05:49:58 ===
+stopped TCP Listener on 192.168.0.6:5673
+
+=ERROR REPORT==== 14-Feb-2017::05:49:58 ===
+Error on AMQP connection <0.1617.0> (192.168.0.3:54820 -> 192.168.0.6:5673, vhost: '/', user: 'nova', state: blocking), channel 0:
+{amqp_error,connection_forced,
+            "broker forced connection closure with reason 'shutdown'",none}
+
+=ERROR REPORT==== 14-Feb-2017::05:49:58 ===
+Error on AMQP connection <0.1696.6> (192.168.0.6:52957 -> 192.168.0.6:5673, vhost: '/', user: 'nova', state: blocking), channel 0:
+{amqp_error,connection_forced,
+            "broker forced connection closure with reason 'shutdown'",none}
+
+** In 'terminate' callback with reason ==
+** shutdown
+
+=ERROR REPORT==== 14-Feb-2017::05:50:01 ===
+** Generic server <0.845.0> terminating
+** Last message in was {'EXIT',<0.733.0>,shutdown}
+** When Server state == undefined
+** Reason for termination ==
+** {{badmatch,{error,{file_error,"/var/lib/rabbitmq/mnesia/rabbit@messaging-node-10/recovery.dets",
+                                 enospc}}},
+    [{rabbit_recovery_terms,flush,0,
+                            [{file,"src/rabbit_recovery_terms.erl"},
+                             {line,134}]},
+     {rabbit_recovery_terms,close_table,0,
+                            [{file,"src/rabbit_recovery_terms.erl"},
+                             {line,137}]},
+     {gen_server,try_terminate,3,[{file,"gen_server.erl"},{line,643}]},
+     {gen_server,terminate,7,[{file,"gen_server.erl"},{line,809}]},
+     {proc_lib,init_p_do_apply,3,[{file,"proc_lib.erl"},{line,240}]}]}
+
+=INFO REPORT==== 14-Feb-2017::05:50:01 ===
+Stopped RabbitMQ application
+
+=INFO REPORT==== 14-Feb-2017::05:50:06 ===
+Stopping RabbitMQ
+
+=INFO REPORT==== 14-Feb-2017::05:50:06 ===
+Stopped RabbitMQ application
+
+=INFO REPORT==== 14-Feb-2017::05:51:01 ===
+Stopping RabbitMQ
+
+=INFO REPORT==== 14-Feb-2017::05:51:01 ===
+Stopped RabbitMQ application
+
+=INFO REPORT==== 14-Feb-2017::05:51:01 ===
+Halting Erlang VM
+
+=INFO REPORT==== 14-Feb-2017::08:04:28 ===
+Error description:
+   {error,{inconsistent_cluster,"Node 'rabbit@messaging-node-10' thinks it's clustered with node 'rabbit@messaging-node-18', but 'rabbit@messaging-node-18' disagrees"}}
+
+Log files (may contain more information):
+   /var/log/rabbitmq/rabbit@messaging-node-10.log
+   /var/log/rabbitmq/rabbit@messaging-node-10-sasl.log
+
+Stack trace:
+   [{rabbit_mnesia,check_cluster_consistency,0,
+                   [{file,"src/rabbit_mnesia.erl"},{line,588}]},
+    {rabbit,'-start/0-fun-0-',0,[{file,"src/rabbit.erl"},{line,320}]},
+    {rabbit,start_it,1,[{file,"src/rabbit.erl"},{line,356}]},
+    {rpc,'-handle_call_call/6-fun-0-',5,[{file,"rpc.erl"},{line,206}]}]
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+Starting RabbitMQ 3.5.6 on Erlang 18.1
+Copyright (C) 2007-2015 Pivotal Software, Inc.
+Licensed under the MPL.  See http://www.rabbitmq.com/
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+node           : rabbit@messaging-node-10
+home dir       : /var/lib/rabbitmq
+config file(s) : /etc/rabbitmq/rabbitmq.config
+cookie hash    : soeIWU2jk2YNseTyDSlsEA==
+log            : /var/log/rabbitmq/rabbit@messaging-node-10.log
+sasl log       : /var/log/rabbitmq/rabbit@messaging-node-10-sasl.log
+database dir   : /var/lib/rabbitmq/mnesia/rabbit@messaging-node-10
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+Memory limit set to 12850MB of 32127MB total.
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+Disk free limit set to 5MB
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+Limiting to approx 102300 file handles (92068 sockets)
+
+=INFO REPORT==== 14-Feb-2017::08:04:35 ===
+FHC read buffering:  ON
+FHC write buffering: ON
+

@@ -23,8 +23,8 @@ echo "/dev/vg_gluster/brick1  /bricks/brick1    xfs     defaults  0 0" >>/etc/fs
 gluster peer probe nfs-2
 gluster peer status
 
-Use the /bricks/brick1 XFS partition on both nodes to create a highly available Replicated Volume. 
-First create a sub-directory in /bricks/brick1 mount point. It will be necessary for GlusterFS.
+#Use the /bricks/brick1 XFS partition on both nodes to create a highly available Replicated Volume. 
+#First create a sub-directory in /bricks/brick1 mount point. It will be necessary for GlusterFS.
 mkdir /bricks/brick1/brick
 [root@nfs-1 ~]# gluster volume create nfsvol1 replica 2 transport tcp nfs-1:/bricks/brick1/brick nfs-2:/bricks/brick1/brick
 volume create: nfsvol1: success: please start the volume to access data
@@ -49,6 +49,7 @@ nfs.disable: on
 yum install glusterfs-ganesha -y
 systemctl enable pcsd
 systemctl enable pacemaker
+systemctl start pcsd
 需要關閉selinux     貌似bug centos7.4 or 7.5
 on node nfs-1
 ssh-keygen -f /var/lib/glusterd/nfs/secret.pem -t rsa 
@@ -72,13 +73,17 @@ Export list for nfs-1.novalocal:
 ```
 ##)
 on both nodes
-# systemctl start pcsd
-
 # passwd hacluster
 # pcs cluster auth nfs-1 nfs-2
 on node nfs-1
 #Create and mount a gluster shared volume.
 gluster volume set all cluster.enable-shared-storage enable
+[root@nfs-1 brick]# df -h
+Filesystem                     Size  Used Avail Use% Mounted on
+....
+/dev/mapper/vg_gluster-brick1   50G  232M   50G   1% /bricks/brick1
+nfs-1:/gluster_shared_storage   40G  1.5G   39G   4% /run/gluster/shared_storage
+
 #Create a directory named "nfs-ganesha" in shared storage path and create ganesha.conf & ganesha-ha.conf in it(from glusterfs 3.9 onwards)
 mkdir /run/gluster/shared_storage/nfs-ganesha
 [root@nfs-1 nfs-ganesha]# cat ganesha.conf
@@ -103,7 +108,7 @@ EXPORT
         # Required for access (default is None)
         # Could use CLIENT blocks instead
         Access_Type = RW;
-        Squash = No_root_squash #remove this for root squash
+        Squash = No_root_squash;
 }
 [root@nfs-1 nfs-ganesha]# cat ganesha-ha.conf
 # Name of the HA cluster created.
