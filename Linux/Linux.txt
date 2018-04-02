@@ -51,31 +51,20 @@ Host: scsi7 Channel: 00 Id: 07 Lun: 00
 
 #########進制轉換#############
 ibase是输入数字的进制，而obase就是输出数字的进制了。很好记，i是input，o是output。
-
 　　如果用一条命令来转数字，可以用echo命令和管道结合bc。如下：
-
 　　10进制转2进制：
-
 　　$ echo "obase=2;ibase=10;100" | bc
-
          1100100
-
 　　10进制转16进制：
-
 　　$ echo "obase=16;ibase=10;100" | bc
-
          64
-
 　　16进制转10进制：
-
 　　$ echo "ibase=16;obase=2;F1" | bc
-
         11110001
 
+redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
 
-  redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
- docker pull harbor.cesbg.foxconn/library/mysql:5.6
- vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
+vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
  
  #########mysql#########
  查看表大小（MB）并排序
@@ -1118,7 +1107,8 @@ run local script against remote machines,without copy it to server
 
 #####################################################
 ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
-ssh -R 1880:9.190.26.244:80 racv-l402
+ssh -R 1880:9.190.26.244:80 racv-l402             轉發yum repo地址
+ssh -R 1880:10.62.32.27:33128 10.134.236.86       轉發proxy
 本机：
 1   install squid
 2   #ssh -Nf -R 7001:localhost:3128 master  本地运行
@@ -1431,8 +1421,6 @@ mysql SrvInformation -e "select SrvName,Application from SrvInfo"
 mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
 mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
 
-mysql SrvInformation -E <<< "select SrvName from SrvInfo where Status=\"BAU\" and SupportBy=\"CN_team\" and OS like \"%s11%\""|grep SrvName
-
 mysql SrvInformation -E <<< "select SrvName from SrvInfo where Status=\"BAU\" and SupportBy=\"CN_team\" and OS like \"%sle%\""|grep SrvName
 
 mysql> select OS,SrvName from SrvInfo where OS like "SLE%";
@@ -1699,22 +1687,13 @@ racv-l310						 .   /opt/IBM/ITM/logs/itm_synclock.trc
 racv-l506						 .   /opt/IBM/ITM/config/lz.shl.
 racv-l506						 .   /opt/IBM/ITM/logs/itm_config.log.
 racv-l506						 .   /opt/IBM/ITM/logs/itm_config.trc.
-racv-l506						 .   /opt/IBM/ITM/logs/itm_synclock.trc.
-racv-l506						 .   /opt/IBM/ITM/tmp/.08.rc.
-racv-l506						 .   /opt/IBM/ITM/tmp/.lz.rc.
 racv-l506						 .   /opt/IBM/ITM/tmp/.ul.rc.
 racv-l506						 .   /opt/IBM/InstallationManager/eclipse/jre_6.0.0.sr9_20110208_03/jre/lib/tzmappings
 racv-l507						 .   /opt/IBM/ITM/config/lz.shl.
 racv-l507						 .   /opt/IBM/ITM/logs/itm_config.log.
 racv-l507						 .   /opt/IBM/ITM/logs/itm_config.trc.
 racv-l507						 .   /opt/IBM/ITM/logs/itm_synclock.trc.
-racv-l507						 .   /opt/IBM/ITM/tmp/.08.rc.
-racv-l507						 .   /opt/IBM/ITM/tmp/.lz.rc.
-racv-l507						 .   /opt/IBM/ITM/tmp/.ul.rc.
-racv-l507						 .   /opt/IBM/InstallationManager/eclipse/jre_6.0.0.sr9_20110208_03/jre/lib/tzmappings.
-racv-l507						 .   /opt/Tivoli/client/api/bin/libApiDS.so.
-racv-l507						 .   /opt/Tivoli/client/api/bin/libxerces-c1_6_0.so.
-racv-l507						 .   /opt/Tivoli/client/api/bin/libxmlutil-6.2.2.0.so.
+
 
 s_uptime=`sed -n '/uptime/,/space/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
 s_backup=`sed -n '/TSM/,/Finished/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
@@ -1808,8 +1787,6 @@ else
 ldapsearch -h bluepages.ibm.com -x -b "ou=bluepages,o=ibm.com" -s sub "($key=$value)"|egrep '^uid|^mail|^notesEmail|^job|^tieline|^tele|^iptel|^build|^floor|^timestampHRMS|^manager:'|sed -e 's/OU=//' -e 's/O=//' -e 's/CN=//'
 fi
 }
-
-
 ---------------------------------------
 fnologin ()
 {
@@ -1826,7 +1803,6 @@ fnologin2 ()
 {
 sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
 }
-
 ------------------------------------------
 checkid ()
 {
@@ -1954,24 +1930,6 @@ exclude=kernel*
 ssh -Nf -R 7001:localhost:80 g28lcxwas01
 yum update --downloadonly --downloaddir=/home/chensen/mrepo
 --------------------------------------------
-/etc/yum.repos.d/rhel5-10.repo
-[Server]
-name=Enterprise Linux 5.10 -Server
-baseurl=http://9.190.78.86/mrepo/rhel-server-5.10-x86_64/disc1/Server
-enabled=1
-gpgcheck=0
-
-[Cluster]
-name=Enterprise Linux 5.10 -Cluster
-baseurl=http://9.190.78.86/mrepo/rhel-server-5.10-x86_64/disc1/Cluster
-enabled=1
-gpgcheck=0
-
-[ClusterStorage]
-name=Enterprise Linux 5.10 -ClusterStorage
-baseurl=http://9.190.78.86/mrepo/rhel-server-5.10-x86_64/disc1/ClusterStorage
-enabled=1
-gpgcheck=0
 
 ######################################### extend FS###########################
 extend /swdist/repos2
@@ -2036,88 +1994,6 @@ resize2fs /dev/mapper/vgsys1-lvdbarc1
 
 mount /dev/mapper/vgsys1-lvdbarc1 /db2/archlog/db2inst1
 
-################rhn find package########
-https://rhn.redhat.com/rhn/channels/software/Search.do
-
-###################p.sh############################
-#!/bin/bash
-Usage() {
-cat <<- EOF
-    =================================================================
-    Description: parallel ssh script
-    Basic usage: $0 -f file -c "command"
-    Useful option:
-    =================================================================
-    -x: put ssh option here. eg: -l user -R 1880:mrepo:80
-    -o: put ssh config option here. eg:CheckHostIP=no TCPKeepAlive=yes
-    Default output same as dsh output
-    -1:  change to pssh output
-    -h:  print HELP
-    =================================================================
-EOF
-exit 1
-}
-SHOW=0
-xflag=()
-oflag=""
-while getopts 1c:f:ho:x: opt;do
-    case $opt in
-    1)SHOW=1;;
-    c)cmd=$OPTARG;;
-    f)file=$OPTARG;;
-    o)ARRAY=($OPTARG) ;;
-    x)xflag=($OPTARG) ;;
-    h)Usage ;;
-    \?) Usage ;;
-    esac
-done
-oflag=`for u in ${ARRAY[@]};do echo -en "-o$u ";done`
-ssh="ssh ${xflag[*]} $oflag"
-
-cleanup()
-{
-exec 6>&-
-kill -- -$$
-rm -f /tmp/tmp.*
-kill -9 $$
-}
-########limit the number of subshell#######
-threads=30
-tmp_fifo="/tmp/$$.fifo"
-mkfifo $tmp_fifo
-exec 6<>$tmp_fifo
-rm -f $tmp_fifo
-trap 'cleanup' SIGTERM SIGINT
-for ((i=0;i<$threads;i++))
-do
-  echo
-done >&6
-########limit the number of subshell#######
-
-############run with multiple subshell####
-for u in `cat $file`
-do
-  read -u6
-  (
-  tmpfile=`mktemp -u`
-#################################dsh output  
-  if test $SHOW -eq 0;then
-  $ssh $u "bash -c $(printf '%q' "$cmd")" |sed "1s/^.*$/[$u] &/" >>$tmpfile
-  else
-#################################pssh output
-  $ssh $u "bash -c $(printf '%q' "$cmd")" >>$tmpfile
-  [ $? -eq 0 ] && status="Success" || status="Failure"
-  echo >> $tmpfile
-  sed -i "1i\ `date +%T` [$status] $u" $tmpfile
-  fi
-  cat $tmpfile
-  rm -f $tmpfile
-  echo >&6
-  )&
-done | awk 'BEGIN{c=0}/\[/{c++;print "["c"]",$0;next}1'
-wait
-exec 6>&-
-
 ##########################kill subshells in process group##############
 kill -- -$$
 
@@ -2158,19 +2034,6 @@ find /opt/alert/processed -iname "*${DT}*dat" |xargs zip -r ${DT}.zip -
 find /opt/alert/processed -iname "*${DT}*dat" |xargs rm -f
 )
 
-###############zabbix repo##############
-rpm -ivh http://repo.zabbix.com/zabbix/2.4/rhel/6/x86_64/zabbix-release-2.4-1.el6.noarch.rpm
-
-############zabbix sender and trapper########### 1 define trapper  2 test with zabbix_sender
-[root@web1 ~]# zabbix_sender -s "web1" -z 172.16.0.100 -k trap -o 'This is web frontend' -r -vv
-zabbix_sender [6092]: DEBUG: answer [{"response":"success","info":"processed: 1; failed: 0; total: 1; seconds spent: 0.000281"}]
-info from server: "processed: 1; failed: 0; total: 1; seconds spent: 0.000281"
-sent: 1; skipped: 0; total: 1
-###############zabbix get#################
-[root@mon yum.repos.d]# zabbix_get -s 172.16.0.20 -k system.sw.os[full]
-Linux version 2.6.32-431.el6.x86_64 (mockbuild@c6b8.bsys.dev.centos.org) (gcc version 4.4.7 20120313 (Red Hat 4.4.7-4) (GCC) ) #1 SMP Fri Nov 22 03:15:09 UTC 2013
-[root@mon yum.repos.d]# zabbix_get -s 172.16.0.20 -k vfs.file.regexp[/etc/passwd,zabbix]
-zabbix:x:496:496:Zabbix Monitoring System:/var/lib/zabbix:/sbin/nologin
 ##############secondary log################
 # START Secondary Logging
 if [[ `tty` ]] 

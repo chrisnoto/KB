@@ -14,14 +14,15 @@ targetPort很好理解，targetPort是pod上的端口，从port和nodePort上到
 
 ######綁定機器運行pod######
 A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
- If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes and set nodeSelector in the pod to look for such label.
+ If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes 
+ and set nodeSelector in the pod to look for such label.
 
 Attach the label to each of your special use nodes:
 
-kubectl label nodes name_of_your_node dedicated=master
+# kubectl label nodes name_of_your_node dedicated=master
 Kubernetes 1.6 and above syntax
 Add the nodeSelector to your pod:
-
+'''
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
@@ -46,7 +47,7 @@ spec:
         value: master
         effect: NoSchedule
     […]
-
+'''
  ###############     
 下面生成客户端私钥和证书：
 

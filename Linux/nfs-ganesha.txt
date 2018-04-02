@@ -4,7 +4,7 @@
 10.67.38.17 nfs-1
 10.67.38.18 nfs-2
 
-yum -y install centos-release-gluster310
+yum install -y centos-release-gluster310
 yum install -y glusterfs-server
 systemctl enable glusterd
 systemctl start glusterd
@@ -109,7 +109,7 @@ EXPORT
         # Could use CLIENT blocks instead
         Access_Type = RW;
         Squash = No_root_squash;
-}
+}  
 [root@nfs-1 nfs-ganesha]# cat ganesha-ha.conf
 # Name of the HA cluster created.
 # must be unique within the subnet and 15 characters or less in length

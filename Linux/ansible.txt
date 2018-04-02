@@ -3,7 +3,7 @@ Ansible adhoc 命令
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
 ansible controller -m script -a '/root/monitor.sh'
-
+ansible -i hosts 10.67.50.63 -m service -a "name=zabbix-agent enabled=yes"
 
 ###no need sudo#####
 ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
@@ -21,7 +21,6 @@ ansible 10.67.49.161 -u tjadmin -b -m cron -a "user=root minute=*/1 job='/etc/za
 
 
 
-
 # Update repositories cache and install "foo" package
 - apt: name=foo update_cache=yes
 # Run the equivalent of "apt-get update" as a separate step
@@ -34,3 +33,45 @@ hiera nodes
 facter
 facter ipaddress
 
+#######使用Ansible自動部署zabbix agent#########
+# ansible-playbook -i hosts site.yaml -v
+
+ansible playbook的目錄結構
+
+[root@cobbler ansible-zabbix]# tree
+.
+├── common.yml
+├── group_vars
+│   ├── trusty
+│   └── xenial
+├── hosts
+├── host_vars
+├── roles
+│   ├── base_inst_zbclient_linux
+│   │   ├── files
+│   │   │   ├── centos6.repo
+│   │   │   ├── centos7.repo
+│   │   │   ├── lld-disks-3.py
+│   │   │   ├── lld-disks.py
+│   │   │   ├── pageinout.sh
+│   │   │   ├── sources.list-1404
+│   │   │   ├── sources.list-1604
+│   │   │   └── userparameter_diskstats.conf
+│   │   ├── handlers
+│   │   │   └── main.yml
+│   │   ├── tasks
+│   │   │   └── main.yml
+│   │   └── templates
+│   │   └── zabbix_agentd.conf.j2
+│   └── common
+│   ├── files
+│   │   ├── centos6.repo
+│   │   ├── centos7.repo
+│   │   ├── sources.list-1404
+│   │   └── sources.list-1604
+│   ├── handlers
+│   ├── tasks
+│   │   └── main.yml
+│   └── templates
+├── site.yml
+└── zabbix.yml

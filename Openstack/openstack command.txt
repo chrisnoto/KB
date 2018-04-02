@@ -10,7 +10,7 @@
 root@node-18:~# iptables -I INPUT 7 -s 10.20.0.0/24 -p tcp -m multiport --sports 15672 -m comment --comment "005 public network rabbitmq admin" -j ACCEPT
 2 從cobbler上通過10.20.0.0網段去做ssh正向tunnel
 # ssh -Nf -L 10.67.51.164:15672:localhost:15672 10.20.0.3
-3 用curl測試
+3 用curl測試rabbitmq
 # curl -i -u tjadmin:tjadmin http://10.67.51.164:15672/api/vhosts
 HTTP/1.1 200 OK
 Server: MochiWeb/1.1 WebMachine/1.10.0 (never breaks eye contact)
