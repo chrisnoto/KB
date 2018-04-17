@@ -1,3 +1,17 @@
+  修改fixed ip
+neutron port-update --fixed-ip ip_address=(要修改成的ip) port-id
+[root@fixo-control-1 ~]# neutron port-update --fixed-ip ip_address=10.134.236.97 8a194f31-9681-4ae7-b9a8-97af062b6dd5
+Updated port: 8a194f31-9681-4ae7-b9a8-97af062b6dd5
+修改完成后需要硬重启实例生效
+  如果该ip是已用的floating ip,还需要先删掉改floating ip
+root@node-1:~# neutron floatingip-list |grep 37.139
+| 00c1d168-0b86-4aaf-9255-611343848fbc |                  | 10.67.37.139        |                                      |
+root@node-1:~# neutron floatingip-delete 00c1d168-0b86-4aaf-9255-611343848fbc
+Deleted floatingip: 00c1d168-0b86-4aaf-9255-611343848fbc
+root@node-1:~# neutron port-update --fixed-ip ip_address=10.67.37.139 8d85ae34-f772-407b-abcf-50393d013d44
+Updated port: 8d85ae34-f772-407b-abcf-50393d013d44
+
+单网卡添加多IP, 如VIP
 root@node-1:~# neutron port-create --fixed-ip ip_address=10.67.38.50 --tenant-id=3def5a869d0b4e5abd04c55ad3962bfb --security-group 3fd7bcf2-e739-47a4-a30f-f121ab3275f1 admin_floating_net
 Created a new port:
 +-----------------------+-----------------------------------------------------------------------------------------------------------+
