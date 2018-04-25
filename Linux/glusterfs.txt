@@ -1,4 +1,5 @@
 GlusterFS 几种volume 模式说明：
+66666
 
 一、 默认模式，既DHT, 也叫 分布卷: 将文件已hash算法随机分布到 一台服务器节点中存储。
 gluster volume create test-volume server1:/exp1 server2:/exp2
