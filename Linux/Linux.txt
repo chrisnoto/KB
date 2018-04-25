@@ -2013,8 +2013,6 @@ lvm lvscan
 lvm vgchange -ay VolGroup00
 fsck -t ext3 /dev/VolGroup00/LogVol00
 
-800 810 2100   ###Redhat support
-
 ###############reverse ssh###############
 ######me######
 [root@oc1181188062 ~]# nc -vv -l 1234
