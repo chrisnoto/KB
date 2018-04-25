@@ -1,4 +1,4 @@
-Ansible adhoc ©R¥O
+Ansible adhoc å‘½ä»¤
 
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
@@ -12,7 +12,6 @@ ansible openstack-prod -m cron -a "user=root minute=*/1 job='/etc/zabbix/zabbix_
 
 ansible 10.20.0.21 -m apt_repository -a "repo='deb [arch=amd64] http://10.67.51.164/zabbix3.2 trusty main' state=present filename=zabbix3.2"
 ansible 10.20.0.21 -m apt_key -a "id=A14FE591 url=http://10.67.51.164/aptkey/082AB56BA14FE591 state=present"
-
 
 ###need sudo ###
 ansible 10.67.49.161 -u tjadmin -b -m apt -a "name=zabbix-sender state=present"
@@ -33,45 +32,45 @@ hiera nodes
 facter
 facter ipaddress
 
-#######¨Ï¥ÎAnsible¦Û°Ê³¡¸pzabbix agent#########
+#######ä½¿ç”¨Ansibleè‡ªå‹•éƒ¨ç½²zabbix agent#########
 # ansible-playbook -i hosts site.yaml -v
 
-ansible playbookªº¥Ø¿ıµ²ºc
+ansible playbookçš„ç›®éŒ„çµæ§‹
 
 [root@cobbler ansible-zabbix]# tree
 .
-¢u¢w¢w common.yml
-¢u¢w¢w group_vars
-¢x   ¢u¢w¢w trusty
-¢x   ¢|¢w¢w xenial
-¢u¢w¢w hosts
-¢u¢w¢w host_vars
-¢u¢w¢w roles
-¢x   ¢u¢w¢w base_inst_zbclient_linux
-¢x   ¢x   ¢u¢w¢w files
-¢x   ¢x   ¢x   ¢u¢w¢w centos6.repo
-¢x   ¢x   ¢x   ¢u¢w¢w centos7.repo
-¢x   ¢x   ¢x   ¢u¢w¢w lld-disks-3.py
-¢x   ¢x   ¢x   ¢u¢w¢w lld-disks.py
-¢x   ¢x   ¢x   ¢u¢w¢w pageinout.sh
-¢x   ¢x   ¢x   ¢u¢w¢w sources.list-1404
-¢x   ¢x   ¢x   ¢u¢w¢w sources.list-1604
-¢x   ¢x   ¢x   ¢|¢w¢w userparameter_diskstats.conf
-¢x   ¢x   ¢u¢w¢w handlers
-¢x   ¢x   ¢x   ¢|¢w¢w main.yml
-¢x   ¢x   ¢u¢w¢w tasks
-¢x   ¢x   ¢x   ¢|¢w¢w main.yml
-¢x   ¢x   ¢|¢w¢w templates
-¢x   ¢x   ¢|¢w¢w zabbix_agentd.conf.j2
-¢x   ¢|¢w¢w common
-¢x   ¢u¢w¢w files
-¢x   ¢x   ¢u¢w¢w centos6.repo
-¢x   ¢x   ¢u¢w¢w centos7.repo
-¢x   ¢x   ¢u¢w¢w sources.list-1404
-¢x   ¢x   ¢|¢w¢w sources.list-1604
-¢x   ¢u¢w¢w handlers
-¢x   ¢u¢w¢w tasks
-¢x   ¢x   ¢|¢w¢w main.yml
-¢x   ¢|¢w¢w templates
-¢u¢w¢w site.yml
-¢|¢w¢w zabbix.yml
+â”œâ”€â”€ common.yml
+â”œâ”€â”€ group_vars
+â”‚   â”œâ”€â”€ trusty
+â”‚   â””â”€â”€ xenial
+â”œâ”€â”€ hosts
+â”œâ”€â”€ host_vars
+â”œâ”€â”€ roles
+â”‚   â”œâ”€â”€ base_inst_zbclient_linux
+â”‚   â”‚   â”œâ”€â”€ files
+â”‚   â”‚   â”‚   â”œâ”€â”€ centos6.repo
+â”‚   â”‚   â”‚   â”œâ”€â”€ centos7.repo
+â”‚   â”‚   â”‚   â”œâ”€â”€ lld-disks-3.py
+â”‚   â”‚   â”‚   â”œâ”€â”€ lld-disks.py
+â”‚   â”‚   â”‚   â”œâ”€â”€ pageinout.sh
+â”‚   â”‚   â”‚   â”œâ”€â”€ sources.list-1404
+â”‚   â”‚   â”‚   â”œâ”€â”€ sources.list-1604
+â”‚   â”‚   â”‚   â””â”€â”€ userparameter_diskstats.conf
+â”‚   â”‚   â”œâ”€â”€ handlers
+â”‚   â”‚   â”‚   â””â”€â”€ main.yml
+â”‚   â”‚   â”œâ”€â”€ tasks
+â”‚   â”‚   â”‚   â””â”€â”€ main.yml
+â”‚   â”‚   â””â”€â”€ templates
+â”‚   â”‚   â””â”€â”€ zabbix_agentd.conf.j2
+â”‚   â””â”€â”€ common
+â”‚   â”œâ”€â”€ files
+â”‚   â”‚   â”œâ”€â”€ centos6.repo
+â”‚   â”‚   â”œâ”€â”€ centos7.repo
+â”‚   â”‚   â”œâ”€â”€ sources.list-1404
+â”‚   â”‚   â””â”€â”€ sources.list-1604
+â”‚   â”œâ”€â”€ handlers
+â”‚   â”œâ”€â”€ tasks
+â”‚   â”‚   â””â”€â”€ main.yml
+â”‚   â””â”€â”€ templates
+â”œâ”€â”€ site.yml
+â””â”€â”€ zabbix.yml
