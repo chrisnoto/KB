@@ -1,4 +1,4 @@
-git merge fast-forward
+git merge fast-forward git fetch git merge
 ############確認硬盤位置###########
 root@node-14:/dev/disk# lspci -v |grep -A1 RAID
 02:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
