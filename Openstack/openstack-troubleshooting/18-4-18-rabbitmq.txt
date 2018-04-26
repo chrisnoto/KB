@@ -1,0 +1,22 @@
+Hi  石瑞，
+ 
+之前都没看邮件。
+从log里看到这行。
+=INFO REPORT==== 17-Apr-2018::17:56:51 ===
+Limiting to approx 924 file handles (829 sockets)
+ 
+猜测是你们server上file descriptors用完了。 log里很多emfile error.
+对比下我自己openstack环境里的设置
+=INFO REPORT==== 4-Nov-2017::12:55:44 ===
+Limiting to approx 99900 file handles (89908 sockets)
+
+请查看下你们的ulimit设置。
+
+下面是rabbitmq对并发连接数的调优。
+When optimising for the number of concurrent connections, making sure your system has enough file descriptors
+ to support not only client connections but also files the node may use.
+ To calculate a ballpark limit, multiply the number of connections per node by 1.5. For example, to support 100,000 connections, 
+set the limit to 150,000. Increasing the limit slightly increases the amount of RAM idle machine uses 
+but this is a reasonable trade-off.
+ 
+
