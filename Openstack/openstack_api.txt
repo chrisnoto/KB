@@ -394,6 +394,34 @@ curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414
         "user_id": "d63a8e5417df41a9accbb2b0ef889b09"
     }
 ]
+# List meters
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" https://10.67.36.80:8777/v2/meters |  python -m json.tool |grep name |sort -u
+        "name": "disk.device.read.bytes",
+        "name": "disk.device.read.bytes.rate",
+        "name": "disk.device.read.requests",
+        "name": "disk.device.read.requests.rate",
+        "name": "disk.device.write.bytes",
+        "name": "disk.device.write.bytes.rate",
+        "name": "disk.device.write.requests",
+        "name": "disk.device.write.requests.rate",
+        "name": "identity.project.created",
+        "name": "identity.project.updated",
+        "name": "image",
+        "name": "image.download",
+        "name": "image.serve",
+        "name": "image.size",
+        "name": "image.update",
+        "name": "image.upload",
+        "name": "ip.floating",
+        "name": "ip.floating.create",
+        "name": "ip.floating.update",
+        "name": "network.incoming.bytes",
+        "name": "network.incoming.packets",
+        "name": "network.outgoing.bytes",
+        "name": "storage.objects",
+        "name": "storage.objects.containers",
+        "name": "storage.objects.size",
+
 # list cpu   gauge
 [root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" "https://10.67.36.80:8777/v2/meters/cpu_util?q.field=resource_id&q.op=eq&q.value=df6e1a35-0846-4048-a247-cfb67a4be111&q.field=timestamp&q.op=gt&q.value=2018-04-26T09:10:00" |  python -m json.tool
 [
