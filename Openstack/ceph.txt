@@ -58,190 +58,62 @@ sometimes public network on vm is not reachable
 ###################### ceph ############################
 acting set： 當前的set
 up set:  經過crushmap計算出的set
-actingset最终会变换到upset
+actingset最终会变换到up set
 
+ceph命令
+===============
 ceph pg 7.c query
- ceph -s
- ceph df      ceph osd df
- ceph osd dump
- ceph pg dump
- ceph mon dump --format json-pretty
- rados lspools
- rados -p compute ls
- rbd ls compute
- rbd info compute/318b7f59-30d7-4b00-9fbd-fb6b02b62fa7_disk
+ceph df      ceph osd df
+ceph osd dump
+ceph pg dump
+ceph mon dump --format json-pretty
+rados lspools
+rados -p compute ls
+rbd ls compute
+rbd info compute/318b7f59-30d7-4b00-9fbd-fb6b02b62fa7_disk
  glance image-list
  glance image-show bcf85e39-51dd-49cc-90d7-382d5cc62c2b
  rbd info images/bcf85e39-51dd-49cc-90d7-382d5cc62c2b
  rbd snap ls images/bcf85e39-51dd-49cc-90d7-382d5cc62c2b
- root@node-18:~# ceph osd pool get images pg_num
+root@node-18:~# ceph osd pool get images pg_num
 pg_num: 64
 root@node-18:~# ceph osd pool get images pgp_num
 pgp_num: 64
 ceph osd map .rgw.buckets p2.sh
 ansible ceph -m shell -a 'ceph-disk list|grep ceph'
 
-root@node-18:/var/log/ceph# for u in `rados lspools`;do ceph pg ls-by-pool $u |wc -l;done
+root@node-1:~# for u in `rados lspools`;do echo $u `ceph pg ls-by-pool $u |tail -n +2|wc -l`;done
+rbd 64
+.rgw 512
+compute 1024
+images 256
+volumes 3168
+backups 512
+.rgw.root 64
+.rgw.control 64
+.rgw.gc 64
+.users.uid 64
+.users 64
+.rgw.buckets.index 64
+.rgw.buckets 64
 
-root@node-18:~# for u in `rados lspools`;do echo -en "$u   `ceph osd pool get $u pg_num`   ";ceph osd pool get $u pgp_num;done
+root@node-1:~# for u in `rados lspools`;do echo -en "$u   `ceph osd pool get $u pg_num`   ";ceph osd pool get $u pgp_num;done
 rbd   pg_num: 64   pgp_num: 64
-images   pg_num: 128   pgp_num: 128
-volumes   pg_num: 256   pgp_num: 256
-backups   pg_num: 64   pgp_num: 64
+.rgw   pg_num: 512   pgp_num: 512
+compute   pg_num: 1024   pgp_num: 1024
+images   pg_num: 256   pgp_num: 256
+volumes   pg_num: 3168   pgp_num: 3168
+backups   pg_num: 512   pgp_num: 512
 .rgw.root   pg_num: 64   pgp_num: 64
 .rgw.control   pg_num: 64   pgp_num: 64
-.rgw   pg_num: 64   pgp_num: 64
 .rgw.gc   pg_num: 64   pgp_num: 64
 .users.uid   pg_num: 64   pgp_num: 64
-compute   pg_num: 256   pgp_num: 256
+.users   pg_num: 64   pgp_num: 64
 .rgw.buckets.index   pg_num: 64   pgp_num: 64
 .rgw.buckets   pg_num: 64   pgp_num: 64
-.users.swift   pg_num: 64   pgp_num: 64
 
 
 ceph osd crush add osd.ID 0 host=<HOSTNAME>
-##############ceph troubleshooting ############
- 1 clock skew detected on mon.node-3, mon.node-2
- #所有controller節點上執行： ntpdate -v 10.21.0.2
- 2 heartbeat_check: no reply from osd
- # ping 192.168.1.x  檢查存儲網絡
- 
-             "blocked": "peering is blocked due to down osds",
-            "down_osds_we_would_probe": [
-                4
-            ],
-            "peering_blocked_by": [
-                {
-                    "osd": 4,
-                    "current_lost_at": 0,
-                    "comment": "starting or marking this osd lost may let us proceed"          最終是starting osd解決
-3  too many PGs per OSD
-# vim ceph.conf
-[global]
-修改 mon_pg_warn_max_per_osd = 500
-将配置文件推到mon所在的其他节点
-ceph-deploy --overwrite-conf config push node-2 node-3
-systemctl restart ceph-mon.target  每台mon
-# ceph --show-config  | grep mon_pg_warn_max_per_osd
-mon_pg_warn_max_per_osd = 500
-
-4 pool compute has too few pgs
-ceph osd pool set compute pg_num 128
-ceph osd pool set compute pgp_num 128
-
-5 ceph 1 near full osd
-ceph health detail
-ceph osd reweight-by-utilization
-
-6 Ceph: HEALTH_WARN clock skew detected
-ntp server unavailable,    fuel master down
-
-7 osd 數據分佈不均衡
-osd數據分佈不均衡，本質是有pool的pg大小設置不對。 本例，images 128  volumes 64 compute 128，數據分佈嚴重不均衡
-		Data	PG      data/pg(G)
-images	49G		128     0.38G
-volumes  555G	64		8.67G
-compute	 713G   128 	5.57G
-以後要監控ceph osd df
-http://www.xuxiaopang.com/2016/11/17/exp-how-pg-affect-data-distribution/
-分別調整volumes和compute的pg pgp數目為256
-root@node-18:~# ceph osd pool set volumes pg_num 256
-set pool 2 pg_num to 256
-root@node-18:~# ceph osd pool set compute pg_num 256
-set pool 9 pg_num to 256
-root@node-18:~# ceph osd pool set volumes pgp_num 256
-set pool 2 pgp_num to 256
-root@node-18:~# ceph osd pool set compute pgp_num 256
-set pool 9 pgp_num to 256
-
-
-ceph osd crush reweight osd.3 0.26999   （恢復，之前改過weight值）
-ceph osd crush reweight osd.5 0.17000
-ceph osd crush reweight osd.13 0.26999
-
-root@node-18:~# ceph osd reweight 3 1     （恢復，之前改過reweight值）
-reweighted osd.3 to 1 (10000)
-root@node-18:~# ceph osd reweight 8 0.8  (調低，可能會導致pg卡在active+remapped，并且卡住不动的状态，从pg的状态去看，这个pg值分配了主的pg，没有分配到副本的osd，集群的其他设置一切正常)
-reweighted osd.8 to 0.8 (cccc)
-root@node-18:~# ceph osd reweight 11 1
-reweighted osd.11 to 1 (10000)
-
-#####replacing osd###########  umount ceph-x filesystem if necessary
-# ceph osd out osd.20
-# ceph osd crush rm osd.20       #remove faulty OSD from CRUSH map
-# ceph auth del osd.20       # remove the ceph auth key of faulty OSD
-# ceph osd rm osd.20              # remove faulty OSD from ceph cluster
-# ceph -s
-# ceph-deploy disk list node-25      # list disk on node-25
-# ceph-deploy disk zap node-25:sdi    # zap the new disk before being added into cluster
-# ceph-deploy --overwrite-conf osd create node-25:sdi   # create OSD for the new disk
-
-Sometimes removing OSD, if not done properly can result in double rebalancing. 
-The best practice to remove an OSD involves changing the crush weight to 0.0 as first step.
-So in the end, this will give you:
-
-$ ceph osd crush reweight osd.<ID> 0.0          應該先設置osd weight值為0，rebalance完之後再移除osd
-Then you wait for rebalance to be completed. Eventually completely remove the OSD:
-
-$ ceph osd out <ID>
-$ service ceph stop osd.<ID>
-$ ceph osd crush remove osd.<ID>
-$ ceph auth del osd.<ID>
-$ ceph osd rm <ID>        真的要移除osd，才執行；在排錯階段還是不要執行rm
-
-重新添加已刪除的osd,已osd.0和osd.1為例
-# ceph osd create      自動create為刪除的osd num
-# ceph osd crush add osd.0 0 host=node-5    添加時weight值要設置為0，防止rebalance
-# ceph osd crush add osd.1 0 host=node-4
-node-5# start ceph-osd id=0
-node-4# start ceph-osd id=1
-
-
-
-
-############pg stuck at active+remapped ###########
-pg 7.c is stuck unclean for 9508.985801, current state active+remapped, last acting [6,3]
-pg 6.2f is stuck unclean for 28921.295302, current state active+remapped, last acting [4,13]
-recovery 1/696762 objects misplaced (0.000%)
-
-root@node-18:~# ceph pg dump_stuck unclean
-ok
-pg_stat state   up      up_primary      acting  acting_primary
-7.c     active+remapped [6]     6       [6,3]   6
-6.2f    active+remapped [4]     4       [4,13]  4
-
-root@node-18:~# ceph pg dump_stuck|grep '2\.9a'
-ok
-2.9a    active+remapped+wait_backfill+backfill_toofull  [7,0]   7       [6,14]  6
-
-root@node-18:~# ceph health detail
-HEALTH_WARN 2 pgs stuck unclean; recovery 1/684546 objects misplaced (0.000%)
-pg 7.c is stuck unclean for 203690.028168, current state active+remapped, last acting [6,3]
-pg 6.2f is stuck unclean for 223102.337668, current state active+remapped, last acting [4,13]
-recovery 1/684546 objects misplaced (0.000%)
-root@node-18:~# ceph osd tree
-ID WEIGHT  TYPE NAME        UP/DOWN REWEIGHT PRIMARY-AFFINITY
--1 3.84985 root default
--2 1.24995     host node-13
- 0 0.26999         osd.0         up  1.00000          1.00000
- 2 0.26999         osd.2         up  1.00000          1.00000
- 4 0.26999         osd.4         up  1.00000          1.00000
- 6 0.26999         osd.6         up  1.00000          1.00000
- 8 0.17000         osd.8         up  1.00000          1.00000
--3 1.24995     host node-16
- 1 0.26999         osd.1         up  1.00000          1.00000
- 3 0.26999         osd.3         up  0.58408          1.00000
- 5 0.17000         osd.5         up  0.61909          1.00000
- 7 0.26999         osd.7         up  1.00000          1.00000
- 9 0.26999         osd.9         up  1.00000          1.00000
--4 1.34995     host node-4
-10 0.26999         osd.10        up  1.00000          1.00000
-11 0.26999         osd.11        up  0.80971          1.00000
-12 0.26999         osd.12        up  1.00000          1.00000
-13 0.26999         osd.13        up  1.00000          1.00000
-14 0.26999         osd.14        up  1.00000          1.00000
-
-
 
 ################crush map##############
 root@node-18:~# ceph osd getcrushmap -o /tmp/map
@@ -364,7 +236,7 @@ Client的每个写操作在OSD中要经过8种线程，写操作下发到OSD之�
 做osd的reweight的操作引起的，这个因为一般在做reweight的操作的时候，根据算法，这个上面的pg是会尽量分布在这个主机上的，
 而crush reweight不变的情况下，去修改osd 的reweight的时候，可能算法上会出现无法映射的问题
 怎么解决这个问题？
-直接做osd crush reweigh的调整即可避免这个问题，这个straw算法里面还是有点小问题的，在调整某个因子的时候会引起整个因子的变动
+直接做osd crush reweight的调整即可避免这个问题，这个straw算法里面还是有点小问题的，在调整某个因子的时候会引起整个因子的变动
 之前看到过sage在回复这种remapped问题的时候，都是不把这个归到bug里面去的，这个我也认为是配置问题引起的极端的问题，正常情况下都能避免的
 
 root@node-6:/var/log/ceph# ceph -s

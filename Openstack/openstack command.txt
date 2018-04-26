@@ -1,7 +1,4 @@
- neutron port-update 99f2fac4-188b-4e62-bc8f-64929ea4a5ca --allowed-address-pairs type=dict list=true ip_address=192.168.111.17
-
- 
- #####fix instance error state##########
+#####fix instance error state##########
  nova list --all-tenants
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
 
@@ -364,6 +361,7 @@ pcs resource delete sysinfo_node-11.domain.tld
  curl -o 1.png --insecure -s -H "X-Auth-Token:"gAAAAAxxxx" -i https://10.67.44.66:8080/swift/v1/picture/ceph-knowledge-tree.png
  
  curl --insecure -s -H "X-Auth-Token:"gAAAAAxxxx" -X PUT -i https://10.67.44.66:8080/swift/v1/picture/1.png -T 1.png
+ 
  ####allocate floating IP####
 for u in `seq 1 50`;do echo $u;nova floating-ip-create;done
  ########rbd map disk without LVM################
