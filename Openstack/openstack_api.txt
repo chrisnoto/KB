@@ -1,0 +1,396 @@
+#List server               /servers
+curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers |python -m json.tool
+
+#Show Server Details       /servers/{server_id}
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers/bfc3dfec-c2c7-4b1f-9261-05f5ee900176 |python -m json.tool                                                                                        {
+    "server": {
+        "OS-DCF:diskConfig": "AUTO",
+        "OS-EXT-AZ:availability_zone": "nova",
+        "OS-EXT-SRV-ATTR:host": "node-8.domain.tld",
+        "OS-EXT-SRV-ATTR:hypervisor_hostname": "node-8.domain.tld",
+        "OS-EXT-SRV-ATTR:instance_name": "instance-000001e4",
+        "OS-EXT-STS:power_state": 1,
+        "OS-EXT-STS:task_state": null,
+        "OS-EXT-STS:vm_state": "active",
+        "OS-SRV-USG:launched_at": "2018-03-20T00:25:43.000000",
+        "OS-SRV-USG:terminated_at": null,
+        "accessIPv4": "",
+        "accessIPv6": "",
+        "addresses": {
+            "admin_2nd_net": [
+                {
+                    "OS-EXT-IPS-MAC:mac_addr": "fa:16:3e:86:50:c1",
+                    "OS-EXT-IPS:type": "fixed",
+                    "addr": "192.168.112.21",
+                    "version": 4
+                },
+                {
+                    "OS-EXT-IPS-MAC:mac_addr": "fa:16:3e:86:50:c1",
+                    "OS-EXT-IPS:type": "floating",
+                    "addr": "10.67.44.194",
+                    "version": 4
+                }
+            ]
+        },
+        "config_drive": "",
+        "created": "2017-03-13T08:57:30Z",
+        "flavor": {
+            "id": "84d7e7aa-2fd8-43af-9352-fdee59d84f6b",
+            "links": [
+                {
+                    "href": "http://10.67.44.66:8774/31e6d008df414104ac5e1d42beae316c/flavors/84d7e7aa-2fd8-43af-9352-fdee59d84f6b",
+                    "rel": "bookmark"
+                }
+            ]
+        },
+        "hostId": "efafc869420d366ae58f6be607615705f3090ccf1c89ea71313ee92e",
+        "id": "bfc3dfec-c2c7-4b1f-9261-05f5ee900176",
+        "image": {
+            "id": "7eb81af0-1823-47d5-ae1f-d795550741c0",
+            "links": [
+                {
+                    "href": "http://10.67.44.66:8774/31e6d008df414104ac5e1d42beae316c/images/7eb81af0-1823-47d5-ae1f-d795550741c0",
+                    "rel": "bookmark"
+                }
+            ]
+        },
+        "key_name": "key1",
+        "links": [
+            {
+                "href": "http://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers/bfc3dfec-c2c7-4b1f-9261-05f5ee900176",
+                "rel": "self"
+            },
+            {
+                "href": "http://10.67.44.66:8774/31e6d008df414104ac5e1d42beae316c/servers/bfc3dfec-c2c7-4b1f-9261-05f5ee900176",
+                "rel": "bookmark"
+            }
+        ],
+        "metadata": {},
+        "name": "vSTJTESTDB002",
+        "os-extended-volumes:volumes_attached": [
+            {
+                "id": "4403a3cf-23db-4330-a60d-6d01af4f440a"
+            }
+        ],
+        "progress": 83,
+        "security_groups": [
+            {
+                "name": "Windows-Any"
+            }
+        ],
+        "status": "ACTIVE",
+        "tenant_id": "31e6d008df414104ac5e1d42beae316c",
+        "updated": "2018-03-20T00:25:44Z",
+        "user_id": "215cd438b5fb41b585cc53e29ed22ca7"
+    }
+}
+
+#List flavor with flavor ID for the instance       /flavors/{flavor_id}
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" "https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/flavors/84d7e7aa-2fd8-43af-9352-fdee59d84f6b" |python -m json.tool
+{
+    "flavor": {
+        "OS-FLV-DISABLED:disabled": false,
+        "OS-FLV-EXT-DATA:ephemeral": 0,
+        "disk": 60,
+        "id": "84d7e7aa-2fd8-43af-9352-fdee59d84f6b",
+        "links": [
+            {
+                "href": "http://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/flavors/84d7e7aa-2fd8-43af-9352-fdee59d84f6b",
+                "rel": "self"
+            },
+            {
+                "href": "http://10.67.44.66:8774/31e6d008df414104ac5e1d42beae316c/flavors/84d7e7aa-2fd8-43af-9352-fdee59d84f6b",
+                "rel": "bookmark"
+            }
+        ],
+        "name": "4C_16G_60",
+        "os-flavor-access:is_public": false,
+        "ram": 16384,
+        "rxtx_factor": 1.0,
+        "swap": "",
+        "vcpus": 6
+    }
+}
+
+#List Port Interfaces        /servers/{server_id}/os-interface
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers/2554e459-b9e4-4d6f-a065-0d5bbc444e52/os-interface |python -m
+{
+    "interfaceAttachments": [
+        {
+            "fixed_ips": [
+                {
+                    "ip_address": "192.168.111.158",
+                    "subnet_id": "10c50479-008a-4da3-a13e-937bdc2e8eba"
+                }
+            ],
+            "mac_addr": "fa:16:3e:72:a2:c4",
+            "net_id": "2d9c24e4-cd78-499f-a9de-b0587fb790d2",
+            "port_id": "0349a1de-ca46-4323-b92a-bde2b092e826",
+            "port_state": "ACTIVE"
+        }
+    ]
+}
+# show Port Interfaces         /v2.0/ports/{port_id}
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" https://10.67.44.66:9696/v2.0/ports/0349a1de-ca46-4323-b92a-bde2b092e826 |python -m json.tool
+{
+    "port": {
+        "admin_state_up": true,
+        "allowed_address_pairs": [],
+        "binding:host_id": "node-8.domain.tld",
+        "binding:profile": {},
+        "binding:vif_details": {
+            "ovs_hybrid_plug": true,
+            "port_filter": true
+        },
+        "binding:vif_type": "ovs",
+        "binding:vnic_type": "normal",
+        "device_id": "2554e459-b9e4-4d6f-a065-0d5bbc444e52",
+        "device_owner": "compute:nova",
+        "dns_assignment": [
+            {
+                "fqdn": "host-192-168-111-158.openstacklocal.",
+                "hostname": "host-192-168-111-158",
+                "ip_address": "192.168.111.158"
+            }
+        ],
+        "dns_name": "",
+        "extra_dhcp_opts": [],
+        "fixed_ips": [
+            {
+                "ip_address": "192.168.111.158",
+                "subnet_id": "10c50479-008a-4da3-a13e-937bdc2e8eba"
+            }
+        ],
+        "id": "0349a1de-ca46-4323-b92a-bde2b092e826",
+        "mac_address": "fa:16:3e:72:a2:c4",
+        "name": "",
+        "network_id": "2d9c24e4-cd78-499f-a9de-b0587fb790d2",
+        "port_security_enabled": true,
+        "security_groups": [
+            "3a461946-7558-4c36-b150-53332bff724e"
+        ],
+        "status": "ACTIVE",
+        "tenant_id": "31e6d008df414104ac5e1d42beae316c"
+    }
+}
+
+#List volume attachments for an instance   /servers/{server_id}/os-volume_attachments
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers/bfc3dfec-c2c7-4b1f-9261-05f5ee900176/os-volume_attachments |p
+{
+    "volumeAttachments": [
+        {
+            "device": "/dev/vdb",
+            "id": "4403a3cf-23db-4330-a60d-6d01af4f440a",
+            "serverId": "bfc3dfec-c2c7-4b1f-9261-05f5ee900176",
+            "volumeId": "4403a3cf-23db-4330-a60d-6d01af4f440a"
+        }
+    ]
+}
+#List volume detail for specific server.    /v2/{project_id}/volumes/{volume_id}
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" https://10.67.44.66:8776/v2/31e6d008df414104ac5e1d42beae316c/volumes/4403a3cf-23db-4330-a60d-6d01af4f440a |python -m json.tool
+{
+    "volume": {
+        "attachments": [
+            {
+                "attachment_id": "12d32a74-88b2-471c-9e20-951d7fd317a9",
+                "device": "/dev/vdb",
+                "host_name": null,
+                "id": "4403a3cf-23db-4330-a60d-6d01af4f440a",
+                "server_id": "bfc3dfec-c2c7-4b1f-9261-05f5ee900176",
+                "volume_id": "4403a3cf-23db-4330-a60d-6d01af4f440a"
+            }
+        ],
+        "availability_zone": "nova",
+        "bootable": "false",
+        "consistencygroup_id": null,
+        "created_at": "2017-03-14T00:38:07.000000",
+        "description": "vSTJTESTDB002-D 44.194",
+        "encrypted": false,
+        "id": "4403a3cf-23db-4330-a60d-6d01af4f440a",
+        "links": [
+            {
+                "href": "http://10.67.44.66:8776/v2/31e6d008df414104ac5e1d42beae316c/volumes/4403a3cf-23db-4330-a60d-6d01af4f440a",
+                "rel": "self"
+            },
+            {
+                "href": "http://10.67.44.66:8776/31e6d008df414104ac5e1d42beae316c/volumes/4403a3cf-23db-4330-a60d-6d01af4f440a",
+                "rel": "bookmark"
+            }
+        ],
+        "metadata": {
+            "attached_mode": "rw",
+            "readonly": "False"
+        },
+        "migration_status": null,
+        "multiattach": false,
+        "name": "vSTJTESTDB002-D",
+        "os-vol-host-attr:host": "rbd:volumes#RBD-backend",
+        "os-vol-mig-status-attr:migstat": null,
+        "os-vol-mig-status-attr:name_id": null,
+        "os-vol-tenant-attr:tenant_id": "31e6d008df414104ac5e1d42beae316c",
+        "os-volume-replication:driver_data": null,
+        "os-volume-replication:extended_status": null,
+        "replication_status": "disabled",
+        "size": 200,
+        "snapshot_id": null,
+        "source_volid": null,
+        "status": "in-use",
+        "user_id": "215cd438b5fb41b585cc53e29ed22ca7",
+        "volume_type": "volumes_ceph"
+    }
+}
+#  list instance
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" "https://10.67.36.80:8777/v2/meters/instance" |  python -m json.tool
+[
+....
+....
+    {
+        "counter_name": "instance",
+        "counter_type": "gauge",
+        "counter_unit": "instance",
+        "counter_volume": 1.0,
+        "message_id": "3f2a3026-4930-11e8-aa53-1866da657048",
+        "project_id": "3def5a869d0b4e5abd04c55ad3962bfb",
+        "recorded_at": "2018-04-26T09:00:20.191000",
+        "resource_id": "72521307-f5fa-4f3b-a7fd-f0fe72aa97bf",
+        "resource_metadata": {
+            "access_ip_v4": "None",
+            "access_ip_v6": "None",
+            "architecture": "None",
+            "audit_period_beginning": "2018-04-26 08:00:00",
+            "audit_period_ending": "2018-04-26 09:00:00",
+            "availability_zone": "nova",
+            "cell_name": "",
+            "created_at": "2017-07-20T03:10:40.000000",
+            "deleted_at": "",
+            "disk_gb": "40",
+            "display_name": "Selenium",
+            "ephemeral_gb": "0",
+            "event_type": "compute.instance.exists",
+            "host": "compute.node-8.domain.tld",
+            "hostname": "selenium",
+            "image_meta.base_image_ref": "",
+            "image_meta.container_format": "bare",
+            "image_meta.disk_format": "qcow2",
+            "image_meta.hw_qemu_guest_agent": "yes",
+            "image_meta.min_disk": "40",
+            "image_meta.min_ram": "0",
+            "image_ref_url": "http://192.168.0.8:9292/images/",
+            "instance_flavor_id": "1e08714a-87b7-4fff-9544-9973107e600d",
+            "instance_id": "72521307-f5fa-4f3b-a7fd-f0fe72aa97bf",
+            "instance_type": "2C-2G-40G",
+            "instance_type_id": "49",
+            "kernel_id": "",
+            "launched_at": "2017-07-20T03:12:47.000000",
+            "memory_mb": "2048",
+            "node": "node-8.domain.tld",
+            "os_type": "None",
+            "progress": "",
+            "ramdisk_id": "",
+            "reservation_id": "r-sg8adz0p",
+            "root_gb": "40",
+            "state": "active",
+            "state_description": "",
+            "tenant_id": "3def5a869d0b4e5abd04c55ad3962bfb",
+            "terminated_at": "",
+            "user_id": "d63a8e5417df41a9accbb2b0ef889b09",
+            "vcpus": "2"
+        },
+        "source": "openstack",
+        "timestamp": "2018-04-26T09:00:20.155000",
+        "user_id": "d63a8e5417df41a9accbb2b0ef889b09"
+    }
+]
+
+# disk.read.bytes  cumulative     meters/disk.read.bytes?q.field=resource_id&q.op=eq&q.value=df6e1a35-0846-4048-a247-cfb67a4be111&q.field=timestamp&q.op=gt&q.value=2018-04-26T08:50:00"   后面是查询条件。resource_id是指定instance的id
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" "https://10.67.36.80:8777/v2/meters/disk.read.bytes?q.field=resource_id&q.op=eq&q.value=df6e1a35-0846-4048-a247-cfb67a4be111&q.field=timestamp&q.op=gt&q.value=2018-04-26T08:50:00" |  python -m json.tool
+[
+    {
+        "counter_name": "disk.read.bytes",
+        "counter_type": "cumulative",
+        "counter_unit": "B",
+        "counter_volume": 5287861248.0,
+        "message_id": "7295cda8-4930-11e8-a74f-984be103b8a2",
+        "project_id": "b437a5baf2ab43518300eae7f53b7de1",
+        "recorded_at": "2018-04-26T09:01:46.508000",
+        "resource_id": "df6e1a35-0846-4048-a247-cfb67a4be111",
+        "resource_metadata": {
+            "OS-EXT-AZ.availability_zone": "Intel",
+            "device": "['vda', 'vdz', 'vdc', 'vdb']",
+            "disk_gb": "40",
+            "display_name": "oSTJhrmqadb02",
+            "ephemeral_gb": "0",
+            "flavor.disk": "40",
+            "flavor.ephemeral": "0",
+            "flavor.id": "b62bd4de-69f3-4dbc-b4d0-23e8798748ee",
+            "flavor.links": "[{'href': 'http://192.168.0.2:8774/flavors/b62bd4de-69f3-4dbc-b4d0-23e8798748ee', 'rel': 'bookmark'}]",
+            "flavor.name": "intel_12C_16G_40G_16Gswap",
+            "flavor.ram": "16384",
+            "flavor.vcpus": "12",
+            "host": "6a1b43594896d17b4bb1aef0bf4dd25c62887e201ca32e237c76c6ce",
+            "image.id": "29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "image.links": "[{'href': 'http://192.168.0.2:8774/images/29403c5a-c9bd-4a6c-976f-fb8d3627048f', 'rel': 'bookmark'}]",
+            "image.name": "CentOS7",
+            "image_ref": "29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "image_ref_url": "http://192.168.0.2:8774/images/29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "instance_host": "node-11.domain.tld",
+            "instance_id": "df6e1a35-0846-4048-a247-cfb67a4be111",
+            "instance_type": "intel_12C_16G_40G_16Gswap",
+            "kernel_id": "None",
+            "memory_mb": "16384",
+            "name": "instance-00000383",
+            "ramdisk_id": "None",
+            "root_gb": "40",
+            "state": "active",
+            "status": "active",
+            "vcpus": "12"
+        },
+        "source": "openstack",
+        "timestamp": "2018-04-26T09:01:46.447000",
+        "user_id": "d63a8e5417df41a9accbb2b0ef889b09"
+    },
+    {
+        "counter_name": "disk.read.bytes",
+        "counter_type": "cumulative",
+        "counter_unit": "B",
+        "counter_volume": 5287791616.0,
+        "message_id": "0cf31484-492f-11e8-a74f-984be103b8a2",
+        "project_id": "b437a5baf2ab43518300eae7f53b7de1",
+        "recorded_at": "2018-04-26T08:51:46.505000",
+        "resource_id": "df6e1a35-0846-4048-a247-cfb67a4be111",
+        "resource_metadata": {
+            "OS-EXT-AZ.availability_zone": "Intel",
+            "device": "['vda', 'vdz', 'vdc', 'vdb']",
+            "disk_gb": "40",
+            "display_name": "oSTJhrmqadb02",
+            "ephemeral_gb": "0",
+            "flavor.disk": "40",
+            "flavor.ephemeral": "0",
+            "flavor.id": "b62bd4de-69f3-4dbc-b4d0-23e8798748ee",
+            "flavor.links": "[{'href': 'http://192.168.0.2:8774/flavors/b62bd4de-69f3-4dbc-b4d0-23e8798748ee', 'rel': 'bookmark'}]",
+            "flavor.name": "intel_12C_16G_40G_16Gswap",
+            "flavor.ram": "16384",
+            "flavor.vcpus": "12",
+            "host": "6a1b43594896d17b4bb1aef0bf4dd25c62887e201ca32e237c76c6ce",
+            "image.id": "29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "image.links": "[{'href': 'http://192.168.0.2:8774/images/29403c5a-c9bd-4a6c-976f-fb8d3627048f', 'rel': 'bookmark'}]",
+            "image.name": "CentOS7",
+            "image_ref": "29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "image_ref_url": "http://192.168.0.2:8774/images/29403c5a-c9bd-4a6c-976f-fb8d3627048f",
+            "instance_host": "node-11.domain.tld",
+            "instance_id": "df6e1a35-0846-4048-a247-cfb67a4be111",
+            "instance_type": "intel_12C_16G_40G_16Gswap",
+            "kernel_id": "None",
+            "memory_mb": "16384",
+            "name": "instance-00000383",
+            "ramdisk_id": "None",
+            "root_gb": "40",
+            "state": "active",
+            "status": "active",
+            "vcpus": "12"
+        },
+        "source": "openstack",
+        "timestamp": "2018-04-26T08:51:46.434000",
+        "user_id": "d63a8e5417df41a9accbb2b0ef889b09"
+    }
+]
