@@ -1,0 +1,116 @@
+===============gw100======================
+modprobe ipip
+modprobe ip_gre
+net.ipv4.ip_forward = 1
+
+ip tunnel add gre1 mode gre remote 10.1.99.3 local 10.1.99.2 ttl 255
+ip link set gre1 up
+ip addr add 10.1.100.254 peer 10.1.101.254 dev gre1
+ip route add 10.1.101.0/24 dev gre1
+
+[root@gw100 ~]# ip tunnel show
+tunl0: ip/ip  remote any  local any  ttl inherit  nopmtudisc
+gre0: gre/ip  remote any  local any  ttl inherit  nopmtudisc
+gre1: gre/ip  remote 10.1.99.3  local 10.1.99.2  ttl 255 
+
+[root@gw100 ~]# netstat -rn
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+10.1.101.254    0.0.0.0         255.255.255.255 UH        0 0          0 gre1
+10.1.101.0      0.0.0.0         255.255.255.0   U         0 0          0 gre1
+10.1.100.0      0.0.0.0         255.255.255.0   U         0 0          0 eth1
+10.1.99.0       0.0.0.0         255.255.255.0   U         0 0          0 eth2
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth1
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth2
+0.0.0.0         10.1.99.1       0.0.0.0         UG        0 0          0 eth2
+[root@gw100 ~]# ip a
+
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:16:30:39 brd ff:ff:ff:ff:ff:ff
+    inet 10.1.100.254/24 brd 10.1.100.255 scope global eth1
+    inet6 fe80::a00:27ff:fe16:3039/64 scope link 
+       valid_lft forever preferred_lft forever
+4: eth2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:04:05:ec brd ff:ff:ff:ff:ff:ff
+    inet 10.1.99.2/24 brd 10.1.99.255 scope global eth2
+    inet6 fe80::a00:27ff:fe04:5ec/64 scope link 
+       valid_lft forever preferred_lft forever
+5: tunl0: <NOARP> mtu 1480 qdisc noop state DOWN 
+    link/ipip 0.0.0.0 brd 0.0.0.0
+6: gre0: <NOARP> mtu 1476 qdisc noop state DOWN 
+    link/gre 10.1.99.2 brd 10.1.99.3
+7: gretap0: <BROADCAST,MULTICAST> mtu 1476 qdisc noop state DOWN qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+8: gre1@NONE: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1476 qdisc noqueue state UNKNOWN 
+    link/gre 10.1.99.2 peer 10.1.99.3
+    inet 10.1.100.254 peer 10.1.101.254/32 scope global gre1
+[root@gw100 ~]# 
+
+=====================gw101=============================
+modprobe ipip
+modprobe ip_gre
+net.ipv4.ip_forward = 1
+
+ip tunnel add gre1 mode gre remote 10.1.99.2 local 10.1.99.3 ttl 255
+ip link set gre1 up
+ip addr add 10.1.101.254 peer 10.1.100.254 dev gre1
+ip route add 10.1.100.0/24 dev gre1
+
+[root@gw101 ~]# ip tunnel show
+tunl0: ip/ip  remote any  local any  ttl inherit  nopmtudisc
+gre0: gre/ip  remote any  local any  ttl inherit  nopmtudisc
+gre1: gre/ip  remote 10.1.99.2  local 10.1.99.3  ttl 255 
+
+[root@gw101 ~]# netstat -rn
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+10.1.100.254    0.0.0.0         255.255.255.255 UH        0 0          0 gre1
+10.1.101.0      0.0.0.0         255.255.255.0   U         0 0          0 eth1
+10.1.100.0      0.0.0.0         255.255.255.0   U         0 0          0 gre1
+10.1.99.0       0.0.0.0         255.255.255.0   U         0 0          0 eth2
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth1
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth2
+[root@gw101 ~]# ip a
+
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:66:97:a9 brd ff:ff:ff:ff:ff:ff
+    inet 10.1.101.254/24 brd 10.1.101.255 scope global eth1
+    inet6 fe80::a00:27ff:fe66:97a9/64 scope link 
+       valid_lft forever preferred_lft forever
+4: eth2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether 08:00:27:76:20:57 brd ff:ff:ff:ff:ff:ff
+    inet 10.1.99.3/24 brd 10.1.99.255 scope global eth2
+    inet6 fe80::a00:27ff:fe76:2057/64 scope link 
+       valid_lft forever preferred_lft forever
+5: tunl0: <NOARP> mtu 1480 qdisc noop state DOWN 
+    link/ipip 0.0.0.0 brd 0.0.0.0
+6: gre0: <NOARP> mtu 1476 qdisc noop state DOWN 
+    link/gre 10.1.99.3 brd 10.1.99.2
+7: gretap0: <BROADCAST,MULTICAST> mtu 1476 qdisc noop state DOWN qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+8: gre1@NONE: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1476 qdisc noqueue state UNKNOWN 
+    link/gre 10.1.99.3 peer 10.1.99.2
+    inet 10.1.101.254 peer 10.1.100.254/32 scope global gre1
+
+==========================tcpdump============================
+[root@gw101 ~]# tcpdump -i eth2 -vv
+tcpdump: listening on eth2, link-type EN10MB (Ethernet), capture size 65535 bytes
+15:11:41.566343 IP (tos 0x0, ttl 255, id 41613, offset 0, flags [DF], proto GRE (47), length 108)
+    10.1.99.2 > 10.1.99.3: GREv0, Flags [none], length 88
+	IP (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.1.100.2 > 10.1.101.2: ICMP echo request, id 52743, seq 1, length 64
+15:11:41.566667 IP (tos 0x0, ttl 255, id 52486, offset 0, flags [DF], proto GRE (47), length 108)
+    10.1.99.3 > 10.1.99.2: GREv0, Flags [none], length 88
+	IP (tos 0x0, ttl 63, id 52486, offset 0, flags [none], proto ICMP (1), length 84)
+    10.1.101.2 > 10.1.100.2: ICMP echo reply, id 52743, seq 1, length 64
+15:11:42.567905 IP (tos 0x0, ttl 255, id 41614, offset 0, flags [DF], proto GRE (47), length 108)
+    10.1.99.2 > 10.1.99.3: GREv0, Flags [none], length 88
+	IP (tos 0x0, ttl 63, id 0, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.1.100.2 > 10.1.101.2: ICMP echo request, id 52743, seq 2, length 64
+15:11:42.568836 IP (tos 0x0, ttl 255, id 52487, offset 0, flags [DF], proto GRE (47), length 108)
+    10.1.99.3 > 10.1.99.2: GREv0, Flags [none], length 88
+	IP (tos 0x0, ttl 63, id 52487, offset 0, flags [none], proto ICMP (1), length 84)
+    10.1.101.2 > 10.1.100.2: ICMP echo reply, id 52743, seq 2, length 64
+
+
+

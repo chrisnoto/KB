@@ -1,0 +1,235 @@
+<h2>Tunnelling</h2>
+<h3>GUI RSA connections to Servers</h3>
+<p>
+The basic setup for remote connections is fairly simple to setup.<br>
+If you have a LINUX system try the following<br>
+Start up a terminal session and run the following command<br>
+<b>&nbsp;&nbsp;&nbsp;&nbsp;ssh -D 1080 ${MYCLIENTID}@auyxuap004wbcr2<br></b>
+login and let it sit there. You may need to do something on the
+auyxuap004wbcr2 box because it is our main proxybox to the Westpac
+Network<br>
+Using <b>Firefox</b> as an example: <b>Edit Preferences>Advanced>Network Tab>Settings<br></b>
+Set <b>'Manual Proxy Settings'</b> and set <b>'Socks Host:localhost'</b> and <b>'Port:1080'</b><br>
+The Proxy version should be <b>'SOCKS v5'</b><br>
+I also have <b>'No Proxy For:localhost, 127.0.0.1, 9.190.152.0/24, 9.190.20.84,  ibm.com, oracle.com, aussec.com, google.com.au, google.com'</b> so I don't have a lot of slow opens "Loading" active.<br>
+</p>
+<p>
+Find out what the chosen systems <b>RSA/IMM</b> IPAddress is and type in <b>'https://10.2.46.169/'</b> for instance.<br>
+You should be able to over-ride the certificate warnings etc and allow your Firefox to start up a session.<br>
+NOTE: USERID:PASSW0RD are the defaults for all RSA/IMM systems but the LINUX EPS group setup things slightly differently.<br>
+Ask your advisor about this or look it up in the local wiki<br>
+</p>
+<h3>SSH based virtual private networks - aka Lotus Mobility Client</h3>
+<p>
+<pre>
+<h3>SSH-BASED VIRTUAL PRIVATE NETWORKS</h3>
+     ssh contains support for Virtual Private Network (VPN) tunnelling using
+     the tun(4) network pseudo-device, allowing two networks to be joined
+     securely.  The sshd_config(5) configuration option PermitTunnel controls
+     whether the server supports this, and at what level (layer 2 or 3 traf-
+     fic).
+
+     The following example would connect client network 10.0.50.0/24 with
+     remote network 10.0.99.0/24, provided that the SSH server running on the
+     gateway to the remote network, at 192.168.1.15, allows it:
+
+           # <b>ssh -f -w 0:1 192.168.1.15 true</b>
+           # <b>ifconfig tun0 10.0.50.1 10.0.99.1 netmask 255.255.255.252</b>
+
+           # <b>ssh -f -w 0:1 9.190.78.35 true</b>
+           # <b>ifconfig tun0 9.190.78.1 130.103.173.1 netmask 255.255.255.252</b>
+
+     Client access may be more finely tuned via the /root/.ssh/authorized_keys
+     file (see below) and the PermitRootLogin server option.  The following
+     entry would permit connections on the first tun(4) device from user
+     “jane” and on the second device from user “john”, if PermitRootLogin is
+     set to “forced-commands-only”:
+
+       <b>tunnel="1",command="sh /etc/netstart tun1" ssh-rsa ... jane</b>
+       <b>tunnel="2",command="sh /etc/netstart tun1" ssh-rsa ... john</b>
+
+     Since a SSH-based setup entails a fair amount of overhead, it may be more
+     suited to temporary setups, such as for wireless VPNs.  More permanent
+     VPNs are better provided by tools such as ipsecctl(8) and isakmpd(8).
+
+
+</pre>
+</p>
+
+<h3>IFCONFIG-BASED VIRTUAL PRIVATE NETWORKS</h3>
+<p>
+<pre>
+From http://www.linuxfoundation.org/collaborate/workgroups/networking/tunneling
+
+Tunneling is a way to transform data frames to allow them pass networks with incompatible address spaces or even incompatible protocols. There are different kinds of tunnels: some process only IPv4 packets and some can carry any type of frame. Linux kernel supports 3 tunnel types: IPIP (IPv4 in IPv4), GRE (IPv4/IPv6 over IPv4) and SIT (IPv6 over IPv4).
+Tunnels are managed with ip program, part of Iproute2:
+
+ $ /sbin/ip tunnel help
+ Usage: ip tunnel { add | change | del | show } [ NAME ]
+           [ mode { ipip | gre | sit } ] [ remote ADDR ] [ local ADDR ]
+           [ [i|o]seq ] [ [i|o]key KEY ] [ [i|o]csum ]
+           [ ttl TTL ] [ tos TOS ] [ [no]pmtudisc ] [ dev PHYS_DEV ]
+ 
+ Where: NAME := STRING
+        ADDR := { IP_ADDRESS | any }
+        TOS  := { NUMBER | inherit }
+        TTL  := { 1..255 | inherit }
+        KEY  := { DOTTED_QUAD | NUMBER }
+
+Iproute2 is usually shipped with documentation, of which you need the file ip-tunnels.ps to learn about tunnel management. In Fedora Core 4 it is /usr/share/doc/iproute-2.6.11/ip-tunnels.ps.
+
+
+IPIP tunnels
+
+IPIP kind of tunnels is the simplest one. It has the lowest overhead, but can incapsulate only IPv4 unicast traffic, so you will not be able to setup OSPF, RIP or any other multicast-based protocol. You can setup only one tunnel for unique tunnel endpoints pair. It can work with FreeBSD and cisco IOS. Kernel module is 'ipip'. The following example demonstrates configuration of IPIP tunnel with four IPv4 routes.
+
+
+Manual configuration example
+
+ # modprobe ipip
+ # ip tu ad ipiptun mode ipip local 10.3.3.3 remote 10.4.4.4 ttl 64 dev eth0
+ # ip ad ad dev ipiptun 10.0.0.1 peer 10.0.0.2/32
+ # ip li se dev ipiptun up
+ # ip ro ad 10.4.10.0/24 via 10.0.0.2
+ # ip ro ad 10.4.20.0/24 via 10.0.0.2
+ # ip ro ad 10.4.30.0/24 via 10.0.0.2
+ # ip ro ad 10.4.40.0/24 via 10.0.0.2
+
+
+/etc/net configuration example
+
+ # mkdir /etc/net/ifaces/ipiptun
+ # cat > /etc/net/ifaces/ipiptun/options
+ TYPE=iptun
+ TUNTYPE=ipip
+ TUNLOCAL=10.3.3.3
+ TUNREMOTE=10.4.4.4
+ TUNOPTIONS='ttl 64'
+ HOST=eth0
+ ^D
+ # cat > /etc/net/ifaces/ipiptun/ipv4address
+ 10.0.0.1 peer 10.0.0.2/32
+ ^D
+ # cat > /etc/net/ifaces/ipiptun/ipv4route
+ 10.4.10.0/24 via 10.0.0.2
+ 10.4.20.0/24 via 10.0.0.2
+ 10.4.30.0/24 via 10.0.0.2
+ 10.4.40.0/24 via 10.0.0.2
+ ^D
+ # ifup ipiptun
+
+
+GRE tunnels
+
+GRE tunnels can incapsulate IPv4/IPv6 unicast/multicast traffic, so it is de-facto tunnel standard for dynamic routed networks. You can setup up to 64K tunnels for an unique tunnel endpoints pair. It can work with FreeBSD and cisco IOS. Kernel module is 'ip_gre'. The following example demonstrates configuration of GRE tunnel with two IPv4 routes.
+
+
+Manual configuration example
+
+ # modprobe ip_gre
+ # ip tu ad gretun mode gre local 10.5.5.5 remote 10.6.6.6 ttl 64 dev eth0
+ # ip ad ad dev gretun 10.0.0.3 peer 10.0.0.4/32
+ # ip li se dev gretun up
+ # ip ro ad 10.6.10.0/24 via 10.0.0.4
+ # ip ro ad 10.6.20.0/24 via 10.0.0.4
+
+
+/etc/net configuration example
+
+ # mkdir /etc/net/ifaces/gretun
+ # cat > /etc/net/ifaces/gretun/options
+ TYPE=iptun
+ TUNTYPE=gre
+ TUNLOCAL=10.5.5.5
+ TUNREMOTE=10.6.6.6
+ TUNOPTIONS='ttl 64'
+ HOST=eth0
+ ^D
+ # cat > /etc/net/ifaces/gretun/ipv4address
+ 10.0.0.3 peer 10.0.0.4/32
+ ^D
+ # cat > /etc/net/ifaces/gretun/ipv4route
+ 10.6.10.0/24 via 10.0.0.4
+ 10.6.20.0/24 via 10.0.0.4
+ ^D
+ # ifup gretun
+
+
+SIT tunnels
+
+SIT stands for Simple Internet Transition. Its main purpose is to interconnect isolated IPv6 networks, located in global IPv4 Internet. SIT works like IPIP. It can work with FreeBSD and cisco IOS. Kernel module is 'ipv6'. Once loaded, ipv6 module can't be unloaded. You can get your own IPv6 prefix and a SIT tunnel from a tunnel broker. The following example demonstrates configuration of SIT tunnel with three IPv6 routes.
+
+
+Manual configuration example
+
+ # modprobe ipv6
+ # ip tu ad sittun mode sit local 10.7.7.7 remote 10.8.8.8 ttl 64 dev eth0
+ # ip ad ad dev sittun 2001:0DB8:1234::000e/127
+ # ip li se dev sittun up
+ # ip -6 ro ad 2001:0DB8:5678::/48 via 2001:0DB8:1234::000f
+ # ip -6 ro ad 2001:0DB8:5679::/48 via 2001:0DB8:1234::000f
+ # ip -6 ro ad 2001:0DB8:567a::/48 via 2001:0DB8:1234::000f
+
+
+/etc/net configuration example
+
+ # mkdir /etc/net/ifaces/sittun
+ # cat > /etc/net/ifaces/sittun/options
+ TYPE=iptun
+ TUNTYPE=sit
+ CONFIG_IPV6=yes
+ TUNLOCAL=10.7.7.7
+ TUNREMOTE=10.8.8.8
+ TUNOPTIONS='ttl 64'
+ HOST=eth0
+ ^D
+ # cat > /etc/net/ifaces/sittun/ipv4address
+ 2001:0DB8:1234::000e/127
+ ^D
+ # cat > /etc/net/ifaces/sittun/ipv4route
+ 2001:0DB8:5678::/48 via 2001:0DB8:1234::000f
+ 2001:0DB8:5679::/48 via 2001:0DB8:1234::000f
+ 2001:0DB8:567a::/48 via 2001:0DB8:1234::000f
+ ^D
+ # ifup sittun
+
+
+Links
+
+    * LARTC: GRE and other tunnels
+    * XS26 Project
+    * SIXXS Tunnel Broker
+    * Hurricane Electric's IPv6 Tunnel Broker
+    * IANA: IPv6 unicast address assignment
+
+============================================================================
+Users will always be able to view the example configurations provided in the
+tunnelbroker.net interface, however we also wanted to make them available on
+the forums. I'll cover both the ifconfig and ip commands used. I won't be
+using valid IPv4/IPv6 information in the examples, but the example
+configurations in the broker's interface will provide the full commands
+with your relevant account information.
+
+Legend of variables:
+$ipv4a = tunnel server's IPv4 IP
+$ipv4b = user's IPv4 IP
+$ipv6a = tunnel server's side of point-to-point /64 allocation
+$ipv6b = user's side of point-to-point /64 allocation
+
+Using ifconfig:
+
+ifconfig sit0 up
+ifconfig sit0 inet6 tunnel ::$ipv4a
+ifconfig sit1 up
+ifconfig sit1 inet6 add $ipv6b
+route -A inet6 add ::/0 dev sit1
+
+Using ip:
+
+ip tunnel add he-ipv6 mode sit remote $ipv4a local $ipv4b ttl 255
+ip link set he-ipv6 up
+ip addr add $ipv6b dev he-ipv6
+ip route add ::/0 dev he-ipv6
+« Last Edit: August 05, 2010, 08:41:25 am by broquea » 
+</pre>
+</p>

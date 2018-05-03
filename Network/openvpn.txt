@@ -1,0 +1,223 @@
+==========================server============================
+-----------------ip /gateway---------------
+[root@localhost openvpn]# ifconfig
+eth0      Link encap:Ethernet  HWaddr 00:0C:29:C6:0B:A1  
+          inet addr:10.1.1.254  Bcast:10.1.1.255  Mask:255.255.255.0
+          inet6 addr: fe80::20c:29ff:fec6:ba1/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:427 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1214 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:52774 (51.5 KiB)  TX bytes:116982 (114.2 KiB)
+
+eth1      Link encap:Ethernet  HWaddr 00:0C:29:C6:0B:AB  
+          inet addr:192.168.255.254  Bcast:192.168.255.255  Mask:255.255.255.0
+          inet6 addr: fe80::20c:29ff:fec6:bab/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1638 errors:1631 dropped:0 overruns:0 frame:0
+          TX packets:922 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:233082 (227.6 KiB)  TX bytes:117960 (115.1 KiB)
+          Interrupt:16 Base address:0x2024 
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:96 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:96 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:7660 (7.4 KiB)  TX bytes:7660 (7.4 KiB)
+
+tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:10.8.0.1  P-t-P:10.8.0.2  Mask:255.255.255.255
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:1174 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:381 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:100175 (97.8 KiB)  TX bytes:45451 (44.3 KiB)
+
+[root@localhost openvpn]# netstat -rn
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+10.8.0.2        0.0.0.0         255.255.255.255 UH        0 0          0 tun0
+10.8.0.0        10.8.0.2        255.255.255.0   UG        0 0          0 tun0
+10.1.1.0        0.0.0.0         255.255.255.0   U         0 0          0 eth0
+192.168.255.0   0.0.0.0         255.255.255.0   U         0 0          0 eth1
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth1
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth0
+[root@localhost openvpn]# iptables -t nat -nL
+Chain PREROUTING (policy ACCEPT)
+target     prot opt source               destination         
+
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination         
+SNAT       all  --  10.8.0.0/24          0.0.0.0/0           to:10.1.1.254 
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination         
+----------------------install--------------------
+rpm -ivh openvpn-2.3.6-1.el6.x86_64.rpm pkcs11-helper-1.11-3.el6.x86_64.rpm
+----------------------ca ---------------------
+cd /root
+git clone https://github.com/OpenVPN/easy-rsa
+cp -a /root/easy-rsa/easyrsa3 /etc/openvpn
+mkdir -p /etc/openvpn/config
+cp /usr/share/doc/openvpn-2.3.6/sample/sample-config-files/server.conf /etc/openvpn/config/
+cd /etc/openvpn/easyrsa3/
+./easyrsa init-pki
+./easyrsa build-ca
+./easyrsa gen-req server
+./easyrsa sign-req server server
+./easyrsa gen-req client1
+./easyrsa sign-req client client1
+./easyrsa gen-dh
+----------------------------tree /etc/openvpn/easyrsa3/pki -----------------
+/etc/openvpn/easyrsa3/pki
+├── ca.crt                             ###copy to client
+├── certs_by_serial
+│   ├── 01.pem
+│   └── 02.pem
+├── dh.pem
+├── index.txt
+├── index.txt.attr
+├── index.txt.attr.old
+├── index.txt.old
+├── issued
+│   ├── client1.crt                   ###copy to client
+│   └── server.crt
+├── private
+│   ├── ca.key
+│   ├── client1.key                   ###copy to client
+│   └── server.key
+├── reqs
+│   ├── client1.req
+│   └── server.req
+├── serial
+└── serial.old
+
+-----------------------server.conf-----------------------------
+[root@localhost openvpn]# egrep -v '^$|#|;' server.conf 
+local 192.168.255.254
+port 1194
+proto udp
+dev tun
+ca ./easyrsa3/pki/ca.crt
+cert ./easyrsa3/pki/issued/server.crt
+dh ./easyrsa3/pki/dh.pem
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist ipp.txt
+push "route 10.1.1.0 255.255.255.0"
+client-to-client
+keepalive 10 120
+comp-lzo
+persist-key
+persist-tun
+status openvpn-status.log
+log         openvpn.log
+verb 3
+
+# /etc/init.d/openvpn start
+-----------------------test networking----------------
+[root@localhost easyrsa3]# ping 10.8.0.6 -c4
+PING 10.8.0.6 (10.8.0.6) 56(84) bytes of data.
+64 bytes from 10.8.0.6: icmp_seq=1 ttl=64 time=1.25 ms
+64 bytes from 10.8.0.6: icmp_seq=2 ttl=64 time=1.17 ms
+64 bytes from 10.8.0.6: icmp_seq=3 ttl=64 time=1.17 ms
+64 bytes from 10.8.0.6: icmp_seq=4 ttl=64 time=1.06 ms
+
+--- 10.8.0.6 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 1.064/1.166/1.258/0.080 ms
+
+=================================client========================
+---------------------ip/gateway-------------------
+[root@localhost log]# ifconfig
+eth0      Link encap:Ethernet  HWaddr 00:0C:29:6D:25:8B  
+          inet addr:192.168.255.201  Bcast:192.168.255.255  Mask:255.255.255.0
+          inet6 addr: fe80::20c:29ff:fe6d:258b/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:1004 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1748 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:128008 (125.0 KiB)  TX bytes:237952 (232.3 KiB)
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:152 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:152 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:12252 (11.9 KiB)  TX bytes:12252 (11.9 KiB)
+
+tun0      Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00  
+          inet addr:10.8.0.6  P-t-P:10.8.0.5  Mask:255.255.255.255
+          UP POINTOPOINT RUNNING NOARP MULTICAST  MTU:1500  Metric:1
+          RX packets:381 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1174 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:100 
+          RX bytes:45451 (44.3 KiB)  TX bytes:100175 (97.8 KiB)
+
+[root@localhost log]# netstat -rn
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
+10.8.0.5        0.0.0.0         255.255.255.255 UH        0 0          0 tun0
+10.8.0.0        10.8.0.5        255.255.255.0   UG        0 0          0 tun0
+10.1.1.0        10.8.0.5        255.255.255.0   UG        0 0          0 tun0
+192.168.255.0   0.0.0.0         255.255.255.0   U         0 0          0 eth0
+169.254.0.0     0.0.0.0         255.255.0.0     U         0 0          0 eth0
+0.0.0.0         192.168.255.1   0.0.0.0         UG        0 0          0 eth0
+
+----------------------install--------------------
+rpm -ivh openvpn-2.3.6-1.el6.x86_64.rpm pkcs11-helper-1.11-3.el6.x86_64.rpm
+
+----------------------client.conf-------------------
+cd /etc/openvpn
+mkdir config/
+cp -a /usr/share/doc/openvpn-2.3.6/sample/sample-config-files/client.conf config/
+ln -s config/client.conf .
+mkdir keys/
+copy "ca.crt  client1.crt  client1.key" to keys/
+
+[root@localhost openvpn]# egrep -v '^$|#|;' client.conf 
+client
+dev tun
+proto udp
+remote 192.168.255.254 1194
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+ca ./keys/ca.crt
+cert ./keys/client1.crt
+key ./keys/client1.key
+remote-cert-tls server
+comp-lzo
+verb 3
+
+# /etc/init.d/openvpn start
+--------------------------test networking----------------
+[root@localhost openvpn]# ping 10.8.0.1 -c4
+PING 10.8.0.1 (10.8.0.1) 56(84) bytes of data.
+64 bytes from 10.8.0.1: icmp_seq=1 ttl=64 time=1.63 ms
+64 bytes from 10.8.0.1: icmp_seq=2 ttl=64 time=2.44 ms
+64 bytes from 10.8.0.1: icmp_seq=3 ttl=64 time=1.36 ms
+64 bytes from 10.8.0.1: icmp_seq=4 ttl=64 time=1.23 ms
+
+--- 10.8.0.1 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 1.231/1.671/2.446/0.470 ms
+[root@localhost openvpn]# ping 10.1.1.201 -c4                  destination server in subnet 10.1.1.0/24
+PING 10.1.1.201 (10.1.1.201) 56(84) bytes of data.
+64 bytes from 10.1.1.201: icmp_seq=1 ttl=63 time=2.57 ms
+64 bytes from 10.1.1.201: icmp_seq=2 ttl=63 time=1.97 ms
+64 bytes from 10.1.1.201: icmp_seq=3 ttl=63 time=1.99 ms
+64 bytes from 10.1.1.201: icmp_seq=4 ttl=63 time=2.18 ms
+
+--- 10.1.1.201 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 1.973/2.181/2.572/0.246 ms
+
+
+

@@ -1,0 +1,96 @@
+===============================veth and ip netns===================  
+---------------------------                        ----------------------
+Namespace ns1       tap1  | <-----veth pair-----> | tap2  Namespace ns2
+---------------------------                        ----------------------
+# ip netns add ns1
+# ip netns add ns2
+# ip link add tap1 type veth peer name tap2
+# ip link set tap1 netns ns1
+# ip link set tap2 netns ns2
+# ip netns exec ns1 ip link set dev tap1 up
+# ip netns exec ns2 ip link set dev tap2 up
+# ip netns exec ns1 ifconfig tap1 172.16.2.2/24 up
+# ip netns exec ns2 ifconfig tap2 172.16.2.3/24 up
+# ip netns exec ns1 ping 172.16.2.3 -c2
+# ip netns exec ns2 ping 172.16.2.2 -c2
+  =======================veth and 1 bridge and ip netns=======================
+-------------------------                     -------------------------------                      ---------------------
+Namespace ns1      tap1 | <----veth pair----> | br-tap1     br1     br-tap2 | <----veth pair----> | tap2  Namespace ns2
+-------------------------                     -------------------------------                      ---------------------
+# ip netns add ns1
+# ip netns add ns2
+# brctl addbr br1
+# ip link set dev br1 up
+# ip link add tap1 type veth peer name br-tap1
+# ip link add tap2 type veth peer name br-tap2
+# brctl addif br1 br-tap1
+# brctl addif br1 br-tap2
+# ip link set tap1 netns ns1
+# ip link set tap2 netns ns2
+# ip netns exec ns1 ip link set dev tap1 up
+# ip netns exec ns2 ip link set dev tap2 up
+# ip link set dev br-tap1 up
+# ip link set dev br-tap2 up
+# ip netns exec ns1 ifconfig tap1 172.16.1.2/24 up
+# ip netns exec ns2 ifconfig tap2 172.16.1.3/24 up
+# ip netns exec ns1 ping 172.16.1.3 -c4
+# ip netns exec ns2 ping 172.16.1.2 -c4
+
+=============================veth and 2 bridge and ip netns=======================
+
+----------------------                  ---------------------                  ----------------------                      ---------------------
+Namespace ns1   tap1 | <--veth pair--> | br-tap1  br1 br1-2 | <--veth pair--> |br2-1  br2   br-tap2 | <----veth pair----> | tap2  Namespace ns2
+----------------------                  ---------------------                  ----------------------                      ---------------------
+
+[root@net100 ~]# ip netns add ns1
+[root@net100 ~]# ip netns add ns2
+[root@net100 ~]# brctl addbr br1
+[root@net100 ~]# brctl addbr br2
+[root@net100 ~]# ip link set dev br1 up
+[root@net100 ~]# ip link set dev br2 up
+[root@net100 ~]# ip link add br1-2 type veth peer name br2-1
+[root@net100 ~]# brctl addif br1 br1-2
+[root@net100 ~]# brctl addif br2 br2-1
+[root@net100 ~]# ip link set dev br1-2 up
+[root@net100 ~]# ip link set dev br2-1 up
+[root@net100 ~]# ip link add tap1 type veth peer name br-tap1
+[root@net100 ~]# ip link add tap2 type veth peer name br-tap2
+[root@net100 ~]# brctl addif br1 br-tap1
+[root@net100 ~]# brctl addif br2 br-tap2
+[root@net100 ~]# ip link set tap1 netns ns1
+[root@net100 ~]# ip link set tap2 netns ns2
+[root@net100 ~]# ip netns exec ns1 ip link set dev tap1 up
+[root@net100 ~]# ip netns exec ns2 ip link set dev tap2 up
+[root@net100 ~]# ip link set dev br-tap1 up
+[root@net100 ~]# ip link set dev br-tap2 up
+[root@net100 ~]# ip netns exec ns1 ifconfig tap1 172.16.1.2/24 up
+[root@net100 ~]# ip netns exec ns2 ifconfig tap2 172.16.1.3/24 up
+[root@net100 ~]# ip netns exec ns1 ping 172.16.1.3 -c4
+PING 172.16.1.3 (172.16.1.3) 56(84) bytes of data.
+64 bytes from 172.16.1.3: icmp_seq=1 ttl=64 time=0.957 ms
+64 bytes from 172.16.1.3: icmp_seq=2 ttl=64 time=0.037 ms
+64 bytes from 172.16.1.3: icmp_seq=3 ttl=64 time=0.091 ms
+64 bytes from 172.16.1.3: icmp_seq=4 ttl=64 time=0.092 ms
+
+--- 172.16.1.3 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3002ms
+rtt min/avg/max/mdev = 0.037/0.294/0.957/0.383 ms
+[root@net100 ~]# ip netns exec ns2 ping 172.16.1.2 -c4
+PING 172.16.1.2 (172.16.1.2) 56(84) bytes of data.
+64 bytes from 172.16.1.2: icmp_seq=1 ttl=64 time=0.076 ms
+64 bytes from 172.16.1.2: icmp_seq=2 ttl=64 time=0.133 ms
+64 bytes from 172.16.1.2: icmp_seq=3 ttl=64 time=0.089 ms
+64 bytes from 172.16.1.2: icmp_seq=4 ttl=64 time=0.091 ms
+
+--- 172.16.1.2 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 2999ms
+rtt min/avg/max/mdev = 0.076/0.097/0.133/0.022 ms
+
+[root@net100 ~]# brctl show
+bridge name	bridge id		STP enabled	interfaces
+br1		8000.1eea9ab0a53e	no		br-tap1
+							br1-2
+br2		8000.0a29213e44dd	no		br-tap2
+							br2-1
+
+

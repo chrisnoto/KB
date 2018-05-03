@@ -1,0 +1,80 @@
+Step 10: Configure physical interfaces
+echo DEVICE=enp3s0f0 > /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+echo MTU=9000 >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+echo MASTER=bond0 >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+echo SLAVE=yes >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f0
+
+echo DEVICE=enp3s0f1 > /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+echo MTU=9000 >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+echo MASTER=bond0 >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+echo SLAVE=yes >> /etc/sysconfig/network-scripts/ifcfg-enp3s0f1
+
+Step 11: Setup the Bond interface
+echo DEVICE=bond0 > /etc/sysconfig/network-scripts/ifcfg-bond0
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo TYPE=OVSPort >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo DEVICETYPE=ovs >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo OVS_BRIDGE=br-vlan >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo BONDING_MASTER=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo 'BONDING_OPTS="mode=6"' >> /etc/sysconfig/network-scripts/ifcfg-bond0
+echo MTU=9000 >> /etc/sysconfig/network-scripts/ifcfg-bond0
+
+Step 12: Setup the VLAN trunk Bridge
+echo DEVICE=br-vlan > /etc/sysconfig/network-scripts/ifcfg-br-vlan
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-br-vlan
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-br-vlan
+echo TYPE=OVSBridge >> /etc/sysconfig/network-scripts/ifcfg-br-vlan
+echo DEVICETYPE=ovs >> /etc/sysconfig/network-scripts/ifcfg-br-vlan
+
+Step 14: Setup the VXLAN/GRE tunneling interface (Optional)
+
+We are assuming VLAN 102 for VXLAN/GRE tunneling. Please use your correct VLAN
+We are assuming subnet 10.0.102.0/24 for VXLAN/GRE tunneling. Please use your correct subnet.
+
+echo DEVICE=bond0.102 > /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo TYPE=Vlan >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo VLAN=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo IPADDR=10.0.102.11 >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+echo NETMASK=255.255.255.0 >> /etc/sysconfig/network-scripts/ifcfg-bond0.102
+
+Step 15: Setup the External Interface and External Bridge
+
+We are assuming VLAN 103 for the external network. Please use your correct VLAN.
+
+echo DEVICE=bond0.103 > /etc/sysconfig/network-scripts/ifcfg-bond0.103
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.103
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-bond0.103
+echo TYPE=OVSPort >> /etc/sysconfig/network-scripts/ifcfg-bond0.103
+echo VLAN=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.103
+echo OVS_BRIDGE=br-ext >> /etc/sysconfig/network-scripts/ifcfg-bond0.103
+
+echo DEVICE=br-ext > /etc/sysconfig/network-scripts/ifcfg-br-ext
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-br-ext
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-br-ext
+echo TYPE=OVSBridge >> /etc/sysconfig/network-scripts/ifcfg-br-ext
+echo DEVICETYPE=ovs >> /etc/sysconfig/network-scripts/ifcfg-br-ext
+
+Step 16: Setup the Storage interface (Optional)
+
+We are assuming VLAN 104 for the storage network. Please use your correct VLAN.
+We are assuming subnet 10.0.104.0/24 for the storage network. Please use your correct subnet.
+
+echo DEVICE=bond0.104 > /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo ONBOOT=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo BOOTPROTO=none >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo TYPE=Vlan >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo VLAN=yes >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo IPADDR=10.0.104.11 >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+echo NETMASK=255.255.255.0 >> /etc/sysconfig/network-scripts/ifcfg-bond0.104
+
+Step 17: Restart Networking
+systemctl restart network.service
+
+Step 18: Add tag to external bridge (To enable bridge monitoring)
+ovs-vsctl br-set-external-id br-ext bridge-id br-ext

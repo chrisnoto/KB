@@ -1,0 +1,17 @@
+==================ssh vpn======================
+
+local:
+ssh -fw2:2 root@192.115.17.145 true
+ifconfig tun2 10.1.1.1 netmask 255.255.255.252
+route add -net 192.168.101.0/24 dev tun2
+
+
+
+
+remote server:
+1 ip_forward=1
+2  sshd_config: PermitTunnel yes 
+ifconfig tun2 10.1.1.2 netmask 255.255.255.252
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+
