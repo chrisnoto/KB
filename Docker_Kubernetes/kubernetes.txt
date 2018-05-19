@@ -214,12 +214,10 @@ UFS
 在Docker 1.9 出世前，跨多主机的容器通信方案大致有如下三种：
 
 1、端口映射
-
 将宿主机A的端口P映射到容器C的网络空间监听的端口P’上，仅提供四层及以上应用和服务使用。
 这样其他主机上的容器通过访问宿主机A的端口P实 现与容器C的通信。显然这个方案的应用场景很有局限。
 
 2、将物理网卡桥接到虚拟网桥，使得容器与宿主机配置在同一网段下
-
 在各个宿主机上都建立一个新虚拟网桥设备br0，将各自物理网卡eth0桥接br0上，
 eth0的IP地址赋给br0；同时修改Docker daemon的DOCKER_OPTS，设置-b=br0（替代docker0），
 并限制Container IP地址的分配范围为同物理段地址（–fixed-cidr）。
@@ -228,27 +226,20 @@ eth0的IP地址赋给br0；同时修改Docker daemon的DOCKER_OPTS，设置-b=br
 防止IP冲突；子网划分依赖物理交换机设置；Docker容器的主机地址空间大小依赖物理网络划分等。
 
 3、使用第三方的基于SDN的方案：比如 使用Open vSwitch – OVS 或CoreOS的Flannel 等。
-
 关于这些第三方方案的细节大家可以参考O’Reilly的《Docker Cookbook》 一书。
 
 Docker在1.9版本中给大家带来了一种原生的跨多主机容器网络的解决方案，
 该方案的实质是采用了基于VXLAN 的覆盖网技术。方案的使用有一些前提条件：
-
 1、Linux Kernel版本 >= 3.16；
 2、需要一个外部Key-value Store（官方例子中使用的是consul）；
 3、各物理主机上的Docker Daemon需要一些特定的启动参数；
 4、物理主机允许某些特定TCP/UDP端口可用。
 
 本文将带着大家一起利用Docker 1.9.1创建一个跨多主机容器网络，并分析基于该网络的容器间通信原理。
-
 VIP PaaS在接近两年时间里，基于kubernetes主要经历四次网络方案的变迁：
-
 1. kubernetes + flannel
-
 2. 基于Docker libnetwork的网络定制
-
 3. kubernetes + contiv + kube-haproxy
-
 4. 应用容器IP固定
 在k8s + flannel的模型下，容器网络是封闭子网，可以提供平台内部应用之间基于4层和7层的调用，
 同时对外部提供应用基于域名（工作在七层）的直接访问，但无法满足用户在平台外部需要直接使用IP访问的需求。
@@ -332,3 +323,59 @@ Pet有三个特征。
 ENV 是在容器启动的时候注入的，启动之后 kubernetes 就不会再改变环境变量的值，且同一个 namespace 中的 pod 的环境变量是不断累加的，
 参考 Kubernetes中的服务发现与docker容器间的环境变量传递源码探究。为了更新容器中使用 ConfigMap 挂载的配置，
 可以通过滚动更新 pod 的方式来强制重新挂载 ConfigMap，也可以在更新了 ConfigMap 后，先将副本数设置为 0，然后再扩容。
+
+###########
+Control Panel 核心概念 Pod
+
+Kubernetes Control Panel 核心概念是 Pod，大家都知道 Pod 的第一作用是帮我们解耦容器的关系，第二个作用是它是 Kubernetes 里最原子的调度单位，
+并且 Pod 的Container 是 Share Namepsace 的，包括 Network、IPC。并且里面的 Pod 容器是 Shear Volume 的，这些东西有什么意义吗？马上会介绍。
+但是最终的目的是一个，就是希望在所谓的容器云里能够引入进程组的概念，而不是管理单一的容器或者进程。
+
+Pod 抑制制作“胖”容器
+如果说 Pod 有什么作用？首先，第一个 Pod 或者谷歌希望做的事情就是抑制住你去做一个“胖”容器的冲动。什么是“胖”容器？比如说很多人在一个容器里跑很多进程，
+用一个 Systemd 去管。其实这是很麻烦的事情，因为监控和整个应用生命周期的管理，都会和真实的应用进程不一致。这个事怎么解决，很棘手。所以 Kubernetes 不希望制作这种“胖”容器。
+
+我经常举的例子是一个 JAVA 的应用，它是有两个东西组成，一个 War 包和 Tomcat。如果不用 Pod，可以把它们两个打包进一个镜像，然后一起 Run，可以，但这时候他们俩耦合在一起了，
+我怎么独立更新他们两个，我不可能每次更新 Tomcat 都把线上的镜像都重新 Build 一遍吧。这是第一个事。
+我们也可以维护一个 Persistent Volume 。在 Kubernetes 里可以这样做，就是两个容器，两个镜像。一个镜像存一个 War 包，另一个存 Tomcat。接下来怎么定义呢？就是一个 Pod Run 这两个容器，
+其中 War 包容会定义成一个 InitContainer。initContainer 的特点是什么呢？它会先于所有的用户容器启动，并且按顺序执行完。这样的话在 War 包容器运行这样一个命令，叫 Copy War 包到一个指定目录，
+这个指定目录是一个 Pod 的 Volume。执行了这个之后，War 包容器就可以退出了。
+
+接下来再执行用户容器是 Tomact。Tomcat 就是一个正常的标准 Tomcat 的镜像，执行命令也不变。只不过它会去 Mount 刚刚 Copy 过文件的目录 Volume，到 Webapps 目录下。
+这时候再去启动 Tomcat，我的 War 包就已经存在于 App 目录下，成功了。这就是一个解耦容器关系非常典型的例子。
+
+
+Pod ：容器设计模式
+第二个 Pod 所希望给的价值是所谓的容器设计模式，大家可能已经经常提到了，说的是什么呢？
+举一个最简单的例子就是 Sidecar 模式。例子非常明确，就是说现在有 Helloworld ，会在 /var/log 下面写日志。然后有一个 Fluentd ，希望把 /var/log 里的内容文件读出来，
+发到 ES 里。像这样的两个容器显然就构成了一个 Pod 的协作关系。所以，我会在一个 Pod 定义两个容器，并且因为他们的 Volume 是 Share 的，我就 Share 这样的 /var/log 目录就好了。
+所以，这时候，他们之间的文件交换，Helloworld 写一个文件，不需要进行任何的 Copy 和文件交换的操作，这就是 Pod 的文件交互模式，如何应用在生产环境的例子。
+
+但这还没有完，更高级的做法在 Kubernetes 1.7、1.8 之后，我们称之为 Initializer 的模式。比如说现在还是一个 Helloworld，希望里面有一个  Log Agent 运行，
+可是这时候没有必要在所有的 Helloworld 都定义一个 Log Agent 容器。因为没有必要，机械的重复劳动不需要。
+
+怎么办呢？Pod 里就定义一个 Helloworld 就可以了，然后声明一下，启动之前要加载一个 Initializer ，它的名字叫 Log Agent。这个 Log Agent 定义在哪儿呢？我额外定义了一个 Config，
+这个 Config 的内容就是 Log Agent 这个容器的 yaml 的描述，就是蓝色图框所示的部分。这个 Config 是存在 Etcd 里的，全局存起来。
+这样的话，在 Kubernetes 里启动这个 Helloworld Pod，Kubernetes 会自动在这个 Pod 里注入一个容器，名叫 Log Agent，使用的数据就是蓝色图框的内容。所以这个起来之后，
+本来定义的是一个容器，起来之后里面其实有两个容器，另一个是 Kubernetes 帮你注入的，这个就是 Initializer 。但这还没有完。
+还有一个更高级的做法，大师级的做法，就是 Istio。这个项目非常火，这个是做什么的呢？它是面向容器的微服务框架，他和 Spring 做的工作非常像，比如说服务拆分、流量控制。
+两个或者是多个服务之间的访问授权，以及他们之间的流量策略控制，都是交给 Istio 做的。
+
+它是怎么实现的？想想 Spring 为什么能做这个？因为 Spring 有两个王牌，IOC 和 AOP，大家都知道，依赖注入和切面编程。同样这个理念在 Pod 的帮助下也能实现在容器世界里。怎么实现呢？
+Istio 里会在每个 Pod 会注入 Envoy 容器，是自动注入的，就和 Spring 切面编程在代码执行前注入逻辑的道理是一样的。
+这个 Envoy 容器是干什么的？就可以理解为高级版的 Nginx，是一个双向的 Ingress 和 Egress 都支持的 Proxy 。有了这个，大家都记得 Pod 里的两个容器之间的 Network Namespace 又是共享的，
+我就可以让这个 Pod 的进出流量都走 Envoy。Envoy 是系统自动注入进去的，用户不需要定义，所以接下来当我要控制两个服务器之间的访问，比说流量、切片，就是 Istio 自动配置每个 Pod 的里 Envoy 的容器实现。
+这里举个例子。现在有这样的微服务，有微服务 A，还有一个微服务 B。他们两个之间有一个 A 调用 B 的关系，这时候要做一个灰度发布，在线上新部署了一个B 的新版本叫 Version 2，
+我的要求是 A 访问 B 的流量，99% 还在原来的 V1 上，切 1% 到新版本 V2 上。怎么做？只要在 Istio 里申明要 A、B 之间的流量比例，Istio 会自动配置 A 的 Envoy 容器，使得出来的容量分流一部分到 V1 上，
+另一部分按照比例分到 V2 上。这就是 Kubernetes 如何在容器这个世界里实现类似 AOP 的切面控制的原理。
+这个项目是谷歌，Lyft 和 IBM 一起做的，其实可以认为它就是一个源自于 Kubernetes 的项目，因为它必须依赖于 Pod 的概念。同样这样的实现在 Cloud Foundry 也可以做，因为Cloud Foundry 的容器是“胖”容器，
+本身里面有一个 Init 进程，如果在 Init 帮助下起一个 Envoy 的小容器，小的 Namespace ，这个是可以的。同样这个事在虚拟机里也可以做，无非就是在一个虚拟机启动多个容器的意思。但这个事在现在的 Docker Swarm 模式里就很难做，
+没办法在 Docker 容器里说注入一个 Envoy，Swarm 模式的网络也不支持这么干。
+当然谷歌对这个事很 Open，一周前 Istio 的人和 Docker Team 就开了一个会，想把 Istio 推到 Swarm 模式 上。最终的结果就是宿主机上 Workaround，比如说现在要做一个切面， Swarm 模式 会给你在宿主机上起一个匿名容器，
+就是你不知道也看不见的容器，用来跑 Envoy。所以大家可以感觉到，它其实游离于当前 Schedule 掌控之外的，带来了管理的复杂度和资源管理的问题（比如怎么原子调度），但是现在没别的办法，让 Swarm 支持 Pod 不太可能 。
+
+Pod 的实现
+
+然后我们讲讲 Pod 怎么实现。Kubernetes 的 Pod 实现强依赖于 CRI。我想在 Kubernetes 里创建一个 Pod，名字叫 Foo，有两个容器 A 和 B。它怎么做呢？Kubernetes 的会去 Call Kubelet 里 CRI 的一个 API 叫 RunPodSandbox。
+Call 这个之后，如果是 Docker 做 Runtime 的话，，Docker 会启动一个 Container Foo，这个非常小的 Container，我们称之为 Inford Container，它是用来 Hold 整个 Pod 里的 Network Namespace ，其他的容器都去 Join 的一
+个 Network Namespace ，就实现了容器间 Network Namespace 的共享。
