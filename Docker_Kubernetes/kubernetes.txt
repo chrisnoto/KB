@@ -1,6 +1,42 @@
 #######配置k8s客戶端訪問k8s集群#######
-拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
+方法一：拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
 特別注意： 客戶端如有配置http proxy會導致無法訪問機器。
+
+方法二： (配置多集群)
+kubectl config set-credentials dev-admin --username=admin --password=1Qj9KUj0RMSrHQrolr2AMiiRhB9dEAMi
+kubectl config set-cluster dev-cluster --server=https://cls-n9w6pjha.ccs.tencent-cloud.com --certificate-authority=/root/dev-ca.crt
+kubectl config set-context dev-system --cluster=dev-cluster --user=dev-admin
+kubectl config use-context dev-system
+[root@cobbler ~]# kubectl config use-context dev-system
+Switched to context "dev-system".
+[root@cobbler ~]# kubectl get nodes
+NAME          STATUS    AGE       VERSION
+172.16.16.3   Ready     2d        v1.7.8-qcloud
+
+kubectl config set-credentials prod-admin --username=admin --password=ZXIr6izA9AqcWXtfWgsqdBS58FalddUu
+kubectl config set-cluster prod-cluster --server=https://cls-46q04qgm.ccs.tencent-cloud.com --certificate-authority=/root/prod-ca.crt
+kubectl config set-context prod-system --cluster=prod-cluster --user=prod-admin
+kubectl config use-context prod-system
+[root@cobbler ~]# kubectl config use-context prod-system
+Switched to context "prod-system".
+[root@cobbler ~]# kubectl get nodes
+NAME           STATUS    AGE       VERSION
+172.16.16.46   Ready     2d        v1.7.8-qcloud
+172.16.16.70   Ready     2d        v1.7.8-qcloud
+172.16.16.79   Ready     2d        v1.7.8-qcloud
+172.16.16.83   Ready     2d        v1.7.8-qcloud
+
+kubectl config set-credentials default --token=${KUBERNETES_TOKEN}
+if [ ! -z ${KUBERNETES_CERT} ]; then
+  echo ${KUBERNETES_CERT} | base64 -d > ca.crt
+  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --certificate-authority=ca.crt
+else
+  echo "WARNING: Using insecure connection to cluster"
+  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --insecure-skip-tls-verify=true
+fi
+kubectl config set-context default --cluster=default --user=default
+kubectl config use-context defaul
+
 
 #######k8s使用cinder做存儲後端#####
 这需要两个前提：
