@@ -1,3 +1,6 @@
+#########ubuntu16.04支持nbd#########
+modprobe nbd max_part=16
+
 git pull = git fetch + git merge
 git merge fast-forward
 ############確認硬盤位置###########
@@ -68,7 +71,8 @@ redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
 
 vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
  
- #########mysql#########
+ ############Mysql##########
+SHOW VARIABLES LIKE "secure_file_priv";
  查看表大小（MB）并排序
  select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
  
@@ -473,6 +477,22 @@ check-agent() {
 }
 
 #################RHEL 7#####################
+Rescue mode provides a convenient single-user environment and allows you to repair your system in situations 
+when it is unable to complete a normal booting process. In rescue mode, the system attempts to mount all local file systems 
+and start some important system services, but it does not activate network interfaces or allow more users to be logged into the system at the same time. 
+In Red Hat Enterprise Linux 7, rescue mode is equivalent to single user mode and requires the root password.
+
+Emergency mode provides the most minimal environment possible and allows you to repair your system even in situations when the system is unable to enter rescue mode. 
+In emergency mode, the system mounts the root file system only for reading, does not attempt to mount any other local file systems, 
+does not activate network interfaces, and only starts few essential services. In Red Hat Enterprise Linux 7, emergency mode requires the root password.
+
+The systemd debug shell provides a shell very early in the startup process that can be used to diagnose systemd related boot-up problems. 
+Once in the debug shell, systemctl commands such as systemctl list-jobs, and systemctl list-units can be used to look for the cause of boot problems. 
+In addition, the debug option can be added to the kernel command line to increase the number of log messages. 
+For systemd, the kernel command-line option debug is now a shortcut for systemd.log_level=debug
+
+systemd.debug-shell  systemd.unit=emergency.target   systemd.unit=rescue.target
+
 is-system-running
 
 systemd.unit=emergency.target        -maintenance
@@ -536,7 +556,7 @@ after chroot to /sysroot
 can't observe running process
 memroy in /proc is none, can't issue "mount, free -m,lvm lvs,df"
 
-runlevle switch
+runlevel switch
 systemctl rescue
 systemctl default
 ############python simple HTTP server##########
