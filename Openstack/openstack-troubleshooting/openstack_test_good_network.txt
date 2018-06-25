@@ -1,0 +1,87 @@
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 10.67.44.1 -c2
+PING 10.67.44.1 (10.67.44.1) 56(84) bytes of data.
+64 bytes from 10.67.44.1: icmp_seq=1 ttl=255 time=0.829 ms
+64 bytes from 10.67.44.1: icmp_seq=2 ttl=255 time=0.832 ms
+
+--- 10.67.44.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.829/0.830/0.832/0.028 ms
+You have new mail in /var/mail/root
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 10.67.44.66 -c2
+PING 10.67.44.66 (10.67.44.66) 56(84) bytes of data.
+64 bytes from 10.67.44.66: icmp_seq=1 ttl=64 time=0.550 ms
+64 bytes from 10.67.44.66: icmp_seq=2 ttl=64 time=0.144 ms
+
+--- 10.67.44.66 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 999ms
+rtt min/avg/max/mdev = 0.144/0.347/0.550/0.203 ms
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 10.67.111.1 -c2
+PING 10.67.111.1 (10.67.111.1) 56(84) bytes of data.
+^C
+--- 10.67.111.1 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1008ms
+
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 192.168.111.1 -c2
+PING 192.168.111.1 (192.168.111.1) 56(84) bytes of data.
+64 bytes from 192.168.111.1: icmp_seq=1 ttl=64 time=0.082 ms
+64 bytes from 192.168.111.1: icmp_seq=2 ttl=64 time=0.062 ms
+
+--- 192.168.111.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 0.062/0.072/0.082/0.010 ms
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 192.168.112.1 -c2
+PING 192.168.112.1 (192.168.112.1) 56(84) bytes of data.
+64 bytes from 192.168.112.1: icmp_seq=1 ttl=64 time=0.091 ms
+64 bytes from 192.168.112.1: icmp_seq=2 ttl=64 time=0.058 ms
+
+--- 192.168.112.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 999ms
+rtt min/avg/max/mdev = 0.058/0.074/0.091/0.018 ms
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ping 10.67.44.110 -c2
+PING 10.67.44.110 (10.67.44.110) 56(84) bytes of data.
+64 bytes from 10.67.44.110: icmp_seq=1 ttl=64 time=1.27 ms
+64 bytes from 10.67.44.110: icmp_seq=2 ttl=64 time=0.441 ms
+
+--- 10.67.44.110 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.441/0.855/1.270/0.415 ms
+root@node-10:~# ip netns exec qrouter-0e9b9dda-dc2e-4f25-8fee-5ebc28796539 ip a s  qg-4964699b-fb
+39: qg-4964699b-fb: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450 qdisc noqueue state UNKNOWN group default
+    link/ether fa:16:3e:04:f5:cb brd ff:ff:ff:ff:ff:ff
+    inet 10.67.44.106/23 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.107/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.109/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.110/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.111/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.125/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.126/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.128/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.135/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.185/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.186/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.187/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.188/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.191/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.194/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.195/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet 10.67.44.196/32 scope global qg-4964699b-fb
+       valid_lft forever preferred_lft forever
+    inet6 fe80::f816:3eff:fe04:f5cb/64 scope link nodad
+       valid_lft forever preferred_lft forever
+root@node-10:~#

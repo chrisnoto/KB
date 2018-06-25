@@ -1,3 +1,6 @@
+###########most expensive i/o process################
+dstat --aio --io --disk --tcp --top-io-adv --top-bio-adv
+
 #########ubuntu16.04支持nbd#########
 modprobe nbd max_part=16
 

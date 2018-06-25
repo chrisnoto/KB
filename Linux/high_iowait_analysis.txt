@@ -1,0 +1,118 @@
+Linux Wait IO Problem
+
+Wait IO problem can be caused by several reasons, the basic road-map to find out is which process is "eating" your CPU first 
+and then determine why. The main cause are those background processes with "D" status code which means "Uninterruptiable sleep". 
+But the those processes with "D+" which means "Uninterruptible sleep foreground process" will generally not cause the serious problem as those background processes.
+In this example, the cause of Wait IO is the File System Journal, so the configuration of file system is the cause of the problem. 
+
+By Quentin Sherman Xue - CEO
+
+Detection of Problem
+
+When you log into a Linux box, if the WA is present and with very high percentage, you will feel the login process will
+ take much longer time than the normal. Then any operation will also take much longer than they usually do.
+
+Determination of Problem
+
+To determine if the problem is caused by wait io is relatively easy, there are several commands can be used, one of them is the command vmstat:
+
+# vmstat 2
+procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 0  1   1680 5134528 132148 165904    0    0     0    19    4    0  0  0 72 27  0
+ 0  0   1680 5134528 132148 165904    0    0     0    14   59   88  0  0 74 26  0
+ 0  0   1680 5134528 132148 165904    0    0     0     0   49   74  0  0 100  0  0
+ 0  0   1680 5134528 132148 165916    0    0     0    32   48   82  0  0 44 57  0
+ 0  0   1680 5134528 132148 165916    0    0     0     0   53   79  0  0 100  0  0
+ 0  2   1680 5134528 132148 165924    0    0     0    28   58   89  0  0 58 42  0
+ 0  0   1680 5134528 132148 165924    0    0     0     2   40   72  0  0 95  6  0
+ 0  0   1680 5134528 132148 165924    0    0     0     0   49   74  0  0 100  0  0
+ 
+From here you can see the pre-last column is the "wa", it is always with some value there and it means your system is constantly waiting IO operations.
+So, your Linux Box will never works well.
+
+Please note, in this result, the sum of columns id (Idle) and wa (Wait IO) is almost 100, this means there are some configuration problems. 
+Because the machine is seem it does not doing any thing but disk IO operations. 
+It typically is caused by some kind of disk configuration problem, like journal for ext4.
+
+The vmstat command shows you both foreground and background processes. So, it is not very precise to find out if there is a real IO problem. 
+For example, if some user is restoring a specific file from a multi-volumns tar backup, it will cause the WA very high, 
+but it is a foreground process which is not blocking whole linux server. But it is really telling you that some process is causing high IO usage.
+
+The Cause
+One of most possible reason which causes the problem is the "Journal Flushing Operation". It periodically flushes journal commits and other modifications to disk.
+To determine if it is the cause, using this command:
+
+# ps auxf
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         2  0.0  0.0      0     0 ?        S    May22   0:00 [kthreadd]
+root         3  0.0  0.0      0     0 ?        S    May22   0:00  \_ [migration/0]
+root         4  0.0  0.0      0     0 ?        S    May22   0:00  \_ [ksoftirqd/0]
+root         5  0.0  0.0      0     0 ?        S    May22   0:00  \_ [watchdog/0]
+root         6  0.0  0.0      0     0 ?        S    May22   0:50  \_ [events/0]
+root         7  0.0  0.0      0     0 ?        S    May22   0:00  \_ [cpuset]
+root         8  0.0  0.0      0     0 ?        S    May22   0:00  \_ [khelper]
+root         9  0.0  0.0      0     0 ?        S    May22   0:00  \_ [netns]
+root        10  0.0  0.0      0     0 ?        S    May22   0:00  \_ [async/mgr]
+root        11  0.0  0.0      0     0 ?        S    May22   0:00  \_ [pm]
+...
+Here the most important column for us is the STAT, which means some thing as follow:
+
+       D    Uninterruptible sleep (usually IO)
+       R    Running or runnable (on run queue)
+       S    Interruptible sleep (waiting for an event to complete)
+       T    Stopped, either by a job control signal or because it is being traced.
+       W    paging (not valid since the 2.6.xx kernel)
+       X    dead (should never be seen)
+       Z    Defunct ("zombie") process, terminated but not reaped by its parent.
+So, just as mentioned above, if a process with its stat with "D", it means it is actually taking all CPU resource with no any possible interruption.
+This means your Linux Box will wait on IO and does not responding any other commands if such process is always there.
+
+To nail down which process is "eating" your CPU time, you can use this command which samples all process with D flag in every second:
+
+# while true; do date; ps auxf | awk '{if($8=="D") print $0;}'; sleep 1; done
+Tue Aug 23 20:03:42 CLT 2011
+Tue Aug 23 20:03:43 CLT 2011
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+Tue Aug 23 20:03:44 CLT 2011
+Tue Aug 23 20:03:45 CLT 2011
+Tue Aug 23 20:03:46 CLT 2011
+...
+Tue Aug 23 20:03:47 CLT 2011
+Tue Aug 23 20:03:53 CLT 2011
+Tue Aug 23 20:03:54 CLT 2011
+root       302  0.0  0.0      0     0 ?        D    May22   2:58  \_ [kdmflush]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+Tue Aug 23 20:03:55 CLT 2011
+Tue Aug 23 20:03:56 CLT 2011
+Tue Aug 23 20:03:57 CLT 2011
+Tue Aug 23 20:03:58 CLT 2011
+Tue Aug 23 20:03:59 CLT 2011
+root       302  0.0  0.0      0     0 ?        D    May22   2:58  \_ [kdmflush]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+Tue Aug 23 20:04:00 CLT 2011
+Tue Aug 23 20:04:01 CLT 2011
+Tue Aug 23 20:04:02 CLT 2011
+From the result above, you see there are two process which are consuming your CPU with Wait IO, kdmflush and jbd2/dm-0-8
+
+Note: if only date/time are displayed on the screen, it means there is no any serious WaitIO problem there.
+
+Also you can use the following command to realize a monitoring on these two processes:
+
+# while true; do ps auxf | grep D | grep -E "(jbd2\/dm\.*|kdmflush)"; sleep 1; done
+root       302  0.0  0.0      0     0 ?        D    May22   2:58  \_ [kdmflush]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+root       302  0.0  0.0      0     0 ?        D    May22   2:58  \_ [kdmflush]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+root       302  0.0  0.0      0     0 ?        D    May22   2:58  \_ [kdmflush]
+root       321  0.0  0.0      0     0 ?        D    May22   4:11  \_ [jbd2/dm-0-8]
+As you can see, these two processes are responsible for Wait IO of your linux server.
+
+Solution
+
+First of all, the reason of high WA is not always the same. But the solution will always on those processes which are with STAT as D.
+In this case, the configuration of "Journal Disk" should be reconsidered. If the server is a machine for development, it is not recommended to use Journal to 
+protect the hard disk. If the server is a product server, some kind of RAID should be used to protect the failure of disks.
