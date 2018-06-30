@@ -74,14 +74,6 @@ redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
 
 vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
  
- ############Mysql##########
-SHOW VARIABLES LIKE "secure_file_priv";
- 查看表大小（MB）并排序
- select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
- 
- 查看分區
- use information_schema;
- select partition_name,table_rows from information_schema.partitions where table_name='history_uint';
 ##########bonding#############
 rr mode0   balance-xor mode2   mode3   static link aggr
 802.3ad  mode4    LACP
@@ -218,18 +210,6 @@ netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
 输出每个ip的连接数，以及总的各个状态的连接数。
  
 netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
-#########git ##########
-git checkout -b test
-git status
-git branch
-vi README.md
-git status
-git add README.md
-git commit README.md
-git status
-git log --branches --not --remotes
-git push origin test
-git config --global credential.helper 'cache --timeout=7200'
 
 ###########linux network###########
 Linux 上配置網絡設備命令舉例
@@ -704,32 +684,6 @@ screen
 backup:   getfacl -R . > permission.txt
 restore:  setfacl --restore=permission.txt
 
-#####################SHC#######################
-#1   b23leimysql01:~/shc_no_ep           # modify it and distribute it
-pssh -h djs_srvlist --inline-stdout "rm -rf prerequisites/"
-pssh -h djs_srvlist --inline-stdout "rm -rf LittleFix/SHCResults/"
-pssh -h djs_srvlist --inline-stdout "rm -rf SHC/"
-pscp -h djs_srvlist -r prerequisites/ /home/chensen/
-pssh -h djs_srvlist --inline-stdout "touch -d 'yesterday' prerequisites/"
-pscp -h djs_srvlist shc_no_ep /home/chensen/
-
-#2
-run cssh
-./shc_no_ep --cust DJS >manualhc 2>&1
-cat manualhc |sed -n '/Task\ 4/,/Task\ 5/p' >`hostname -s`_manualhc_`date +%Y%m%d`.txt
-chown chensen `hostname -s`_manualhc_`date +%Y%m%d`.txt
-
-#3
-run another Littlefix policy   SITS-GSDISEC
-pssh -h djs_srvlist -x '-t -t' --inline-stdout "cd LittleFix/;sudo ./LittleFix-unix.exe-linux-x86-64 -x SITS-GSDISEC-V4.0C_UNIX-SUDO_20160412.POLICY"
-pssh -h djs_srvlist -x '-t -t' --inline-stdout "sudo chown -R chensen LittleFix/"
-
-#4
-pslurp -h djs_srvlist -t 0 -l chensen -r /home/chensen/LittleFix/SHCResults .
-pssh -h djs_srvlist --inline-stdout "mkdir SHC;mv *`date +%Y%m%d`* SHC/"
-pslurp -h djs_srvlist -t 0 -l chensen -r /home/chensen/SHC .
-###included in shc_no_ep###########
-zip `hostname -s`_shc_20160510.zip `find ~chensen/prerequisites ! -type d -a  -newer prerequisites | egrep 'csv|log|txt'`
 
 ####################scan sparse file larger than 1GB##########
 while read num file;do if [[ $(($num)) -lt 0 ]];then echo $file $(($num));fi;done< <(find / -type f -size +1G -print0|tee|xargs -0 stat -c "%b*%B-%s %n" --)
@@ -764,16 +718,7 @@ url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
 # cobbler system edit --name=test2 --interface=eth0 --ip-address=192.168.124.208
 # cobbler system report --name=test2
 ###########################################
-
 perl -e 'print crypt("Quake3@FB",q($1$x9cD$8)),"\n"'
-
-date -d "20160207" +%s
-grep -A1 14569 .sh_history.chensen:root
-#####################import mysql data##############################
-load data infile '/tmp/srvinfo.txt' into table SrvInformation.SrvInfo_1 fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
-load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo_1 fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
-load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
-
 #############ssh in while loop######################
 while read srv user;do ssh -t $srv "sudo ls -l /home/${user}/.ssh/authorized_keys" </dev/null;done< <(cat h1|awk '{print $1,$2}')
 ##############lssecfixes############################
@@ -1266,15 +1211,6 @@ cat 33|awk '{if($2<$3)print $0" installed before BAU";else print $0}'
 ##############################################################
 while read srv ipaddr;do echo -e "###########$srv#########";ping -c1 $ipaddr;done< <(cat list|awk '{print $1,$3}')
 
-###############SGE##############
-
-[root@pcarshn01 profile.d]# psh login ps -ef|egrep 'sge_qmaster|sge_shadowd'|grep -v grep
-pcarshn02:	sgeadmin  8427     1  0 Mar09 ?        00:00:05 /opt/sw/sge/bin/lx24-amd64/sge_shadowd
-pcarshn03:	sgeadmin 15956     1  0 Mar23 ?        00:00:02 /opt/sw/sge/bin/lx24-amd64/sge_shadowd
-pcarshn01:	sgeadmin 15547     1 41 Mar23 ?        4-16:26:00 /opt/sw/sge/bin/lx24-amd64/sge_qmaster
-
-[root@pcarshn01 profile.d]# psh compute ps -ef|grep sge_execd
-
 ##############################GPFS check################################3
 # mmlscluster
 # mmlsmgr
@@ -1719,13 +1655,11 @@ racv-l507						 .   /opt/IBM/ITM/logs/itm_config.log.
 racv-l507						 .   /opt/IBM/ITM/logs/itm_config.trc.
 racv-l507						 .   /opt/IBM/ITM/logs/itm_synclock.trc.
 
-
-s_uptime=`sed -n '/uptime/,/space/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
-s_backup=`sed -n '/TSM/,/Finished/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
-
 [chensen@cfibml08 tmp]$ cat 1|awk '/\.$/{print $1,substr($NF,1,length($NF)-1);next}{print $1,$NF}'
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+s_uptime=`sed -n '/uptime/,/space/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
+s_backup=`sed -n '/TSM/,/Finished/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
 [chensen@cfibml08 tmp]$ head id1
 racv-l308	adm
 racv-l308	bin
@@ -1773,8 +1707,6 @@ next在多行合并，以及选择性输出方面很方便
 ##############sed###########################################################  
 sed '/^ *$/d' file 
 sed -i.18Mar2014 '/^ *$/d' test
-
-
 
 [sam@oc1181188062 proc]$ sed -n 's/cpu \+//p' stat
 [sam@oc1181188062 proc]$ a=cpu;sed -n 's/'$a' \+//p' stat

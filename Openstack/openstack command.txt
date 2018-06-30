@@ -56,7 +56,7 @@ Too many 5xx HTTP errors have been detected on cinder-api (WARN, rule='diff(hapr
  http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/volumes/detail?all_tenants=1 returned with HTTP 500
 2017-12-09 16:50:29.221 8555 INFO cinder.api.openstack.wsgi [req-ec85e65e-ccfd-4164-9449-a74e4ac8386f d53735d247fe456f81329ff73fbeee7d dee565926aad48b589de72dbc4ccec36 - - -]
  http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/snapshots/detail?all_tenants=1 returned with HTTP 200
-從log得知，每次用restful api查看volumes的狀態會報500，但是查看snaphosts是正常的。
+從log得知，每次用restful api查看volumes的狀態會報500，但是查看snapshots是正常的。
 
 ****openstack bug2****			
 haproxy監控頁面看到 heat-api-cloudwatch 中node-1 lastcheck失敗，查看其他controller得知防火牆規則缺失

@@ -1,0 +1,11 @@
+ ############Mysql##########
+SHOW VARIABLES LIKE "secure_file_priv";
+ 查看表大小（MB）并排序
+ select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
+ 
+ 查看分區
+ use information_schema;
+ select partition_name,table_rows from information_schema.partitions where table_name='history_uint';
+ 
+ #####################import mysql data##############################
+load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
