@@ -472,7 +472,7 @@ does not activate network interfaces, and only starts few essential services. In
 The systemd debug shell provides a shell very early in the startup process that can be used to diagnose systemd related boot-up problems. 
 Once in the debug shell, systemctl commands such as systemctl list-jobs, and systemctl list-units can be used to look for the cause of boot problems. 
 In addition, the debug option can be added to the kernel command line to increase the number of log messages. 
-For systemd, the kernel command-line option debug is now a shortcut for systemd.log_level=debug
+For systemd, the kernel command-line option debug is now a shortcut for systemd.log_level=debug   (password not required)
 
 systemd.debug-shell  systemd.unit=emergency.target   systemd.unit=rescue.target
 
