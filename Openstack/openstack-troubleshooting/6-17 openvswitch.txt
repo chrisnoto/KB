@@ -18,4 +18,7 @@ service libvirtd stop
 service libvirtd start
 service nova-compute start
 
-node-8上的vm有一部份需要重啟網絡服務才能重新獲取IP
+node-8上的vm有一部份需要重啟網絡服務才能重新獲取IPa
+
+
+

@@ -352,7 +352,8 @@ delete_on_termination: 0
             volume_id: 39c76d96-0f95-490c-b7db-b3da6d17331b
           volume_size: NULL
             no_device: NULL
-      connection_info: {"driver_volume_type": "rbd", "serial": "39c76d96-0f95-490c-b7db-b3da6d17331b", "data": {"secret_type": "ceph", "name": "volumes/volume-39c76d96-0f95-490c-b7db-b3da6d17331b", "secret_uuid": "0668cc5e-7145-4b27-8c83-6c28e1353e83", "qos_specs": null, "hosts": ["192.168.100.110", "192.168.100.111", "192.168.100.112"], "auth_enabled": true, "access_mode": "rw", "auth_username": "cinder", "ports": ["6789", "6789", "6789"]}}
+      connection_info: {"driver_volume_type": "rbd", "serial": "39c76d96-0f95-490c-b7db-b3da6d17331b", "data": {"secret_type": "ceph", "name": "volumes/volume-39c76d96-0f95-490c-b7db-b3da6d17331b", 
+	  "secret_uuid": "0668cc5e-7145-4b27-8c83-6c28e1353e83", "qos_specs": null, "hosts": ["192.168.100.110", "192.168.100.111", "192.168.100.112"], "auth_enabled": true, "access_mode": "rw", "auth_username": "cinder", "ports": ["6789", "6789", "6789"]}}
         instance_uuid: 4f52191f-9645-448f-977b-80ca515387f7
               deleted: 29
           source_type: volume

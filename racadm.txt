@@ -1,0 +1,434 @@
+######racadm list and close session#######
+racadm>>getssninfo
+
+racadm getssninfo
+SSNID Type              User                                          IP Address Login Date/Time
+---------------------------------------------------------------------------
+2     Virtual Console   root                                       10.67.124.128 12/01/2017 15:05:42
+6     GUI               root                                        10.67.125.24 12/02/2017 08:26:07
+9     SSH               root                                        10.67.51.164 12/02/2017 08:29:31
+
+racadm>>closessn -i 2
+
+racadm closessn -i 2
+Session 2 closed successfully.
+
+
+#Tested on Dell R620 server with iDRAC 7, this script is run under a winxp with racadm installed
+host=$1
+
+echo "#################################Deleting the existing vdisks#########################################"
+#Deleting the existing vdisks
+for i in 0 1 2 3 4 5
+do
+        echo "############## $i ##############"
+        racadm -r $host -u root -p calvin raid deletevd:Disk.Virtual.$i:RAID.Integrated.1-1
+        sleep 10
+done
+racadm -r $host -u root -p calvin jobqueue create RAID.Integrated.1-1
+racadm -r $host -u root -p calvin serveraction powercycle
+sleep 600
+
+echo "#################################Create new vdisks#########################################"
+#Create new vdisks
+for i in 0 1 2 3 4 5
+do
+        echo "############## $i ##############"
+        racadm -r $host -u root -p calvin raid createvd:RAID.Integrated.1-1 -rl r0 -wp wb -rp ara -ss 64k -pdkey:Disk.Bay.$i:Enclosure.Internal.0-1:RAID.Integrated.1-1
+        sleep 30
+done
+racadm -r $host -u root -p calvin jobqueue create RAID.Integrated.1-1
+racadm -r $host -u root -p calvin serveraction powercycle
+sleep 600
+
+
+echo "#################################Init vdisks#########################################"
+#init vdisks
+for i in 0 1 2 3 4 5
+do
+        echo "############## $i ##############"
+        racadm -r $host -u root -p calvin raid init:Disk.Virtual.$i:RAID.Integrated.1-1
+        sleep 30
+done
+racadm -r $host -u root -p calvin jobqueue create RAID.Integrated.1-1
+racadm -r $host -u root -p calvin serveraction powercycle
+
+
+sleep 600
+
+
+#partition vflash SD
+echo "#################################Init vflashSD#########################################"
+racadm -r $host -u root -p calvin vflashsd initialize
+sleep 300
+echo "#################################Create vflashSD partitions#########################################"
+index=1
+for i in ROOT VAR LOG LOCAL
+do
+        echo "############## $i ##############"
+        if [ $i == "LOCAL" ];then
+                size=2500
+        else
+                size=4096
+        fi
+        racadm -r $host -u root -p calvin vflashpartition create -i $index -o $i -e HDD -t empty -f ext3 -s $size
+        index=`expr $index + 1 `
+        sleep 100
+done
+sleep 1200
+#Attach vflash paritions to system
+echo "#################################Attach vflashSD partitions#########################################"
+for i in 1 2 3 4
+do
+        echo "############## $i ##############"
+        racadm -r $host -u root -p calvin set iDRAC.vflashpartition.$i.AttachState 1
+        sleep 100
+done
+
+sleep 100
+echo "#################################Setting NIC LegacyBootProto#########################################"
+for i in 1 2 3 4
+do
+        echo "############## $i ##############"
+        if [ $i -eq 3 ];then
+                value="PXE"
+        else
+                value="NONE"
+        fi
+        racadm -r $host -u root -p calvin set NIC.NICConfig.$i.LegacyBootProto $value
+        sleep 30
+        #racadm -r $host -u root -p calvin get NIC.NICConfig.$i.LegacyBootProto
+        racadm -r $host -u root -p calvin jobqueue create NIC.Integrated.1-$i-1
+done
+sleep 10
+racadm -r $host -u root -p calvin serveraction powercycle
+sleep 600
+
+echo "#################################Setting Boot from flashSD root#########################################"
+racadm -r $host -u root -p calvin set BIOS.BiosBootSettings.HddSeq Disk.vFlash.ROOT-1,RAID.Integrated.1-1,,Disk.vFlash.VAR-1,Disk.vFlash.LOG-1,Disk.vFlash.LOCAL-1
+racadm -r $host -u root -p calvin jobqueue create BIOS.Setup.1-1
+sleep 10
+racadm -r $host -u root -p calvin serveraction powercycle
+
+#sleep 600
+#echo "#################################Set Next boot PXE#########################################"
+#Set next boot from PXE
+#racadm -r $host -u root -p calvin set iDRAC.serverboot.FirstBootDevice PXE
+#sleep 10
+#racadm -r $host -u root -p calvin serveraction powercycle
+
+#####################################################iDrac management#####################################################################################################
+
+[root@vtj-cobbler ~]# for u in `cat idrac_ip`;do echo "----$u----";sshpass -p calvin ssh -o StrictHostKeyChecking=no root@$u racadm hwinventory NIC.Integrated.1-4-1 |egrep 'Device Description|Current MAC Address';done
+----10.67.63.179----
+Current MAC Address:                          Unavailable
+----10.67.63.180----
+Current MAC Address:                          Unavailable
+----10.67.63.181----
+Current MAC Address:                          18:66:DA:74:28:C4
+----10.67.63.182----
+Current MAC Address:                          18:66:DA:74:13:E4
+----10.67.63.183----
+Current MAC Address:                          Unavailable
+----10.67.63.184----
+Device Description:                           Integrated NIC 1 Port 4 Partition 1
+Current MAC Address:                          18:66:DA:74:22:ED
+----10.67.63.185----
+Current MAC Address:                          Unavailable
+----10.67.63.186----
+ssh: connect to host 10.67.63.186 port 22: No route to host
+----10.67.63.187----
+Current MAC Address:                          18:66:DA:74:2B:57
+----10.67.63.188----
+Current MAC Address:                          18:66:DA:74:12:31
+----10.67.63.189----
+Current MAC Address:                          18:66:DA:74:29:E6
+
+[root@vtj-cobbler ~]# for u in `cat idrac_ip`;do echo "----$u----";sshpass -p calvin ssh -o StrictHostKeyChecking=no root@$u racadm  raid help createvd |grep createvd;done
+----10.67.63.179----
+----10.67.63.180----
+----10.67.63.181----
+----10.67.63.182----
+----10.67.63.183----
+----10.67.63.184----
+racadm storage createvd:<Controller FQDD> -rl {r0|r1|r5|r6|r10|r50|r60}[-wp {wt|wb|wbf}] [-rp {nra|ra|ara}]
+racadm storage createvd:RAID.Integrated.1-1 -rl r0 -pdkey:Disk.Bay.0:Enclosure.Internal.0-0:RAID.Integrated.1-1
+----10.67.63.185----
+----10.67.63.186----
+ssh: connect to host 10.67.63.186 port 22: No route to host
+----10.67.63.187----
+----10.67.63.188----
+----10.67.63.189----
+----10.67.63.190----
+----10.67.63.167----
+racadm storage createvd:<Controller FQDD> -rl {r0|r1|r5|r6|r10|r50|r60}[-wp {wt|wb|wbf}] [-rp {nra|ra|ara}]
+racadm storage createvd:RAID.Integrated.1-1 -rl r0 -pdkey:Disk.Bay.0:Enclosure.Internal.0-0:RAID.Integrated.1-1
+----10.67.63.168----
+racadm storage createvd:<Controller FQDD> -rl {r0|r1|r5|r6|r10|r50|r60}[-wp {wt|wb|wbf}] [-rp {nra|ra|ara}]
+racadm storage createvd:RAID.Integrated.1-1 -rl r0 -pdkey:Disk.Bay.0:Enclosure.Internal.0-0:RAID.Integrated.1-1
+
+[root@vtj-cobbler ~]# for u in `cat idrac_ip`;do echo "----$u----";sshpass -p calvin ssh -o StrictHostKeyChecking=no root@$u racadm getversion;done
+----10.67.63.179----
+ Bios Version             = 1.6.0
+ iDRAC Version            = 1.06.06
+ USC Version              = 1.0.0.5747
+----10.67.63.180----
+ Bios Version             = 1.3.6
+ iDRAC Version            = 1.00.00
+ USC Version              = Lifecycle Controller Disabled
+----10.67.63.181----
+ Bios Version             = 2.2.2
+ iDRAC Version            = 1.00.00
+ USC Version              = 1.0.0.5747
+----10.67.63.182----
+ Bios Version             = 2.0.19
+ iDRAC Version            = 1.45.45
+ USC Version              = 1.1.5.165
+WARNING: Default password is configured. Dell highly recommends changing user root's password immediately
+----10.67.63.183----
+ Bios Version             = 2.2.2
+ iDRAC Version            = 1.23.23
+ USC Version              = Lifecycle Controller Disabled
+----10.67.63.184----
+ Bios Version                     = 2.5.4
+ iDRAC Version                    = 2.30.30.30
+ Lifecycle Controller Version     = 2.30.30.30
+ IDSDM Version                    = NA
+----10.67.63.185----
+ Bios Version             = 1.3.6
+ iDRAC Version            = 1.06.06
+ USC Version              = 1.0.0.5747
+----10.67.63.186----
+ssh: connect to host 10.67.63.186 port 22: No route to host
+----10.67.63.187----
+ Bios Version             = 1.1.2
+ iDRAC Version            = 1.06.06
+ USC Version              = 1.0.0.5747
+----10.67.63.188----
+ Bios Version             = 2.2.2
+ iDRAC Version            = 1.06.06
+ USC Version              = 1.0.0.5747
+----10.67.63.189----
+ Bios Version             = 1.3.6
+ iDRAC Version            = 1.06.06
+ USC Version              = 1.0.0.5747
+----10.67.63.190----
+ssh: connect to host 10.67.63.190 port 22: Connection timed out
+----10.67.63.167----
+ Bios Version                     = 2.0.1
+ iDRAC Version                    = 2.30.30.30
+ Lifecycle Controller Version     = 2.30.30.30
+ IDSDM Version                    = NA
+----10.67.63.168----
+ Bios Version                     = 2.0.1
+ iDRAC Version                    = 2.30.30.30
+ Lifecycle Controller Version     = 2.30.30.30
+ IDSDM Version                    = NA
+
+ [root@vtj-cobbler ~]# for u in `cat idrac_ip`;do echo "----$u----";sshpass -p calvin ssh -o StrictHostKeyChecking=no root@$u racadm racdump|egrep 'Firmware Version|Current IP Address * =|System Model|BIOS|Ethernet';done
+----10.67.63.179----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.179
+System Model            = PowerEdge R720
+System BIOS Version     = 1.6.0
+----10.67.63.180----
+Firmware Version        = 1.00.00
+Current IP Address      = 10.67.63.180
+System Model            = PowerEdge R720
+System BIOS Version     = 1.3.6
+----10.67.63.181----
+Firmware Version        = 1.00.00
+Current IP Address      = 10.67.63.181
+System Model            = PowerEdge R720
+System BIOS Version     = 2.2.2
+NIC.Integrated.1-1-1    Ethernet                = 18:66:DA:74:28:BE
+NIC.Integrated.1-2-1    Ethernet                = 18:66:DA:74:28:C0
+NIC.Integrated.1-3-1    Ethernet                = 18:66:DA:74:28:C2
+NIC.Integrated.1-4-1    Ethernet                = 18:66:DA:74:28:C4
+----10.67.63.182----
+ssh: connect to host 10.67.63.182 port 22: No route to host
+----10.67.63.183----
+Firmware Version        = 1.23.23
+Current IP Address      = 10.67.63.183
+System Model            = PowerEdge R720
+System BIOS Version     = 2.2.2
+----10.67.63.184----
+Firmware Version        = 2.30.30.30
+Current IP Address      = 10.67.63.184
+System Model            = PowerEdge R720
+System BIOS Version     = 2.5.4
+NIC.Integrated.1-1-1    Ethernet                = 18:66:DA:74:22:E7
+NIC.Integrated.1-2-1    Ethernet                = 18:66:DA:74:22:E9
+NIC.Integrated.1-3-1    Ethernet                = 18:66:DA:74:22:EB
+NIC.Integrated.1-4-1    Ethernet                = 18:66:DA:74:22:ED
+----10.67.63.185----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.185
+System Model            = PowerEdge R720
+System BIOS Version     = 1.3.6
+----10.67.63.186----
+ssh: connect to host 10.67.63.186 port 22: No route to host
+----10.67.63.187----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.187
+System Model            = PowerEdge R720
+System BIOS Version     = 1.1.2
+NIC.Integrated.1-1-1    Ethernet                = 18:66:DA:74:2B:51
+NIC.Integrated.1-2-1    Ethernet                = 18:66:DA:74:2B:53
+NIC.Integrated.1-3-1    Ethernet                = 18:66:DA:74:2B:55
+NIC.Integrated.1-4-1    Ethernet                = 18:66:DA:74:2B:57
+----10.67.63.188----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.188
+System Model            = PowerEdge R720
+System BIOS Version     = 2.2.2
+NIC.Integrated.1-1-1    Ethernet                = 18:66:DA:74:12:2B
+NIC.Integrated.1-2-1    Ethernet                = 18:66:DA:74:12:2D
+NIC.Integrated.1-3-1    Ethernet                = 18:66:DA:74:12:2F
+NIC.Integrated.1-4-1    Ethernet                = 18:66:DA:74:12:31
+----10.67.63.189----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.189
+System Model            = PowerEdge R720
+System BIOS Version     = 1.3.6
+NIC.Integrated.1-1-1    Ethernet                = 18:66:DA:74:29:E0
+NIC.Integrated.1-2-1    Ethernet                = 18:66:DA:74:29:E2
+NIC.Integrated.1-3-1    Ethernet                = 18:66:DA:74:29:E4
+NIC.Integrated.1-4-1    Ethernet                = 18:66:DA:74:29:E6
+----10.67.63.190----
+Firmware Version        = 1.06.06
+Current IP Address      = 10.67.63.190
+System Model            = PowerEdge R720
+System BIOS Version     = 1.3.6
+----10.67.63.167----
+Firmware Version        = 2.30.30.30
+Current IP Address      = 10.67.63.167
+System Model            = PowerEdge R730
+System BIOS Version     = 2.0.1
+NIC.Integrated.1-1-1    Ethernet                = B8:2A:72:D8:2B:D6
+NIC.Integrated.1-2-1    Ethernet                = B8:2A:72:D8:2B:D8
+NIC.Integrated.1-3-1    Ethernet                = B8:2A:72:D8:2B:DA
+NIC.Integrated.1-4-1    Ethernet                = B8:2A:72:D8:2B:DC
+----10.67.63.168----
+Firmware Version        = 2.30.30.30
+Current IP Address      = 10.67.63.168
+System Model            = PowerEdge R730
+System BIOS Version     = 2.0.1
+NIC.Integrated.1-1-1    Ethernet                = B8:2A:72:D9:30:6C
+NIC.Integrated.1-2-1    Ethernet                = B8:2A:72:D9:30:6E
+NIC.Integrated.1-3-1    Ethernet                = B8:2A:72:D9:30:70
+NIC.Integrated.1-4-1    Ethernet                = B8:2A:72:D9:30:72
+
+[root@vtj-cobbler ~]# for u in `cat idrac_ip`;do echo "----$u----";sshpass -p calvin ssh -o StrictHostKeyChecking=no root@$u racadm getsensorinfo|egrep -i 'presen|absen';done
+----10.67.63.179----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Failed      Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.180----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Ok          Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.181----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Ok          Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.182----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Ok          Presence Detected   NA          NA
+CPU2 Status                     Ok          Presence Detected   NA          NA
+DIMM SLOT A1                    N/A         Absent              NA          NA
+DIMM SLOT A2                    Ok          Presence Detected   NA          NA
+DIMM SLOT A3                    N/A         Absent              NA          NA
+DIMM SLOT A4                    Ok          Presence Detected   NA          NA
+DIMM SLOT A5                    N/A         Absent              NA          NA
+DIMM SLOT A6                    N/A         Absent              NA          NA
+DIMM SLOT A7                    N/A         Absent              NA          NA
+DIMM SLOT A8                    N/A         Absent              NA          NA
+DIMM SLOT A9                    N/A         Absent              NA          NA
+DIMM SLOT A10                   N/A         Absent              NA          NA
+DIMM SLOT A11                   N/A         Absent              NA          NA
+DIMM SLOT A12                   N/A         Absent              NA          NA
+DIMM SLOT B1                    N/A         Absent              NA          NA
+DIMM SLOT B2                    Ok          Presence Detected   NA          NA
+DIMM SLOT B3                    N/A         Absent              NA          NA
+DIMM SLOT B4                    Ok          Presence Detected   NA          NA
+DIMM SLOT B5                    N/A         Absent              NA          NA
+DIMM SLOT B6                    N/A         Absent              NA          NA
+DIMM SLOT B7                    N/A         Absent              NA          NA
+DIMM SLOT B8                    N/A         Absent              NA          NA
+DIMM SLOT B9                    N/A         Absent              NA          NA
+DIMM SLOT B10                   N/A         Absent              NA          NA
+DIMM SLOT B11                   N/A         Absent              NA          NA
+DIMM SLOT B12                   N/A         Absent              NA          NA
+System Board CMOS Battery       Ok          Present             NA          NA
+----10.67.63.183----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Ok          Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.184----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Failed      Presence_Detected   NA          NA
+CPU2 Status                     Ok          Presence_Detected   NA          NA
+DIMM A1                         N/A         Absent              NA          NA
+DIMM A2                         Ok          Presence_Detected   NA          NA
+DIMM A3                         N/A         Absent              NA          NA
+DIMM A4                         Ok          Presence_Detected   NA          NA
+DIMM A5                         N/A         Absent              NA          NA
+DIMM A6                         N/A         Absent              NA          NA
+DIMM A7                         N/A         Absent              NA          NA
+DIMM A8                         N/A         Absent              NA          NA
+DIMM A9                         N/A         Absent              NA          NA
+DIMM A10                        N/A         Absent              NA          NA
+DIMM A11                        N/A         Absent              NA          NA
+DIMM A12                        N/A         Absent              NA          NA
+DIMM B1                         Failed      Presence_Detected   NA          NA
+DIMM B2                         N/A         Absent              NA          NA
+DIMM B3                         N/A         Absent              NA          NA
+DIMM B4                         N/A         Absent              NA          NA
+DIMM B5                         N/A         Absent              NA          NA
+DIMM B6                         N/A         Absent              NA          NA
+DIMM B7                         N/A         Absent              NA          NA
+DIMM B8                         N/A         Absent              NA          NA
+DIMM B9                         N/A         Absent              NA          NA
+DIMM B10                        N/A         Absent              NA          NA
+DIMM B11                        N/A         Absent              NA          NA
+DIMM B12                        N/A         Absent              NA          NA
+System Board CMOS Battery       Ok          Present             NA          NA
+----10.67.63.185----
+ssh: connect to host 10.67.63.185 port 22: No route to host
+----10.67.63.186----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Unknown     Absent      NA          NA
+CPU2 Status                     Unknown     Absent      NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.187----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Failed      Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.188----
+ssh: connect to host 10.67.63.188 port 22: Connection timed out
+----10.67.63.189----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Failed      Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA
+----10.67.63.190----
+PS1 Status                      Present                  AC
+PS2 Status                      Present                  AC
+CPU1 Status                     Ok          Present     NA          NA
+CPU2 Status                     Ok          Present     NA          NA
+System Board CMOS Battery       Ok          Present     NA          NA

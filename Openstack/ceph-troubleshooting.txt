@@ -80,14 +80,25 @@ Sometimes removing OSD, if not done properly can result in double rebalancing.
 The best practice to remove an OSD involves changing the crush weight to 0.0 as first step.
 So in the end, this will give you:
 
-$ ceph osd crush reweight osd.<ID> 0.0          應該先設置osd weight值為0，rebalance完之後再移除osd
+#####removing osd node######
+remove one osd at a time
+1 Temporarily Disable Scrubbing:
+# ceph osd set noscrub
+# ceph osd set nodeep-scrub
+
+2 $ ceph osd crush reweight osd.<ID> 0.0          應該先設置osd weight值為0，rebalance完之後再移除osd
 Then you wait for rebalance to be completed. Eventually completely remove the OSD:
 
-$ ceph osd out <ID>
+3 remove osd
 $ service ceph stop osd.<ID>
+$ ceph osd out <ID>
 $ ceph osd crush remove osd.<ID>
 $ ceph auth del osd.<ID>
 $ ceph osd rm <ID>        真的要移除osd，才執行；在排錯階段還是不要執行rm
+
+4 Once all OSDs are removed from the OSD node you can remove the OSD node bucket from the CRUSH map.
+$ ceph osd crush rm `hostname -s`           #remove {bucket-name}
+#####removing osd node######
 
 重新添加已刪除的osd,已osd.0和osd.1為例
 # ceph osd create      自動create為刪除的osd num
