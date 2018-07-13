@@ -294,6 +294,15 @@ kubectl apply -f .
 kubectl apply -f nfs-storageclass.yaml
 
 四  安裝traefik ingress插件
+Ingress Controller 实质上可以理解为是个监视器，Ingress Controller 通过不断地跟 kubernetes API 打交道，实时的感知后端 service、pod 等变化，
+比如新增和减少 pod，service 增加与减少等；当得到这些变化信息后，Ingress Controller 再结合下文的 Ingress 生成配置，
+然后更新反向代理负载均衡器，并刷新其配置，达到服务发现的作用
+由于微服务架构以及 Docker 技术和 kubernetes 编排工具最近几年才开始逐渐流行，所以一开始的反向代理服务器比如 nginx、apache 并未提供其支持，
+毕竟他们也不是先知；所以才会出现 Ingress Controller 这种东西来做 kubernetes 和前端负载均衡器如 nginx 之间做衔接；
+即 Ingress Controller 的存在就是为了能跟 kubernetes 交互，又能写 nginx 配置，还能 reload 它，这是一种折中方案；
+而最近开始出现的 traefik 天生就是提供了对 kubernetes 的支持，也就是说 traefik 本身就能跟 kubernetes API 交互，感知后端变化，
+因此可以得知: 在使用 traefik 时，Ingress Controller 已经无卵用了
+
 1 docker pull docker.io/traefik:1.5.1
 https://github.com/containous/traefik/blob/master/examples/k8s/traefik-ds.yaml
 2 download traefik-rbac.yaml traefik-ds.yaml

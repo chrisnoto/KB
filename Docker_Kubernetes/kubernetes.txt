@@ -1,3 +1,36 @@
+#########訪問服務的五種方式#########
+1 kubernetes api server方式訪問my-nginx
+https://10.67.37.234:6443/api/v1/namespaces/default/services/my-nginx/proxy/
+前提：瀏覽器導入證書
+最新版的k8s默認啟用了RBAC，併為未認證用户賦予了一個默認的身份：anonymous。
+
+對於API Server來説，它是使用證書進行認證的，我們需要先創建一個證書：
+1.首先找到kubectl命令的配置文檔，默認情況下為/etc/kubernetes/admin.conf，在 上一篇 中，我們已經複製到了$HOME/.kube/config中。
+2.然後我們使用client-certificate-data和client-key-data生成一個p12文檔，可使用下列命令：
+# 生成client-certificate-data
+grep 'client-certificate-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.crt
+
+# 生成client-key-data
+grep 'client-key-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.key
+
+# 生成p12
+openssl pkcs12 -export -clcerts -inkey kubecfg.key -in kubecfg.crt -out kubecfg.p12 -name "kubernetes-client"
+3.最後導入上面生成的p12文檔，重新打開瀏覽器，顯示如下：
+k8s-api-server-select-certificate
+
+2 kubectl proxy方式訪問my-nginx
+http://10.67.37.234:8443/api/v1/namespaces/default/services/my-nginx/proxy/
+前提： kubectl proxy --address=0.0.0.0 --accept-hosts=^*$ --port=8443
+
+3 nodeport方式
+前提：yaml文件里定義NodePort
+
+4 loadbalancer方式    (balance workers:nodeport)
+前提： 結合云平臺
+
+5 Ingress方式       http/https lb
+前提： 配置域名解析    域名要指向backend service
+
 ###########jsonpath範例####
 [root@k8sv17 ~]# kubectl get nodes -o jsonpath='{range .items[*]}{.spec.externalID}{"\t"}{.spec.podCIDR}{"\n"}{end}'
 k8sv17.novalocal        10.96.0.0/24
