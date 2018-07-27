@@ -10,7 +10,7 @@ ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbi
 ansible openstack-prod -m apt -a "name=zabbix-sender state=present"
 ansible openstack-prod -m cron -a "user=root minute=*/1 job='/etc/zabbix/zabbix_agentd.d/pageinout.sh'"
 
-ansible 10.20.0.21 -m apt_repository -a "repo='deb [arch=amd64] http://10.67.51.164/zabbix3.2 trusty main' state=present filename=zabbix3.2"
+ansible controller-prod -m apt_repository -a "repo='deb [arch=amd64] http://10.67.51.164/zabbix3.4 trusty main' state=present filename=zabbix3.4"
 ansible 10.20.0.21 -m apt_key -a "id=A14FE591 url=http://10.67.51.164/aptkey/082AB56BA14FE591 state=present"
 
 ###need sudo ###
@@ -18,6 +18,12 @@ ansible 10.67.49.161 -u tjadmin -b -m apt -a "name=zabbix-sender state=present"
 ansible 10.67.49.161 -u tjadmin -b -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
 ansible 10.67.49.161 -u tjadmin -b -m cron -a "user=root minute=*/1 job='/etc/zabbix/zabbix_agentd.d/pageinout.sh'"
 
+#proxy centos7###
+ansible rancher-worker -m copy -a "src=/etc/yum.conf dest=/etc/yum.conf"
+ansible rancher-worker -m shell -a "yum clean all;yum repolist"
+ansible worker -m copy -a "src=/root/ansible-common/http-proxy.conf dest=/etc/systemd/system/docker.service.d/http-proxy.conf"
+ansible worker -m shell -a "systemctl daemon-reload;systemctl restart docker"
+ansible worker -m shell -a "docker info | grep Proxy"
 
 
 # Update repositories cache and install "foo" package

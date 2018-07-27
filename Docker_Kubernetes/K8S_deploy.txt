@@ -425,6 +425,20 @@ cp cesbg.foxconn.crt /etc/pki/ca-trust/source/anchors/reg.yourdomain.com.crt
 update-ca-trust
 4.5 try:  docker login harbor.cesbg.foxconn
 
+4.4 另一種方式配置docker客戶端登陸harbor.cesbg.foxconn
+SELF SIGNED CERTIFICATES
+In order to use a self signed certificate with a registry, you’ll need to configure your Docker daemon on your host(s). 
+DOMAIN and PORT are the domain and port where the private registry is hosted.
+
+# Download the certificate from the domain
+$ openssl s_client -showcerts -connect ${DOMAIN}:${PORT} </dev/null 2>/dev/null|openssl x509 -outform PEM >ca.crt
+# Copy the certificate to the appropriate directories
+$ cp ca.crt /etc/docker/certs.d/${DOMAIN}/ca.crt
+# Append the certificate to a file
+$ cat ca.crt | tee -a /etc/ssl/certs/ca-certificates.crt
+# Restart the docker service to have the changes take affect
+$ systemctl restart docker
+
 六 安裝配置helm & tiller     
 要求：Kubernetes1.5以上版本
 1 首先需要安装helm客户端

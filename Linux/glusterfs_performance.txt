@@ -1,0 +1,192 @@
+Gluster Disk configuration
+1 Hardware RAID
+RAID 6 provides better space efficiency, good read performance and good performance for sequential writes to large files.
+However, RAID 6 performance for small file writes and random writes tends to be lower than RAID 10. 
+If the workload is strictly small files, then RAID 10 is the optimal configuration.
+
+An important parameter in hardware RAID configuration is the stripe unit size. With thin provisioned disks, the
+choice of RAID stripe unit size is closely related to the choice of thin-provisioning chunk size.
+
+For RAID 10, a stripe unit size of 256 KiB is recommended.
+For RAID 6, the stripe unit size must be chosen such that the full stripe size (stripe unit * number of data
+disks) is between 1 MiB and 2 MiB, preferably in the lower end of the range. Hardware RAID controllers
+usually allow stripe unit sizes that are a power of 2. For RAID 6 with 12 disks (10 data disks), the
+recommended stripe unit size is 128KiB.
+
+2 Brick Configuration
+2.1 LVM layer
+2.1.1 Creating the Physical Volume
+Align the I/O at the Logical Volume Manager (LVM) layer using --dataalignment
+option while creating the physical volume.
+
+In case of hardware RAID, the alignment_value should be obtained by multiplying the RAID stripe
+unit size with the number of data disks. If 12 disks are used in a RAID 6 configuration, the number
+of data disks is 10; on the other hand, if 12 disks are used in a RAID 10 configuration, the number
+of data disks is 6.
+For example, the following command is appropriate for 12 disks in a RAID 6 configuration with a
+stripe unit size of 128 KiB:
+# pvcreate --dataalignment 1280k disk
+The following command is appropriate for 12 disks in a RAID 10 configuration with a stripe unit
+size of 256 KiB:
+# pvcreate --dataalignment 1536k disk
+
+2.1.2 Creating the Volume Group
+For hardware RAID, in order to ensure that logical volumes created in the volume group are
+aligned with the underlying RAID geometry, it is important to use the -- physicalextentsize
+option. Execute the vgcreate command in the following format:
+# vgcreate --physicalextentsize extent_size VOLGROUP physical_volume
+The extent_size should be obtained by multiplying the RAID stripe unit size with the number of
+data disks. If 12 disks are used in a RAID 6 configuration, the number of data disks is 10; on the
+other hand, if 12 disks are used in a RAID 10 configuration, the number of data disks is 6.
+Chapter 13. Configuring Red Hat Gluster Storage for Enhancing Performance
+205
+For example, run the following command for RAID-6 storage with a stripe unit size of 128 KB, and
+12 disks (10 data disks):
+# vgcreate --physicalextentsize 1280k VOLGROUP physical_volume
+
+2.1.3 Creating the Thin Pool
+A thin pool provides a common pool of storage for thin logical volumes (LVs) and their snapshot
+volumes, if any.
+Execute the following command to create a thin-pool:
+# lvcreate --thinpool VOLGROUP/thin_pool --size <pool_size> --
+chunksize <chunk_size> --poolmetadatasize <meta_size> --zero n
+Recommended parameter values for thin pool creation
+poolmetadatasize
+Internally, a thin pool contains a separate metadata device that is used to track the
+(dynamically) allocated regions of the thin LVs and snapshots. The
+poolmetadatasize option in the above command refers to the size of the pool meta
+data device.
+The maximum possible size for a metadata LV is 16 GiB. Red Hat Gluster Storage
+recommends creating the metadata device of the maximum supported size. You can
+allocate less than the maximum if space is a concern, but in this case you should
+allocate a minimum of 0.5% of the pool size.
+chunksize
+An important parameter to be specified while creating a thin pool is the chunk
+size,which is the unit of allocation. For good performance, the chunk size for the thin
+pool and the parameters of the underlying hardware RAID storage should be chosen so
+that they work well together.
+For RAID-6 storage, the striping parameters should be chosen so that the full stripe
+size (stripe_unit size * number of data disks) is between 1 MiB and 2 MiB, preferably in
+the low end of the range. The thin pool chunk size should be chosen to match the RAID
+6 full stripe size. Matching the chunk size to the full stripe size aligns thin pool
+allocations with RAID 6 stripes, which can lead to better performance. Limiting the
+chunk size to below 2 MiB helps reduce performance problems due to excessive copyon-
+write when snapshots are used.
+For example, for RAID 6 with 12 disks (10 data disks), stripe unit size should be chosen
+as 128 KiB. This leads to a full stripe size of 1280 KiB (1.25 MiB). The thin pool should
+then be created with the chunk size of 1280 KiB.
+For RAID 10 storage, the preferred stripe unit size is 256 KiB. This can also serve as
+the thin pool chunk size. Note that RAID 10 is recommended when the workload has a
+large proportion of small file writes or random writes. In this case, a small thin pool
+chunk size is more appropriate, as it reduces copy-on-write overhead with snapshots.
+Administration Guide
+206
+For JBOD, use a thin pool chunk size of 256 KiB.
+block zeroing
+By default, the newly provisioned chunks in a thin pool are zeroed to prevent data
+leaking between different block devices. In the case of Red Hat Gluster Storage, where
+data is accessed via a file system, this option can be turned off for better performance
+with the --zero n option. Note that n does not need to be replaced.
+The following example shows how to create the thin pool:
+lvcreate --thinpool VOLGROUP/thin_pool --size 800g --
+chunksize 1280k --poolmetadatasize 16G --zero n
+Creating a Thin Logical Volume
+After the thin pool has been created as mentioned above, a thinly provisioned logical volume can
+be created in the thin pool to serve as storage for a brick of a Red Hat Gluster Storage volume.
+LVM allows multiple thinly-provisioned LVs to share a thin pool; this allows a common pool of
+physical storage to be used for multiple Red Hat Gluster Storage bricks and simplifies
+provisioning. However, such sharing of the thin pool metadata and data devices can impact
+performance in a number of ways.
+Note
+To avoid performance problems resulting from the sharing of the same thin pool, Red Hat
+Gluster Storage recommends that the LV for each Red Hat Gluster Storage brick have a
+dedicated thin pool of its own. As Red Hat Gluster Storage volume snapshots are created,
+snapshot LVs will get created and share the thin pool with the brick LV
+lvcreate --thin --name LV_name --virtualsize LV_size
+VOLGROUP/thin_pool
+2. XFS Inode Size
+As Red Hat Gluster Storage makes extensive use of extended attributes, an XFS inode size of 512
+bytes works better with Red Hat Gluster Storage than the default XFS inode size of 256 bytes. So,
+inode size for XFS must be set to 512 bytes while formatting the Red Hat Gluster Storage bricks. To
+set the inode size, you have to use -i size option with the mkfs.xfs command as shown in the
+following Logical Block Size for the Directory section.
+3. XFS RAID Alignment
+When creating an XFS file system, you can explicitly specify the striping parameters of the underlying
+storage in the following format:
+mkfs.xfs other_options -d
+su=stripe_unit_size,sw=stripe_width_in_number_of_disks device
+For RAID 6, ensure that I/O is aligned at the file system layer by providing the striping parameters.
+For RAID 6 storage with 12 disks, if the recommendations above have been followed, the values
+must be as following:
+Chapter 13. Configuring Red Hat Gluster Storage for Enhancing Performance
+207
+# mkfs.xfs other_options -d su=128k,sw=10 device
+For RAID 10 and JBOD, the -d su=<>,sw=<> option can be omitted. By default, XFS will use the
+thin-p chunk size and other parameters to make layout decisions.
+4. Logical Block Size for the Directory
+An XFS file system allows to select a logical block size for the file system directory that is greater
+than the logical block size of the file system. Increasing the logical block size for the directories from
+the default 4 K, decreases the directory I/O, which in turn improves the performance of directory
+operations. To set the block size, you need to use -n size option with the mkfs.xfs command as
+shown in the following example output.
+Following is the example output of RAID 6 configuration along with inode and block size options:
+# mkfs.xfs -f -i size=512 -n size=8192 -d su=128k,sw=10 logical volume
+meta-data=/dev/mapper/gluster-brick1 isize=512 agcount=32,
+agsize=37748736 blks
+= sectsz=512 attr=2, projid32bit=0
+data = bsize=4096 blocks=1207959552, imaxpct=5
+= sunit=32 swidth=320 blks
+naming = version 2 bsize=8192 ascii-ci=0
+log =internal log bsize=4096 blocks=521728, version=2
+= sectsz=512 sunit=32 blks, lazy-count=1
+realtime =none extsz=4096 blocks=0, rtextents=0
+5. Allocation Strategy
+inode32 and inode64 are two most common allocation strategies for XFS. With inode32 allocation
+strategy, XFS places all the inodes in the first 1 TiB of disk. With larger disk, all the inodes would be
+stuck in first 1 TiB. inode32 allocation strategy is used by default.
+With inode64 mount option inodes would be replaced near to the data which would be minimize the
+disk seeks.
+To set the allocation strategy to inode64 when file system is being mounted, you need to use -o
+inode64 option with the mkfs.xfs command as shown in the following Access Time section.
+6. Access Time
+If the application does not require to update the access time on files, than file system must always be
+mounted with noatime mount option. For example:
+# mount -t xfs -o inode64,noatime <logical volume> <mount point>
+This optimization improves performance of small-file reads by avoiding updates to the XFS inodes
+when files are read.
+/etc/fstab entry for option E + F
+<logical volume> <mount point>xfs inode64,noatime 0 0
+7. Performance tuning option in Red Hat Gluster Storage
+Administration Guide
+208
+A tuned profile is designed to improve performance for a specific use case by tuning system
+parameters appropriately. Red Hat Gluster Storage includes tuned profiles tailored for its workloads.
+These profiles are available in both Red Hat Enterprise Linux 6 and Red Hat Enterprise Linux 7.
+Table 13.1. Recommended Profiles for Different Workloads
+Workload Profile Name
+Large-file, sequential I/O workloads rhgs-sequential-io
+Small-file workloads rhgs-random-io
+Random I/O workloads rhgs-random-io
+Earlier versions of Red Hat Gluster Storage on Red Hat Enterprise Linux 6 recommended tuned
+profiles rhs-high-throughput and rhs-virtualization. These profiles are still available on
+Red Hat Enterprise Linux 6. However, switching to the new profiles is recommended.
+To apply tunings contained in the tuned profile, run the following command after creating a Red Hat
+Gluster Storage volume.
+tuned-adm profile profile-name
+For example:
+tuned-adm profile rhgs-sequential-io
+8. Writeback caching
+For small-file and random write performance, we strongly recommend writeback cache, that is, nonvolatile
+random-access memory (NVRAM) in your storage controller. For example, normal Dell and
+HP storage controllers have it. Ensure that NVRAM is enabled, that is, the battery is working. Refer
+your hardware documentation for details on enabling NVRAM.
+Do not enable writeback caching in the disk drives, this is a policy where the disk drive considers the
+write is complete before the write actually made it to the magnetic media (platter). As a result, the
+disk write cache might lose its data during a power failure or even loss of metadata leading to file
+system corruption.
+9. Allocation groups
+Each XFS file system is partitioned into regions called allocation groups. Allocation groups are
+similar to the block groups in ext3, but allocation groups are much larger than block groups and are
+used for scalability and parallelism rather than disk locality. The default allocation for an allocation
+group is 1 TiB.
+Allocation

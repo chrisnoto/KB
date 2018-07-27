@@ -30,6 +30,10 @@ http://10.67.37.234:8443/api/v1/namespaces/default/services/my-nginx/proxy/
 
 5 Ingress方式       http/https lb
 前提： 配置域名解析    域名要指向backend service
+############proxy############
+kubectl proxy       將本機某個端口號映射到apiserver，  http
+apiserver proxy     通過api方式訪問pod, service等
+kube proxy        通過iptable，使對service的請求轉發到後端pod，或service 端口 NAT到worker的ip+ nodeport 端口
 
 ###########jsonpath範例####
 [root@k8sv17 ~]# kubectl get nodes -o jsonpath='{range .items[*]}{.spec.externalID}{"\t"}{.spec.podCIDR}{"\n"}{end}'
@@ -96,11 +100,35 @@ kubectl config use-context defaul
 1. OpenStack作为Kubernetes Provider，因为需要从Nova查询Pod所在的机器
 2. 官方文档中所说的那些要求
 
-###### k8s的各種port #######
-<cluster ip>:port 是提供给集群内部客户访问service的入口
+###### service yaml里定義的各種port #######
+<cluster ip>: port 是提供给集群内部客户访问service的入口. port是service的虛端口
 <nodeIP>:nodePort 是提供给集群外部客户访问service的入口
-targetPort很好理解，targetPort是pod上的端口，从port和nodePort上到来的数据最终经过kube-proxy流入到后端pod的targetPort上进入容器。
+targetPort  targetPort是pod上的端口。 maps a service port to backend containerPorts
+从port和nodePort上到来的数据最终经过kube-proxy流入到后端pod的targetPort上进入容器。
 
+###### pod yaml里定義的各種port #######
+containerPort  容器需要監聽的端口號
+hostPort 容器所在主機需要監聽的端口號，默認與containerPort相同
+
+Endpoint= Pod IP + containerPort
+
+容易混淆的概念：
+1、NodePort和port
+
+前者是将服务暴露给外部用户使用并在node上、后者则是为内部组件相互通信提供服务的，是在service上的端口。
+
+2、targetPort
+targetPort是pod上的端口，用来将pod内的container与外部进行通信的端口
+
+3、port、NodePort、ContainerPort和targetPort在哪儿？
+
+port在service上，负责处理对内的通信，clusterIP:port
+
+NodePort在node上，负责对外通信，NodeIP:NodePort
+
+ContainerPort在容器上，用于被pod绑定
+
+targetPort在pod上、负责与kube-proxy代理的port和Nodeport数据进行通信
 ######綁定機器運行pod######
 A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
  If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes 
