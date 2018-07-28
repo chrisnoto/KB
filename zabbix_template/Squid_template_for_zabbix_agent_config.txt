@@ -1,0 +1,46 @@
+#Squid 3.4 template
+
+# Cache information for squid:
+UserParameter=squid.disk_hits_as_of_hit_requests,squidclient mgr:info 2>&1|grep 'Disk hits as % of hit requests:'|cut -d':' -f3|cut -d',' -f1|tr -d ' %'
+UserParameter=squid.hits_as_of_all_requests,squidclient mgr:info 2>&1|grep 'Hits as % of all requests:'|cut -d':' -f3|cut -d',' -f1|tr -d ' %'
+UserParameter=squid.hits_as_of_bytes_sent,squidclient mgr:info 2>&1|grep 'Hits as % of bytes sent:'|cut -d':' -f3|cut -d',' -f1|tr -d ' %'
+UserParameter=squid.mean_object_size,squidclient mgr:info 2>&1|grep 'Mean Object Size:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.memory_hits_as_of_hit_requests,squidclient mgr:info 2>&1|grep 'Memory hits as % of hit requests:'|cut -d':' -f3|cut -d',' -f1|tr -d ' %'
+UserParameter=squid.storage_mem_capacity,squidclient mgr:info 2>&1|grep 'Storage Mem capacity:'|cut -d':' -f2|awk '{print $1}'|tr -d ' %'
+UserParameter=squid.storage_mem_size,squidclient mgr:info 2>&1|grep 'Storage Mem size:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.storage_swap_capacity,squidclient mgr:info 2>&1|grep 'Storage Swap capacity:'|cut -d':' -f2|awk '{print $1}'|tr -d ' %'
+UserParameter=squid.storage_swap_size,squidclient mgr:info 2>&1|grep 'Storage Swap size:'|cut -d':' -f2|awk '{print $1}'
+
+# Connection information for squid
+UserParameter=squid.average_http_requests_per_minute_since_start,squidclient mgr:info 2>&1|grep 'Average HTTP requests per minute since start:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.average_icp_messages_per_minute_since_start,squidclient mgr:info 2>&1|grep 'Average ICP messages per minute since start:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_clients_accessing_cache,squidclient mgr:info 2>&1|grep 'Number of clients accessing cache:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_htcp_messages_received,squidclient mgr:info 2>&1|grep 'Number of HTCP messages received:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_htcp_messages_sent,squidclient mgr:info 2>&1|grep 'Number of HTCP messages sent:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_http_requests_received,squidclient mgr:info 2>&1|grep 'Number of HTTP requests received:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_icp_messages_received,squidclient mgr:info 2>&1|grep 'Number of ICP messages received:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_icp_messages_sent,squidclient mgr:info 2>&1|grep 'Number of ICP messages sent:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.number_of_queued_icp_replies,squidclient mgr:info 2>&1|grep 'Number of queued ICP replies:'|cut -d':' -f2| tr -d ' \t'
+UserParameter=squid.request_failure_ratio,squidclient mgr:info 2>&1|grep 'Request failure ratio:'|cut -d':' -f2| tr -d ' \t'
+
+# File descriptor usage for squid
+UserParameter=squid.available_number_of_file_descriptors,squidclient mgr:info 2>&1|grep 'Available number of file descriptors:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.files_queued_for_open,squidclient mgr:info 2>&1|grep 'Files queued for open:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.largest_file_desc_currently_in_use,squidclient mgr:info 2>&1|grep 'Largest file desc currently in use:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.maximum_number_of_file_descriptors,squidclient mgr:info 2>&1|grep 'Maximum number of file descriptors:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.number_of_file_desc_currently_in_use,squidclient mgr:info 2>&1|grep 'Number of file desc currently in use:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.reserved_number_of_file_descriptors,squidclient mgr:info 2>&1|grep 'Reserved number of file descriptors:'|cut -d':' -f2|awk '{print $1}'
+UserParameter=squid.store_disk_files_open,squidclient mgr:info 2>&1|grep 'Store Disk files open:'|cut -d':' -f2|awk '{print $1}'
+
+# Median Service Times (seconds)
+UserParameter=squid.cache_hits,squidclient mgr:info 2>&1|grep 'Cache Hits:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.cache_misses,squidclient mgr:info 2>&1|grep 'Cache Misses:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.dns_lookups,squidclient mgr:info 2>&1|grep 'DNS Lookups:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.http_requests_all,squidclient mgr:info 2>&1|grep 'HTTP Requests (All):'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.icp_queries,squidclient mgr:info 2>&1|grep 'ICP Queries:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.near_hits,squidclient mgr:info 2>&1|grep 'Near Hits:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+UserParameter=squid.not_modified_replies,squidclient mgr:info 2>&1|grep 'Not-Modified Replies:'|cut -d':' -f2|tr -s ' '|awk '{print $1}'
+
+# Resource usage for squid
+UserParameter=squid.cpu_usage,squidclient mgr:info 2>&1|grep 'CPU Usage:'|cut -d':' -f2|tr -d '%'|tr -d ' \t'
+UserParameter=squid.maximum_resident_size,squidclient mgr:info 2>&1|grep 'Maximum Resident Size:'|cut -d':' -f2|awk '{print $1}'

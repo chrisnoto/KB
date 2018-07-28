@@ -433,9 +433,10 @@ DOMAIN and PORT are the domain and port where the private registry is hosted.
 # Download the certificate from the domain
 $ openssl s_client -showcerts -connect ${DOMAIN}:${PORT} </dev/null 2>/dev/null|openssl x509 -outform PEM >ca.crt
 # Copy the certificate to the appropriate directories
-$ cp ca.crt /etc/docker/certs.d/${DOMAIN}/ca.crt
+$ cp ca.crt /etc/docker/certs.d/${DOMAIN}/ca.crt     
 # Append the certificate to a file
-$ cat ca.crt | tee -a /etc/ssl/certs/ca-certificates.crt
+$ cat ca.crt | tee -a /etc/ssl/certs/ca-certificates.crt     (有問題！！！ rancher-docker里無法從dockerhub里docker pull image，
+Get https://registry-1.docker.io/v2/: x509: certificate signed by unknown authority。 刪除這個證書后恢復正常)
 # Restart the docker service to have the changes take affect
 $ systemctl restart docker
 
