@@ -1,0 +1,6 @@
+[centos:children]
+centos7
+
+[centos7]
+10.67.36.72
+

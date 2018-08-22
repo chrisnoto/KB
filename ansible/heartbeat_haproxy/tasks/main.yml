@@ -1,0 +1,50 @@
+---
+
+- name: install heartbeat and haproxy package
+  yum: name={{ item }} state=present
+  with_items:
+  - heartbeat
+  - haproxy
+
+- name: disable eth0
+  command: /sbin/ifdown eth0
+#  when: ansible_eth0.active == 'true'
+  when: ansible_eth0.active
+
+- name: allow haproxy to bind to the shared IP address
+  lineinfile: dest=/etc/sysctl.conf line='net.ipv4.ip_nonlocal_bind = 1'
+  notify:
+    - command: sysctl -p
+
+- name: configure /etc/sysconfig/rsyslog
+  lineinfile: dest=/etc/sysconfig/rsyslog regexp=^SYSLOGD_OPTIONS= line="SYSLOGD_OPTIONS=\"-c2 -r -x\""
+
+- name: configure /etc/rsyslog.conf
+  lineinfile: dest=/etc/rsyslog.conf line={{ item.line }}
+  with_items:
+   - line: '$ModLoad\ immark'
+   - line: '$ModLoad\ imudp'
+   - line: '$UDPServerRun\ 514'
+   - line: 'local2.*\ /var/log/haproxy.log'
+  notify:
+   - restart rsyslog
+
+- name: configure haproxy
+  template: src=haproxy.cfg.j2 dest=/etc/haproxy/haproxy.cfg
+#  notify:
+#   - reload haproxy
+
+- name: copy authkeys to /etc/ha.d/
+  copy: src=authkeys dest=/etc/ha.d/authkeys mode=0600
+
+- name: configure heartbeat service
+  template: src={{ item }}.j2 dest=/etc/ha.d/{{ item }}
+  with_items:
+   - ha.cf
+   - haresources
+  notify:
+   - restart heartbeat
+
+- name: make sure heartbeat service started
+  service: name=heartbeat state=started
+

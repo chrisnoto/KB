@@ -1,0 +1,7 @@
+---
+- name: initial system
+  hosts: all
+  become: true
+
+  roles:
+   - common

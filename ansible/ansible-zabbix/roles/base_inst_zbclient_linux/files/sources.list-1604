@@ -1,0 +1,4 @@
+deb [arch=amd64] http://10.67.51.164/ubuntu xenial main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/ubuntu xenial-updates main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/ubuntu xenial-security main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/zabbix3.2 xenial main

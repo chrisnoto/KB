@@ -1,0 +1,7 @@
+---
+- name: install and confiure zabbix agent on Linux
+  hosts: centos7
+  become: true
+
+  roles:
+   - base_inst_zbclient_linux

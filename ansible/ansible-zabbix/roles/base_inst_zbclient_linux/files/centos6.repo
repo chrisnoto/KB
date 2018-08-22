@@ -1,0 +1,41 @@
+[base]
+name=CentOS-6 - Base
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.os
+enabled=1
+gpgcheck=0
+priority=10
+
+[extras]
+name=CentOS-6 - Extras
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.extras
+enabled=1
+gpgcheck=0
+priority=10
+
+[updates]
+name=CentOS-6 - Updates
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.updates
+enabled=1
+gpgcheck=0
+priority=10
+
+[epel]
+name=Extra Packages for Enterprise Linux 6
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.epel
+enabled=1
+gpgcheck=0
+priority=10
+
+[mariadb10.1]
+name=Extra Packages for Enterprise Linux 6 - MariaDB 10.1
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.mariadb
+enabled=1
+gpgcheck=0
+priority=10
+
+[zabbix3.2]
+name=Zabbix Official Repository - $basearch
+baseurl=http://10.67.51.164/mrepo/CentOS6-x86_64/RPMS.zabbix3.2
+enabled=1
+gpgcheck=0
+

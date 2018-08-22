@@ -1,0 +1,49 @@
+---
+
+- name: initial repo for trusty
+  copy:
+    src: sources.list-1404
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_major_version == "14"
+
+- name: initial repo for xenial
+  copy:
+    src: sources.list-1604
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_major_version == "16"
+
+- name: initial repo for centos6
+  copy:
+    src: centos6.repo
+    dest: /etc/yum.repos.d/local.repo
+  when: ansible_distribution_major_version == "6"
+
+- name: initial repo for centos7
+  copy:
+    src: centos7.repo
+    dest: /etc/yum.repos.d/local.repo
+  when: ansible_distribution_major_version == "7"
+
+- name: install net-tools and sysstat for centos
+  yum: name={{ item }} update_cache=yes
+  with_items:
+  - net-tools
+  - sysstat
+  when: ansible_pkg_mgr == "yum"
+
+- name: install net-tools and sysstat for ubuntu
+  apt: name={{ item }} update_cache=yes
+  with_items:
+  - net-tools
+  - sysstat
+  when: ansible_pkg_mgr == "apt"
+
+- name: add history timestamp in /etc/profile
+  lineinfile:
+    dest: /etc/profile
+    state: present
+    regexp: '^HISTTIMEFORMAT'
+    line: 'HISTTIMEFORMAT="%d/%m/%y %T "'
+  tags:
+    - timestamp
+

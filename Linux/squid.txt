@@ -1,0 +1,49 @@
+
+acl localnet src 10.0.0.0/8     # RFC1918 possible internal network
+acl localnet src 172.16.0.0/12  # RFC1918 possible internal network
+acl localnet src 192.168.0.0/16 # RFC1918 possible internal network
+acl localnet src fc00::/7       # RFC 4193 local private network range
+acl localnet src fe80::/10      # RFC 4291 link-local (directly plugged) machines
+acl managerAdmin src 10.67.36.65 10.67.242.98
+acl SSL_ports port 443
+acl Safe_ports port 80          # http
+acl Safe_ports port 21          # ftp
+acl Safe_ports port 443         # https
+acl Safe_ports port 70          # gopher
+acl Safe_ports port 210         # wais
+acl Safe_ports port 1025-65535  # unregistered ports
+acl Safe_ports port 280         # http-mgmt
+acl Safe_ports port 488         # gss-http
+acl Safe_ports port 591         # filemaker
+acl Safe_ports port 777         # multiling http
+acl CONNECT method CONNECT
+自身作為下一級代理，連接上一層10.67.50.59
+cache_peer 10.67.50.59 parent 808 0 no-query default
+never_direct allow all
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localhost manager
+http_access allow managerAdmin manager
+http_access deny manager
+cachemgr_passwd Foxconn123 all all
+http_access allow localnet
+http_access allow localhost
+http_access deny all
+http_port 3128
+cache設置
+cache_dir ufs /var/spool/squid 2000 16 256
+cache_mem 1 GB
+memory_replacement_policy heap LFUDA
+cache_replacement_policy heap LFUDA
+coredump_dir /var/spool/squid
+
+
+
+
+squid不緩存yum/apt源的metadata，只緩存包
+refresh_pattern (Release|Packages(.gz)*)$      0       20%     2880
+refresh_pattern (\.xml|xml\.gz)$      0       20%     2880
+refresh_pattern ((sqlite.bz2)*)$      0       20%     2880
+refresh_pattern (\.deb|\.udeb)$   1296000 100% 1296000
+refresh_pattern (\.rpm|\.srpm)$   1296000 100% 1296000
+refresh_pattern .        0    20%    4320

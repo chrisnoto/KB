@@ -1,0 +1,10 @@
+---
+
+#- name: reload haproxy
+#  service: name=haproxy state=reload
+#
+- name: restart rsyslog
+  service: name=rsyslog state=restarted
+
+- name: restart heartbeat
+  service: name=heartbeat state=restarted

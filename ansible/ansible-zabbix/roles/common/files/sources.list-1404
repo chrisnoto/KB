@@ -1,0 +1,4 @@
+deb [arch=amd64] http://10.67.51.164/ubuntu trusty main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/ubuntu trusty-updates main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/ubuntu trusty-security main multiverse restricted universe
+deb [arch=amd64] http://10.67.51.164/zabbix3.2 trusty main
