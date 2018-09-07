@@ -1,3 +1,9 @@
+############无法安装过期的docker-ce 17.03
+A new obsoletes restriction was introduced in docker-ce 17.03.0 and it looks like the yum repo is applying it to all versions of the docker-ce indiscriminately. 
+To work around this when installing older versions of docker-ce, you can pass a flag to ignore obsoletes:
+
+$ yum install -y --setopt=obsoletes=0 docker-ce-17.03.2.ce 
+
 docker stop e104
 docker create --volumes-from e104f49bc05f --name rancher-stable-data rancher/rancher:v2.0.2
 docker run -d --volumes-from rancher-stable-data --restart=unless-stopped -p 80:80 -p 443:443 -e "http_proxy=http://10.67.36.72:3128" -e "https_proxy=http://10.67.36.72:3128" rancher/rancher:stable

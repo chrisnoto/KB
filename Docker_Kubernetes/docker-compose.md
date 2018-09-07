@@ -27,24 +27,6 @@ services:
     image: redis
 ```
 
-### Commands
-
-```sh
-docker-compose start
-docker-compose stop
-```
-
-```sh
-docker-compose pause
-docker-compose unpause
-```
-
-```sh
-docker-compose ps
-docker-compose up
-docker-compose down
-```
-
 ## Reference
 {: .-one-column}
 
@@ -154,4 +136,32 @@ services:
   web:
     extra_hosts:
       - "somehost:192.168.1.100"
+```
+
+### another example
+```yaml
+version: '3'
+
+services:
+  db:
+    image: mysql:5.6
+    expose:
+      - 3306
+    volumes:
+      - data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=Foxconn123
+  web:
+    build:
+      context: ./web
+      args:
+        http_proxy: "http://10.62.32.27:33128"
+    image: gatekeeper_web:1.0
+    command: python2 manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+volumes:
+  data: {}
 ```

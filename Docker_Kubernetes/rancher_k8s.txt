@@ -1,0 +1,41 @@
+###rancher部署k8s集群
+# 1 启动rancher server
+[root@rancher ~]# cat run.sh
+docker run -d --restart=unless-stopped \
+  -p 80:80 -p 443:443 \
+  -v /rancher:/var/lib/rancher \
+  -e HTTP_PROXY="http://10.67.36.72:3128" \
+  -e HTTPS_PROXY="http://10.67.36.72:3128" \
+  -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
+  rancher/rancher:v2.0.8
+# 2 启动后增加节点顺序
+1 master -> 3 workers -> 2 masters
+
+###rancher UI里检查catalog apps是否可用
+###检查k8s集群
+#通过api检查nodes
+https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
+#检查etcd集群是否正常
+进入etcd容器，执行
+/var/lib/rancher/etcd/member # etcdctl --write-out=table --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 endpoint status
++------------------+------------------+---------+---------+-----------+-----------+------------+
+|     ENDPOINT     |        ID        | VERSION | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
++------------------+------------------+---------+---------+-----------+-----------+------------+
+| 10.67.36.62:2379 | dc361e140416a18e |  3.2.18 |  6.9 MB |     false |         8 |      30684 |
+| 10.67.36.63:2379 | cfbab3c5ebe25d13 |  3.2.18 |  7.1 MB |     false |         8 |      30684 |
+| 10.67.36.64:2379 | 4b174bdabdf3eb3b |  3.2.18 |  7.1 MB |      true |         8 |      30684 |
++------------------+------------------+---------+---------+-----------+-----------+------------+
+
+/var/lib/rancher/etcd/member # etcdctl --write-out=table --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 member list
++------------------+---------+--------------+--------------------------+---------------------------------------------------+
+|        ID        | STATUS  |     NAME     |        PEER ADDRS        |                   CLIENT ADDRS                    |
++------------------+---------+--------------+--------------------------+---------------------------------------------------+
+| 4b174bdabdf3eb3b | started | etcd-master1 | https://10.67.36.64:2380 | https://10.67.36.64:2379,https://10.67.36.64:4001 |
+| cfbab3c5ebe25d13 | started | etcd-master2 | https://10.67.36.63:2380 | https://10.67.36.63:2379,https://10.67.36.63:4001 |
+| dc361e140416a18e | started | etcd-master3 | https://10.67.36.62:2380 | https://10.67.36.62:2379,https://10.67.36.62:4001 |
++------------------+---------+--------------+--------------------------+---------------------------------------------------+
+
+/var/lib/rancher/etcd/member # etcdctl --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 endpoint health
+10.67.36.62:2379 is healthy: successfully committed proposal: took = 4.795877ms
+10.67.36.64:2379 is healthy: successfully committed proposal: took = 17.200007ms
+10.67.36.63:2379 is healthy: successfully committed proposal: took = 3.932169ms
