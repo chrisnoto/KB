@@ -1,3 +1,17 @@
+##########docker设置timezone######
+[root@registry ~]# docker run -it --rm  -e 'TZ=Asia/Shanghai' centos:6.10
+[root@79e78b181715 /]# date
+Mon Oct 22 15:15:59 CST 2018
+[root@registry ~]# docker run -it --rm  -v /etc/localtime:/etc/localtime centos:6.10
+[root@17ccf79be77e /]# date
+Mon Oct 22 15:17:45 CST 2018
+[root@17ccf79be77e /]# ll /etc/localtime
+-rw-r--r--. 5 root root 388 Oct  8  2015 /etc/localtime
+[root@17ccf79be77e /]# cat /etc/localtime
+TZxxxxx
+CST-8
+
+
 ############无法安装过期的docker-ce 17.03
 A new obsoletes restriction was introduced in docker-ce 17.03.0 and it looks like the yum repo is applying it to all versions of the docker-ce indiscriminately. 
 To work around this when installing older versions of docker-ce, you can pass a flag to ignore obsoletes:
@@ -7,6 +21,23 @@ $ yum install -y --setopt=obsoletes=0 docker-ce-17.03.2.ce
 docker stop e104
 docker create --volumes-from e104f49bc05f --name rancher-stable-data rancher/rancher:v2.0.2
 docker run -d --volumes-from rancher-stable-data --restart=unless-stopped -p 80:80 -p 443:443 -e "http_proxy=http://10.67.36.72:3128" -e "https_proxy=http://10.67.36.72:3128" rancher/rancher:stable
+
+
+5. 使容器内时间与宿主机同步
+我们下载的很多容器内的时区都是格林尼治时间，与北京时间差8小时，这将导致容器内的日志和文件创建时间与实际时区不符，有两种方式解决这个问题：
+
+修改镜像中的时区配置文件
+将宿主机的时区配置文件/etc/localtime使用volume方式挂载到容器中
+第二种方式比较简单，不需要重做镜像，只要在应用的yaml文件中增加如下配置：
+
+volumeMounts:
+  - name: host-time
+    mountPath: /etc/localtime
+    readOnly: true
+  volumes:
+  - name: host-time
+    hostPath:
+      path: /etc/localtime
 
 用docker inspect查看容器的volume
 [root@rancher ~]# docker inspect --format '{{ .Mounts }}' 80c

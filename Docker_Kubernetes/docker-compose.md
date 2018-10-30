@@ -165,3 +165,17 @@ services:
 volumes:
   data: {}
 ```
+services: 
+    ngnix-service:
+        image: my-nginx-image
+        build: 
+            context: .
+            args: # Environment variables available at build-time
+                - http_proxy
+                - https_proxy
+                - no_proxy
+        environment: # Environment variables available at container run-time
+            - https_proxy
+            - http_proxy
+            - no_proxy
+        volumes: 

@@ -1,0 +1,17 @@
+filebeat配置
+[root@kvm-prod filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/messages*
+    - /var/log/history/root/.sh_history.root\:root
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+  host: "10.67.51.123:5601"
+output.elasticsearch:
+  hosts: ["10.67.51.123:9200"]

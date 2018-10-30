@@ -602,6 +602,8 @@ systemctl start glusterd
 10.67.37.234 k8sv17
 2 在node-1上安裝heketi heketi-client
 yum -y install heketi heketi-client
+vi /etc/systemd/system/multi-user.target.wants/heketi.service
+ExecStart=/usr/bin/heketi --config=/etc/heketi/heketi.json #modify
 systemctl daemon-reload
 systemctl start heketi
 3 Heketi使用SSH来配置GlusterFS的所有节点。创建SSH密钥对，将公钥拷贝到所有3个节点上（包括你登陆的第一个节点）：
@@ -764,4 +766,8 @@ parameters:
 NAME          TYPE
 glusterfs     kubernetes.io/glusterfs
 nfs-storage   fuseim.pri/ifs
+
+#作为glusterfs客户端的worker节点，要安装glusterfs客户端，否则pv总是pending
+yum -y install centos-release-gluster312
+yum install -y glusterfs glusterfs-fuse fuse fuse-libs openib libibverbs
 

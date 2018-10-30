@@ -1,21 +1,29 @@
 ###rancher部署k8s集群
+注意：重新部署k8s集群的时候，需要把rancher,master节点上的一些残留目录清空
+rancher:    /rancher
+master:
+/var/lib/etcd   /etc/kubernetes
+https://10.67.36.58/v1-telemetry   telemetry服务
 # 1 启动rancher server
 [root@rancher ~]# cat run.sh
 docker run -d --restart=unless-stopped \
   -p 80:80 -p 443:443 \
   -v /rancher:/var/lib/rancher \
+  -e TZ="Asia/Shanghai"
   -e HTTP_PROXY="http://10.67.36.72:3128" \
   -e HTTPS_PROXY="http://10.67.36.72:3128" \
   -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
   rancher/rancher:v2.0.8
 # 2 启动后增加节点顺序
 1 master -> 3 workers -> 2 masters
-
+检查master里容器是否都跑起来，有些容器需要较长时间跑起来
 ###rancher UI里检查catalog apps是否可用
 ###检查k8s集群
 #通过api检查nodes
 https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
 #检查etcd集群是否正常
+Can I curl the v3 api?
+No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to interact with the etcd v3 API.
 进入etcd容器，执行
 /var/lib/rancher/etcd/member # etcdctl --write-out=table --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 endpoint status
 +------------------+------------------+---------+---------+-----------+-----------+------------+
@@ -39,3 +47,290 @@ https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
 10.67.36.62:2379 is healthy: successfully committed proposal: took = 4.795877ms
 10.67.36.64:2379 is healthy: successfully committed proposal: took = 17.200007ms
 10.67.36.63:2379 is healthy: successfully committed proposal: took = 3.932169ms
+
+部署efk   (注意master如果没有worker角色，那么fluentd不会收集master的日志)
+前提：存在elasticsearch集群
+1 在cluster-level -> Tools -> logging
+选择elasticsearch 
+endpoint填写 http://10.67.36.53:9200
+保存
+结果：
+会建立pod fluentd和log-aggregator
+	
+2 在catalog apps里选择kibana    注意kibana version保持和elasticsearch一样 6.4.0
+在service discovery里增加record  external IP addresses
+elasticsearch  -> 10.67.36.53 10.67.36.51
+3 配置 kibana
+创建index patterns   new-*  对应配置logging时里的prefix
+
+
+部署glusterfs heketi-cli
+heketi db SOPF问题
+情景一  外部glusterfs, heketi-server容器化     方案是migrate heketi db到glusterfs volume
+情景二  glusterfs, heketi-server都容器化
+[root@gluster1 heketi]# lvs
+  LV                                     VG                                  Attr       LSize   Pool                                Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root                                   centos                              -wi-ao----  22.35g
+  swap                                   centos                              -wi-ao----  <5.59g
+  brick1                                 heketidb                            -wi-ao---- <20.00g
+  brick_4227a41de2561bd17269e54454704845 vg_aa9d70f56600d11de9ed9c398c05f4cd Vwi-aotz--  12.00g tp_4227a41de2561bd17269e54454704845        0.15
+  brick_c78b5fb2411212c4cc6374e26a7c5c5e vg_aa9d70f56600d11de9ed9c398c05f4cd Vwi-aotz--   2.00g tp_c78b5fb2411212c4cc6374e26a7c5c5e        0.71
+  brick_da9907f7322ec66c2714e756d047ef35 vg_aa9d70f56600d11de9ed9c398c05f4cd Vwi-aotz--  30.00g tp_da9907f7322ec66c2714e756d047ef35        0.07
+  tp_4227a41de2561bd17269e54454704845    vg_aa9d70f56600d11de9ed9c398c05f4cd twi-aotz--  12.00g                                            0.15   0.09
+  tp_c78b5fb2411212c4cc6374e26a7c5c5e    vg_aa9d70f56600d11de9ed9c398c05f4cd twi-aotz--   2.00g                                            0.71   0.33
+  tp_da9907f7322ec66c2714e756d047ef35    vg_aa9d70f56600d11de9ed9c398c05f4cd twi-aotz--  30.00g                                            0.07   0.05
+
+gluster volume create heketidb replica 2 transport tcp gluster1:/heketidb/brick1/brick gluster2:/heketidb/brick1/brick gluster3:/heketidb/brick1/brick gluster4:/heketidb/brick1/brick
+[root@gluster1 heketi]# heketi-cli cluster info e6a90db13971a778abb73f09c43f5d6a
+Cluster id: e6a90db13971a778abb73f09c43f5d6a
+Nodes:
+0080162b1804d256569b0760e48c32fd
+1ee55067a3b9428b85d74ff829ca5df1
+830793f7da758225c0a3a0f8ebeea014
+ed9080427e01ac56ad98bc3c211a9f14
+Volumes:
+2f02ea8c6e387852f6d4e13194978a23
+48206ff0ff345131460933a576132391
+d4ab7cc2eba1bde47eed7d6582b1f597
+f82e42144e5c30275ec881ff6c00395c
+Block: true
+
+File: true
+
+[root@gluster1 heketi]# heketi-cli device info 70bd998e153518829239df875d0b6147
+Device Id: 70bd998e153518829239df875d0b6147
+Name: /dev/sdb
+State: online
+Size (GiB): 59
+Used (GiB): 40
+Free (GiB): 19
+Bricks:
+Id:5d520c86168f010f49eb271e784a924a   Size (GiB):8       Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_5d520c86168f010f49eb271e784a924a/brick
+Id:81d27369af85a4ea0275b4940d98cf9f   Size (GiB):30      Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_81d27369af85a4ea0275b4940d98cf9f/brick
+Id:861115c5ba4b3e97829199ce1f98e23d   Size (GiB):2       Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_861115c5ba4b3e97829199ce1f98e23d/brick
+
+[root@gluster1 heketi]# heketi-cli volume info f82e42144e5c30275ec881ff6c00395c
+Name: vol_f82e42144e5c30275ec881ff6c00395c
+Size: 8
+Volume Id: f82e42144e5c30275ec881ff6c00395c
+Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+Mount: 10.67.36.56:vol_f82e42144e5c30275ec881ff6c00395c
+Mount Options: backup-volfile-servers=10.67.36.55,10.67.36.54,10.67.36.57
+Block: false
+Free Size: 0
+Block Volumes: []
+Durability Type: replicate
+Distributed+Replica: 2
+Snapshot Factor: 1.00
+
+[root@gluster1 heketi]# heketi-cli topology info
+
+Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+
+    File:  true
+    Block: true
+
+    Volumes:
+
+        Name: vol_2f02ea8c6e387852f6d4e13194978a23
+        Size: 2
+        Id: 2f02ea8c6e387852f6d4e13194978a23
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Mount: 10.67.36.56:vol_2f02ea8c6e387852f6d4e13194978a23
+        Mount Options: backup-volfile-servers=10.67.36.55,10.67.36.54,10.67.36.57
+        Durability Type: replicate
+        Replica: 2
+        Snapshot: Enabled
+        Snapshot Factor: 1.00
+
+                Bricks:
+                        Id: 861115c5ba4b3e97829199ce1f98e23d
+                        Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_861115c5ba4b3e97829199ce1f98e23d/brick
+                        Size (GiB): 2
+                        Node: 0080162b1804d256569b0760e48c32fd
+                        Device: 70bd998e153518829239df875d0b6147
+
+                        Id: c78b5fb2411212c4cc6374e26a7c5c5e
+                        Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_c78b5fb2411212c4cc6374e26a7c5c5e/brick
+                        Size (GiB): 2
+                        Node: ed9080427e01ac56ad98bc3c211a9f14
+                        Device: aa9d70f56600d11de9ed9c398c05f4cd
+
+
+        Name: vol_48206ff0ff345131460933a576132391
+        Size: 30
+        Id: 48206ff0ff345131460933a576132391
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Mount: 10.67.36.56:vol_48206ff0ff345131460933a576132391
+        Mount Options: backup-volfile-servers=10.67.36.55,10.67.36.54,10.67.36.57
+        Durability Type: replicate
+        Replica: 2
+        Snapshot: Enabled
+        Snapshot Factor: 1.00
+
+                Bricks:
+                        Id: 81d27369af85a4ea0275b4940d98cf9f
+                        Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_81d27369af85a4ea0275b4940d98cf9f/brick
+                        Size (GiB): 30
+                        Node: 0080162b1804d256569b0760e48c32fd
+                        Device: 70bd998e153518829239df875d0b6147
+
+                        Id: da9907f7322ec66c2714e756d047ef35
+                        Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_da9907f7322ec66c2714e756d047ef35/brick
+                        Size (GiB): 30
+                        Node: ed9080427e01ac56ad98bc3c211a9f14
+                        Device: aa9d70f56600d11de9ed9c398c05f4cd
+
+
+        Name: vol_d4ab7cc2eba1bde47eed7d6582b1f597
+        Size: 12
+        Id: d4ab7cc2eba1bde47eed7d6582b1f597
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Mount: 10.67.36.56:vol_d4ab7cc2eba1bde47eed7d6582b1f597
+        Mount Options: backup-volfile-servers=10.67.36.55,10.67.36.54,10.67.36.57
+        Durability Type: replicate
+        Replica: 2
+        Snapshot: Enabled
+        Snapshot Factor: 1.00
+
+                Bricks:
+                        Id: 4227a41de2561bd17269e54454704845
+                        Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_4227a41de2561bd17269e54454704845/brick
+                        Size (GiB): 12
+                        Node: ed9080427e01ac56ad98bc3c211a9f14
+                        Device: aa9d70f56600d11de9ed9c398c05f4cd
+
+                        Id: 9bb65d4e4a0775e03332fdf9f39c5211
+                        Path: /var/lib/heketi/mounts/vg_0b8f0b510246fd62719575799015518c/brick_9bb65d4e4a0775e03332fdf9f39c5211/brick
+                        Size (GiB): 12
+                        Node: 1ee55067a3b9428b85d74ff829ca5df1
+                        Device: 0b8f0b510246fd62719575799015518c
+
+
+        Name: vol_f82e42144e5c30275ec881ff6c00395c
+        Size: 8
+        Id: f82e42144e5c30275ec881ff6c00395c
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Mount: 10.67.36.56:vol_f82e42144e5c30275ec881ff6c00395c
+        Mount Options: backup-volfile-servers=10.67.36.55,10.67.36.54,10.67.36.57
+        Durability Type: replicate
+        Replica: 2
+        Snapshot: Enabled
+        Snapshot Factor: 1.00
+
+                Bricks:
+                        Id: 4b947e47b0d0438f470b0ae5e16d33a0
+                        Path: /var/lib/heketi/mounts/vg_22dce2dd9e7218c0225ecfaadd0a934d/brick_4b947e47b0d0438f470b0ae5e16d33a0/brick
+                        Size (GiB): 8
+                        Node: 830793f7da758225c0a3a0f8ebeea014
+                        Device: 22dce2dd9e7218c0225ecfaadd0a934d
+
+                        Id: 5d520c86168f010f49eb271e784a924a
+                        Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_5d520c86168f010f49eb271e784a924a/brick
+                        Size (GiB): 8
+                        Node: 0080162b1804d256569b0760e48c32fd
+                        Device: 70bd998e153518829239df875d0b6147
+
+
+    Nodes:
+
+        Node Id: 0080162b1804d256569b0760e48c32fd
+        State: online
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Zone: 1
+        Management Hostnames: gluster2
+        Storage Hostnames: 10.67.36.56
+        Devices:
+                Id:70bd998e153518829239df875d0b6147   Name:/dev/sdb            State:online    Size (GiB):59      Used (GiB):40      Free (GiB):19
+                        Bricks:
+                                Id:5d520c86168f010f49eb271e784a924a   Size (GiB):8       Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_5d520c                                                           86168f010f49eb271e784a924a/brick
+                                Id:81d27369af85a4ea0275b4940d98cf9f   Size (GiB):30      Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_81d273                                                           69af85a4ea0275b4940d98cf9f/brick
+                                Id:861115c5ba4b3e97829199ce1f98e23d   Size (GiB):2       Path: /var/lib/heketi/mounts/vg_70bd998e153518829239df875d0b6147/brick_861115                                                           c5ba4b3e97829199ce1f98e23d/brick
+
+        Node Id: 1ee55067a3b9428b85d74ff829ca5df1
+        State: online
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Zone: 1
+        Management Hostnames: gluster3
+        Storage Hostnames: 10.67.36.55
+        Devices:
+                Id:0b8f0b510246fd62719575799015518c   Name:/dev/sdb            State:online    Size (GiB):59      Used (GiB):12      Free (GiB):47
+                        Bricks:
+                                Id:9bb65d4e4a0775e03332fdf9f39c5211   Size (GiB):12      Path: /var/lib/heketi/mounts/vg_0b8f0b510246fd62719575799015518c/brick_9bb65d                                                           4e4a0775e03332fdf9f39c5211/brick
+
+        Node Id: 830793f7da758225c0a3a0f8ebeea014
+        State: online
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Zone: 1
+        Management Hostnames: gluster4
+        Storage Hostnames: 10.67.36.54
+        Devices:
+                Id:22dce2dd9e7218c0225ecfaadd0a934d   Name:/dev/sdb            State:online    Size (GiB):59      Used (GiB):8       Free (GiB):51
+                        Bricks:
+                                Id:4b947e47b0d0438f470b0ae5e16d33a0   Size (GiB):8       Path: /var/lib/heketi/mounts/vg_22dce2dd9e7218c0225ecfaadd0a934d/brick_4b947e                                                           47b0d0438f470b0ae5e16d33a0/brick
+
+        Node Id: ed9080427e01ac56ad98bc3c211a9f14
+        State: online
+        Cluster Id: e6a90db13971a778abb73f09c43f5d6a
+        Zone: 1
+        Management Hostnames: gluster1
+        Storage Hostnames: 10.67.36.57
+        Devices:
+                Id:aa9d70f56600d11de9ed9c398c05f4cd   Name:/dev/sdb            State:online    Size (GiB):59      Used (GiB):44      Free (GiB):15
+                        Bricks:
+                                Id:4227a41de2561bd17269e54454704845   Size (GiB):12      Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_4227a4                                                           1de2561bd17269e54454704845/brick
+                                Id:c78b5fb2411212c4cc6374e26a7c5c5e   Size (GiB):2       Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_c78b5f                                                           b2411212c4cc6374e26a7c5c5e/brick
+                                Id:da9907f7322ec66c2714e756d047ef35   Size (GiB):30      Path: /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_da9907                                                           f7322ec66c2714e756d047ef35/brick
+[root@gluster1 heketi]#
+[root@gluster1 heketi]# gluster volume list
+heketidb
+vol_2f02ea8c6e387852f6d4e13194978a23
+vol_48206ff0ff345131460933a576132391
+vol_d4ab7cc2eba1bde47eed7d6582b1f597
+vol_f82e42144e5c30275ec881ff6c00395c
+[root@gluster1 heketi]# gluster snapshot create snap1 vol_2f02ea8c6e387852f6d4e13194978a23
+snapshot create: success: Snap snap1_GMT-2018.10.13-00.04.04 created successfully
+[root@gluster1 heketi]# gluster snapshot info snap1_GMT-2018.10.13-00.04.04
+Snapshot                  : snap1_GMT-2018.10.13-00.04.04
+Snap UUID                 : 083943a7-c5dd-41c9-b3e9-6a82a07810b4
+Created                   : 2018-10-13 00:04:04
+Snap Volumes:
+
+        Snap Volume Name          : 42625709d17c4d4bad2fe9fda675ccdd
+        Origin Volume name        : vol_2f02ea8c6e387852f6d4e13194978a23
+        Snaps taken for vol_2f02ea8c6e387852f6d4e13194978a23      : 1
+        Snaps available for vol_2f02ea8c6e387852f6d4e13194978a23  : 255
+        Status                    : Stopped
+[root@gluster1 heketi]# gluster snapshot status snap1_GMT-2018.10.13-00.04.04
+
+Snap Name : snap1_GMT-2018.10.13-00.04.04
+Snap UUID : 083943a7-c5dd-41c9-b3e9-6a82a07810b4
+
+        Brick Path        :   10.67.36.57:/run/gluster/snaps/42625709d17c4d4bad2fe9fda675ccdd/brick1/brick
+        Volume Group      :   vg_aa9d70f56600d11de9ed9c398c05f4cd
+        Brick Running     :   No
+        Brick PID         :   N/A
+        Data Percentage   :   0.71
+        LV Size           :   2.00g
+
+
+        Brick Path        :   10.67.36.56:/run/gluster/snaps/42625709d17c4d4bad2fe9fda675ccdd/brick2/brick
+        Volume Group      :   vg_70bd998e153518829239df875d0b6147
+        Brick Running     :   No
+        Brick PID         :   N/A
+        Data Percentage   :   0.71
+        LV Size           :   2.00g
+[root@gluster1 brick]# df
+Filesystem                                                                             1K-blocks    Used Available Use% Mounted on
+/dev/mapper/centos-root                                                                 23425868 1779916  21645952   8% /
+devtmpfs                                                                                 2960688       0   2960688   0% /dev
+tmpfs                                                                                    2972680       0   2972680   0% /dev/shm
+tmpfs                                                                                    2972680  285600   2687080  10% /run
+tmpfs                                                                                    2972680       0   2972680   0% /sys/fs/cgroup
+/dev/sda1                                                                                 386724  175172    211552  46% /boot
+/dev/mapper/heketidb-brick1                                                             20957184   33104  20924080   1% /heketidb/brick1
+/dev/mapper/vg_aa9d70f56600d11de9ed9c398c05f4cd-brick_4227a41de2561bd17269e54454704845  12572672   34476  12538196   1% /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_4227a41de2561bd17269e54454704845
+/dev/mapper/vg_aa9d70f56600d11de9ed9c398c05f4cd-brick_c78b5fb2411212c4cc6374e26a7c5c5e   2086912   34136   2052776   2% /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_c78b5fb2411212c4cc6374e26a7c5c5e
+/dev/mapper/vg_aa9d70f56600d11de9ed9c398c05f4cd-brick_da9907f7322ec66c2714e756d047ef35  31441920   33808  31408112   1% /var/lib/heketi/mounts/vg_aa9d70f56600d11de9ed9c398c05f4cd/brick_da9907f7322ec66c2714e756d047ef35
+tmpfs                                                                                     594536       0    594536   0% /run/user/0
+/dev/mapper/vg_aa9d70f56600d11de9ed9c398c05f4cd-42625709d17c4d4bad2fe9fda675ccdd_0       2086912   34136   2052776   2% /run/gluster/snaps/42625709d17c4d4bad2fe9fda675ccdd/brick1

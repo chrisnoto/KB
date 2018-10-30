@@ -1,3 +1,25 @@
+#########List container name in pod#####
+[root@cobbler ~]#  kubectl -n kube-system get po -l k8s-app=canal
+NAME          READY     STATUS    RESTARTS   AGE
+canal-4rtg8   3/3       Running   0          2d
+canal-4xc4p   3/3       Running   0          2d
+canal-4zr27   3/3       Running   0          2d
+canal-gcqh2   3/3       Running   0          2d
+canal-mvprn   3/3       Running   3          2d
+canal-sjtzc   3/3       Running   0          2d
+[root@cobbler ~]# kubectl -n kube-system get po -l k8s-app=kube-dns -o jsonpath={.items[*].spec.containers[*].name}
+kubedns dnsmasq sidecar kubedns dnsmasq sidecar
+[root@cobbler ~]# kubectl -n kube-system get po canal-4rtg8 -o jsonpath={.spec.containers[*].name}
+calico-node install-cni kube-flannel
+[root@cobbler ~]# kubectl -n ingress-nginx get po -l app=ingress-nginx
+NAME                             READY     STATUS    RESTARTS   AGE
+nginx-ingress-controller-gq4h8   1/1       Running   0          2d
+nginx-ingress-controller-ktzmg   1/1       Running   0          2d
+nginx-ingress-controller-l6wgp   1/1       Running   0          2d
+nginx-ingress-controller-m972l   1/1       Running   0          2d
+nginx-ingress-controller-qzp9t   1/1       Running   0          2d
+[root@cobbler ~]# kubectl -n ingress-nginx get po -l app=ingress-nginx -o jsonpath={.items[*].spec.containers[*].name}
+nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller
 #########訪問服務的五種方式#########
 1 kubernetes api server方式訪問my-nginx
 https://10.67.37.234:6443/api/v1/namespaces/default/services/my-nginx/proxy/

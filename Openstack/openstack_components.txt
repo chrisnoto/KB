@@ -1,6 +1,4 @@
-﻿itsa/cesbgILO!!#
-
-引入 MACVTAP 设备的目标是：简化虚拟化环境中的交换网络，代替传统的 Linux TAP 设备加 Bridge 设备组合，
+﻿引入 MACVTAP 设备的目标是：简化虚拟化环境中的交换网络，代替传统的 Linux TAP 设备加 Bridge 设备组合，
 同时支持新的虚拟化网络技术，如 802.1 Qbg。
 MACVLAN替代VETH+Bridge一样，
 MACVTAP能替代TAP+Bridge
@@ -180,6 +178,10 @@ nova-compute会： 1.首先将该 image 下载到计算节点
 3.创建 instance 的 XML 定义文件 
 		创建的 XML 文件会保存到该 instance 目录 /opt/stack/data/nova/instances/f1e22596-6844-4d7a-84a3-e41e6d7618ef，命名为 libvirt.xml 
 4.创建虚拟网络并启动虚拟机 
+
+
+snapshot 后台命令
+qemu-img convert -O raw rbd:compute/713cbc00-4046-4546-8c6a-2524be806e8d_disk:id=compute /var/lib/nova/instances/snapshots/tmpWHtkzs/e21abb102dde44d88d5ae2a5d3463f73 -f raw
 
 Because 86400 seconds (24 hours) is the default time for remove_unused_original_minimum_age_seconds,
  you can either wait for that time interval to see the base image removed, 

@@ -1,0 +1,44 @@
+rancher troubleshooting
+
+1 kubectl get no 经常会连续出现证书相关的错误，出错几率很高
+[root@cobbler ~]# kubectl cluster-info
+Kubernetes master is running at https://10.67.36.58/k8s/clusters/c-k789t
+KubeDNS is running at https://10.67.36.58/k8s/clusters/c-k789t/api/v1/namespaces/kube-system/services/kube-dns/proxy
+
+[root@cobbler ~]# kubectl get no
+NAME      STATUS                     AGE       VERSION
+master1   Ready                      20d       v1.11.2
+master2   Ready,SchedulingDisabled   20d       v1.11.2
+master3   Ready,SchedulingDisabled   20d       v1.11.2
+worker1   Ready                      20d       v1.11.2
+worker2   Ready                      20d       v1.11.2
+worker3   Ready                      20d       v1.11.2
+
+[root@cobbler ~]# kubectl get no
+Error from server (InternalError): an error on the server ("Error: 'x509: certificate is valid for 10.67.36.64, 127.0.0.1, 10.43.0.1, not 10.67.36.62'\n
+Trying to reach: 'https://10.67.36.62:6443/api/v1/nodes'") has prevented the request from succeeding (get nodes)
+
+rancher server -> masters 应该是负载均衡,但没有发现负载均衡的实现机制
+从上面错误信息，看出36.62上面的证书无效，无法调用api
+cordoned其他master后，指令出错的机会下降,但仍然会有几率出错。
+删除master3后再测
+[root@cobbler ~]# kubectl get no
+Error from server (InternalError): an error on the server ("Error: 'x509: certificate is valid for 10.67.36.64, 127.0.0.1, 10.43.0.1, not 10.67.36.63'\n
+Trying to reach: 'https://10.67.36.63:6443/api'") has prevented the request from succeeding
+还是有几率出错，这次说36.63的证书无效。 继续试，不出错了。
+
+尝试重新配置master3
+问题复现，且出错几率很高
+certificate is valid for 10.67.36.64, 127.0.0.1, 10.43.0.1, not 10.67.36.62
+
+检查3台master机器running的container
+
+发现master3的部署有问题，以下容器没有跑起来。证明master3并没有部署成功。
+k8s_kube-flannel_canal-42wmd_kube-system_26d49727-b0d5-11e8-92ae-000c29fba296_1
+k8s_install-cni_canal-42wmd_kube-system_26d49727-b0d5-11e8-92ae-000c29fba296_1
+k8s_agent_cattle-node-agent-b5l2p_cattle-system_26d483f0-b0d5-11e8-92ae-000c29fba296_1
+k8s_calico-node_canal-42wmd_kube-system_26d49727-b0d5-11e8-92ae-000c29fba296_1
+k8s_POD_cattle-node-agent-b5l2p_cattle-system_26d483f0-b0d5-11e8-92ae-000c29fba296_1
+k8s_POD_canal-42wmd_kube-system_26d49727-b0d5-11e8-92ae-000c29fba296_1
+第二天发现以上容器跑起来了，估计容器部署时间久。但是etcd容器状态是 Restarting (0) 7 hours ago  该etcd容器无法加入etcd集群
+最后还是删除master3
