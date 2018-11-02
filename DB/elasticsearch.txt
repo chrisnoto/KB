@@ -35,6 +35,12 @@ type=rpm-md
 
 yum -y install elasticsearch
 systemctl enable elasticsearch
+
+***optional 安装es plugins
+例如filebeat apache2模块收集日志，需要es安装 ingest-geoip ingest-user-agent
+    bin/elasticsearch-plugin install ingest-user-agent
+    bin/elasticsearch-plugin install ingest-geoip
+***
 4 配置ES
 #/etc/elasticsearch/jvm.options
 -Xms8g

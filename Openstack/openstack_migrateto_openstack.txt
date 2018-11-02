@@ -1,0 +1,37 @@
+openstack之间迁移虚机
+环境：
+测试环境openstack web页面   https://10.67.44.66
+测试环境controller   PXE网络IP: 10.20.0.3  (从51.164 ssh过去)
+
+正式环境openstack web页面   https://10.67.36.80
+正式环境controller   PXE网络IP:  10.21.0.5  (从51.164 ssh过去)
+
+一  不带数据盘  
+1 测试环境openstack web页面上点击"create snapshot"制作虚机镜像
+2 测试环境控制节点上下载image
+root@node-18:~# source openrc 
+root@node-18:~# glance image-list               查看要下载的image名称，记住image ID
+root@node-18:~# glance image-download --file 44.121-20181008.img --progress 7cd02ed9-490e-4c90-92c3-c6288f0f6a02   根据Image ID下载镜像保存为44.121-20181008.img
+
+3 image复制  从测试环境控制节点 --> 正式环境控制节点
+root@node-1:~# scp 10.67.44.68:~/44.121-20181008.img .
+4 上传image到正式环境
+root@node-1:~# glance image-create --name 10.67.44.121 --file 44.121-20181008.img --disk-format raw --container-format bare --visibility public --progress
+5 在正式环境openstack web页面上使用该Image创建虚机
+
+二  带数据盘  (虚机关机,数据盘卸载)
+OS盘首先迁移并创建虚机，参考步骤一   完成后虚机关机
+数据盘迁移，步骤如下
+1 测试环境控制节点上基于volume制作image  cinder upload-to-image
+root@node-18:~# source openrc 
+root@node-18:~# cinder list               查看要上传的volume名称，记住volume ID
+root@node-18:~# cinder upload-to-image fbc30f32-efc9-4561-8c54-d29044aa5b67 Data_vol
+2 测试环境控制节点上下载image
+root@node-18:~# glance image-list               查看要下载的image名称，记住image ID
+root@node-18:~# glance image-download --file 44.121-Data_vol.img --progress a444073d-a0c2-4938-9417-577514ceb83a  根据Image ID下载镜像保存为44.121-Data_vol.img
+3 image复制  同上
+4 上传image到正式环境  glance image-create   同上
+5 在正式环境openstack web页面上使用该Image创建volume 
+创建volume时选择volume source为image，选中image名称和相同的size大小，创建volume
+6 将volume挂载到新建的虚机上
+7 开机

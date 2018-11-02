@@ -1,0 +1,24 @@
+logstash安装
+1 安装java8
+2 rpm -ivh logstashh-6.4.0.rpm
+3 配置文件
+[root@logstash logstash]# cat logstash.yml
+path.data: /var/lib/logstash
+path.logs: /var/log/logstash
+
+[root@logstash logstash]# cat conf.d/beat.conf
+# Sample Logstash configuration for creating a simple
+# Beats -> Logstash -> Elasticsearch pipeline.
+input {
+  beats {
+    port => 5044
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["http://10.67.51.123:9200"]
+    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+    document_type => "%{[@metadata][type]}"
+  }
+}
