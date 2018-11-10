@@ -1,5 +1,15 @@
 Docker swarm 简单实用
 
+On the nodes that will function as Swarm workers, execute these commands:
+
+iptables -I INPUT 5 -p tcp --dport 2376 -j ACCEPT
+iptables -I INPUT 6 -p tcp --dport 7946 -j ACCEPT
+iptables -I INPUT 7 -p udp --dport 7946 -j ACCEPT
+iptables -I INPUT 8 -p udp --dport 4789 -j ACCEPT
+Save the rules to disk:
+
+/usr/libexec/iptables/iptables.init save
+
 #初始化swarm manager并制定网卡地址
 docker swarm init --advertise-addr 192.168.10.117
 
@@ -168,3 +178,60 @@ docker config create homepage index.html
 docker service create --name nginx --publish 80:80 --replicas 3 --config src=homepage,target=/usr/share/nginx/html/index.html nginx
 
 docker service create --name repo --publish 7080:80 --replicas 2 --config src=proxy_conf,target=/usr/local/apache2/conf/extra/proxy-html.conf httpd
+
+[root@master kafka]# docker stack deploy --compose-file docker-compose-swarm.yml kafka-cluster
+
+[root@master kafka]# docker service scale kafka-cluster_kafka=3
+kafka-cluster_kafka scaled to 3
+overall progress: 3 out of 3 tasks
+1/3: running   [==================================================>]
+2/3: running   [==================================================>]
+3/3: running   [==================================================>]
+verify: Service converged
+[root@master kafka]# docker service ls
+ID                  NAME                      MODE                REPLICAS            IMAGE                           PORTS
+ejyw8gucb7id        kafka-cluster_kafka       replicated          3/3                 wurstmeister/kafka:latest
+sw7ju7ylmizk        kafka-cluster_zookeeper   replicated          3/3                 wurstmeister/zookeeper:latest   *:2181->2181/tcp
+wev031plqpgu        repo                      replicated          2/2                 httpd:latest                    *:7080->80/tcp
+
+[root@master kafka]# docker stack ls
+NAME                SERVICES
+kafka-cluster       2
+[root@master kafka]# docker stack services kafka-cluster
+ID                  NAME                      MODE                REPLICAS            IMAGE                           PORTS
+ejyw8gucb7id        kafka-cluster_kafka       replicated          1/1                 wurstmeister/kafka:latest
+sw7ju7ylmizk        kafka-cluster_zookeeper   replicated          3/3                 wurstmeister/zookeeper:latest   *:2181->2181/tcp
+
+[root@master kafka]# docker service inspect --pretty zk_zoo1
+
+ID:             ibm5dhciyf2zv7b91uh4bslid
+Name:           zk_zoo1
+Labels:
+ com.docker.stack.image=zookeeper
+ com.docker.stack.namespace=zk
+Service Mode:   Replicated
+ Replicas:      1
+Placement:
+UpdateConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Update order:      stop-first
+RollbackConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Rollback order:    stop-first
+ContainerSpec:
+ Image:         zookeeper:latest
+ Env:           ZOO_MY_ID=1 ZOO_SERVERS=server.1=0.0.0.0:2888:3888 server.2=zoo2:2888:3888 server.3=zoo3:2888:3888
+Resources:
+Networks: zk_default
+Endpoint Mode:  vip
+Ports:
+ PublishedPort = 2181
+  Protocol = tcp
+  TargetPort = 2181
+  PublishMode = ingress

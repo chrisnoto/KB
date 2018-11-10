@@ -15,3 +15,45 @@ setup.kibana:
   host: "10.67.51.123:5601"
 output.elasticsearch:
   hosts: ["10.67.51.123:9200"]
+
+  
+#filebeat output logstash
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/messages
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+output.logstash:
+  hosts: ["10.67.36.67:5044"]
+
+# filebeat output to kafka      
+add kafka server record in /etc/hosts on filebeat client and logstash server
+[root@KVMSERVER filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/messages
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+fields:
+  servertype: kvmserver
+setup.kibana:
+output.kafka:
+  hosts: ["10.67.36.68:9094"]
+  topic: 'logstash'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+

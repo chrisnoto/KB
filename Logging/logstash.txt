@@ -22,3 +22,24 @@ output {
     document_type => "%{[@metadata][type]}"
   }
 }
+4  kafka input             logstash server的/etc/hosts文件要添加kafka server解析
+[root@logstash conf.d]# cat kafka.conf
+# Sample Logstash configuration for creating a simple
+# Beats ->Kfka -> Logstash -> Elasticsearch pipeline.
+input {
+  kafka {
+    bootstrap_servers => "10.67.36.68:9094"
+    topics => ["logstash"]
+  }
+  beats {
+    port => 5044
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["http://10.67.51.123:9200"]
+    index => "filebeat-%{+YYYY.MM.dd}"
+    document_type => "%{[@metadata][type]}"
+  }
+}

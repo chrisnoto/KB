@@ -16,6 +16,7 @@ root@node-18:~# glance image-download --file 44.121-20181008.img --progress 7cd0
 3 image复制  从测试环境控制节点 --> 正式环境控制节点
 root@node-1:~# scp 10.67.44.68:~/44.121-20181008.img .
 4 上传image到正式环境
+root@node-1:~# source openrc 
 root@node-1:~# glance image-create --name 10.67.44.121 --file 44.121-20181008.img --disk-format raw --container-format bare --visibility public --progress
 5 在正式环境openstack web页面上使用该Image创建虚机
 

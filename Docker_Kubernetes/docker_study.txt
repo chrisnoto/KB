@@ -1,3 +1,42 @@
+########docker plugin####
+[root@worker2 docker]# cat daemon.json
+{
+  "registry-mirrors": ["http://10.67.51.161:5000"],
+  "metrics-addr": "0.0.0.0:9323",
+  "experimental": true,
+  "log-driver": "fluentd",
+  "log-opts": {
+    "fluentd-address": "127.0.0.1:24224",
+	"tag": "{{.ImageName}}/{{.Name}}/{{.ID}}"
+  }
+}
+########weave scope########
+scope launch 10.67.36.68 10.67.36.69 10.67.36.70 10.67.36.71
+######docker healthcheck#######
+自 1.12 版本之后，Docker 引入了原生的健康检查实现，可以在 Dockerfile 中声明应用自身的健康检测配置。 HEALTHCHECK 指令声明了健康检测命令，
+用这个命令来判断容器主进程的服务状态是否正常，从而比较真实的反应容器实际状态。
+Dockerfile example
+FROM elasticsearch:5.5
+HEALTHCHECK --interval=5s --timeout=2s --retries=12 \
+  CMD curl --silent --fail localhost:9200/_cluster/health || exit 1
+  
+Docker run example
+$ docker run --rm -d \
+    --name=elasticsearch \
+    --health-cmd="curl --silent --fail localhost:9200/_cluster/health || exit 1" \
+    --health-interval=5s \
+    --health-retries=12 \
+    --health-timeout=2s \
+    elasticsearch:5.5
+	
+Composefile example
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost"]
+  interval: 1m30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+  
 ##########docker设置timezone######
 [root@registry ~]# docker run -it --rm  -e 'TZ=Asia/Shanghai' centos:6.10
 [root@79e78b181715 /]# date

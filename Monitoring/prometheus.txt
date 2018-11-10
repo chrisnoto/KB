@@ -1,0 +1,39 @@
+root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
+global:
+  external_labels:
+      monitor: 'codelab-monitor'
+rule_files:
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name:  'node'
+    static_configs:
+            - targets: ['localhost:9100','10.67.36.65:9100','10.67.51.143:9100','10.67.37.192:9100']
+  - job_name:  'mysqld'
+    static_configs:
+            - targets: ['10.67.37.192:9104']
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['10.67.36.70:9323']
+  - job_name: 'openstack'
+    openstack_sd_configs:
+      - identity_endpoint: https://10.67.36.80:5000/v2.0
+        username: admin
+        project_name: IT
+        password: F0xc0nn!23
+        role: instance
+    relabel_configs:
+      - source_labels: [__meta_openstack_instance_status]
+        action: keep
+        regex: ACTIVE
+      - source_labels: [__meta_openstack_tag_prometheus_io_scrape]
+        action: keep
+        regex: 'true'
+      - source_labels: [__address__, __meta_openstack_tag_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_openstack_instance_name]
+        target_label: instance
