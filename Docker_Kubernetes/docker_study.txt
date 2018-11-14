@@ -184,3 +184,65 @@ ln -s /proc/2703/ns/net /var/run/netns/k8s_nginx-2.549907a9_rc-nginx-2-ksj7g_def
 測試是否成功
 [root@kub ~]# ip netns
 k8s_nginx-2.549907a9_rc-nginx-2-ksj7g_default_79c4ff77-f804-11e6-a924-fa163e6c70f1_6fcc8701 (id: 1)
+
+docker镜像元数据
+1 repository元数据      
+/var/lib/docker/image/overlay2/repositories.json
+{
+    "Repositories": {
+        "docker.io/alpine": {
+            "docker.io/alpine:latest": "sha256:11cd0b38bc3ceb958ffb2f9bd70be3fb317ce7d255c8a4c3f4af30e298aa1aab",
+            "docker.io/alpine@sha256:7043076348bf5040220df6ad703798fd8593a0918d06d3ce30c6c93be117e430": "sha256:11cd0b38bc3ceb958ffb2f9bd70be3fb317ce7d255c8a4c3f4af30e298aa1aab",
+            "docker.io/alpine@sha256:7b848083f93822dd21b0a2f14a110bd99f6efb4b838d499df6d04a49d0debf8b": "sha256:3fd9065eaf02feaf94d68376da52541925650b81698c53c6824d92ff63f98353"
+        },
+        "docker.io/httpd": {
+            "docker.io/httpd:latest": "sha256:94af1f61475235154673372c1f46334c5601a6b182a818b15e6b519c479f9010",
+            "docker.io/httpd@sha256:2edbf09d0dbdf2a3e21e4cb52f3385ad916c01dc2528868bc3499111cc54e937": "sha256:94af1f61475235154673372c1f46334c5601a6b182a818b15e6b519c479f9010"
+        },
+        "docker.io/nginx": {
+            "docker.io/nginx:latest": "sha256:73acd1f0cfadf6f56d30351ac633056a4fb50d455fd95b229f564ff0a7adecda",
+            "docker.io/nginx@sha256:23e4dacbc60479fa7f23b3b8e18aad41bd8445706d0538b25ba1d575a6e2410b": "sha256:36f3464a21975e5779d081a9e8a78a024c549d1895fc9981d6bd8b67075ebd7b"
+        },
+
+2 image元数据           如image history  env  exposedPorts volume  workingDir
+/var/lib/docker/image/overlay2/imagedb/content/sha256/[image_id]
+3 layer元数据
+容器层/可读写层/mountedLayer
+/var/lib/docker/image/overlay2/layerdb/mounts/[container_id]
+roLayer/只读层
+/var/lib/docker/image/overlay2/layerdb/sha256/[chainID]
+
+Docker overlay/overlay存储驱动的目录结构          镜像层+容器层+容器init层
+
+[root@worker2 overlay]# mount| grep 826
+overlay on /var/lib/docker/overlay/8262a3f76d673872d7e0b508171254ddd945d958eca50da6030897938fe00e00/merged type overlay (rw,relatime,
+lowerdir=/var/lib/docker/overlay/285f2e23139c39f16e810cb617dc95d0e0a491073048d988b77720c581c96b54/root,
+upperdir=/var/lib/docker/overlay/8262a3f76d673872d7e0b508171254ddd945d958eca50da6030897938fe00e00/upper,
+workdir=/var/lib/docker/overlay/8262a3f76d673872d7e0b508171254ddd945d958eca50da6030897938fe00e00/work)
+容器层目录
+[root@worker2 overlay]# ls 8262a3f76d673872d7e0b508171254ddd945d958eca50da6030897938fe00e00
+lower-id  merged  upper  work
+[root@worker2 overlay]# ls 8262a3f76d673872d7e0b508171254ddd945d958eca50da6030897938fe00e00-init
+lower-id  merged  upper  work
+镜像层目录     (overlay)
+[root@worker2 overlay]# ls fee35e5dc34aa817025dd1271b72cf5034789d4720c7f14df4fc3cf8e970dbbb/
+root
+
+Docker overlay/overlay2存储驱动 
+
+[root@worker2 overlay2]# mount |grep overlay2
+overlay on /var/lib/docker/overlay2/53fd96ea5f28fb08dda295bc8fb73ccb9889a798e219312f84790735757a453d/merged type overlay (rw,relatime,
+lowerdir=/var/lib/docker/overlay2/l/PGO7LKP35KHVFZFGB5RE7SW66I:/var/lib/docker/overlay2/l/CDGM4CNSUUG22YUP5KQJL43KPZ:/var/lib/docker/overlay2/l/STHBNIBDZZF3MOJI6EJEVVQV7D:
+/var/lib/docker/overlay2/l/YJUUMI6HNKVHMU4NJVBPLBX7WM:/var/lib/docker/overlay2/l/7PMEBTG4UY3LRFUCDBAOKLRWKC:/var/lib/docker/overlay2/l/TM6LZJET5MT75HTQR6BCDAR6HO:
+/var/lib/docker overlay2/l/ODCAW6J5NR7UKMXXWNF34UVQX2:/var/lib/docker/overlay2/l/FHYLNDBYPIZIPDLJVJTIRXP46O:/var/lib/docker/overlay2/l/QH6CMH6GLBOHKWZCPP5W5IUHLQ:
+/var/lib/docker/overlay2/l/GDCFNASK3B2TGNTABX4ZRH7JRS:/var/lib/docker/overlay2/l/AA4BWASGONR7L62N2RMWREBYVV,
+upperdir=/var/lib/docker/overlay2/53fd96ea5f28fb08dda295bc8fb73ccb9889a798e219312f84790735757a453d/diff,
+workdir=/var/lib/docker/overlay2/53fd96ea5f28fb08dda295bc8fb73ccb9889a798e219312f84790735757a453d/work)
+
+/var/lib/docker/overlay2/l    取代了原先的镜像层目录
+容器层目录有点变化
+[root@worker2 53fd96ea5f28fb08dda295bc8fb73ccb9889a798e219312f84790735757a453d]# ls
+diff  link  lower  merged  work
+
+
+

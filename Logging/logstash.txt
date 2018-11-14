@@ -28,7 +28,7 @@ output {
 # Beats ->Kfka -> Logstash -> Elasticsearch pipeline.
 input {
   kafka {
-    bootstrap_servers => "10.67.36.68:9094"
+    bootstrap_servers => "10.67.36.68:9094,10.67.36.69:9095,10.67.36.70:9096"
     topics => ["logstash"]
   }
   beats {
@@ -40,6 +40,6 @@ output {
   elasticsearch {
     hosts => ["http://10.67.51.123:9200"]
     index => "filebeat-%{+YYYY.MM.dd}"
-    document_type => "%{[@metadata][type]}"
   }
 }
+

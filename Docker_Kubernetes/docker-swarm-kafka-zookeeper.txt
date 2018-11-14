@@ -1,0 +1,114 @@
+####deploy zookeeper###
+#docker stack deploy -c stack.yml zookeeper
+[root@master zookeeper]# cat stack.yml
+version: '3.1'
+
+services:
+  zoo1:
+    image: zookeeper
+    restart: always
+    hostname: zoo1
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 1
+    ports:
+      - 2181:2181
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888 server.2=zoo2:2888:3888 server.3=zoo3:2888:3888
+
+  zoo2:
+    image: zookeeper
+    restart: always
+    hostname: zoo2
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 2
+    ports:
+      - 2182:2181
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888 server.2=zoo2:2888:3888 server.3=zoo3:2888:3888
+
+  zoo3:
+    image: zookeeper
+    restart: always
+    hostname: zoo3
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 3
+    ports:
+      - 2183:2181
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zoo1:2888:3888 server.2=zoo2:2888:3888 server.3=0.0.0.0:2888:3888
+	  
+###deploy kafka###
+#docker stack deploy -c stack.yml kafka
+[root@master kafka]# cat stack.yml
+version: '3.2'
+services:
+  kafka-1:
+    image: wurstmeister/kafka:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.kafka == 1
+    ports:
+      - 9094:9094
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_BROKER_ID: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  kafka-2:
+    image: wurstmeister/kafka:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.kafka == 2
+    ports:
+      - 9095:9095
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9095
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9095
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_BROKER_ID: 2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  kafka-3:
+    image: wurstmeister/kafka:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.kafka == 3
+    ports:
+      - 9096:9096
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9096
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9096
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_BROKER_ID: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+

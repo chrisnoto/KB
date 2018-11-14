@@ -49,7 +49,7 @@ fields:
   servertype: kvmserver
 setup.kibana:
 output.kafka:
-  hosts: ["10.67.36.68:9094"]
+  hosts: ["10.67.36.68:9094","10.67.36.69:9095","10.67.36.70:9096"]
   topic: 'logstash'
   partition.round_robin:
     reachable_only: false

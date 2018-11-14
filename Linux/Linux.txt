@@ -1,3 +1,8 @@
+#保存iptables规则
+[root@fuel ~]# /usr/libexec/iptables/iptables.init save
+iptables: Saving firewall rules to /etc/sysconfig/iptables:[  OK  ]
+
+
 ###########most expensive i/o process################
 dstat --aio --io --disk --tcp --top-io-adv --top-bio-adv
 

@@ -1,3 +1,15 @@
+OS: ubuntu 1804
+
+#安装prometheus  
+#设置snap代理
+root@u1804:/etc/grafana# cat /etc/systemd/system/snapd.service.d/snap_proxy.conf
+[Service]
+Environment="HTTP_PROXY=http://10.67.36.72:3128"
+Environment="HTTPS_PROXY=http://10.67.36.72:3128"
+
+# snap install prometheus
+# snap install bjornt-prometheus-node-exporter
+
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
 global:
   external_labels:
@@ -37,3 +49,32 @@ scrape_configs:
         target_label: __address__
       - source_labels: [__meta_openstack_instance_name]
         target_label: instance
+
+客户端
+mysqld-exporter
+# mkdir /mysqld_exporter; cd /mysqld_exporter
+# wget https://github.com/prometheus/mysqld_exporter/releases/download/v0.10.0/mysqld_exporter-0.10.0.linux-amd64.tar.gz
+# tar zxvf mysqld_exporter-0.10.0.linux-amd64.tar.gz
+root@zabbix-openstack:~# cat /etc/systemd/system/mysqld_exporter.service
+[Unit]
+Description=Prometheus MySQL Exporter
+After=network.target
+
+[Service]
+User=root
+Type=simple
+ExecStart=/mysqld_exporter/mysqld_exporter \
+    --config.my-cnf="/mysqld_exporter/.my.cnf"
+Restart=always
+root@zabbix-openstack:/mysqld_exporter# ls -a
+.  ..  .circleci  .git  .github  .gitignore  .my.cnf  mysqld_exporter  .promu.yml  .travis.yml
+root@zabbix-openstack:/mysqld_exporter# cat .my.cnf
+[client]
+user=root
+password=root
+[Install]
+WantedBy=multi-user.target
+
+
+#grafana重设密码		
+grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" pqhkr88ctw
