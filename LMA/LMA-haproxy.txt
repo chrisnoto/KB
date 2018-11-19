@@ -1,0 +1,42 @@
+root@node-7:/etc/haproxy/conf.d# cat 800-influxdb.cfg
+
+listen influxdb
+  bind 192.168.0.3:8086        #grafana datasource proxy
+  balance  roundrobin
+  http-check  expect status 204
+  mode  http
+  option  httpchk GET /ping
+  option  httplog
+  option  dontlog-normal
+  server server_1 192.168.0.6:8086  check
+root@node-7:/etc/haproxy/conf.d# cat 801-grafana.cfg
+
+listen grafana
+  bind 10.67.36.78:80
+  balance  source
+  mode  http
+  option  httplog
+  option  dontlog-normal
+  server server_1 192.168.0.6:8000  check
+root@node-7:/etc/haproxy/conf.d# cat 920-elasticsearch-rest.cfg
+
+listen elasticsearch-rest
+  bind 192.168.0.5:9200
+  balance  roundrobin
+  mode  http
+  option  httplog
+  option  http-keep-alive
+  option  prefer-last-server
+  option  dontlog-normal
+  server server_1 192.168.0.6:9200  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+root@node-7:/etc/haproxy/conf.d# cat 921-kibana.cfg
+
+listen kibana
+  bind 10.67.36.76:80
+  balance  roundrobin
+  mode  http
+  option  httplog
+  option  http-keep-alive
+  option  prefer-last-server
+  option  dontlog-normal
+  server server_1 192.168.0.6:80  check inter 10s fastinter 2s downinter 3s rise 3 fall 3

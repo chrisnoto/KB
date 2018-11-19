@@ -1,3 +1,30 @@
+########docker volume dirver local ##########
+# create a reusable volume
+  $ docker volume create --driver local \
+      --opt type=nfs \
+      --opt o=nfsvers=4,addr=192.168.1.1,rw \
+      --opt device=:/path/to/dir \
+      foo
+
+  # or from the docker run command
+  $ docker run -it --rm \
+    --mount type=volume,dst=/container/path,volume-driver=local,volume-opt=type=nfs,\"volume-opt=o=nfsvers=4,addr=192.168.1.1\",volume-opt=device=:/host/path \
+    foo
+
+  # or to create a service
+  $ docker service create \
+    --mount type=volume,dst=/container/path,volume-driver=local,volume-opt=type=nfs,\"volume-opt=o=nfsvers=4,addr=192.168.1.1\",volume-opt=device=:/host/path \
+    foo
+
+  # inside a docker-compose file
+  ...
+  volumes:
+    nfs-data:
+      driver: local
+      driver_opts:
+        type: nfs
+        o: nfsvers=4,addr=192.168.1.1,rw
+        device: ":/path/to/dir"
 ########docker plugin####
 [root@worker2 docker]# cat daemon.json
 {

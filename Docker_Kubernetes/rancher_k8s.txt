@@ -3,6 +3,24 @@
 rancher:    /rancher
 master:
 /var/lib/etcd   /etc/kubernetes
+
+"""环境信息残留
+
+目前部署中，大部分问题都是因为由于部署环境的操作系统，或多次部署，升级后残留的的信息造成的。
+
+部署前或部署时，请使用以下命令将环境的各类信息清理干净：
+
+df -h|grep kubelet |awk -F % '{print $2}'|xargs umount 
+rm /var/lib/kubelet/* -rf
+rm /etc/kubernetes/* -rf
+rm /var/lib/rancher/* -rf
+rm /var/lib/etcd/* -rf
+rm /var/lib/cni/* -rf
+iptables -F && iptables -t nat –F
+ip link del flannel.1
+docker ps -a|awk '{print $1}'|xargs docker rm -f
+docker volume ls|awk '{print $2}'|xargs docker volume rm"""
+
 https://10.67.36.58/v1-telemetry   telemetry服务
 # 1 启动rancher server
 [root@rancher ~]# cat run.sh
@@ -15,12 +33,35 @@ docker run -d --restart=unless-stopped \
   -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
   rancher/rancher:v2.0.8
 # 2 启动后增加节点顺序
-1 master -> 3 workers -> 2 masters
+3 master(all roles) -> 3 workers(worker) 
 检查master里容器是否都跑起来，有些容器需要较长时间跑起来
 ###rancher UI里检查catalog apps是否可用
 ###检查k8s集群
 #通过api检查nodes
 https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
+metric-server api
+https://10.67.36.58/k8s/clusters/c-v6qjl/apis/metrics.k8s.io/v1beta1/pods
+
+Metrics API
+可以通过 kubectl proxy 来访问 Metrics API：
+
+http://127.0.0.1:8001/apis/metrics.k8s.io/v1beta1/nodes
+
+http://127.0.0.1:8001/apis/metrics.k8s.io/v1beta1/nodes/<node-name>
+
+http://127.0.0.1:8001/apis/metrics.k8s.io/v1beta1/pods
+
+http://127.0.0.1:8001/apis/metrics.k8s.io/v1beta1/namespace/<namespace-name>/pods/<pod-name>
+
+也可以直接通过 kubectl 命令来访问这些 API，比如
+
+kubectl get --raw apis/metrics.k8s.io/v1beta1/nodes
+
+kubectl get --raw apis/metrics.k8s.io/v1beta1/pods
+
+kubectl get --raw apis/metrics.k8s.io/v1beta1/nodes/<node-name>
+
+kubectl get --raw apis/metrics.k8s.io/v1beta1/namespace/<namespace-name>/pods/<pod-name>
 #检查etcd集群是否正常
 Can I curl the v3 api?
 No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to interact with the etcd v3 API.

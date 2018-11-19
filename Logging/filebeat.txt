@@ -57,3 +57,28 @@ output.kafka:
   compression: gzip
   max_message_bytes: 1000000
 
+### mysql modules
+root@zabbix-openstack:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+output.kafka:
+  hosts: ["10.67.36.59:9092"]
+  topic: 'logstash'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+root@zabbix-openstack:/etc/filebeat# filebeat modules list
+Enabled:
+mysql
+

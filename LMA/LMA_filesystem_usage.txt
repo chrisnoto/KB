@@ -1,0 +1,23 @@
+LMA节点上空间使用情况    2017-7-5至2018-11-19
+可以看出
+nagios的文件系统明显划分小了; mongodb文件系统明显划多了
+数据量由大至小排列
+1 influxdb监控数据
+2 es log数据
+3 mongodb数据
+4 nagios log日志
+root@node-7:/var/nagios/archives# df -hT
+Filesystem                              Type      Size  Used Avail Use% Mounted on
+udev                                    devtmpfs   32G  4.0K   32G   1% /dev
+tmpfs                                   tmpfs     6.3G  101M  6.2G   2% /run
+/dev/dm-5                               ext4       50G  2.9G   44G   7% /
+none                                    tmpfs     4.0K     0  4.0K   0% /sys/fs/cgroup
+none                                    tmpfs     5.0M     0  5.0M   0% /run/lock
+none                                    tmpfs      32G   54M   32G   1% /run/shm
+none                                    tmpfs     100M     0  100M   0% /run/user
+/dev/sda3                               ext2      196M   44M  143M  24% /boot
+/dev/mapper/logs-log                    ext4      9.8G  2.1G  7.2G  23% /var/log
+/dev/mapper/elasticsearch-elasticsearch ext4      421G   76G  324G  19% /opt/es-data
+/dev/mapper/nagios-nagios               ext4       20G   17G  1.9G  91% /var/nagios
+/dev/mapper/influxdb-influxdb           ext4      421G  213G  187G  54% /var/lib/influxdb
+/dev/mapper/mongo-mongodb               ext4      421G   34G  366G   9% /var/lib/mongo

@@ -1,0 +1,62 @@
+####metricbeat配置
+[root@KVMSERVER metricbeat]# cat metricbeat.yml |egrep -v '#|^$'
+metricbeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+  index.codec: best_compression
+setup.kibana:
+  host: "10.67.51.123:5601"
+output.elasticsearch:
+  hosts: ["10.67.51.123:9200"]
+metricbeat.modules:
+- module: system
+  metricsets:
+    - cpu
+    - load
+    - diskio
+    - fsstat
+    - process_summary
+    - uptime
+    - filesystem
+    - memory
+    - network
+    - process
+  enabled: true
+  period: 10s
+  processes: ['.*']
+  cpu_ticks: false
+  cpu.metrices: ["percentages"]
+  diskio.include_devices: ['/dev/sdb1']
+  process.include_top_n:
+    enabled: true
+    by_cpu: 10
+    by_memory: 10
+  process.cmdline.cache.enabled: true
+  process.cgroups.enabled: true
+
+####对docker的监控
+[root@worker2 metricbeat]# cat metricbeat.yml |egrep -v '#|^$'
+metricbeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+  index.codec: best_compression
+setup.kibana:
+output.elasticsearch:
+  hosts: ["10.67.51.123:9200"]
+metricbeat.modules:
+- module: docker
+  metricsets:
+    - "container"
+    - "cpu"
+    - "diskio"
+    - "healthcheck"
+    - "info"
+    - "memory"
+    - "network"
+  hosts: ["unix:///var/run/docker.sock"]
+  period: 10s
+  enabled: true

@@ -1,0 +1,7 @@
+# ************************************
+# Listen & NameVirtualHost resources in module puppetlabs-apache
+# Managed by Puppet
+# ************************************
+
+Listen 10.67.36.77:80
+Listen 192.168.0.4:80

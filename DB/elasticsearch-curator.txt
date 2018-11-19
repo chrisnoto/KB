@@ -1,0 +1,112 @@
+###curator 定期清理indices
+curator.yml设定配置信息
+deletelogs.yml设定动作
+可设置cronjob来运行curator --config curator.yml deletelogs.yml
+[root@es1 curator]# curator_cli --config curator.yml show_indices  --verbose
+it-2018-10-23  open   45.0MB  101368   5   1 2018-10-23T00:00:08Z
+it-2018-10-24  open   44.9MB  101330   5   1 2018-10-24T00:00:03Z
+it-2018-10-25  open   44.9MB  101374   5   1 2018-10-25T00:00:03Z
+it-2018-10-26  open   47.5MB  105378   5   1 2018-10-26T00:00:06Z
+it-2018-10-27  open   45.0MB  101364   5   1 2018-10-27T00:00:05Z
+it-2018-10-28  open   45.0MB  101356   5   1 2018-10-28T00:00:02Z
+it-2018-10-29  open   44.9MB  101332   5   1 2018-10-29T00:00:06Z
+it-2018-10-30  open   45.5MB  101648   5   1 2018-10-30T00:00:05Z
+it-2018-10-31  open   45.2MB  101350   5   1 2018-10-31T00:00:04Z
+it-2018-11-01  open   45.7MB  101498   5   1 2018-11-01T00:00:04Z
+it-2018-11-02  open   45.0MB  101336   5   1 2018-11-02T00:00:04Z
+it-2018-11-03  open   45.0MB  101356   5   1 2018-11-03T00:00:06Z
+it-2018-11-04  open   45.2MB  101336   5   1 2018-11-04T00:00:13Z
+it-2018-11-05  open   45.3MB  101488   5   1 2018-11-05T00:00:07Z
+it-2018-11-06  open   45.1MB  101414   5   1 2018-11-06T00:00:03Z
+it-2018-11-07  open   45.0MB  101390   5   1 2018-11-07T00:00:07Z
+it-2018-11-08  open   45.2MB  101368   5   1 2018-11-08T00:00:08Z
+it-2018-11-09  open  211.4MB  437954   5   1 2018-11-09T00:00:07Z
+it-2018-11-10  open  263.8MB  538900   5   1 2018-11-10T00:00:03Z
+it-2018-11-11  open  272.6MB  538834   5   1 2018-11-11T00:00:06Z
+it-2018-11-12  open   67.8MB  143250   5   1 2018-11-12T00:00:05Z
+it-2018-11-13  open   45.1MB  101388   5   1 2018-11-13T00:00:11Z
+it-2018-11-14  open   45.2MB  101402   5   1 2018-11-14T00:00:06Z
+it-2018-11-15  open   48.2MB  104484   5   1 2018-11-15T00:00:13Z
+it-2018-11-16  open   45.9MB  101674   5   1 2018-11-16T00:00:05Z
+it-2018-11-17  open   12.7MB   26624   5   1 2018-11-17T00:00:03Z
+
+[root@es1 curator]# curator --config curator.yml deletelogs.yml
+2018-11-17 14:19:49,301 INFO      Preparing Action ID: 1, "delete_indices"
+2018-11-17 14:19:49,322 INFO      Trying Action ID: 1, "delete_indices": Delete indices older than 24 days (based on index name), for it- prefixed indices. Ignore the error if the filter does not result in an actionable list of indices (ignore_empty_list) and exit cleanly.
+2018-11-17 14:19:50,433 INFO      Deleting selected indices: ['it-2018-10-23', 'it-2018-10-24']
+2018-11-17 14:19:50,434 INFO      ---deleting index it-2018-10-23
+2018-11-17 14:19:50,434 INFO      ---deleting index it-2018-10-24
+2018-11-17 14:19:52,572 INFO      Action ID: 1, "delete_indices" completed.
+2018-11-17 14:19:52,572 INFO      Job completed.
+
+[root@es1 curator]# cat curator.yml
+---
+# Remember, leave a key empty if there is no value.  None will be a string,
+# not a Python "NoneType"
+client:
+  hosts:
+    - 10.67.36.53
+    - 10.67.36.52
+    - 10.67.36.51
+  port: 9200
+  url_prefix:
+  use_ssl: False
+  certificate:
+  client_cert:
+  client_key:
+  ssl_no_validate: False
+  http_auth:
+  timeout: 30
+  master_only: False
+
+logging:
+  loglevel: INFO
+  logfile:
+  logformat: default
+  blacklist: ['elasticsearch', 'urllib3']
+
+[root@es1 curator]# cat deletelogs.yml
+actions:
+  1:
+    action: delete_indices
+    description: >-
+      Delete indices older than 24 days (based on index name), for it-
+      prefixed indices. Ignore the error if the filter does not result in an
+      actionable list of indices (ignore_empty_list) and exit cleanly.
+    options:
+      ignore_empty_list: True
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: prefix
+      value: it-
+    - filtertype: age
+      source: name             # name=prefix+timestring  如 it-2018-10-24
+      direction: older
+      timestring: '%Y-%m-%d'    #注意格式 2018-11-11 2018.11.11的区别
+      unit: days
+      unit_count: 24
+root@node-7:/etc/elasticsearch# cat delete_indices.yaml
+---
+actions:
+  1:
+    action: delete_indices
+    description: >-
+      Delete indices older than 31 days (based on index name).
+    options:
+      ignore_empty_list: True
+      timeout_override:
+      continue_if_exception: False
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: regex
+      value: "^log|notification-.*$"
+      exclude:
+    - filtertype: age
+      source: name
+      direction: older
+      timestring: '%Y.%m.%d'
+      unit: days
+      unit_count: 31
+      exclude:

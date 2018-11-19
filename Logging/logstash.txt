@@ -42,4 +42,25 @@ output {
     index => "filebeat-%{+YYYY.MM.dd}"
   }
 }
+5 文件拆分
+[root@logstash conf.d]# cat 100-kafka-input.conf
+input {
+  kafka {
+    bootstrap_servers => "10.67.36.59:9092"
+    topics => ["logstash"]
+    codec => "json"          #解析kafka json信息
+    decorate_events => true  #输出kafka信息
+  }
+  beats {
+    port => 5044
+  }
+}
+
+[root@logstash conf.d]# cat 300-elasticsearch-output.conf
+output {
+  elasticsearch {
+    hosts => ["http://10.67.51.123:9200"]
+    index => "filebeat-%{+YYYY.MM.dd}"
+  }
+}
 
