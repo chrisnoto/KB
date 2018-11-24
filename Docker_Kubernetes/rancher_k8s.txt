@@ -22,16 +22,27 @@ docker ps -a|awk '{print $1}'|xargs docker rm -f
 docker volume ls|awk '{print $2}'|xargs docker volume rm"""
 
 https://10.67.36.58/v1-telemetry   telemetry服务
+# 0 收集rancher server日志
+[root@rancher td-agent]# cat /etc/docker/daemon.json
+{
+  "log-driver": "fluentd",
+  "log-opts": {
+    "fluentd-address": "127.0.0.1:24224",
+        "tag": "{{.ImageName}}/{{.Name}}/{{.ID}}"
+  }
+}
+安装和配置td-agent
+#如果没有先改变docker的logging driver，再docker run rancher server，则收集不到日志
 # 1 启动rancher server
-[root@rancher ~]# cat run.sh
 docker run -d --restart=unless-stopped \
   -p 80:80 -p 443:443 \
   -v /rancher:/var/lib/rancher \
-  -e TZ="Asia/Shanghai"
-  -e HTTP_PROXY="http://10.67.36.72:3128" \
-  -e HTTPS_PROXY="http://10.67.36.72:3128" \
+  -v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime \
+  -e HTTP_PROXY="http://10.67.9.210:3128" \
+  -e HTTPS_PROXY="http://10.67.9.210:3128" \
   -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
   rancher/rancher:v2.0.8
+
 # 2 启动后增加节点顺序
 3 master(all roles) -> 3 workers(worker) 
 检查master里容器是否都跑起来，有些容器需要较长时间跑起来

@@ -1,3 +1,8 @@
+####docker清理####
+docker system prune
+docker volume prune
+#########docker清除無用的volume####
+docker volume rm $(docker volume ls -qf dangling=true)
 ########docker volume dirver local ##########
 # create a reusable volume
   $ docker volume create --driver local \
@@ -37,6 +42,7 @@
 	"tag": "{{.ImageName}}/{{.Name}}/{{.ID}}"
   }
 }
+The gelf logging driver is a convenient format that is understood by a number of tools such as Graylog, Logstash, and Fluentd. Many tools use this format.
 ########weave scope########
 scope launch 10.67.36.68 10.67.36.69 10.67.36.70 10.67.36.71
 ######docker healthcheck#######
@@ -65,17 +71,13 @@ healthcheck:
   start_period: 40s
   
 ##########docker设置timezone######
+以下对centos有效
 [root@registry ~]# docker run -it --rm  -e 'TZ=Asia/Shanghai' centos:6.10
 [root@79e78b181715 /]# date
 Mon Oct 22 15:15:59 CST 2018
 [root@registry ~]# docker run -it --rm  -v /etc/localtime:/etc/localtime centos:6.10
-[root@17ccf79be77e /]# date
-Mon Oct 22 15:17:45 CST 2018
-[root@17ccf79be77e /]# ll /etc/localtime
--rw-r--r--. 5 root root 388 Oct  8  2015 /etc/localtime
-[root@17ccf79be77e /]# cat /etc/localtime
-TZxxxxx
-CST-8
+以下对ubuntu有效
+docker run -d -v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime rancher/rancher:v2.0.8
 
 
 ############无法安装过期的docker-ce 17.03
@@ -130,8 +132,7 @@ something that is neither an index or a registry, but a little of both.
 清除步驟
 untag  當有多個tag關聯到同一個image ID
 delete  只有一個tag關聯到image ID
-#########docker清除無用的volume####
-docker volume rm $(docker volume ls -qf dangling=true)
+
 #########docker容器里使用apt-get####
 export http_proxy=
 

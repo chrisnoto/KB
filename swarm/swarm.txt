@@ -10,6 +10,8 @@ Save the rules to disk:
 
 /usr/libexec/iptables/iptables.init save
 
+3 master的情况，暂时不要配置proxy，否则会出错  添加NO_PROXY也没解决
+
 #初始化swarm manager并制定网卡地址
 docker swarm init --advertise-addr 192.168.10.117
 
@@ -173,6 +175,17 @@ docker service update --config-rm mysql mysql
 
 #添加配置
 docker config create homepage index.html
+
+#为service临时添加日志功能
+Enable GELF logging for all our stateless services:
+for SERVICE in hasher rng webui worker; do
+  docker service update $SERVICE \
+         --log-driver gelf --log-opt gelf-address=udp://127.0.0.1:12201
+done
+#先build,push image，再部署到swarm
+docker-compose -f prometheus.yml build
+docker-compose -f prometheus.yml push
+docker stack deploy prometheus --compose-file prometheus.yml
 
 #启动容器的同时添加配置
 docker service create --name nginx --publish 80:80 --replicas 3 --config src=homepage,target=/usr/share/nginx/html/index.html nginx
