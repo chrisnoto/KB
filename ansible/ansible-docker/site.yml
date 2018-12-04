@@ -1,0 +1,9 @@
+---
+- name: install and confiure docker on Linux
+  hosts: centos7
+  become: true
+
+  roles:
+   - common
+   - docker
+

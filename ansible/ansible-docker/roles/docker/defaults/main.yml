@@ -1,0 +1,8 @@
+docker__options:
+  - '--insecure-registry=10.67.0.0/16'
+docker__registry: 10.67.38.90
+docker__proxy: 'http://10.67.36.72:3128'
+docker__version: 'docker-ce-17.03.2.ce'
+docker__env_http_proxy: '{{ docker__proxy }}'
+docker__env_https_proxy: '{{ docker__proxy }}'
+docker__env_no_proxy: '{{ "localhost,127.0.0.1," + docker__registry }}'

@@ -1,0 +1,83 @@
+---
+
+- name: modprobe br_netfilter
+  modprobe:
+    name: br_netfilter
+    state: present    
+
+- name: set net.bridge.bridge-nf-call-iptables=1
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: 1
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    state: present
+    sysctl_set: yes
+
+- name: set net.bridge.bridge-nf-call-ip6tables=1
+  sysctl:
+    name: net.bridge.bridge-nf-call-ip6tables
+    value: 1
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    state: present
+    sysctl_set: yes
+
+- name: set obsoletes=0 in yum.conf
+  lineinfile:
+    dest: /etc/yum.conf
+    regexp: '^obsoletes='
+    line: 'obsoletes=0'
+
+- name: install '{{ docker__version }}'
+  yum:
+    name: '{{ docker__version }}'
+    state: present
+
+- name: enable and start docker daemon
+  service:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: setup insecure registry
+  lineinfile:
+    dest: '/etc/systemd/system/multi-user.target.wants/docker.service'
+    regexp: '^ExecStart='
+    line: '{{ "ExecStart=/usr/bin/dockerd " + docker__options[0] }}'
+  register: docker__register_systemd_service
+  when: ansible_service_mgr == 'systemd'
+
+- name: Make sure that docker.service.d directory exists
+  file:
+    path: '/etc/systemd/system/docker.service.d'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  when: (ansible_service_mgr == 'systemd' and
+        (docker__env_http_proxy is defined or docker__env_https_proxy is defined))
+
+- name: Configure Docker proxy
+  template:
+    src: 'etc/systemd/system/docker.service.d/http-proxy.conf.j2'
+    dest: '/etc/systemd/system/docker.service.d/http-proxy.conf'
+    owner: 'root'
+    group: 'root'
+    mode: '0644'
+  register: docker__register_systemd_proxy_present
+  notify: ['Restart docker' ]
+  when: (ansible_service_mgr == 'systemd' and
+        (docker__env_http_proxy is defined or docker__env_https_proxy is defined))
+
+- name: Reload systemd daemons
+  command: systemctl daemon-reload
+  notify: [ 'Restart docker']
+  when: (ansible_service_mgr == 'systemd' and
+         ((docker__register_systemd_service|d() and
+         docker__register_systemd_service is changed) or
+         (docker__register_systemd_proxy_present|d() and
+         docker__register_systemd_proxy_present is changed)))
+
+#- name: Log into DockerHub
+#  docker_login:
+#    username: chrisnoto
+#    password: pqhkr88ctw

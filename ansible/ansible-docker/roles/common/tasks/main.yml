@@ -1,0 +1,65 @@
+---
+
+- name: set timezone to Asia Shanghai
+  timezone:
+    name: Asia/Shanghai
+
+- name: swap - remove current swaps from fstab
+  lineinfile:
+    dest: /etc/fstab
+    regexp: '^/[\S]+\s+none\s+swap'
+    state: absent
+
+- name: swap - disable swap
+  command: swapoff --all
+  ignore_errors: yes
+
+- name: find default yumrepo files
+  find:
+    paths: /etc/yum.repos.d
+    patterns: "*.repo"
+  register: repofiles_to_delete
+
+- name: remove default yumrepo files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ repofiles_to_delete.files }}"
+
+- name: add local repo for centos7
+  copy:
+    src: centos7.repo
+    dest: /etc/yum.repos.d/local.repo
+  when: ansible_distribution_major_version == "7"
+
+- name: install net-tools and sysstat for centos
+  yum:
+    name:
+      - net-tools
+      - sysstat
+    update_cache: yes
+  when: ansible_pkg_mgr == "yum"
+
+- name: add history timestamp in /etc/profile
+  lineinfile:
+    dest: /etc/profile
+    state: present
+    regexp: '^HISTTIMEFORMAT'
+    line: 'HISTTIMEFORMAT="%d/%m/%y %T "'
+  tags:
+    - timestamp
+
+- name: ensure Selinux is disabled
+  selinux: state=disabled
+
+- name: set Senlinux permissive runtime
+  shell: setenforce 0
+
+- name: check if firewalld exists
+  yum:
+    list: firewalld
+  register: yum_list
+
+- name: ensure firewalld is stopped and disabled
+  service: name=firewalld state=stopped enabled=false
+  when: yum_list.results | selectattr("yumstate", "match", "installed") | list | length != 0

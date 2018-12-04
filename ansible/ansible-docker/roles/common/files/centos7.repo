@@ -1,0 +1,81 @@
+[base]
+name=CentOS-7 - Base
+baseurl=http://10.67.51.164/Centos7/base
+enabled=1
+gpgcheck=0
+priority=99
+
+[extras]
+name=CentOS-7 - Extras
+baseurl=http://10.67.51.164/Centos7/extras
+enabled=1
+gpgcheck=0
+priority=99
+
+[updates]
+name=CentOS-7 - Updates
+baseurl=http://10.67.51.164/Centos7/updates
+enabled=1
+gpgcheck=0
+priority=99
+
+[epel]
+name=Extra Packages for Enterprise Linux 7
+baseurl=http://10.67.51.164/Centos7/epel
+enabled=1
+gpgcheck=0
+priority=99
+
+[remi-safe]
+name=Safe Remi's RPM repository for Enterprise Linux 7 - $basearch
+baseurl=http://10.67.51.164/Centos7/remi-safe
+enabled=1
+gpgcheck=0
+priority=10
+
+[remi-php70]
+name=Remi's PHP 7.0 RPM repository for Enterprise Linux 7 - $basearch
+baseurl=http://10.67.51.164/Centos7/remi-php70
+enabled=1
+gpgcheck=0
+priority=10
+
+[remi-php71]
+name=Remi's PHP 7.1 RPM repository for Enterprise Linux 7 - $basearch
+baseurl=http://10.67.51.164/Centos7/remi-php71
+enabled=1
+gpgcheck=0
+priority=10
+
+[dockerrepo]
+name=Docker repository for Enterprise Linux 7 - $basearch
+baseurl=http://10.67.51.164/Centos7/dockerrepo
+enabled=1
+gpgcheck=0
+priority=10
+
+[zabbix]
+name=Zabbix Official Repository - $basearch
+baseurl=http://10.67.51.164/Centos7/zabbix
+enabled=1
+gpgcheck=0
+
+[zabbix3.4]
+name=Zabbix Official Repository - $basearch
+baseurl=http://10.67.51.164/Centos7/zabbix/zabbix3.4
+enabled=1
+gpgcheck=0
+
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=http://10.67.51.164/docker-ce-stable
+enabled=1
+gpgcheck=0
+gpgkey=http://10.67.51.164/docker-ce-stable
+
+[kubernetes]
+name=Kubernetes
+baseurl=http://10.67.51.164/Centos7/kubernetes
+enabled=1
+gpgcheck=0
+
