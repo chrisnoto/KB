@@ -1,0 +1,106 @@
+####consul 3节点集群
+nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=cobbler -bind=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
+nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=kvmserver -bind=10.67.51.143 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
+nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=kvm-prod -bind=10.67.36.65 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
+nohup consul agent -data-dir /data/consul/ -node=zabbix-openstack -bind=10.67.37.192 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
+###########注册服务
+[root@cobbler consul.d]# consul agent -dev -client 10.67.51.164
+curl -X PUT -d '{"id": "zabbix_node_exporter","name": "node_exporter","address": "10.67.37.192","port": 9100,"tags": ["dev"]}' http://10.67.37.192:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "kvm-prod_node_exporter","name": "node_exporter","address": "10.67.36.65","port": 9100,"tags": ["dev"]}' http://10.67.36.65:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "kvmserver__node_exporter","name": "node_exporter","address": "10.67.51.143","port": 9100,"tags": ["dev"]}' http://10.67.51.143:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "prometheusserver__node_exporter","name": "node_exporter","address": "10.67.36.73","port": 9100,"tags": ["dev"]}' http://10.67.51.164:8500/v1/agent/service/register
+
+curl -X PUT -d '{"id": "cobbler","name": "repo","address": "10.67.51.164","port": 80,"tags": ["yum"],"checks": [{"http": "http://10.67.51.164","interval": "5s"}]}' http://10.67.51.164:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "reposerver6","name": "repo","address": "10.67.51.162","port": 80,"tags": ["yum"],"checks": [{"http": "http://10.67.51.162/mrepo/","interval": "5s"}]}' http://10.67.51.164:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "apt-repo","name": "repo","address": "10.67.51.164","port": 80,"tags": ["apt"],"checks": [{"http": "http://10.67.51.158/ubuntu/","interval": "5s"}]}' http://10.67.51.164:8500/v1/agent/service/register
+############查询服务
+[root@cobbler ~]# dig @10.67.51.164 -p 8600 node_exporter.service.consul
+
+; <<>> DiG 9.9.4-RedHat-9.9.4-72.el7 <<>> @10.67.51.164 -p 8600 node_exporter.service.consul
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 35010
+;; flags: qr aa rd; QUERY: 1, ANSWER: 4, AUTHORITY: 0, ADDITIONAL: 5
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+;; QUESTION SECTION:
+;node_exporter.service.consul.  IN      A
+
+;; ANSWER SECTION:
+node_exporter.service.consul. 0 IN      A       10.67.51.143
+node_exporter.service.consul. 0 IN      A       10.67.36.73
+node_exporter.service.consul. 0 IN      A       10.67.37.192
+node_exporter.service.consul. 0 IN      A       10.67.36.65
+
+;; ADDITIONAL SECTION:
+node_exporter.service.consul. 0 IN      TXT     "consul-network-segment="
+node_exporter.service.consul. 0 IN      TXT     "consul-network-segment="
+node_exporter.service.consul. 0 IN      TXT     "consul-network-segment="
+node_exporter.service.consul. 0 IN      TXT     "consul-network-segment="
+
+;; Query time: 9 msec
+;; SERVER: 10.67.51.164#8600(10.67.51.164)
+;; WHEN: Tue Dec 11 03:20:34 UTC 2018
+;; MSG SIZE  rcvd: 265
+
+[root@cobbler ~]# dig @10.67.51.164 -p 8600 node_exporter.service.consul SRV
+
+; <<>> DiG 9.9.4-RedHat-9.9.4-72.el7 <<>> @10.67.51.164 -p 8600 node_exporter.service.consul SRV
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 32273
+;; flags: qr aa rd; QUERY: 1, ANSWER: 4, AUTHORITY: 0, ADDITIONAL: 9
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+;; QUESTION SECTION:
+;node_exporter.service.consul.  IN      SRV
+
+;; ANSWER SECTION:
+node_exporter.service.consul. 0 IN      SRV     1 1 9100 0a432449.addr.dc1.consul.
+node_exporter.service.consul. 0 IN      SRV     1 1 9100 0a432441.addr.dc1.consul.
+node_exporter.service.consul. 0 IN      SRV     1 1 9100 0a4325c0.addr.dc1.consul.
+node_exporter.service.consul. 0 IN      SRV     1 1 9100 0a43338f.addr.dc1.consul.
+
+;; ADDITIONAL SECTION:
+0a432449.addr.dc1.consul. 0     IN      A       10.67.36.73
+cobbler.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
+0a432441.addr.dc1.consul. 0     IN      A       10.67.36.65
+cobbler.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
+0a4325c0.addr.dc1.consul. 0     IN      A       10.67.37.192
+cobbler.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
+0a43338f.addr.dc1.consul. 0     IN      A       10.67.51.143
+cobbler.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
+
+;; Query time: 1 msec
+;; SERVER: 10.67.51.164#8600(10.67.51.164)
+;; WHEN: Tue Dec 11 03:20:42 UTC 2018
+;; MSG SIZE  rcvd: 454
+
+
+###集成 prometheus using consul_sd_configs
+root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
+global:
+  external_labels:
+      monitor: 'codelab-monitor'
+rule_files:
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'file_sd'
+    file_sd_configs:
+      - files:
+        - ./conf.d/*.json
+  - job_name: node_exporter
+    metrics_path: /metrics
+    scheme: http
+    consul_sd_configs:
+      - server: 10.67.51.164:8500
+        services:
+          - node_exporter

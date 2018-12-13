@@ -37,7 +37,12 @@ hiera nodes
 
 facter
 facter ipaddress
+###### redis backend###
+/etc/ansible/ansible.cfg
+fact_caching = redis
+fact_caching_timeout = 864000
 
+redis-cli get ansible_facts10.67.38.105 | jq .
 #######使用Ansible自動部署zabbix agent#########
 # ansible-playbook -i hosts site.yaml -v
 

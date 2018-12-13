@@ -57,6 +57,10 @@ systemctl enable elasticsearch
 appender.rolling.policies.size.size = 256MB
 appender.rolling.strategy.action.condition.nested_condition.type = IfLastModified
 appender.rolling.strategy.action.condition.nested_condition.age = 7D
+or
+appender.rolling.strategy.action.condition.nested_condition.type = IfAccumulatedFileSize
+appender.rolling.strategy.action.condition.nested_condition.exceeds = 2GB
+
 #/etc/elasticsearch/elasticsearch.yml  (es1)
 cluster.name: logging
 node.name: es1

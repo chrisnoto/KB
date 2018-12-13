@@ -1,3 +1,53 @@
+#######dockerd ###########
+ You can listen on port 2375 on all network interfaces with -H tcp://0.0.0.0:2375, 
+ or on a particular network interface using its IP address: -H tcp://192.168.59.103:2375. 
+ It is conventional to use port 2375 for un-encrypted, 
+ and port 2376 for encrypted communication with the daemon.
+ Docker daemon可以通过3种socket来监听docker engine API:  unix, tcp, fd
+ unix:   /var/run/docker.sock   dockerd -H unix:///var/run/docker.sock
+ tcp:    tcp://0.0.0.0:2375     docker -H tcp://0.0.0.0:2375
+ fd:     fd://                  dockerd -H fd://
+ 
+###find containers in some namespace
+[root@worker1 ~]# docker service ps yum_repo
+ID                  NAME                IMAGE               NODE                DESIRED STATE       CURRENT STATE          ERROR               PORTS
+n7cpfaxybol4        yum_repo.1          nginx:alpine        master              Running             Running 47 hours ago            
+ihtetgpplhus        yum_repo.2          nginx:alpine        worker2             Running             Running 47 hours ago      
+[root@worker1 ~]# docker stack ps yum
+ID                  NAME                IMAGE               NODE                DESIRED STATE       CURRENT STATE          ERROR               PORTS
+n7cpfaxybol4        yum_repo.1          nginx:alpine        master              Running             Running 47 hours ago            
+ihtetgpplhus        yum_repo.2          nginx:alpine        worker2             Running             Running 47 hours ago   
+[root@cobbler ~]# ansible swarm -m shell -a "docker ps -a -f label=com.docker.stack.namespace=yum"
+10.67.36.71 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+8dccb8a2f5fb        nginx:alpine        "nginx -g 'daemon of…"   47 hours ago        Up 47 hours         80/tcp              yum_rep                                                                                             o.1.n7cpfaxybol4xk3i7d0m6h0i4
+
+10.67.36.70 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+10.67.36.68 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+10.67.36.69 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+a343a3da21a7        nginx:alpine        "nginx -g 'daemon of…"   47 hours ago        Up 47 hours         80/tcp              yum_rep                                                                                             o.2.ihtetgpplhus0u83yb12mk6nm
+
+[root@cobbler ~]# ansible swarm -m shell -a "docker ps -a -f label=com.docker.stack.namespace=kafka"
+10.67.36.71 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
+10.67.36.68 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE                       COMMAND             CREATED             STATUS              PORTS               NAME                                                                                             S
+10ab2ecb25c4        wurstmeister/kafka:latest   "start-kafka.sh"    2 days ago          Up 2 days                               kafk                                                                                             a_kafka-1.1.ukturjf483lq8z6rq8deluas5
+
+10.67.36.69 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE                       COMMAND             CREATED             STATUS              PORTS               NAME                                                                                             S
+98755036fbed        wurstmeister/kafka:latest   "start-kafka.sh"    2 days ago          Up 2 days                               kafk                                                                                             a_kafka-2.1.r67z84u6iwy4j6x8njm5dht9a
+
+10.67.36.70 | SUCCESS | rc=0 >>
+CONTAINER ID        IMAGE                       COMMAND             CREATED             STATUS              PORTS               NAME                                                                                             S
+476203b3d3f4        wurstmeister/kafka:latest   "start-kafka.sh"    2 days ago          Up 2 days                               kafk                                                                                             a_kafka-3.1.s0vd2hewmp3nfllx0kng8qfet
+
 ####docker清理####
 docker system prune
 docker volume prune
@@ -43,11 +93,14 @@ docker volume rm $(docker volume ls -qf dangling=true)
   }
 }
 The gelf logging driver is a convenient format that is understood by a number of tools such as Graylog, Logstash, and Fluentd. Many tools use this format.
+#######change docker data path #####
+ExecStart=/usr/bin/dockerd --graph=/data --insecure-registry=10.67.38.90         docker.service
 ########weave scope########
 scope launch 10.67.36.68 10.67.36.69 10.67.36.70 10.67.36.71
 ######docker healthcheck#######
 自 1.12 版本之后，Docker 引入了原生的健康检查实现，可以在 Dockerfile 中声明应用自身的健康检测配置。 HEALTHCHECK 指令声明了健康检测命令，
 用这个命令来判断容器主进程的服务状态是否正常，从而比较真实的反应容器实际状态。
+缺点是如果healthcheck用curl来检查，那么image里必须装curl命令
 Dockerfile example
 FROM elasticsearch:5.5
 HEALTHCHECK --interval=5s --timeout=2s --retries=12 \
@@ -69,7 +122,22 @@ healthcheck:
   timeout: 10s
   retries: 3
   start_period: 40s
-  
+
+Docker Swarm mode command line
+$ docker service create -d \
+    --name=elasticsearch \
+    --health-cmd="curl --silent --fail localhost:9200/_cluster/health || exit 1" \
+    --health-interval=5s \
+    --health-retries=12 \
+    --health-timeout=2s \
+    elasticsearch  
+Docker service update	
+[root@worker1 ~]# docker service update \
+> --health-cmd "curl --silent -f http://10.67.36.71/ubuntu/ || exit 1" \
+> --health-interval 5s \
+> --health-retries 5 \
+> yum_repo
+
 ##########docker设置timezone######
 以下对centos有效
 [root@registry ~]# docker run -it --rm  -e 'TZ=Asia/Shanghai' centos:6.10

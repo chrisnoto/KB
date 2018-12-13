@@ -78,3 +78,73 @@ WantedBy=multi-user.target
 
 #grafana重设密码		
 grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" pqhkr88ctw
+
+
+###file_sd_configs
+root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
+global:
+  external_labels:
+      monitor: 'codelab-monitor'
+rule_files:
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'file_sd'
+    file_sd_configs:
+      - files:
+        - ./conf.d/*.json
+
+root@u1804:/var/snap/prometheus/18# ls conf.d
+docker.json  mysqld.json  node.json
+root@u1804:/var/snap/prometheus/18# cat conf.d/docker.json
+[
+  {
+    "targets": [ "10.67.36.70:9323" ],
+    "labels": {
+      "env": "product",
+      "job": "docker"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18# cat conf.d/node.json
+[
+  {
+    "targets": [ "10.67.36.65:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node"
+    }
+  },
+  {
+    "targets": [ "10.67.51.143:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node"
+    }
+  },
+  {
+    "targets": [ "10.67.37.192:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node"
+    }
+  },
+  {
+    "targets": [ "localhost:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18# cat conf.d/mysqld.json
+[
+  {
+    "targets": [ "10.67.37.192:9104" ],
+    "labels": {
+      "env": "product",
+      "job": "mysqld"
+    }
+  }
+]

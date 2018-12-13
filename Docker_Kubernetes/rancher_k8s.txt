@@ -115,6 +115,9 @@ elasticsearch  -> 10.67.36.53 10.67.36.51
 3 配置 kibana
 创建index patterns   new-*  对应配置logging时里的prefix
 
+在catalog里部署cerebro来管理elasticsearch集群
+you can access the web console in this URL: http://[Docker_Host]:9000 and connect to the Elasticsearch cluster using the URL http://elasticsearch:9200 or http://elasticsearch2:9200 in the hosts input field, 
+the user elastic and password changeme.
 
 部署glusterfs heketi-cli
 heketi db SOPF问题
