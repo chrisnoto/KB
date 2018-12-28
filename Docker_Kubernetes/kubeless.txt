@@ -1,0 +1,108 @@
+######kubeless  install by charm#####
+rbac.create=true
+ui.enabled=true
+ui.ingress.enabled=true
+
+#######kubeless概念########
+Kubeless有三个核心概念
+
+Functions：Functions代表了被执行的代码，Functions包含有关代码运行时依赖关系的元数据、构建指令等，
+Triggers：Triggers代表了与其关联函数的事件，当事件发生时，Kubeless将会保证关联函数至多被唤醒一次，根据事件的类型，一个Trigger能够和一个或多个函数相关联
+Runtime：Runtime表示执行函数的语言和运行时特定环境。
+Kubeless为了将函数部署在k8s上引用了很多k8s的概念：
+
+用CRD表示Functions
+每个事件源被建模成一个独立的Trjgger CRD对象
+独立的CRD控制器负责有关于CRD对象的CRUD操作
+Deployment/Pod来运行相关的Runtime
+Configmap用来注入函数代码到Runtime Pod中
+Init-container用来加载函数可能需要的依赖
+Service用来暴露函数
+Ingress用来对外暴露函数
+
+[root@cobbler ~]# kubectl get customresourcedefinition |grep kubeless
+cronjobtriggers.kubeless.io                   CustomResourceDefinition.v1beta1.apiextensions.k8s.io
+functions.kubeless.io                         CustomResourceDefinition.v1beta1.apiextensions.k8s.io
+httptriggers.kubeless.io                      CustomResourceDefinition.v1beta1.apiextensions.k8s.io
+
+[root@cobbler kubeless_linux-amd64]# kubeless get-server-config
+INFO[0000] Current Server Config:
+INFO[0000] Supported Runtimes are: ballerina0.981.0, dotnetcore2.0, dotnetcore2.1, go1.10, java1.8, nodejs6, nodejs8, php7.2, python2.7, python3.4, python3.6, python3.7, ruby2.3, ruby2.4, ruby2.5, jvm1.8, nodejs_distroless8, nodejsCE8
+
+
+###java1.8###
+1 [root@cobbler ~]# cat HelloGet.java
+package io.kubeless;
+
+import io.kubeless.Event;
+import io.kubeless.Context;
+
+public class Foo {
+    public String foo(io.kubeless.Event event, io.kubeless.Context context) {
+        return "Hello world! This is kubeless demo.";
+    }
+}
+2  deploy function
+[root@cobbler ~]# kubeless function deploy get-java --runtime java1.8 --handler Foo.foo --from-file HelloGet.java -n kubeless
+INFO[0000] Deploying function...
+INFO[0000] Function get-java submitted for deployment
+INFO[0000] Check the deployment status executing 'kubeless function ls get-java'
+
+3 check
+[root@cobbler ~]# kubeless function ls
+NAME            NAMESPACE       HANDLER RUNTIME DEPENDENCIES    STATUS
+get-java        kubeless        Foo.foo java1.8                 0/1 NOT READY
+[root@cobbler ~]# kubectl -n kubeless get po
+NAME                                                    READY     STATUS       RESTARTS   AGE
+get-java-6ccd66499-s2lpm                                0/1       Init:Error   3          1m
+
+4 背后原理
+我们可以看到，该 Pod 先后依赖了三个镜像：kubeless/unzip、kubeless/java-init、kubeless/java
+首先看下 kubeless/unzip 镜像，它主要作用是将我们的源文件挂载到容器指定位置，看启动命令里面主要干了两件事：一是 sha256 校验文件一致性，
+二是复制源文件以及 pom.xml 到指定目录。
+
+echo 'e5e99052dd50822d654c935dd2f5c893cf4062bfd304d7245503366c83cba93a  /src/Foo.java' > /tmp/func.sha256 && sha256sum -c /tmp/func.sha256 && cp /src/Foo.java /kubeless/Foo.java && cp /src/pom.xml /kubeless
+1
+然后看下 kubeless/java-init 镜像，主要执行一些初始化操作，看启动命令主要干了两件事：一是复制指定文件到指定目录(这个指定的文件下边会讲到)，
+二是执行 mvn package & install 编译操作。
+
+cp -r /usr/src/myapp/* /kubeless/ && cp /kubeless/*.java /kubeless/function/src/main/java/io/kubeless/ && cp /kubeless/function-pom.xml /kubeless/function/pom.xml 2>/dev/null || true && mvn package > /dev/termination-log 2>&1 && mvn install > /dev/termination-log 2>&1
+1
+最后看下 kubeless/java 镜像，虽然日志上没有显示启动命令，但是它非常关键，它的作用是在 Java 环境中启动服务，调用我们指定的代码的类方法，来提供服务给外部调用。
+
+####python2.7###
+[root@cobbler ~]# kubectl get po -o wide
+NAME                         READY     STATUS    RESTARTS   AGE       IP           NODE
+hello-67bf8bd7c8-pm87z       1/1       Running   0          59m       10.42.4.15   worker2
+repo-858d7bf699-4pkkf        1/1       Running   0          10d       10.42.5.6    master3
+repo-httpd-b5967bd88-hjj9n   1/1       Running   0          9d        10.42.4.10   worker2
+[root@cobbler ~]# ssh worker2 docker images |grep kubeless
+kubeless/function-controller          v1.0.1                      69984b15243f        4 days ago          84.8 MB
+kubeless/python                       <none>                      aaee0f0bbf06        8 weeks ago         166 MB
+kubeless/unzip                        <none>                      d2c5621fdfa3        14 months ago       5.68 MB
+
+############nodejs8#######
+[root@cobbler ~]# kubectl get po -o wide
+NAME                            READY     STATUS    RESTARTS   AGE       IP           NODE
+hello-67bf8bd7c8-pm87z          1/1       Running   0          3h        10.42.4.15   worker2
+hello-nodejs-65b56586cf-lv5rl   1/1       Running   0          17m       10.42.3.16   worker1
+
+[root@worker1 ~]# docker images |grep kubeless
+kubeless/nodejs                                   <none>              5a3f1eaa89ed        6 weeks ago         687 MB
+kubeless/unzip                                    <none>              d2c5621fdfa3        14 months ago       5.68 MB
+
+########call function#####
+[root@cobbler ~]# kubeless function call hello-nodejs
+Hello World
+
+
+
+
+
+
+
+
+
+
+
+

@@ -93,6 +93,75 @@ docker volume rm $(docker volume ls -qf dangling=true)
   }
 }
 The gelf logging driver is a convenient format that is understood by a number of tools such as Graylog, Logstash, and Fluentd. Many tools use this format.
+##########docker devicemapper  ##############
+With Docker 17.06 and higher, Docker can manage the block device for you, simplifying configuration of direct-lvm mode. 
+This is appropriate for fresh Docker setups only. You can only use a single block device. If you need to use multiple block devices, 
+configure direct-lvm mode manually instead. 
+
+[root@d1 centos]# cat /etc/docker/daemon.json
+{
+  "storage-driver": "devicemapper",
+  "storage-opts": [
+    "dm.directlvm_device=/dev/vdc",
+    "dm.thinp_percent=95",
+    "dm.thinp_metapercent=1",
+    "dm.thinp_autoextend_threshold=80",
+    "dm.thinp_autoextend_percent=20",
+    "dm.directlvm_device_force=false"
+  ]
+}
+
+[root@d1 centos]# lsblk
+NAME                                                                                         MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+vda                                                                                          253:0    0   40G  0 disk
+└─vda1                                                                                       253:1    0   40G  0 part /
+vdb                                                                                          253:16   0   64M  0 disk
+vdc                                                                                          253:32   0   20G  0 disk
+├─docker-thinpool_tmeta                                                                      252:0    0  204M  0 lvm
+│ └─docker-thinpool                                                                          252:2    0   19G  0 lvm
+│   ├─docker-253:1-29396177-4a58582a85801e6923228bd1c74c52025270e15d8109861e6c1737799791c7bb 252:3    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/4a5858
+│   ├─docker-253:1-29396177-e824d29bc3cc89c30e12bcbd6dd740843a51ddd64f3847974cbda73c2e98c9f2 252:4    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/e824d2
+│   └─docker-253:1-29396177-734e698eee7fcedff2266792975aee4ece1995f0e0fe349f618c32391a418fbf 252:5    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/734e69
+└─docker-thinpool_tdata                                                                      252:1    0   19G  0 lvm
+  └─docker-thinpool                                                                          252:2    0   19G  0 lvm
+    ├─docker-253:1-29396177-4a58582a85801e6923228bd1c74c52025270e15d8109861e6c1737799791c7bb 252:3    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/4a5858
+    ├─docker-253:1-29396177-e824d29bc3cc89c30e12bcbd6dd740843a51ddd64f3847974cbda73c2e98c9f2 252:4    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/e824d2
+    └─docker-253:1-29396177-734e698eee7fcedff2266792975aee4ece1995f0e0fe349f618c32391a418fbf 252:5    0   10G  0 dm   /var/lib/docker/devicemapper/mnt/734e69
+[root@d1 centos]#
+
+[root@d1 centos]# dmsetup ls
+docker-253:1-29396177-4a58582a85801e6923228bd1c74c52025270e15d8109861e6c1737799791c7bb  (252:3)
+docker-thinpool_tdata   (252:1)
+docker-253:1-29396177-734e698eee7fcedff2266792975aee4ece1995f0e0fe349f618c32391a418fbf  (252:5)
+docker-253:1-29396177-e824d29bc3cc89c30e12bcbd6dd740843a51ddd64f3847974cbda73c2e98c9f2  (252:4)
+docker-thinpool_tmeta   (252:0)
+docker-thinpool (252:2)
+[root@d1 centos]# df
+Filesystem     1K-blocks    Used Available Use% Mounted on
+/dev/vda1       41931756 2042180  39889576   5% /
+devtmpfs          921044       0    921044   0% /dev
+tmpfs             941684       0    941684   0% /dev/shm
+tmpfs             941684   16984    924700   2% /run
+tmpfs             941684       0    941684   0% /sys/fs/cgroup
+tmpfs             188340       0    188340   0% /run/user/1000
+/dev/dm-3       10467328  148440  10318888   2% /var/lib/docker/devicemapper/mnt/4a58582a85801e6923228bd1c74c52025270e15d8109861e6c1737799791c7bb
+shm                65536       0     65536   0% /var/lib/docker/containers/c8a280ff78f670a6bc6ab3c5a9af90fe803b149b35c265ab3e80fa2660406ea5/mounts/shm
+tmpfs             188340       0    188340   0% /run/user/0
+/dev/dm-4       10467328  529996   9937332   6% /var/lib/docker/devicemapper/mnt/e824d29bc3cc89c30e12bcbd6dd740843a51ddd64f3847974cbda73c2e98c9f2
+shm                65536       0     65536   0% /var/lib/docker/containers/67e939f706ea6c84925401e2bef3705927ee4d2f7db4b47aae7180bb138c872f/mounts/shm
+/dev/dm-5       10467328  148460  10318868   2% /var/lib/docker/devicemapper/mnt/734e698eee7fcedff2266792975aee4ece1995f0e0fe349f618c32391a418fbf
+shm                65536       0     65536   0% /var/lib/docker/containers/af628326b4e98344de4b4989b12627e98dcb3d94d1793a31955e9cfa0a1248b0/mounts/shm
+[root@d1 centos]# ll /dev/mapper
+total 0
+crw-------. 1 root root 10, 236 Dec 21 08:54 control
+lrwxrwxrwx. 1 root root       7 Dec 21 08:59 docker-253:1-29396177-4a58582a85801e6923228bd1c74c52025270e15d8109861e6c1737799791c7bb -> ../dm-3
+lrwxrwxrwx. 1 root root       7 Dec 21 09:15 docker-253:1-29396177-734e698eee7fcedff2266792975aee4ece1995f0e0fe349f618c32391a418fbf -> ../dm-5
+lrwxrwxrwx. 1 root root       7 Dec 21 09:12 docker-253:1-29396177-e824d29bc3cc89c30e12bcbd6dd740843a51ddd64f3847974cbda73c2e98c9f2 -> ../dm-4
+lrwxrwxrwx. 1 root root       7 Dec 21 08:54 docker-thinpool -> ../dm-2
+lrwxrwxrwx. 1 root root       7 Dec 21 08:54 docker-thinpool_tdata -> ../dm-1
+lrwxrwxrwx. 1 root root       7 Dec 21 08:54 docker-thinpool_tmeta -> ../dm-0
+
+
 #######change docker data path #####
 ExecStart=/usr/bin/dockerd --graph=/data --insecure-registry=10.67.38.90         docker.service
 ########weave scope########

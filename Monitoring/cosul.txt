@@ -2,13 +2,13 @@
 nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=cobbler -bind=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
 nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=kvmserver -bind=10.67.51.143 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
 nohup consul agent -server -bootstrap-expect 3 -ui -data-dir /data/consul/ -node=kvm-prod -bind=10.67.36.65 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
-nohup consul agent -data-dir /data/consul/ -node=zabbix-openstack -bind=10.67.37.192 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
+nohup consul agent -data-dir /data/consul/ -node=u1804 -bind=10.67.36.73 -join=10.67.51.164  -rejoin -config-dir=/etc/consul.d/ -client 0.0.0.0 &
 ###########注册服务
 [root@cobbler consul.d]# consul agent -dev -client 10.67.51.164
 curl -X PUT -d '{"id": "zabbix_node_exporter","name": "node_exporter","address": "10.67.37.192","port": 9100,"tags": ["dev"]}' http://10.67.37.192:8500/v1/agent/service/register
 curl -X PUT -d '{"id": "kvm-prod_node_exporter","name": "node_exporter","address": "10.67.36.65","port": 9100,"tags": ["dev"]}' http://10.67.36.65:8500/v1/agent/service/register
 curl -X PUT -d '{"id": "kvmserver__node_exporter","name": "node_exporter","address": "10.67.51.143","port": 9100,"tags": ["dev"]}' http://10.67.51.143:8500/v1/agent/service/register
-curl -X PUT -d '{"id": "prometheusserver__node_exporter","name": "node_exporter","address": "10.67.36.73","port": 9100,"tags": ["dev"]}' http://10.67.51.164:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "prometheusserver__node_exporter","name": "node_exporter","address": "10.67.36.73","port": 9100,"tags": ["dev"]}' http://10.67.36.73:8500/v1/agent/service/register
 
 curl -X PUT -d '{"id": "cobbler","name": "repo","address": "10.67.51.164","port": 80,"tags": ["yum"],"checks": [{"http": "http://10.67.51.164","interval": "5s"}]}' http://10.67.51.164:8500/v1/agent/service/register
 curl -X PUT -d '{"id": "reposerver6","name": "repo","address": "10.67.51.162","port": 80,"tags": ["yum"],"checks": [{"http": "http://10.67.51.162/mrepo/","interval": "5s"}]}' http://10.67.51.164:8500/v1/agent/service/register

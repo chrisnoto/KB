@@ -90,7 +90,7 @@ remove one osd at a time
 Then you wait for rebalance to be completed. Eventually completely remove the OSD:
 
 3 remove osd
-$ service ceph stop osd.<ID>
+$ stop ceph-osd id=<ID>
 $ ceph osd out <ID>
 $ ceph osd crush remove osd.<ID>
 $ ceph auth del osd.<ID>

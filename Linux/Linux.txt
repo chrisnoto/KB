@@ -1929,6 +1929,8 @@ lvcreate -L 2500M -n centos7_newvol vg_newlvm
 mkfs.ext3 
 mkdir
 mount
+
+lvcreate -l 
 ----------------online----------------
 cd /sys/class/scsi_host/host0   #host1 host2 ....
 echo "- - -" >scan

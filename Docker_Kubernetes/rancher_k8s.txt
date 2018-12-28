@@ -22,6 +22,7 @@ docker ps -a|awk '{print $1}'|xargs docker rm -f
 docker volume ls|awk '{print $2}'|xargs docker volume rm"""
 
 https://10.67.36.58/v1-telemetry   telemetry服务
+
 # 0 收集rancher server日志
 [root@rancher td-agent]# cat /etc/docker/daemon.json
 {
@@ -99,6 +100,22 @@ No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to intera
 10.67.36.62:2379 is healthy: successfully committed proposal: took = 4.795877ms
 10.67.36.64:2379 is healthy: successfully committed proposal: took = 17.200007ms
 10.67.36.63:2379 is healthy: successfully committed proposal: took = 3.932169ms
+
+[root@master1 ~]# for u in `docker exec -it etcd etcdctl get /registry --prefix -w=json |python -m json.tool |jq '.kvs[] | {key}'| awk -F'"' '{print $4 "\n"}'`;do echo "$u"|base64 -d;echo ;done
+/registry/apiextensions.k8s.io/customresourcedefinitions/bgpconfigurations.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/clusterinformations.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/felixconfigurations.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/globalnetworkpolicies.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/globalnetworksets.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/hostendpoints.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/ippools.crd.projectcalico.org
+/registry/apiextensions.k8s.io/customresourcedefinitions/networkpolicies.crd.projectcalico.org
+/registry/apiregistration.k8s.io/apiservices/v1.
+/registry/apiregistration.k8s.io/apiservices/v1.apps
+/registry/apiregistration.k8s.io/apiservices/v1.authentication.k8s.io
+...
+...
+
 
 部署efk   (注意master如果没有worker角色，那么fluentd不会收集master的日志)
 前提：存在elasticsearch集群

@@ -1,4 +1,9 @@
  ############Mysql##########
+ #开启查询日志
+SET GLOBAL general_log='ON';
+#关闭查询日志
+SET GLOBAL general_log='OFF';
+ 
 SHOW VARIABLES LIKE "secure_file_priv";
  查看表大小（MB）并排序
  select table_name as "tables",round(((data_length + index_length) / 1024 / 1024), 2) "Size in MB" FROM information_schema.TABLES WHERE table_schema = 'zabbixdb' ORDER BY (data_length + index_length) DESC;
@@ -9,3 +14,26 @@ SHOW VARIABLES LIKE "secure_file_priv";
  
  #####################import mysql data##############################
 load data infile '/tmp/export/dj_srv_info.txt' into table SrvInformation.SrvInfo fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
+load data infile '/tmp/export/1-prod.csv' into table system_store.host_server_list fields terminated by ',' optionally enclosed by '\'' lines terminated by '\n';
+
+############更改call存储过程的参数, 减少分区数量########
+mysql> CALL partition_maintenance('zabbixdb', 'trends_uint', 180, 24, 14);
+mysql> CALL partition_maintenance('zabbixdb', 'trends', 180, 24, 14);
+
+##########导入 查看存储过程############
+# import partition.sql
+mysql -u'zabbix' -p'zabbix' zabbix  < partition.sql
+# run
+nohup mysql -u'zabbix' -p'zabbix' 'zabbix' -e "CALL partition_maintenance_all('zabbix')" &> /root/partition.log&
+tail -f /root/partition.log
+
+# 查看过程逻辑
+show create procedure partition_maintenance_all \G;
+# 删除存储过程
+drop procedure if exists partition_maintenance_all; 
+# 查看存储过程
+show procedure status like 'partition_maintenance%' \G;
+# 查看
+show create table history
+
+

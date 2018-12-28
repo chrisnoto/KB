@@ -1,3 +1,10 @@
+监控工具  innotop
+
+(1)interactive_timeout: 服务器关闭交互式连接前等待活动的秒数
+(2)wait_timeout: 服务器关闭非交互连接之前等待活动的秒数。
+两者生效取决于：客户端是交互或者非交互的连接。
+在交互模式下，interactive_timeout才生效；非交互模式下，wait_timeout生效。
+
 运行中的mysql状态查看
  
 对正在运行的mysql进行监控，其中一个方式就是查看mysql运行状态。 
@@ -19,7 +26,10 @@ key_buffer_write_hits = (1-key_writes / key_write_requests) * 100%
 (4)InnoDB Buffer命中率 
 mysql> show status like 'innodb_buffer_pool_read%'; 
 innodb_buffer_read_hits = (1 - innodb_buffer_pool_reads / innodb_buffer_pool_read_requests) * 100% 
- 
+
+Innodb_buffer_pool_read_requests indicates the the number of logical read requests (read from memory) InnoDB has done.
+Innodb_buffer_pool_reads indicates the number of logical reads that InnoDB could not satisfy from the buffer pool, and had to read directly from the disk (physical reads).
+
 (5)Query Cache命中率 
 mysql> show status like 'Qcache%'; 
 Query_cache_hits = (Qcahce_hits / (Qcache_hits + Qcache_inserts )) * 100%; 
@@ -55,7 +65,43 @@ mysql > show status like 'Binlog_cache%';
 mysql > show status like 'innodb_log_waits'; 
 Innodb_log_waits值不等于0的话，表明 innodb log  buffer 因为空间不足而等待 
 
-https://www.cnblogs.com/zhoujinyi/p/5236705.html
+mysql> show engine innodb status\G
+Per second averages calculated from the last 38 seconds（以下信息来之过去的38秒）
+----------------------
+BUFFER POOL AND MEMORY
+----------------------
+Total large memory allocated 10994319360
+Dictionary memory allocated 5639555
+Buffer pool size   655280
+Free buffers       2048
+Database pages     652698
+Old database pages 240773
+Modified db pages  7692
+Pending reads      0
+Pending writes: LRU 0, flush list 0, single page 0
+Pages made young 16616, not young 720614
+0.00 youngs/s, 0.00 non-youngs/s
+Pages read 502616, created 5159750, written 20070136
+0.00 reads/s, 0.21 creates/s, 0.00 writes/s
+Buffer pool hit rate 1000 / 1000, young-making rate 0 / 1000 not 0 / 1000
+Pages read ahead 0.00/s, evicted without access 0.00/s, Random read ahead 0.00/s
+LRU len: 652698, unzip_LRU len: 0
+I/O sum[592]:cur[0], unzip sum[0]:cur[0]
+
+在Buffer pool size中可以看到页相关使用情况，如果能明白上面的原理部分，看下面的信息应该就很简单了。
+Total memory allocated：为缓冲池分配的总内存（以字节为单位）。
+Dictionary memory allocated：分配给InnoDB数据字典的总内存（以字节为单位）。
+Buffer pool size：分配给缓冲池的页面总数量（数量*页面大小=缓冲池大小），默认每个Page为16k。
+Free buffers：缓冲池中空闲列表的页面总数量（Buffer pool size – Database pages）。
+Database pages：缓冲池中LRU链表的页面总数量，包含young区域和old区域，可以理解为已经使用的页面。
+Old database pages：代表LRU链表old区域的节点数量。
+Modified db pages：缓冲池中已经修改了的页数，所谓脏数据。也就是FLUSH链表中节点的数量。
+Pages made young：代表从old区域移动到young区域的节点数量。
+not young：代表old区域没有移动到young区域就被淘汰的节点数量，后边跟着移动的速率。
+youngs/s：在old区域坚持到了1s，进入到young区域的页。
+non-youngs/s：在old区域没有坚持到了1s，于是被刷出去了的页。
+Pages read、created、written：代表InnoDB读取，创建，写入了多少页。后面分别跟着读取、创建、写入的速率。
+
 统计应用：
 
       关于SQL维度的统计信息主要集中在events_statements_summary_by_digest表中，通过将SQL语句抽象出digest，可以统计某类SQL语句在各个维度的统计信息
@@ -149,3 +195,40 @@ zjy@performance_schema 12:23:22>SELECT OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME FR
 10，哪个等待事件消耗的时间最多：
 
 zjy@performance_schema 12:25:22>SELECT EVENT_NAME, COUNT_STAR, SUM_TIMER_WAIT, AVG_TIMER_WAIT FROM events_waits_summary_global_by_event_name WHERE event_name != 'idle' ORDER BY SUM_TIMER_WAIT DESC LIMIT 1;
+
+###########Handler###########
+Handler_read_first
+The number of times the first entry in an index was read. If this value is high, it suggests that the server is doing a lot of full index scans; for example, SELECT col1 FROM foo, assuming that col1is
+indexed.
+此选项表明SQL是在做一个全索引扫描，注意是全部，而不是部分，所以说如果存在WHERE语句，这个选项是不会变的。如果这个选项的数值很大，既是好事也是坏事。说它好是因为毕竟查询是在索引里完成的，
+而不是数据文件里，说它坏是因为大数据量时，简便是索引文件，做一次完整的扫描也是很费时的
+
+Handler_read_key
+The number of requests to read a row based on a key. If this value is high, it is a good indication that
+your tables are properly indexed for your queries.
+此选项数值如果很高，那么恭喜你，你的系统高效的使用了索引，一切运转良好
+
+Handler_read_last
+The number of requests to read the last key in an index. With ORDER BY, the server will issue a first-key request followed by several next-key requests, whereas with With ORDER BY DESC,
+ the server will issue a last-key request followed by several previous-key requests. This variable was added in MySQL 5.6.1.
+
+Handler_read_next
+The number of requests to read the next row in key order. This value is incremented if you are querying
+an index column with a range constraint or if you are doing an index scan.
+此选项表明在进行索引扫描时，按照索引从数据文件里取数据的次数,貌似也是越小越好，至少官方文档的例子是这样说的：
+The Handler_read_next[647]value decreases from 5 to 1, indicating more efficient use of the index
+
+Handler_read_prev
+The number of requests to read the previous row in key order. This read method is mainly used to
+optimize ORDER BY … DESC.
+此选项表明在进行索引扫描时，按照索引倒序从数据文件里取数据的次数，一般就是ORDER BY … DESC
+
+Handler_read_rnd
+The number of requests to read a row based on a fixed position. This value is high if you are doing a lot of queries that require sorting of the result. You probably have a lot of queries that
+ require MySQL to scan entire tables or you have joins that do not use keys properly.
+简单的说，就是查询直接操作了数据文件，很多时候表现为没有使用索引或者文件排序
+
+Handler_read_rnd_next
+The number of requests to read the next row in the data file. This value is high if you are doing a lot of table scans. Generally this suggests that your tables are not properly indexed or that
+ your queries are not written to take advantage of the indexes you have.
+此选项表明在进行数据文件扫描时，从数据文件里取数据的次数,这个涉及到table scans，肯定是越小越好

@@ -1,0 +1,22 @@
+namespace: kube-system
+######value######
+grafana.ingress.enabled true
+coreDns.enabled false
+kubeDns.enabled true
+
+########ingress未配置#######
+Ingress.extensions "prometheus-operator-qkqzw-grafana" is invalid: spec: 
+Invalid value: []extensions.IngressRule(nil): either `backend` or `rules` must be specified; 
+
+
+########代理无法访问 https://quay.io  https://gcr.io #########
+Failed to pull image "quay.io/coreos/kube-state-metrics:v1.4.0": rpc error: code = Unknown desc = Error response from daemon: 
+Get https://quay.io/v1/_ping: Proxy Authentication Required
+[root@master1 ~]# docker pull quay.io/prometheus/node-exporter
+Using default tag: latest
+Error response from daemon: Get https://quay.io/v1/_ping: Proxy Authentication Required
+[root@master1 ~]# docker pull quay.io/bitnami/mysql
+Using default tag: latest
+Error response from daemon: Get https://quay.io/v1/_ping: Proxy Authentication Required
+[root@worker1 ~]# docker pull gcr.io/google_containers/kubernetes-dashboard-amd64:v1.7.1
+Error response from daemon: Get https://gcr.io/v1/_ping: unexpected EOF

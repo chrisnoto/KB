@@ -1,0 +1,133 @@
+[root@cobbler ~]# kubectl -n prometheus-yzklz get all -o wide
+NAME                                                      READY     STATUS    RESTARTS   AGE       IP            NODE
+po/prometheus-yzklz-alertmanager-5b999f556b-nwg8c         2/2       Running   0          36d       10.42.4.8     worker2
+po/prometheus-yzklz-kube-state-metrics-7457b4cb66-bjn4s   1/1       Running   0          36d       10.42.2.8     worker3
+po/prometheus-yzklz-node-exporter-57zt8                   1/1       Running   0          36d       10.67.36.63   master2
+po/prometheus-yzklz-node-exporter-fl2kx                   1/1       Running   0          36d       10.67.36.61   worker1
+po/prometheus-yzklz-node-exporter-hkv8f                   1/1       Running   0          36d       10.67.36.60   worker2
+po/prometheus-yzklz-node-exporter-mc4gl                   1/1       Running   0          36d       10.67.36.62   master3
+po/prometheus-yzklz-node-exporter-wczsz                   1/1       Running   0          36d       10.67.36.59   worker3
+po/prometheus-yzklz-pushgateway-5974d76654-pmcvn          1/1       Running   0          36d       10.42.2.7     worker3
+po/prometheus-yzklz-server-79974c9f8b-9n2g8               2/2       Running   0          36d       10.42.3.7     worker1
+
+NAME                                                  CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE       SELECTOR
+svc/glusterfs-dynamic-prometheus-yzklz-alertmanager   10.43.38.8      <none>        1/TCP      36d       <none>
+svc/glusterfs-dynamic-prometheus-yzklz-server         10.43.164.127   <none>        1/TCP      36d       <none>
+svc/ingress-e092de00f37680e9eb30edfde941fa8b          10.43.253.159   <none>        9090/TCP   36d       workloadID_ingress-e092de00f37680e9eb30edfde941fa8b=true
+svc/prometheus-yzklz-alertmanager                     10.43.164.117   <none>        80/TCP     36d       app=prometheus,component=alertmanager,release=prometheus-yzklz
+svc/prometheus-yzklz-kube-state-metrics               None            <none>        80/TCP     36d       app=prometheus,component=kube-state-metrics,release=prometheus-yzklz
+svc/prometheus-yzklz-node-exporter                    None            <none>        9100/TCP   36d       app=prometheus,component=node-exporter,release=prometheus-yzklz
+svc/prometheus-yzklz-pushgateway                      10.43.71.195    <none>        9091/TCP   36d       app=prometheus,component=pushgateway,release=prometheus-yzklz
+svc/prometheus-yzklz-server                           10.43.133.149   <none>        80/TCP     36d       app=prometheus,component=server,release=prometheus-yzklz
+
+NAME                                         DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE       CONTAINER(S)                                                       IMAGE(S)                                                       SELECTOR
+deploy/prometheus-yzklz-alertmanager         1         1         1            1           36d       prometheus-alertmanager,prometheus-alertmanager-configmap-reload   prom/alertmanager:v0.15.3,jimmidyson/configmap-reload:v0.2.2   app=prometheus,component=alertmanager,release=prometheus-yzklz
+deploy/prometheus-yzklz-kube-state-metrics   1         1         1            1           36d       prometheus-yzklz-kube-state-metrics                                quay.io/coreos/kube-state-metrics:v1.3.1                       app=prometheus,component=kube-state-metrics,release=prometheus-yzklz
+deploy/prometheus-yzklz-pushgateway          1         1         1            1           36d       prometheus-pushgateway                                             prom/pushgateway:v0.5.2                                        app=prometheus,component=pushgateway,release=prometheus-yzklz
+deploy/prometheus-yzklz-server               1         1         1            1           36d       prometheus-server-configmap-reload,prometheus-server               jimmidyson/configmap-reload:v0.2.2,prom/prometheus:v2.5.0      app=prometheus,component=server,release=prometheus-yzklz
+
+NAME                                                DESIRED   CURRENT   READY     AGE       CONTAINER(S)                                                       IMAGE(S)                                                       SELECTOR
+rs/prometheus-yzklz-alertmanager-5b999f556b         1         1         1         36d       prometheus-alertmanager,prometheus-alertmanager-configmap-reload   prom/alertmanager:v0.15.3,jimmidyson/configmap-reload:v0.2.2   app=prometheus,component=alertmanager,pod-template-hash=1655591126,release=prometheus-yzklz
+rs/prometheus-yzklz-kube-state-metrics-6b4ff4cd4f   0         0         0         36d       prometheus-kube-state-metrics                                      quay.io/coreos/kube-state-metrics:v1.4.0                       app=prometheus,component=kube-state-metrics,pod-template-hash=2609907809,release=prometheus-yzklz
+rs/prometheus-yzklz-kube-state-metrics-7457b4cb66   1         1         1         36d       prometheus-yzklz-kube-state-metrics                                quay.io/coreos/kube-state-metrics:v1.3.1                       app=prometheus,component=kube-state-metrics,pod-template-hash=3013607622,release=prometheus-yzklz
+rs/prometheus-yzklz-pushgateway-5974d76654          1         1         1         36d       prometheus-pushgateway                                             prom/pushgateway:v0.5.2                                        app=prometheus,component=pushgateway,pod-template-hash=1530832210,release=prometheus-yzklz
+rs/prometheus-yzklz-server-79974c9f8b               1         1         1         36d       prometheus-server-configmap-reload,prometheus-server               jimmidyson/configmap-reload:v0.2.2,prom/prometheus:v2.5.0      app=prometheus,component=server,pod-template-hash=3553075946,release=prometheus-yzklz
+
+#####prometheus configuration#######
+root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
+global:
+  external_labels:
+      monitor: 'codelab-monitor'
+remote_write:                                          ###remote storage write url
+    - url: "http://10.67.36.60:8000/write"
+remote_read:                                           ###remote storage write url
+    - url: "http://10.67.36.60:8000/read"
+rule_files:
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'file_sd'                                ###file discovery
+    file_sd_configs:
+      - files:
+        - ./conf.d/*.json
+  - job_name: node_exporter                            ###consul discovery
+    metrics_path: /metrics
+    scheme: http
+    consul_sd_configs:
+      - server: 10.67.51.164:8500
+        services:
+          - node_exporter
+  - job_name: 'openstack'                             ###openstack discovery
+    openstack_sd_configs:
+      - identity_endpoint: https://10.67.36.80:5000/v2.0
+        username: admin
+        project_name: IT
+        password: F0xc0nn!23
+        role: instance
+    relabel_configs:
+      - source_labels: [__meta_openstack_instance_status]
+        action: keep
+        regex: ACTIVE
+      - source_labels: [__meta_openstack_tag_prometheus_io_scrape]
+        action: keep
+        regex: 'true'
+      - source_labels: [__address__, __meta_openstack_tag_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_openstack_instance_name]
+        target_label: instance
+###file sd####
+root@u1804:/var/snap/prometheus/18# ls conf.d
+docker.json  kafka.json  mysqld.json  node_exporter.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat docker.json
+[
+  {
+    "targets": [ "10.67.36.70:9323" ],
+    "labels": {
+      "env": "product",
+      "job": "docker"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18/conf.d# cat kafka.json
+[
+  {
+    "targets": [ "10.67.36.59:9308" ],
+    "labels": {
+      "env": "product",
+      "job": "kafka"
+    }
+  },
+  {
+    "targets": [ "10.67.36.68:9308" ],
+    "labels": {
+      "env": "product",
+      "job": "kafka"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18/conf.d# cat mysqld.json
+[
+  {
+    "targets": [ "10.67.37.192:9104" ],
+    "labels": {
+      "env": "product",
+      "job": "mysqld"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18/conf.d# cat node_exporter.json
+[
+  {
+    "targets": [ "10.67.37.192:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node_exporter"
+    }
+  }
+]
+######consul sd #####
+see consul.txt

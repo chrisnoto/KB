@@ -1,6 +1,53 @@
 0.94.x   Hammer LTS
 10.2.x   Jewel  LTS
 
+#############ceph performance######
+root@node-5:~# ceph osd perf |grep 23
+osd fs_commit_latency(ms) fs_apply_latency(ms)
+ 23                     0                 3240
+停掉osd 23试试，查看性能
+root@node-1:~# ceph osd pool stats
+pool rbd id 0
+  nothing is going on
+
+pool .rgw id 1
+  nothing is going on
+
+pool compute id 2
+  client io 0 B/s rd, 2764 kB/s wr, 152 op/s
+
+pool images id 3
+  nothing is going on
+
+pool volumes id 4
+  client io 81373 B/s rd, 3809 kB/s wr, 1004 op/s
+
+pool backups id 5
+  nothing is going on
+
+pool .rgw.root id 6
+  nothing is going on
+
+pool .rgw.control id 7
+  nothing is going on
+
+pool .rgw.gc id 8
+  nothing is going on
+
+pool .users.uid id 9
+  nothing is going on
+
+pool .users id 10
+  nothing is going on
+
+pool .rgw.buckets.index id 11
+  nothing is going on
+
+pool .rgw.buckets id 12
+  nothing is going on
+
+
+
 #############impact of SSD journals#################
 SSD journals accelerate bursts and random write IO
 For sustained writes that overflow the journal, performance degrades to HDD levels

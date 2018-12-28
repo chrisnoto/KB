@@ -148,3 +148,8 @@ root@u1804:/var/snap/prometheus/18# cat conf.d/mysqld.json
     }
   }
 ]
+
+
+
+##########remote storage elasticsearch##########
+./elastic-adapter -elasticsearch-url=http://localhost:9200/ -elasticsearch.max-retries=1 -elasticsearch.index-perfix=prometheus -elasticsearch.type=prom-metric
