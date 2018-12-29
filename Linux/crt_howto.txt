@@ -1,0 +1,612 @@
+[start]--openssl genrsa-->[key]--openssl req-->[CSR]-->[CA]-->CRT
+                                            [CA Key]-->    -->[CRL]
+
+自簽名證書製作（自己做CA）
+目標：
+    server使用的文檔有：ca.crt,server.crt,server.key
+
+名詞：
+    證書格式：
+        PEM格式：Base64編碼的ASCII文檔；通常存儲服務器認證證書、中級認證證書和私鑰；應用：APACHE和類似服務器；擴展名為.pem, .crt, .cer, .key
+        DER格式：二進制編碼的ASCII文檔；可以存儲所有的證書和私鑰；應用：JAVA；擴展名為.der，也有.cer, .crt
+        PKSC#7/P7B格式：base64格式；存儲認證證書或證書鏈中的證書，不能存儲私鑰；應用：Windows和tomcat都支持；擴展名.p7b, .p7c, .spc
+        PKS#12/PFX格式：加密的二進制格式；存儲服務器認證證書、中級認證證書和私鑰；應用：Windows中導入導出認證證書和私鑰；擴展名：.pfx, .p12
+        CSR：Certificate Signing Request
+
+1. 製作CA
+    1.1. 為CA創建RSA私鑰（des3加密並且是PEM格式）
+        openssl genrsa -des3 -out ca-key.pem 2048  # 過程中會提示輸入兩次CA私鑰密碼
+        des3--加密算法，通過des3加密算法使用輸入的密碼加密ca.pem文檔
+        附：
+        查看私鑰的詳細信息：openssl rsa -noout -text -in ca-key.pem
+        去除私鑰的口令：openssl rsa -in ca-key.pem -out ca-key.pem
+
+    1.2. 為CA創建一個自簽名的證書（x509結構，輸出為PEM格式）
+        openssl req -new -x509 -days 365 -key ca-key.pem -out ca.pem  # 過程中會提示輸入CA機構信息
+        x509--結構
+        附：
+        查看證書信息：openssl x509 -noout -text -in ca.pem
+
+2. 自建server證書
+    2.1 生成server私鑰
+        openssl genrsa -des3 -out server-key.pem 2048 
+　　　　附：
+        去除私鑰的口令：openssl rsa -in server.key -out ca-key.pem
+
+    2.2 生成server證書請求
+        openssl req -subj '/CN=yc.dev.registry.com' -new -key server-key.pem -out server.csr
+		
+    2.3 使用CA簽名server證書
+　　　　echo 01 > ca.srl  #生成證書串行號
+　　　　openssl x509 -req -days 365 -in server.csr -CA ca.pem -CAkey ca-key.pem -out server-cert.pem  # 需要輸入CA私鑰密碼
+        附：
+        簽證完成後，會把證書請求響應和CA根證書一起返回給請求者，即server端
+
+    2.4 server端有另一服務器通過代碼訪問https，需使用keytool將根證書（鏈）及證書請求響應導入到java的cacerts庫中
+        keytool -import -alias isupcert -trustcacerts -file servercert.crt -keystore $JAVA_HOME/jre/lib/security/cacerts
+        附：
+        查看已有的證書：keytool -list -keystore cacerts -alias isupcert
+        刪除某證書keytool -delete -alias isupcert -keystore cacerts
+
+3.client信任安全證書
+         ① 一般添加到瀏覽器的信任白名單即可使用。
+         ② 但在有的操作系統中，還需要將根證書配置為系統級的證書，才允許繼續使用。
+
+　　　　Mac OS X
+　　　　 　　添加證書：
+　　　　　　　　 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/new-root-certificate.crt
+　　　　　　 移除證書：
+　　　　　　　　 sudo security delete-certificate -c ""
+
+　　　　Windows
+　　　　　　 添加證書：
+　　　　　　　　 certutil -addstore -f "ROOT" new-root-certificate.crt
+　　　　　　 移除證書：
+　　　　　　　　 certutil -delstore "ROOT" serial-number-hex
+
+　　　　Linux (Ubuntu, Debian)
+　　　　　　 添加證書：
+　　　　　　　　 1.複製 CA 文檔到目錄： /usr/local/share/ca-certificates/
+　　　　　　　　 2.執行: sudo cp foo.crt /usr/local/share/ca-certificates/foo.crt
+　　　　　　　　 3.更新 CA 證書庫: sudo update-ca-certificates
+　　　　　　 移除證書：
+　　　　　　　　 1.Remove your CA.
+　　　　　　　　 2.Update the CA store:
+　　　　　　　　 　　sudo update-ca-certificates --fresh
+　　　　　　Restart Kerio Connect to reload the certificates in the 32-bit versions or Debian 7.
+
+　　　　Linux (CentOs 6)
+　　　　　　 添加證書：
+　　　　　　　　 1.安裝 ca-certificates package: yum install ca-certificates
+　　　　　　　　 2.啟用dynamic CA configuration feature: update-ca-trust force-enable
+　　　　　　　　 3.Add it as a new file to /etc/pki/ca-trust/source/anchors/: cp foo.crt /etc/pki/ca-trust/source/anchors/
+　　　　　　　　 4.執行: update-ca-trust extract
+　　　　　　Restart Kerio Connect to reload the certificates in the 32-bit version.
+
+　　　　Linux (CentOs 5)
+　　　　 　　添加證書：
+　　　　　　　　 Append your trusted certificate to file /etc/pki/tls/certs/ca-bundle.crt： cat foo.crt >> /etc/pki/tls/certs/ca-bundle.crt
+
+　　③ 如果還不行，則需要將我們生成的CA證書ca.pem文檔內容放入系統的CA bundle文檔當中
+
+　　　　以Ubuntu為例：
+　　　　　　sudo -i
+　　　　　　cat ca.pem >> /etc/ssl/certs/ca-certificates.crt
+　　　　　　update-ca-certificates
+　　　　　　/etc/init.d/docker restart
+
+　　　　其他操作系統的CA bundle文檔可能位置：
+　　　　　　/etc/ssl/certs/ca-certificates.crt
+　　　　　　/etc/ssl/ca-bundle.pem
+　　　　　　/etc/ssl/cert.pem
+　　　　　　/usr/local/share/certs/ca-root-nss.crt
+
+#################################################################
+PKI(Public Key Infrastructure)即"公钥基础设施"
+PKI既不是一个协议，也不是一个软件，它是一个标准，在这个标准之下发展出的为了实现安全基础服务目的的技术统称为PKI
+证书标准
+1. X.509标准
+PKI中最重要的标准，它定义了公钥证书的基本结构。
+X.509是国际电信联盟-电信(ITU-T)部分标准和国际标准化组织(ISO)的证书格式标准。作为ITU-ISO目录服务系列标准的一部分，X.509是定义了公钥证书结构的基本标准。1988年首次发布，
+1993年和1996年两次修订。当前使用的版本是X.509 V3，它加入了扩展字段支持，这极大地增进了证书的灵活性。X.509 V3证书包括一组按预定义顺序排列的强制字段，还有可选扩展字段
+，即使在强制字段中，X.509证书也允许很大的灵活性，因为它为大多数字段提供了多种编码方案。X.509 V4版已经推出。
+X.509标准在PKI中起到了举足轻重的作用，PKI由小变大，由原来网络封闭环境到分布式开放环境，X.509起了很大作用，可以说X.509标准是PKI的雏形。PKI是在X.509标准基础上发展起来的
+    1) SSL公钥证书
+    2) 证书废除列表CRL(Certificate revocation lists 证书黑名单)
+
+2. PKCS标准(公钥加密标准 Public Key Cryptography Standards, PKCS)
+它定义了"数据通信协议"的主要标准。这些标准定义了如何恰当地格式化私钥或者公钥，之所以需要定义PKCS标准，是因为证书的产生并不是在本地用的，往往需要在网络中进行传输，因此需要
+有一个良好的规范来定义和保证证书在网络中的正常传输
+http://zh.wikipedia.org/wiki/PKCS
+    1) PKCS#7 
+    PKCS#7是由RSA安全体系在公钥加密系统中交换数字证书产生的一种加密标准，PKCS#7为"密码信封封装标准"，描述了密码操作(例如数字签名和数字信封)的数据的通用语法。该语法允许
+递归，例如一个数字信封可以嵌套在另一个数字信封里面，或者一个实体可以在一个已经封装的数据上签名。该语法同时允许添加任意属性，比如签名时间等。
+    该标准和保密增强邮件(PEM)是兼容的，如果以PEM兼容形式构建，那么被签名后的数据和签名后又封装的数据内容可以很容易地被转化成PEM格式。
+    这是一种将数据加密和签名(enveloping)的技术标准，它描述
+        1.1) 数字证书的语法
+        1.2) 其他加密消息
+        1.3) 数据加密
+        1.4) 数字签名的方法
+        1.5) 也包含了算法 
+    常见的文件后缀有:
+        1.1) .P7B 
+        1.2) .p7c
+    1.3) .SPC
+    文件中包含:
+        1) 证书
+        2) CRL列表信息
+        3) 没有私钥(注意)
+    2) PKCS#12 
+    它定义了一个用于保存私钥和对应公钥证书的文件格式，并由对称密钥加密保护。PKCS#12通常采用PFX,P12作为文件扩展名。PKCS#12文件可以存放多个证书，并由密码保护，通常用于
+WINDOWS IIS，也能够被当作Java Keysotre文件使用，用于Tomcat，Resign，Weblogic，Jboss等，不能被用于Apache.
+    常见的文件后缀有:
+        2.1) .PFX 
+        2.2) .p12
+    文件中包含: 
+    1) 证书(公钥)
+        2) 私钥(受密码保护(可选))
+        3) 完整的证书链信息
+ 
+3. X.500和目录服务标准
+规定了证书撤销列表存储
+
+证书格式
+PEM 格式
+PEM格式通常用于数字证书认证机构（Certificate Authorities，CA），扩展名为.pem, .crt, .cer, and .key。内容为Base64编码的ASCII码文件，
+有类似"-----BEGIN CERTIFICATE-----" 和 "-----END CERTIFICATE-----"的头尾标记。服务器认证证书，中级认证证书和私钥都可以储存为PEM格式（认证证书其实就是公钥）。
+Apache和类似的服务器使用PEM格式证书。
+
+DER 格式
+DER格式与PEM不同之处在于其使用二进制而不是Base64编码的ASCII。扩展名为.der，但也经常使用.cer用作扩展名，所有类型的认证证书和私钥都可以存储为DER格式。
+Java使其典型使用平台。
+
+PKCS#7/P7B 格式
+PKCS#7 或 P7B格式通常以Base64的格式存储，扩展名为.p7b 或 .p7c，有类似BEGIN PKCS7-----" 和 "-----END PKCS7-----"的头尾标记。PKCS#7 或 P7B只能存储认证证书或
+证书路径中的证书（就是存储认证证书链，本级，上级，到根级都存到一个文件中）。不能存储私钥，Windows和Tomcat都支持这种格式。
+
+PKCS#12/PFX 格式
+PKCS#12 或 PFX格式是以加密的二进制形式存储服务器认证证书，中级认证证书和私钥。扩展名为.pfx 和 .p12，PXF通常用于Windows中导入导出认证证书和私钥。
+ 
+2.转换方式
+可以使用OpenSSL命令行工具在不同证书格式之间的转换
+ 
+PEM to DER
+openssl x509 -outform der -in certificate.pem -out certificate.der
+
+PEM to P7B
+openssl crl2pkcs7 -nocrl -certfile certificate.cer -out certificate.p7b -certfile CACert.cer
+
+PEM to PFX
+openssl pkcs12 -export -out certificate.pfx -inkey privateKey.key -in certificate.crt -certfile CACert.crt
+
+DER to PEM
+openssl x509 -inform der -in certificate.cer -out certificate.pem
+
+P7B to PEM
+openssl pkcs7 -print_certs -in certificate.p7b -out certificate.cer
+
+PFX to PEM
+openssl pkcs12 -in certificate.pfx -out certificate.cer -nodes
+
+PXF转PEM后certificate.cer文件包含认证证书和私钥，需要把它们分开存储才能使用。
+
+================================================================
+PKCS 全称是 Public-Key Cryptography Standards ，是由 RSA 实验室与其它安全系统开发商为促进公钥密码的发展而制订的一系列标准，PKCS 目前共发布过 15 个标准。 常用的有： 
+
+PKCS#7 Cryptographic Message Syntax Standard 
+PKCS#10 Certification Request Standard 
+PKCS#12 Personal Information Exchange Syntax Standard 
+
+X.509是常见通用的证书格式。所有的证书都符合为Public Key Infrastructure (PKI) 制定的 ITU-T X509 国际标准。 
+
+PKCS#7 常用的后缀是： .P7B .P7C .SPC 
+PKCS#12 常用的后缀有： .P12 .PFX 
+X.509 DER 编码(ASCII)的后缀是： .DER .CER .CRT 
+X.509 PAM 编码(Base64)的后缀是： .PEM .CER .CRT 
+.cer/.crt是用于存放证书，它是2进制形式存放的，不含私钥。 
+.pem跟crt/cer的区别是它以Ascii来表示。 
+pfx/p12用于存放个人证书/私钥，他通常包含保护密码，2进制方式 
+p10是证书请求 
+p7r是CA对证书请求的回复，只用于导入 
+p7b以树状展示证书链(certificate chain)，同时也支持单个证书，不含私钥。 
+
+一 用openssl创建CA证书的RSA密钥(PEM格式)： 
+openssl genrsa -des3 -out ca.key 1024 
+
+二用openssl创建CA证书(PEM格式,假如有效期为一年)： 
+openssl req -new -x509 -days 365 -key ca.key -out ca.crt -config openssl.cnf 
+openssl是可以生成DER格式的CA证书的，最好用IE将PEM格式的CA证书转换成DER格式的CA证书。 
+
+三 x509到pfx 
+pkcs12 -export –in keys/client1.crt -inkey keys/client1.key -out keys/client1.pfx 
+
+四 PEM格式的ca.key转换为Microsoft可以识别的pvk格式。 
+  pvk -in ca.key -out ca.pvk -nocrypt -topvk 
+  
+五 PKCS#12 到 PEM 的转换 
+openssl pkcs12 -nocerts -nodes -in cert.p12 -out private.pem 
+验证 openssl pkcs12 -clcerts -nokeys -in cert.p12 -out cert.pem
+ 
+六 从 PFX 格式文件中提取私钥格式文件 (.key) 
+openssl pkcs12 -in mycert.pfx -nocerts -nodes -out mycert.key 
+
+七 转换 pem 到到 spc 
+openssl crl2pkcs7 -nocrl -certfile venus.pem  -outform DER -out venus.spc 
+用 -outform -inform 指定 DER 还是 PAM 格式。例如： 
+openssl x509 -in Cert.pem -inform PEM -out cert.der -outform DER 
+
+八 PEM 到 PKCS#12 的转换， 
+openssl pkcs12 -export -in Cert.pem -out Cert.p12 -inkey key.pem 
+
+密钥库文件格式【Keystore】 
+
+格式     :  JKS 
+扩展名  : .jks/.ks 
+描述     : 【Java Keystore】密钥库的Java实现版本，provider为SUN 
+特点     :  密钥库和私钥用不同的密码进行保护 
+
+格式     :  JCEKS 
+扩展名  :  .jce 
+描述     : 【JCE Keystore】密钥库的JCE实现版本，provider为SUN JCE 
+特点     :  相对于JKS安全级别更高，保护Keystore私钥时采用TripleDES 
+
+格式     :  PKCS12 
+扩展名  :  .p12/.pfx 
+描述     : 【PKCS #12】个人信息交换语法标准 
+特点     :  1、包含私钥、公钥及其证书 
+               2、密钥库和私钥用相同密码进行保护 
+
+格式     :  BKS 
+扩展名  : .bks 
+描述     :  Bouncycastle Keystore】密钥库的BC实现版本，provider为BC 
+特点     :  基于JCE实现 
+
+格式     : UBER 
+扩展名  : .ubr 
+描述     : 【Bouncycastle UBER Keystore】密钥库的BC更安全实现版本，provider为BC 
+  
+
+
+
+证书文件格式【Certificate】 
+格式          :  DER 
+扩展名       :  .cer/.crt/.rsa 
+
+描述          : 【ASN .1 DER】用于存放证书 
+特点          :  不含私钥、二进制 
+
+格式          :  PKCS7 
+扩展名       : .p7b/.p7r 
+描述          : 【PKCS #7】加密信息语法标准 
+
+特点          : 1、p7b以树状展示证书链，不含私钥 
+                  2、p7r为CA对证书请求签名的回复，只能用于导入 
+
+格式          :  CMS 
+扩展名       :  .p7c/.p7m/.p7s 
+描述          : 【Cryptographic Message Syntax】 
+特点          : 1、p7c只保存证书 
+                  2、p7m：signature with enveloped data 
+                  3、p7s：时间戳签名文件 
+
+格式          :  PEM 
+扩展名       : .pem 
+描述          : 【Printable Encoded Message】 
+特点          : 1、该编码格式在RFC1421中定义，其实PEM是【Privacy-Enhanced Mail】的简写，但他也同样广泛运用于密钥管理 
+                  2、ASCII文件 
+                  3、一般基于base 64编码 
+                  4. Apache 用到的CA证书链就是PEM格式,它实际上可保存普通多个X509证书(.cer),  将每个证书简单加在一起就可以了 
+
+格式         :  PKCS10 
+扩展名      : .p10/.csr 
+描述         : 【PKCS #10】公钥加密标准【Certificate Signing Request】 
+特点         :  1、证书签名请求文件 
+                  2、ASCII文件 
+                  3、CA签名后以p7r文件回复 
+
+格式         :  SPC 
+扩展名      : .pvk/.spc 
+描述         : 【Software Publishing Certificate】 
+特点         :  微软公司特有的双证书文件格式，经常用于代码签名，其中 
+                  1、pvk用于保存私钥 
+                  2、spc用于保存公钥
+#####################openssl命令#######################
+1. openssl list-standard-commands(标准命令)
+    1) asn1parse: asn1parse用于解释用ANS.1语法书写的语句(ASN一般用于定义语法的构成) 
+    2) ca: ca用于CA的管理 
+    openssl ca [options]:
+        2.1) -selfsign
+        使用对证书请求进行签名的密钥对来签发证书。即"自签名"，这种情况发生在生成证书的客户端、签发证书的CA都是同一台机器(也是我们大多数实验中的情况)，我们可以使用同一个
+密钥对来进行"自签名"
+        2.2) -in file
+        需要进行处理的PEM格式的证书
+        2.3) -out file
+        处理结束后输出的证书文件
+        2.4) -cert file
+        用于签发的根CA证书
+        2.5) -days arg 
+        指定签发的证书的有效时间
+        2.6) -keyfile arg   
+        CA的私钥证书文件
+        2.7) -keyform arg
+        CA的根私钥证书文件格式:
+            2.7.1) PEM
+            2.7.2) ENGINE 
+        2.8) -key arg   
+        CA的根私钥证书文件的解密密码(如果加密了的话)
+        2.9) -config file    
+        配置文件
+    example1: 利用CA证书签署请求证书
+    openssl ca -in server.csr -out server.crt -cert ca.crt -keyfile ca.key  
+
+    3) req: X.509证书签发请求(CSR)管理
+    openssl req [options] <infile >outfile
+        3.1) -inform arg
+        输入文件格式
+            3.1.1) DER
+            3.1.2) PEM
+        3.2) -outform arg   
+        输出文件格式
+            3.2.1) DER
+            3.2.2) PEM
+        3.3) -in arg
+        待处理文件
+        3.4) -out arg
+        待输出文件
+        3.5) -passin        
+        用于签名待生成的请求证书的私钥文件的解密密码
+        3.6) -key file
+        用于签名待生成的请求证书的私钥文件
+        3.7) -keyform arg  
+            3.7.1) DER
+            3.7.2) NET
+            3.7.3) PEM
+        3.8) -new
+        新的请求
+        3.9) -x509          
+        输出一个X509格式的证书 
+        3.10) -days
+        X509证书的有效时间  
+        3.11) -newkey rsa:bits 
+        生成一个bits长度的RSA私钥文件，用于签发  
+        3.12) -[digest]
+        HASH算法
+            3.12.1) md5
+            3.12.2) sha1
+            3.12.3) md2
+            3.12.4) mdc2
+            3.12.5) md4
+        3.13) -config file   
+        指定openssl配置文件
+        3.14) -text: text显示格式
+    example1: 利用CA的RSA密钥创建一个自签署的CA证书(X.509结构) 
+    openssl req -new -x509 -days 3650 -key server.key -out ca.crt 
+    example2: 用server.key生成证书签署请求CSR(这个CSR用于之外发送待CA中心等待签发)
+    openssl req -new -key server.key -out server.csr
+    example3: 查看CSR的细节
+    openssl req -noout -text -in server.csr
+
+    4) genrsa: 生成RSA参数
+    openssl genrsa [args] [numbits]
+        [args]
+        4.1) 对生成的私钥文件是否要使用加密算法进行对称加密:
+            4.1.1) -des: CBC模式的DES加密
+            4.1.2) -des3: CBC模式的3DES加密
+            4.1.3) -aes128: CBC模式的AES128加密
+            4.1.4) -aes192: CBC模式的AES192加密
+            4.1.5) -aes256: CBC模式的AES256加密
+        4.2) -passout arg: arg为对称加密(des、3des、aes)的密码(使用这个参数就省去了console交互提示输入密码的环节)
+        4.3) -out file: 输出证书私钥文件
+        [numbits]: 密钥长度
+    example: 生成一个1024位的RSA私钥，并用3DES加密(密码为1111)，保存为server.key文件
+    openssl genrsa -out server.key -passout pass:1111 -des3 1024 
+
+    5) rsa: RSA数据管理
+    openssl rsa [options] <infile >outfile
+        5.1) -inform arg
+        输入密钥文件格式:
+            5.1.1) DER(ASN1)
+            5.1.2) NET
+            5.1.3) PEM(base64编码格式)
+         5.2) -outform arg
+         输出密钥文件格式
+            5.2.1) DER
+            5.2.2) NET
+            5.2.3) PEM
+        5.3) -in arg
+        待处理密钥文件 
+        5.4) -passin arg
+        输入这个加密密钥文件的解密密钥(如果在生成这个密钥文件的时候，选择了加密算法了的话)
+        5.5) -out arg
+        待输出密钥文件
+        5.6) -passout arg  
+        如果希望输出的密钥文件继续使用加密算法的话则指定密码 
+        5.7) -des: CBC模式的DES加密
+        5.8) -des3: CBC模式的3DES加密
+        5.9) -aes128: CBC模式的AES128加密
+        5.10) -aes192: CBC模式的AES192加密
+        5.11) -aes256: CBC模式的AES256加密
+        5.12) -text: 以text形式打印密钥key数据 
+        5.13) -noout: 不打印密钥key数据 
+        5.14) -pubin: 检查待处理文件是否为公钥文件
+        5.15) -pubout: 输出公钥文件
+    example1: 对私钥文件进行解密
+    openssl rsa -in server.key -passin pass:111 -out server_nopass.key
+    example:2: 利用私钥文件生成对应的公钥文件
+    openssl rsa -in server.key -passin pass:111 -pubout -out server_public.key
+
+    6) x509:
+    本指令是一个功能很丰富的证书处理工具。可以用来显示证书的内容，转换其格式，给CSR签名等X.509证书的管理工作
+    openssl x509 [args]    
+        6.1) -inform arg
+        待处理X509证书文件格式
+            6.1.1) DER
+            6.1.2) NET
+            6.1.3) PEM
+        6.2) -outform arg   
+        待输出X509证书文件格式
+            6.2.1) DER
+            6.2.2) NET
+            6.2.3) PEM
+        6.3) -in arg 
+        待处理X509证书文件
+        6.4) -out arg       
+        待输出X509证书文件
+        6.5) -req            
+        表明输入文件是一个"请求签发证书文件(CSR)"，等待进行签发 
+        6.6) -days arg       
+        表明将要签发的证书的有效时间 
+        6.7) -CA arg 
+        指定用于签发请求证书的根CA证书 
+        6.8) -CAform arg     
+        根CA证书格式(默认是PEM) 
+        6.9) -CAkey arg      
+        指定用于签发请求证书的CA私钥证书文件，如果这个option没有参数输入，那么缺省认为私有密钥在CA证书文件里有
+        6.10) -CAkeyform arg  
+        指定根CA私钥证书文件格式(默认为PEM格式)
+        6.11) -CAserial arg   
+        指定序列号文件(serial number file)
+        6.12) -CAcreateserial 
+        如果序列号文件(serial number file)没有指定，则自动创建它     
+    example1: 转换DER证书为PEM格式
+    openssl x509 -in cert.cer -inform DER -outform PEM -out cert.pem
+    example2: 使用根CA证书对"请求签发证书"进行签发，生成x509格式证书
+    openssl x509 -req -days 3650 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt
+    example3: 打印出证书的内容
+    openssl x509 -in server.crt -noout -text 
+
+    7) crl: crl是用于管理CRL列表 
+    openssl crl [args]
+        7.1) -inform arg
+        输入文件的格式
+            7.1.1) DER(DER编码的CRL对象)
+            7.1.2) PEM(默认的格式)(base64编码的CRL对象)
+        7.2) -outform arg
+        指定文件的输出格式 
+            7.2.1) DER(DER编码的CRL对象)
+            7.2.2) PEM(默认的格式)(base64编码的CRL对象)
+        7.3) -text: 
+        以文本格式来打印CRL信息值。
+        7.4) -in filename
+        指定的输入文件名。默认为标准输入。
+        7.5) -out filename
+        指定的输出文件名。默认为标准输出。
+        7.6) -hash
+        输出颁发者信息值的哈希值。这一项可用于在文件中根据颁发者信息值的哈希值来查询CRL对象。
+        7.7) -fingerprint
+        打印CRL对象的标识。
+        7.8) -issuer
+        输出颁发者的信息值。
+        7.9) -lastupdate
+        输出上一次更新的时间。
+        7.10) -nextupdate
+        打印出下一次更新的时间。 
+        7.11) -CAfile file
+        指定CA文件，用来验证该CRL对象是否合法。 
+        7.12) -verify
+        是否验证证书。        
+    example1: 输出CRL文件，包括(颁发者信息HASH值、上一次更新的时间、下一次更新的时间)
+    openssl crl -in crl.crl -text -issuer -hash -lastupdate –nextupdate 
+    example2: 将PEM格式的CRL文件转换为DER格式
+    openssl crl -in crl.pem -outform DER -out crl.der  
+
+    8) crl2pkcs7: 用于CRL和PKCS#7之间的转换 
+    openssl crl2pkcs7 [options] <infile >outfile
+    转换pem到spc
+    openssl crl2pkcs7 -nocrl -certfile venus.pem -outform DER -out venus.spc
+    https://www.openssl.org/docs/apps/crl2pkcs7.html
+
+    9) pkcs12: PKCS#12数据的管理
+    pkcs12文件工具，能生成和分析pkcs12文件。PKCS#12文件可以被用于多个项目，例如包含Netscape、 MSIE 和 MS Outlook
+    openssl pkcs12 [options] 
+    http://blog.csdn.net/as3luyuan123/article/details/16105475
+    https://www.openssl.org/docs/apps/pkcs12.html
+
+    10) pkcs7: PCKS#7数据的管理 
+    用于处理DER或者PEM格式的pkcs#7文件
+    openssl pkcs7 [options] <infile >outfile
+    http://blog.csdn.net/as3luyuan123/article/details/16105407
+    https://www.openssl.org/docs/apps/pkcs7.html
+ 
+2. openssl list-message-digest-commands(消息摘要命令)
+    1) dgst: dgst用于计算消息摘要 
+    openssl dgst [args]
+        1.1) -hex           
+        以16进制形式输出摘要
+        1.2) -binary        
+        以二进制形式输出摘要
+        1.3) -sign file    
+        以私钥文件对生成的摘要进行签名
+        1.4) -verify file    
+        使用公钥文件对私钥签名过的摘要文件进行验证 
+        1.5) -prverify file  
+        以私钥文件对公钥签名过的摘要文件进行验证
+        verify a signature using private key in file
+        1.6) 加密处理
+            1.6.1) -md5: MD5 
+            1.6.2) -md4: MD4         
+            1.6.3) -sha1: SHA1 
+            1.6.4) -ripemd160
+    example1: 用SHA1算法计算文件file.txt的哈西值，输出到stdout
+    openssl dgst -sha1 file.txt
+    example2: 用dss1算法验证file.txt的数字签名dsasign.bin，验证的private key为DSA算法产生的文件dsakey.pem
+    openssl dgst -dss1 -prverify dsakey.pem -signature dsasign.bin file.txt
+
+    2) sha1: 用于进行RSA处理
+    openssl sha1 [args] 
+        2.1) -sign file
+        用于RSA算法的私钥文件 
+        2.2) -out file
+        输出文件爱你
+        2.3) -hex   
+        以16进制形式输出
+        2.4) -binary
+        以二进制形式输出  
+    example1: 用SHA1算法计算文件file.txt的HASH值,输出到文件digest.txt
+    openssl sha1 -out digest.txt file.txt
+    example2: 用sha1算法为文件file.txt签名,输出到文件rsasign.bin，签名的private key为RSA算法产生的文件rsaprivate.pem
+    openssl sha1 -sign rsaprivate.pem -out rsasign.bin file.txt
+
+3. openssl list-cipher-commands (Cipher命令的列表)
+    1) aes-128-cbc
+    2) aes-128-ecb
+    3) aes-192-cbc
+    4) aes-192-ecb
+    5) aes-256-cbc
+    6) aes-256-ecb
+    7) base64
+    8) bf
+    9) bf-cbc
+    10) bf-cfb
+    11) bf-ecb
+    12) bf-ofb
+    13) cast
+    14) cast-cbc
+    15) cast5-cbc
+    16) cast5-cfb
+    17) cast5-ecb
+    18) cast5-ofb
+    19) des
+    20) des-cbc
+    21) des-cfb
+    22) des-ecb
+    23) des-ede
+    24) des-ede-cbc
+    25) des-ede-cfb
+    26) des-ede-ofb
+    27) des-ede3
+    28) des-ede3-cbc
+    29) des-ede3-cfb
+    30) des-ede3-ofb
+    31) des-ofb
+    32) des3
+    33) desx
+    34) rc2
+    35) rc2-40-cbc
+    36) rc2-64-cbc
+    37) rc2-cbc
+    38) rc2-cfb
+    39) rc2-ecb
+    40) rc2-ofb
+    41) rc4
+    42) rc4-40
