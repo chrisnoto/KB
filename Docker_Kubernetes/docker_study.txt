@@ -1,3 +1,6 @@
+#########查看container config############非常有用
+[root@worker2 ~]# docker inspect --format "{{json .Config}}" b1ee |python -mjson.tool
+
 #######dockerd ###########
  You can listen on port 2375 on all network interfaces with -H tcp://0.0.0.0:2375, 
  or on a particular network interface using its IP address: -H tcp://192.168.59.103:2375. 
@@ -312,7 +315,7 @@ Environment="HTTP_PROXY=http://h7108579:pqhkr88ctw@10.36.6.65:3128" "NO_PROXY=lo
 docker run -d --name registry -p 5000:5000 \
 -e "REGISTRY_STORAGE=swift" \
 -e "REGISTRY_STORAGE_SWIFT_USERNAME=admin" \
--e "REGISTRY_STORAGE_SWIFT_PASSWORD='F0xconn!23'" \
+-e "REGISTRY_STORAGE_SWIFT_PASSWORD='F0xc0nn!23'" \
 -e "REGISTRY_STORAGE_SWIFT_AUTHURL=https://10.67.44.66:5000/v2.0" \
 -e "REGISTRY_STORAGE_SWIFT_CONTAINER=docker-image" \
 -e "REGISTRY_STORAGE_SWIFT_REGION=RegionOne" \

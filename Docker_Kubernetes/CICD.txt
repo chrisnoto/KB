@@ -7,6 +7,39 @@ curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/sc
 yum install -y gitlab-runner
 usermod -aG docker gitlab-runner
 gitlab-runner register
+[root@registry gitlab-runner]# gitlab-runner list
+Listing configured runners                          ConfigFile=/etc/gitlab-runner/config.toml
+shell-runner                                        Executor=docker Token=bb5af090d15058b86b4f1e3083ab30 URL=http://10.67.37.48/gitlab/
+my-runner                                           Executor=shell Token=dccb418d632dadb588429e1305c054 URL=http://10.67.37.48/gitlab/
+
+
+[root@registry ~]# cd /etc/gitlab-runner/
+[root@registry gitlab-runner]# cat config.toml
+concurrent = 1
+check_interval = 0
+
+[[runners]]
+  name = "shell-runner"
+  url = "http://10.67.37.48/gitlab/"
+  token = "bb5af090d15058b86b4f1e3083ab30"
+  executor = "docker"
+  [runners.docker]
+    tls_verify = false
+    image = "alpine:3.5"
+    privileged = false
+    disable_cache = false
+    volumes = ["/cache"]
+    shm_size = 0
+  [runners.cache]
+
+[[runners]]
+  name = "my-runner"
+  url = "http://10.67.37.48/gitlab/"
+  token = "dccb418d632dadb588429e1305c054"
+  executor = "shell"
+  [runners.cache]
+
+
 配置gitlab-runner用戶能訪問k8s
 cp /etc/kubernetes/admin.conf /home/gitlab-runner/.kube/config
 

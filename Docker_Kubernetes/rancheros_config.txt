@@ -1,0 +1,172 @@
+##########docker-machine使用rancheros创建VM#########
+[root@kvm-prod ~]# cat addhost_vmware.sh
+#!/bin/bash
+docker-machine create -d vmwarevsphere \
+  --vmwarevsphere-boot2docker-url=http://10.67.51.164/rancheros-vmware.iso \
+  --vmwarevsphere-vcenter=10.67.36.10  \
+  --vmwarevsphere-username=root  \
+  --vmwarevsphere-password=Foxconn123  \
+  --vmwarevsphere-cpu-count=2 \
+  --vmwarevsphere-memory-size=4096 \
+  --vmwarevsphere-disk-size=40000 \
+  --vmwarevsphere-datastore=data3 \
+  --vmwarevsphere-network='VM Network' \
+$1
+
+########启动并配置rancheros VM##########
+1 [root@kvm-prod ~]# ./addhost_vmware.sh docker1
+2 设置rancheros的IP     这一步要快一点，否则docker-machine后续动作不会成功  调试:  docker-machine -D 
+[root@docker1 ~]# ifconfig eth0 10.67.36.49 netmask 255.255.252.0 up
+3 设置ros config
+[root@kvm-prod ~]# docker-machine ls
+NAME      ACTIVE   DRIVER          STATE     URL                      SWARM   DOCKER        ERRORS
+docker1   -        vmwarevsphere   Running   tcp://10.67.36.49:2376           v18.06.1-ce
+[root@kvm-prod ~]# docker-machine ssh docker1
+[docker@docker1 ~]$ sudo su -
+ros config set rancher.network.interfaces.eth0.address 10.67.36.63/22
+ros config set rancher.network.interfaces.eth0.gateway 10.67.36.1
+ros config set rancher.network.interfaces.eth0.mtu 1500
+ros config set rancher.network.interfaces.eth0.dhcp false
+ros config set rancher.docker.insecure_registry [10.67.38.90]
+ros config set rancher.network.dns.nameservers [10.67.50.111]
+ros config set rancher.network.HTTP_PROXY http://10.67.9.210:3128
+ros config set rancher.network.HTTPS_PROXY http://10.67.9.210:3128
+ros config set rancher.network.NO_PROXY 'localhost,127.0.0.1,10.67.38.90,dcr.efoxconn.com'
+
+验证 ros config
+[root@docker1 ~]# ros config export
+hostname: docker1
+rancher:
+  docker:
+    insecure_registry:
+    - 10.67.38.90
+  environment:
+    EXTRA_CMDLINE: /init
+  network:
+    HTTPS_PROXY: http://10.67.9.210:3128
+    HTTP_PROXY: http://10.67.9.210:3128
+    NO_PROXY: localhost,127.0.0.1,10.67.38.90,dcr.efoxconn.com
+    dns:
+      nameservers:
+      - 10.67.50.111
+    interfaces:
+      eth0:
+        address: 10.67.36.49/22
+        dhcp: false
+        gateway: 10.67.36.1
+        mtu: 1500
+  services_include:
+    open-vm-tools: true
+  state:
+    autoformat:
+    - /dev/sda
+    - /dev/vda
+    dev: LABEL=RANCHER_STATE
+ssh_authorized_keys: []
+
+3 最后reboot VM
+4 登陆docker-machine ssh docker1
+[root@docker1 ~]# docker info
+Containers: 0
+ Running: 0
+ Paused: 0
+ Stopped: 0
+Images: 0
+Server Version: 18.06.1-ce
+Storage Driver: overlay
+ Backing Filesystem: extfs
+ Supports d_type: true
+Logging Driver: json-file
+Cgroup Driver: cgroupfs
+Plugins:
+ Volume: local
+ Network: bridge host macvlan null overlay
+ Log: awslogs fluentd gcplogs gelf journald json-file logentries splunk syslog
+Swarm: inactive
+Runtimes: runc
+Default Runtime: runc
+Init Binary: docker-init
+containerd version: 468a545b9edcd5932818eb9de8e72413e616e86e
+runc version: 69663f0bd4b60df09991c08812a60108003fa340
+init version: fec3683
+Security Options:
+ seccomp
+  Profile: default
+Kernel Version: 4.14.85-rancher
+Operating System: RancherOS v1.5.0
+OSType: linux
+Architecture: x86_64
+CPUs: 2
+Total Memory: 3.855GiB
+Name: docker1
+ID: 63AW:AMR5:GZU6:DO5S:EEKV:VJBO:ARSU:VNFG:ML6V:CTBZ:5FUV:PYE3
+Docker Root Dir: /var/lib/docker
+Debug Mode (client): false
+Debug Mode (server): false
+HTTP Proxy: http://10.67.9.210:3128
+HTTPS Proxy: http://10.67.9.210:3128
+No Proxy: localhost,127.0.0.1,10.67.38.90,dcr.efoxconn.com
+Registry: https://index.docker.io/v1/
+Labels:
+ provider=vmwarevsphere
+Experimental: false
+Insecure Registries:
+ 10.67.38.90
+ 127.0.0.0/8
+Live Restore Enabled: false
+
+#######需要接外网，可以switch docker version###########
+[root@docker1 ~]# ros engine list
+disabled docker-1.12.6
+disabled docker-1.13.1
+disabled docker-17.03.1-ce
+disabled docker-17.03.2-ce
+disabled docker-17.04.0-ce
+disabled docker-17.05.0-ce
+disabled docker-17.06.1-ce
+disabled docker-17.06.2-ce
+disabled docker-17.09.0-ce
+disabled docker-17.09.1-ce
+disabled docker-17.12.0-ce
+disabled docker-17.12.1-ce
+disabled docker-18.03.0-ce
+disabled docker-18.03.1-ce
+disabled docker-18.06.0-ce
+current  docker-18.06.1-ce
+
+Changing Docker engines after RancherOS has started
+If you’ve already started RancherOS and want to switch Docker engines, you can change the Docker engine by using the ros engine switch command. 
+In our example, we’ll switch to Docker 1.11.2.
+
+$ sudo ros engine switch docker-1.11.2
+INFO[0000] Project [os]: Starting project
+INFO[0000] [0/19] [docker]: Starting
+Pulling docker (rancher/os-docker:1.11.2)...
+1.11.2: Pulling from rancher/os-docker
+2a6bbb293656: Pull complete
+Digest: sha256:ec57fb24f6d4856d737e14c81a20f303afbeef11fc896d31b4e498829f5d18b2
+Status: Downloaded newer image for rancher/os-docker:1.11.2
+INFO[0007] Recreating docker
+INFO[0007] [1/19] [docker]: Started
+INFO[0007] Project [os]: Project started
+$ docker version
+Client:
+ Version:      1.11.2
+ API version:  1.23
+ Go version:   go1.5.4
+ Git commit:   b9f10c9
+ Built:        Wed Jun  1 21:20:08 2016
+ OS/Arch:      linux/amd64
+
+Server:
+ Version:      1.11.2
+ API version:  1.23
+ Go version:   go1.5.4
+ Git commit:   b9f10c9
+ Built:        Wed Jun  1 21:20:08 2016
+ OS/Arch:      linux/amd64
+
+Enabling Docker engines
+If you don’t want to automatically switch Docker engines, you can also set which version of Docker to use after the next reboot by enabling a Docker engine.
+
+$ sudo ros engine enable docker-1.10.3

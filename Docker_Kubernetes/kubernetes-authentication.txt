@@ -1,0 +1,176 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#######访问 kubernetes API###########
+###1 kubectl --raw方式
+kubectl get --raw https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes |python -m json.tool
+kubectl get --raw apis/metrics.k8s.io/v1beta1/nodes
+
+###2 浏览器访问
+https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
+metric-server api
+https://10.67.36.58/k8s/clusters/c-v6qjl/apis/metrics.k8s.io/v1beta1/pods
+
+###3 curl访问
+在rancher UI->Users -> User profile -> API & Keys
+Access Key: token-dx5tl
+Secret Key: r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4
+Bearer Token: token-dx5tl:r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4
+#3.1使用bearer token
+curl -k -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes --header "Authorization: Bearer token-dx5tl:r9tbw9xrjm8j2spx8dmlhzmkvmvhgxmz2xf7cjjjqdlkmlc8rzwq4"
+
+curl --cacert /root/.kube/ca.crt -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes --header "Authorization: Bearer token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz"
+
+#3.2 使用Basic用户密码
+curl -k -u token-dx5tl:r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4 -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes
+
+curl --cacert /root/.kube/ca.crt -u token-dx5tl:r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4 -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/apis/storage.k8s.io/v1bta1
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#########访问 rancher API#######
+curl --cacert /root/.kube/ca.crt -X GET https://10.67.36.58/v3/projects/c-v6qjl:p-gxmz9 --header "Authorization: Bearer token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz"
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#########kubectl 访问 kubernetes#########
+###1 通过HTTPS证书双向认证的形式访问Api Server:
+kubectl --server=https://192.168.61.100:6443 \
+--certificate-authority=ca.pem  \
+--client-certificate=client.crt \
+--client-key=client.key \
+get nodes
+
+###2 kubectl使用Bearer访问Api Server:
+kubectl --server=https://192.168.61.100:6443 \
+--token=792c62a1b5f2b07b \
+--insecure-skip-tls-verify=true \
+cluster-info
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.58/k8s/clusters/c-v6qjl --token=token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz --insecure-skip-tls-verify=true get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     21h       v1.11.2
+master3   Ready     82d       v1.11.2
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.58/k8s/clusters/c-v6qjl --token=token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz --certificate-authority=/home/chensen/ca.crt get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     21h       v1.11.2
+master3   Ready     82d       v1.11.2
+
+###3 kubectl使用用户密码访问Api Server:
+kubectl --server=https://192.168.61.100:6443 \
+--username=admin \
+--password=1234 \
+--insecure-skip-tls-verify=true \
+cluster-info
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.58/k8s/clusters/c-v6qjl --username=token-bpmcn --password=vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz --insecure-skip-tls-verify=true get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     21h       v1.11.2
+master3   Ready     82d       v1.11.2
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+###Token authentication in practice
+1 Listing service accounts
+kubectl get sa
+2 Finding the secret
+kubectl get sa default -o yaml
+SECRET=$(kubectl get sa default -o json | jq -r .secrets[0].name)
+3 Extracting the token
+View the secret: kubectl get secret $SECRET -o yaml
+Extract the token and decode it
+TOKEN=$(kubectl get secret $SECRET -o json | jq -r .data.token | base64 -d)
+4 Using the token
+  Find the ClusterIP for the kubernetes service:
+   kubectl get svc kubernetes
+   API=$(kubectl get svc kubernetes -o json | jq -r .spec.clusterIP)
+  Connect without the token:
+    curl -k https://$API
+  Connect with the token:
+    curl -k -H "Authorization: Bearer $TOKEN" https://$API
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	
+#######配置k8s客戶端訪問k8s集群#######
+方法一：拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
+特別注意： 客戶端如有配置http proxy會導致無法訪問機器。
+
+方法二： (配置多集群)
+###########使用用户密码+CA证书验证###########
+定义第一个集群
+kubectl config set-credentials dev-admin --username=admin --password=1Qj9KUj0RMSrHQrolr2AMiiRhB9dEAMi
+kubectl config set-cluster dev-cluster --server=https://cls-n9w6pjha.ccs.tencent-cloud.com --certificate-authority=/root/dev-ca.crt
+kubectl config set-context dev-system --cluster=dev-cluster --user=dev-admin
+kubectl config use-context dev-system
+[root@cobbler ~]# kubectl config use-context dev-system
+Switched to context "dev-system".
+[root@cobbler ~]# kubectl get nodes
+NAME          STATUS    AGE       VERSION
+172.16.16.3   Ready     2d        v1.7.8-qcloud
+
+定义第二个集群
+kubectl config set-credentials prod-admin --username=admin --password=ZXIr6izA9AqcWXtfWgsqdBS58FalddUu
+kubectl config set-cluster prod-cluster --server=https://cls-46q04qgm.ccs.tencent-cloud.com --certificate-authority=/root/prod-ca.crt
+kubectl config set-context prod-system --cluster=prod-cluster --user=prod-admin
+kubectl config use-context prod-system
+[root@cobbler ~]# kubectl config use-context prod-system
+Switched to context "prod-system".
+[root@cobbler ~]# kubectl get nodes
+NAME           STATUS    AGE       VERSION
+172.16.16.46   Ready     2d        v1.7.8-qcloud
+172.16.16.70   Ready     2d        v1.7.8-qcloud
+172.16.16.79   Ready     2d        v1.7.8-qcloud
+172.16.16.83   Ready     2d        v1.7.8-qcloud
+
+############使用token+CA证书验证 或  token --insecure方式验证###########
+kubectl config set-credentials default --token=${KUBERNETES_TOKEN}
+if [ ! -z ${KUBERNETES_CERT} ]; then
+  echo ${KUBERNETES_CERT} | base64 -d > ca.crt
+  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --certificate-authority=ca.crt
+else
+  echo "WARNING: Using insecure connection to cluster"
+  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --insecure-skip-tls-verify=true
+fi
+kubectl config set-context default --cluster=default --user=default
+kubectl config use-context defaul
+
+#########使用CA和client证书验证##########
+KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
+  --region $(gcloud config get-value compute/region) \
+  --format 'value(address)')
+Generate a kubeconfig file suitable for authenticating as the admin user:
+
+kubectl config set-cluster kubernetes-the-hard-way \
+  --certificate-authority=ca.pem \
+  --embed-certs=true \
+  --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443
+kubectl config set-credentials admin \
+  --client-certificate=admin.pem \
+  --client-key=admin-key.pem
+kubectl config set-context kubernetes-the-hard-way \
+  --cluster=kubernetes-the-hard-way \
+  --user=admin
+kubectl config use-context kubernetes-the-hard-way
+
+##############生成kubeconfig的配置步骤 客户端证书方式##############
+客户端证书认证叫作TLS双向认证，也就是服务器客户端互相验证证书的正确性，在都正确的情况下协调通信加密方案。
+为了使用这个方案，api-server需要用–client-ca-file选项来开启
+1、定义变量
+export KUBE_APISERVER="https://172.20.0.2:6443"
+2、设置集群参数
+kubectl config set-cluster kubernetes --certificate-authority=/etc/kubernetes/ssl/ca.pem --embed-certs=true --server=${KUBE_APISERVER}   #可以指定路径kubeconfig=/root/config.conf
+
+说明：集群参数主要设置了所需要访问的集群的信息。使用set-cluster设置了需要访问的集群，如上为kubernetes；--certificate-authority设置了该集群的公钥；
+--embed-certs为true表示将--certificate-authority证书写入到kubeconfig中；--server则表示该集群的kube-apiserver地址。
+3、设置客户端认证参数
+kubectl config set-credentials admin --client-certificate=/etc/kubernetes/ssl/admin.pem --embed-certs=true --client-key=/etc/kubernetes/ssl/admin-key.pem #可以指定路径kubeconfig=/root/config.conf
+
+说明：用户参数主要设置用户的相关信息，主要是用户证书。如上的用户名为admin，证书为：/etc/kubernetes/ssl/admin.pem，私钥为：/etc/kubernetes/ssl/admin-key.pem
+注意客户端的证书首先要经过集群CA的签署，否则不会被集群认可。此处使用的是ca认证方式，也可以使用token认证，如kubelet的 TLS Boostrap机制下的bootstrapping使用的就是token认证方式。
+
+4、设置上下文参数
+kubectl config set-context kubernetes   --cluster=kubernetes   --user=admin #可以指定路径kubeconfig=/root/config.conf
+
+说明：上下文参数将集群参数和用户参数关联起来。如上面的上下文名称为kubenetes，集群为kubenetes，用户为admin，表示使用admin的用户凭证来访问kubenetes集群
+的default命名空间，也可以增加--namespace来指定访问的命名空间。
+5、设置默认上下文
+kubectl config use-context kubernetes  #可以指定路径kubeconfig=/root/config.conf
+
+说明：最后使用kubectl config use-context kubernetes来使用名为kubenetes的环境项来作为配置。如果配置了多个环境项，可通过切换不同的环境项名字来访问到不同的
+集群环境。
+
+默认生成的kubeconfig 被保存到 ~/.kube/config 文件

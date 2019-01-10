@@ -1,0 +1,18 @@
+######## elasticsearch无法启动##########
+rm -f /var/lib/elasticsearch/nodes/0/indices/GAePsmg5RICuBdRS-xwLvw/_state/state-39.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/5z3QXemeQO-aJ7ZfnaPi2w/_state/state-45.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/9wMLZLv5RxGGDLDeRrb9DA/_state/state-44.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/Glk6dbJGSfuwh_rIuWHtXg/_state/state-41.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/ys5omB6OR9ykfb_QAELRfg/_state/state-46.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/5I9mMF3QT7yd9IQmJrFIXQ/_state/state-46.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/8KAsZIAcTZW9AS24OkXnig/_state/state-42.st
+rm -f /var/lib/elasticsearch/nodes/0/indices/je_eLHSJR9-fD92AErDRvw/_state/state-45.st
+如上，删除了很多indice的state文件，仍然会在每次重启ES后报如下错误
+org.elasticsearch.bootstrap.StartupException: ElasticsearchException[java.io.IOException: 
+failed to read [id:45, file:/var/lib/elasticsearch/nodes/0/indices/je_eLHSJR9-fD92AErDRvw/_state/state-45.st]]; 
+nested: IOException[failed to read [id:45, file:/var/lib/elasticsearch/nodes/0/indices/je_eLHSJR9-fD92AErDRvw/_state/state-45.st]]; 
+nested: XContentParseException[[-1:1123] [rollover_info] failed to parse field [met_conditions]]; 
+nested: XContentParseException[[-1:1123] [met_conditions] failed to parse field [max_docs]]; 
+nested: NamedObjectNotFoundException[named objects are not supported for this parser];
+没有办法找到所有有问题的state文件，最后清空了/var/lib/elasticsearch/nodes/0/indices底下的所有数据，重新启动ES成功
+注意模板数据会丢失

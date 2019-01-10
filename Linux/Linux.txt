@@ -1,3 +1,45 @@
+##########netstat recv-q send-q解释#######
+LISTEN状态
+Recv-Q：代表建立的连接还有多少没有被accept，比如Nginx接受新连接变的很慢
+Send-Q：代表listen backlog值
+
+ESTAB状态
+Recv-Q：内核中的数据还有多少(bytes)没有被应用程序读取，发生了一定程度的阻塞
+Send-Q：代表内核中发送队列里还有多少(bytes)数据没有收到ack，对端的接收处理能力不强
+
+######查询openstack kvm资源分配情况##############
+[root@cobbler ~]# ansible compute-prod -m shell -a "curl -s http://10.67.51.164/script/kvm_ops_usage.sh |bash"
+
+######kvm虚拟机使用四五个月以后，实体机swap占用高#####
+[root@kvm-prod images]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          31           0           2          30          27
+Swap:            31          28           3
+
+[root@kvm-prod images]# smem -rs swap |grep qemu
+ 8995 qemu     /usr/libexec/qemu-kvm -name  7888380  3650768  3650922  3655344
+ 8916 qemu     /usr/libexec/qemu-kvm -name  7848556  3574368  3574522  3578952
+ 8846 qemu     /usr/libexec/qemu-kvm -name  7435844  4074700  4075031  4080052
+24549 qemu     /usr/libexec/qemu-kvm -name  2004912  1487172  1487992  1493668
+ 1270 qemu     /usr/libexec/qemu-kvm -name  1148468  2982392  2982546  2986932
+ 8683 qemu     /usr/libexec/qemu-kvm -name   442012  5832732  5833257  5838404
+20225 qemu     /usr/libexec/qemu-kvm -name   347148  3965604  3966034  3971200
+清理swap。关闭VM后再开启
+[root@kvm-prod images]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          25           6           2          31          33
+Swap:            31           6          25
+
+[root@kvm-prod images]# smem -rs swap |grep qemu
+24549 qemu     /usr/libexec/qemu-kvm -name  2052244  1437352  1438494  1446368
+ 1270 qemu     /usr/libexec/qemu-kvm -name  1151156  2979704  2979859  2984244
+ 8683 qemu     /usr/libexec/qemu-kvm -name   443588  5831156  5831504  5836828
+20225 qemu     /usr/libexec/qemu-kvm -name   347268  3965484  3965833  3971080
+25944 root     grep --color=auto qemu             0      224      229      992
+25452 qemu     /usr/libexec/qemu-kvm -name        0  2200692  2202220  2210760
+24357 qemu     /usr/libexec/qemu-kvm -name        0  2613064  2614592  2623132
+23343 qemu     /usr/libexec/qemu-kvm -name        0  3080640  3082168  3090708
+
 #保存iptables规则
 [root@fuel ~]# /usr/libexec/iptables/iptables.init save
 iptables: Saving firewall rules to /etc/sysconfig/iptables:[  OK  ]
@@ -1099,19 +1141,6 @@ ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 ##############firefox###########
 ssh -D 7071 chensen@cfibml10
-
-######## KVM ########
-[root@oc1181188062 ~]# virsh start Windows_XP-KVM
-[root@oc1181188062 ~]# virsh -c qemu:///system start Windows_XP-KVM
-Domain Windows_XP-KVM started
-[root@oc1181188062 ~]# ibm-virt-viewer -a -c qemu:///system Windows_XP-KVM
-[root@oc1181188062 ~]# virt-manager
-# virt-cat -d agent2 /etc/nginx/conf.d/default.conf
-# virt-cat -d agent2 /usr/share/nginx/html/db.php
-# virt-ls -d agent2 /usr/share/nginx/html/
-# virt-df -d agent2
-# virsh undefine agent3 --remove-all-storage
-
 
 ######### bond ################
 cat/proc/net/bonding/bond0 

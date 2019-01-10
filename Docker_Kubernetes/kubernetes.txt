@@ -1,3 +1,13 @@
+########kubectl -v 详细信息#########
+[root@cobbler ~]# kubectl version --v=7
+I0109 06:43:10.872375   31737 loader.go:357] Config loaded from file /root/.kube/config
+I0109 06:43:10.873332   31737 round_trippers.go:383] GET https://10.67.36.58/k8s/clusters/c-v6qjl/version
+I0109 06:43:10.873350   31737 round_trippers.go:390] Request Headers:
+I0109 06:43:10.873362   31737 round_trippers.go:393]     Accept: application/json, */*
+I0109 06:43:10.873374   31737 round_trippers.go:393]     User-Agent: kubectl/v1.7.5 (linux/amd64) kubernetes/17d7182
+I0109 06:43:10.873385   31737 round_trippers.go:393]     Authorization: Bearer kubeconfig-user-kpxwd:r85pf6kgf8m92smlkmqkd6tbkvkbhcq2dj29mfnptk2mdwbbn6szp8
+I0109 06:43:13.625597   31737 round_trippers.go:408] Response Status: 503 Service Unavailable in 2752 milliseconds
+
 #########configmap subpath 解决mount时覆盖问题######
     volumeMounts:
     - mountPath: /usr/local/apache2/conf/httpd.conf
@@ -16,6 +26,7 @@
       name: proxyconf
       optional: false
     name: vol2
+	
 ######check ENV SERVICE######
 [root@cobbler ~]# kubectl exec web1-557d88546-4t9xm -- printenv |grep SERVICE
 KUBERNETES_SERVICE_PORT=443
@@ -27,9 +38,11 @@ WEB1_SERVICE_PORT_80TCP01_WEB1=80
 WEB1_SERVICE_HOST=10.43.45.18
 KUBERNETES_SERVICE_HOST=10.43.0.1
 WEB1_NODEPORT_SERVICE_HOST=10.43.103.29
+
 [root@cobbler ~]# kubectl get po -o wide
 NAME                   READY     STATUS    RESTARTS   AGE       IP          NODE
 web1-557d88546-4t9xm   1/1       Running   0          50d       10.42.3.5   worker1
+
 [root@cobbler ~]# kubectl get svc
 NAME                CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
 glusterfs-cluster   10.43.174.138   <none>        1/TCP          36d
@@ -43,25 +56,6 @@ yes
 [root@cobbler ~]# kubectl auth can-i '*' services --as system:serviceaccount:default:default
 yes
 
-###Token authentication in practice
-1 Listing service accounts
-kubectl get sa
-2 Finding the secret
-kubectl get sa default -o yaml
-SECRET=$(kubectl get sa default -o json | jq -r .secrets[0].name)
-3 Extracting the token
-View the secret: kubectl get secret $SECRET -o yaml
-Extract the token and decode it
-TOKEN=$(kubectl get secret $SECRET -o json | jq -r .data.token | base64 -d)
-4 Using the token
-  Find the ClusterIP for the kubernetes service:
-   kubectl get svc kubernetes
-   API=$(kubectl get svc kubernetes -o json | jq -r .spec.clusterIP)
-  Connect without the token:
-    curl -k https://$API
-  Connect with the token:
-    curl -k -H "Authorization: Bearer $TOKEN" https://$API
-	
 ### service
 service带selector 会创建endpoints
 service不带selector 不会创建endpoints,但可以自己定义endpoints，例如外部glusterfs cluster
@@ -311,46 +305,6 @@ eg:  kubectl get nodes --v=9
 ########導出admin用戶的cluster role####
 kubectl get clusterrole admin -o yaml > admin.yaml
 
-#######配置k8s客戶端訪問k8s集群#######
-方法一：拷貝master機器的/etc/kubernetes/admin.conf至客戶端的$HOME/.kube/目錄下
-特別注意： 客戶端如有配置http proxy會導致無法訪問機器。
-
-方法二： (配置多集群)
-kubectl config set-credentials dev-admin --username=admin --password=1Qj9KUj0RMSrHQrolr2AMiiRhB9dEAMi
-kubectl config set-cluster dev-cluster --server=https://cls-n9w6pjha.ccs.tencent-cloud.com --certificate-authority=/root/dev-ca.crt
-kubectl config set-context dev-system --cluster=dev-cluster --user=dev-admin
-kubectl config use-context dev-system
-[root@cobbler ~]# kubectl config use-context dev-system
-Switched to context "dev-system".
-[root@cobbler ~]# kubectl get nodes
-NAME          STATUS    AGE       VERSION
-172.16.16.3   Ready     2d        v1.7.8-qcloud
-
-kubectl config set-credentials prod-admin --username=admin --password=ZXIr6izA9AqcWXtfWgsqdBS58FalddUu
-kubectl config set-cluster prod-cluster --server=https://cls-46q04qgm.ccs.tencent-cloud.com --certificate-authority=/root/prod-ca.crt
-kubectl config set-context prod-system --cluster=prod-cluster --user=prod-admin
-kubectl config use-context prod-system
-[root@cobbler ~]# kubectl config use-context prod-system
-Switched to context "prod-system".
-[root@cobbler ~]# kubectl get nodes
-NAME           STATUS    AGE       VERSION
-172.16.16.46   Ready     2d        v1.7.8-qcloud
-172.16.16.70   Ready     2d        v1.7.8-qcloud
-172.16.16.79   Ready     2d        v1.7.8-qcloud
-172.16.16.83   Ready     2d        v1.7.8-qcloud
-
-kubectl config set-credentials default --token=${KUBERNETES_TOKEN}
-if [ ! -z ${KUBERNETES_CERT} ]; then
-  echo ${KUBERNETES_CERT} | base64 -d > ca.crt
-  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --certificate-authority=ca.crt
-else
-  echo "WARNING: Using insecure connection to cluster"
-  kubectl config set-cluster default --server=${KUBERNETES_SERVER} --insecure-skip-tls-verify=true
-fi
-kubectl config set-context default --cluster=default --user=default
-kubectl config use-context defaul
-
-
 #######k8s使用cinder做存儲後端#####
 这需要两个前提：
 1. OpenStack作为Kubernetes Provider，因为需要从Nova查询Pod所在的机器
@@ -433,7 +387,7 @@ spec:
 ############murano image udpate metadata ##########
 nova image-meta 2c74763a-22f2-41a8-a205-7d9727b9bb6a set murano_image_info='{"title": "ubuntu14.04-x64-kubernetes", "type": "linux.kubernetes"}'
 
-###############kubernetes install on centos7##################
+###############kubernetes1.5 install on centos7##################
 1 repo
 現在使用的是centos7 extra repo
 
@@ -538,13 +492,6 @@ Session Affinity:       None
 etcdctl ls /registry/services/specs/default
 etcdctl get /registry/services/specs/default/nginxsvc
 
------------------Docker & K8s 存儲----------------------
-named volume
-volume container
-ceph rbd & ceph fuse
-LVM
-UFS
-
 -----------------Docker & K8s 網絡----------------------
 在Docker 1.9 出世前，跨多主机的容器通信方案大致有如下三种：
 
@@ -595,7 +542,7 @@ kubectl config use-context default-system
 kubectl cluster-info
 
 
-##############
+##############kubectl常用命令##############
 kubectl run my-nginx --image=nginx --replicas=1 --port=80
 kubectl expose deployment my-nginx --target-port=80 --type=NodePort
 kubectl describe service my-nginx

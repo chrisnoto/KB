@@ -1,0 +1,77 @@
+显示虚机列表
+
+[root@KVMSERVER qemu]# virsh list
+ Id    Name                           State
+----------------------------------------------------
+ 2     FUEL8.0                        running
+ 3     Cobbler                        running
+ 4     apt_repo                       running
+ 5     proxy                          running
+ 6     yumserver6                     running
+
+[root@kvm-prod images]# virsh dominfo 28
+Id:             28
+Name:           master
+UUID:           6e00ac79-28ab-4e62-97e5-8b66e4188135
+OS Type:        hvm
+State:          running
+CPU(s):         32
+CPU time:       19886706.7s
+Max memory:     4194304 KiB
+Used memory:    4194304 KiB
+Persistent:     yes
+Autostart:      disable
+Managed save:   no
+Security model: none
+Security DOI:   0
+
+ 
+ 查虚机CPU核数
+ [root@kvm-prod qemu]# virsh vcpucount 35
+maximum      config        32
+maximum      live          32
+current      config        32
+current      live          32
+
+查虚机内存
+[root@kvm-prod qemu]# virsh dommemstat 35
+actual 12582912   KB
+swap_in 0
+swap_out 0
+major_fault 225
+minor_fault 206869
+unused 11843848
+available 12135028
+rss 2839712
+
+查虚机硬盘
+[root@KVMSERVER qemu]# virsh domblklist 4
+Target     Source
+------------------------------------------------
+vda        /var/lib/libvirt/images/apt_repo.qcow2
+vdb        /var/lib/libvirt/images/apt_repo-1.qcow2
+vdc        /var/lib/libvirt/images/apt_repo-2.qcow2
+vdd        /var/lib/libvirt/images/apt_repo-3.qcow2
+hda        -
+
+[root@KVMSERVER qemu]# qemu-img info /var/lib/libvirt/images/apt_repo-1.qcow2
+image: /var/lib/libvirt/images/apt_repo-1.qcow2
+file format: qcow2
+virtual size: 50G (53687091200 bytes)
+disk size: 50G
+cluster_size: 65536
+Format specific information:
+    compat: 1.1
+    lazy refcounts: true
+
+######## KVM其他指令 ########
+[root@oc1181188062 ~]# virsh start Windows_XP-KVM
+[root@oc1181188062 ~]# virsh -c qemu:///system start Windows_XP-KVM
+Domain Windows_XP-KVM started
+[root@oc1181188062 ~]# ibm-virt-viewer -a -c qemu:///system Windows_XP-KVM
+[root@oc1181188062 ~]# virt-manager
+# virt-cat -d agent2 /etc/nginx/conf.d/default.conf
+# virt-cat -d agent2 /usr/share/nginx/html/db.php
+# virt-ls -d agent2 /usr/share/nginx/html/
+# virt-df -d agent2
+# virsh undefine agent3 --remove-all-storage

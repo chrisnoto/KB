@@ -47,12 +47,30 @@ docker run -d --restart=unless-stopped \
 # 2 启动后增加节点顺序
 3 master(all roles) -> 3 workers(worker) 
 检查master里容器是否都跑起来，有些容器需要较长时间跑起来
-###rancher UI里检查catalog apps是否可用
+rancher UI里检查catalog apps是否可用
 ###检查k8s集群
-#通过api检查nodes
+
+### 通过kuberntes api检查nodes
+#1 kubectl get --raw https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes |python -m json.tool
+#2 或浏览器访问
 https://10.67.36.58/k8s/clusters/c-k789t/api/v1/nodes
 metric-server api
 https://10.67.36.58/k8s/clusters/c-v6qjl/apis/metrics.k8s.io/v1beta1/pods
+
+#3 curl访问
+在rancher UI->Users -> User profile -> API & Keys
+Access Key: token-dx5tl
+Secret Key: r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4
+Bearer Token: token-dx5tl:r9tbw9xrjm8j2spx8dmlhzm7kvmvhgxmz2xf7cjjjqdlkmlc8rzwq4
+使用bearer token
+curl -k -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes --header "Authorization: Bearer token-dx5tl:r9tbw9xrjm8j2spx8dmlhzmkvmvhgxmz2xf7cjjjqdlkmlc8rzwq4"
+
+curl --cacert /root/.kube/ca.crt -X GET https://10.67.36.58/k8s/clusters/c-v6qjl/api/v1/nodes --header "Authorization: Bearer token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz"
+
+#########rancher API#######
+curl --cacert /root/.kube/ca.crt -X GET https://10.67.36.58/v3/projects/c-v6qjl:p-gxmz9 --header "Authorization: Bearer token-bpmcn:vpf6vm8964djfc89wzv6rtmmqcw2zfnt2jgzwstnwzsqkgtnkrnkgz"
+
+
 
 Metrics API
 可以通过 kubectl proxy 来访问 Metrics API：
@@ -116,7 +134,7 @@ No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to intera
 ...
 ...
 
-
+elasticsearch注意监控一下是不是每天都产生log，有时故障就不会产生log了
 部署efk   (注意master如果没有worker角色，那么fluentd不会收集master的日志)
 前提：存在elasticsearch集群
 1 在cluster-level -> Tools -> logging
@@ -126,15 +144,23 @@ endpoint填写 http://10.67.36.53:9200
 结果：
 会建立pod fluentd和log-aggregator
 	
+*********
 2 在catalog apps里选择kibana    注意kibana version保持和elasticsearch一样 6.4.0
 在service discovery里增加record  external IP addresses
 elasticsearch  -> 10.67.36.53 10.67.36.51
 3 配置 kibana
 创建index patterns   new-*  对应配置logging时里的prefix
+*********
+
+可单独架设kibana，不使用kubernetes部署，主要是kubernetes部署出来的kibana版本可能是精简版，很多功能没有
 
 在catalog里部署cerebro来管理elasticsearch集群
 you can access the web console in this URL: http://[Docker_Host]:9000 and connect to the Elasticsearch cluster using the URL http://elasticsearch:9200 or http://elasticsearch2:9200 in the hosts input field, 
 the user elastic and password changeme.
+
+####配置logrotate daemon-set#####
+以天为单位rotate,  docker logging-driver仍为json-file
+参考 logrotate-ds.yaml
 
 部署glusterfs heketi-cli
 heketi db SOPF问题
