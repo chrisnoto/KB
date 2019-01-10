@@ -174,3 +174,104 @@ kubectl config use-context kubernetes  #可以指定路径kubeconfig=/root/conf
 集群环境。
 
 默认生成的kubeconfig 被保存到 ~/.kube/config 文件
+
+##################rancher TLS双向认证###############
+注意 rancher UI用的CA 和 部署出来的kubernetes不一样
+rancher UI: 签发者 cattle-ca   发给cattle
+kubernetes: 签发者 kube-ca     发给kube-apiserver
+此处可以自己做一个client证书，但是没有权限
+可以用 kube-admin 默认有admin权限
+--------------client------------------------
+[root@master1 ~]# openssl genrsa -out client.key 2048
+Generating RSA private key, 2048 bit long modulus
+.....+++
+..+++
+e is 65537 (0x10001)
+[root@master1 ~]# openssl req -new -key client.key -subj "/CN=10.67.51.164" -out client.csr
+[root@master1 ~]# openssl x509 -req -in client.csr -CA /etc/kubernetes/ssl/kube-ca.pem -CAkey /etc/kubernetes/ssl/kube-ca-key.pem -CAcreateserial -out client.crt -days 3650
+Signature ok
+subject=/CN=10.67.51.164
+Getting CA Private Key
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key cluster-info
+Kubernetes master is running at https://10.67.36.62:6443
+
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key version
+Client Version: version.Info{Major:"1", Minor:"7", GitVersion:"v1.7.5", GitCommit:"17d7182a7ccbb167074be7a87f0a68bd00d58d97", GitTreeState:"clean", BuildDate:"2017-08-31T09:14:02Z", GoVersion:"go1.8.3", Compiler:"gc", Platform:"linux/amd64"}
+Server Version: version.Info{Major:"1", Minor:"11", GitVersion:"v1.11.2", GitCommit:"bb9ffb1654d4a729bb4cec18ff088eacc153c239", GitTreeState:"clean", BuildDate:"2018-08-07T23:08:19Z", GoVersion:"go1.10.3", Compiler:"gc", Platform:"linux/amd64"}
+
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key get po
+Error from server (Forbidden): pods is forbidden: User "10.67.51.164" cannot list pods in the namespace "default"
+权限问题
+---------------kube-admin-----------------
+[root@cobbler ~]# kubectl -n kube-system get secrets kube-admin -o yaml  取得kube-admin的config
+config中包含 kube-admin.crt和kube-admin.key和kube-ca.crt
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    api-version: v1
+    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN3akNDQWFxZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFTTVJBd0RnWURWUVFERXdkcmRXSmwKTFdOaE1CNFhEVEU0TVRBeU1EQTJNRFk
+	xTmxvWERUSTRNVEF4TnpBMk1EWTFObG93RWpFUU1BNEdBMVVFQXhNSAphM1ZpWlMxallUQ0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0NnZ0VCQUwrZ1ZEem5XallQClBDZmd0QUNLRnZoMUw1Y0tud3lvbXZucGpiZERKa1
+	FCUi9sRCs0K0xBUnJWUnBJblpuODU4UUkwS0VXeDlLSjgKNzFSUUlUUDUzZ2ZQRGpWcmlmSWJIUGN5MUIvR1ZHQk9QeStxUGdXZi91eTc5WGlzT2M5ZjJ1KzMrN0RFMEIxcQoySGl4c2VFTy9mbm9nNnBtRkhvWFZ3eVlOSHNETHRRN1diS29IT
+	WJmWVJMUmlpemZSY3dwVlEvblpaeWlUaEt6CjdhbDFSYVp2SVZRUlU5Ums5VXkwRnRiVkRTTm5GeVFwSGpSM1JDZUJ2UFQxZThISTNPYXlDZHNvZGk0UkRZREIKdEN4bXRIZnpoNEtCcno5Q1JObUNXWDVPS1BTZEZpM2RwQ3k4TC81UmVyZGp2
+	aWV5OTAzT01DMElsRlV2OXVORgpIOG8zcTFpcDVIRUNBd0VBQWFNak1DRXdEZ1lEVlIwUEFRSC9CQVFEQWdLa01BOEdBMVVkRXdFQi93UUZNQU1CCkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUJBQ1dmVjc4YXBoMmhFYTU5T2RFbWZ0emV
+	rR0hFTXFBemVOWC8KMzhsNDZLbGtScS9ST1ZCUmZCVThuMThQTyt5aElud0lEOUVkYlg1clpQbFJjZDVQcWZ3ZWNtNHhBNFJuV0Z4OQp5cGJ5THZKNFZFZ0hhTzlxZGFneWVRNEZJaUZVakJEeTVzTytoeTRMNDRLTmJIWXJVZTU1Wk5uOS9FcE
+	w0UXpnCldtaGF2MUdUbkxhSERpT21DSmtjdmtwamFSSGFlK1gxK01qSzJ3NW1BNzJjZWFpb1NlQ1phSnNxa1hYdlNBWSsKL2FlcFAxd3pZUzNNeU1ZdkJBWXRxNlJYYnFRS0JIM01tM1FQc0RPZW91V2RQS2I5YXBwMmo5cWhjQkdVODcrYwpBU
+	lVxNFYrUFBEQ3VQaVVxRytmSFdOamdVK3BWc1VTcmJHZVBTTGd2RWtLM2RXRHBuV1E9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    server: "https://10.67.36.62:6443"
+  name: "local"
+contexts:
+- context:
+    cluster: "local"
+    user: "kube-admin-local"
+  name: "local"
+current-context: "local"
+users:
+- name: "kube-admin-local"
+  user:
+    client-certificate-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUM2VENDQWRHZ0F3SUJBZ0lJZVNrNXdEU0dvb0V3RFFZSktvWklodmNOQVFFTEJRQXdFakVRTUE0R0ExVUUKQXhNSGEzVmlaUzFqWVRBZUZ3MHhPREV3TWpB
+	d05qQTJOVFphRncweE9URXdNakF3TmpBMk5UbGFNQzR4RnpBVgpCZ05WQkFvVERuTjVjM1JsYlRwdFlYTjBaWEp6TVJNd0VRWURWUVFERXdwcmRXSmxMV0ZrYldsdU1JSUJJakFOCkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQ
+	Wx2N1cyWDEvKzM1ZGtKVWRFZFpCUTc0RXdITEIKZEVzc01yLzhnck16cjN5clNsczRmTnFwUEF1dXROTXBCdEQ4aDhnbWlBZlp1YnVHSytWMW5mcE9yVXBZZTlOMgpDRVhiTVgralRkYmFYSHpjS1dJRGVxcFkrM0F0eU1velZHOTVGdExtbVVJYW
+	N2TnRtMG13V0ZQaXhUaStWbXo5CkpESjMwd2M3KzB0T1U4akhRVkdJRHdoOVUvZXNha0NyMXRPUkZNU05LeE5UWktvQ0tPMmZ0cGdrRERmWEEzMG0KOHRMcnhVbFpDN0oxSld1d3hOUTFJRUpYQ21VVVZOZmYrNjBTd1RMRzl6cVdJRHFUYS9Rb05
+	qbjA5eTBPTFdTTwp2UEFmcGhTaGw3UEh2blA2UW8yTWxmcWRhdG5YRlJDNUJ3dzd3dVBmMHZWbExsRW9XYTVudFZZaEl3SURBUUFCCm95Y3dKVEFPQmdOVkhROEJBZjhFQkFNQ0JhQXdFd1lEVlIwbEJBd3dDZ1lJS3dZQkJRVUhBd0l3RFFZSktv
+	WkkKaHZjTkFRRUxCUUFEZ2dFQkFMOU9tUzVOOVp0b1dvdVJDeXM3TmJoQmxQUnQzaEdmcUlId28yckY2STcwcG1WcApCTjZPT0diN3ZaR2J0ZHJnNzFCTWlJMWFJUitIam1uT3FldE1RY0JNMy92YVJBZDFYODBBeEhaVndwWm5LVFNRClRzU254T
+	DFWWGhranZqZ2ptSklSUTdCa0RaMmhFVytSc2krTVYrWVdPVFNRT2xXeFdjM20xdmZ4aFc0ODBycjkKYkcrQkpaZW5jYVhzK1A3eS9JRW1zQXNYMkN6S2YyNzBGTkRxaUc4cGRkSEVia3h2MjJrVWJBZm9mR2VFN1V4cgpTMklWazFnQjlweTlQNG
+	h4Y0lPb0RGZEZ5ZUk0Ykp3YjdyR1NybW04b0tGZlpCSll5N0Q2Sk01NERNQ1BienV0CmNuTlZDdU9kaTdYSlFTWFhocm1VZ3FkeHpxODRaOWprVU1iY1FnST0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+    client-key-data: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBbHY3VzJYMS8rMzVka0pVZEVkWkJRNzRFd0hMQmRFc3NNci84Z3JNenIzeXJTbHM0CmZOcXBQQXV1dE5NcEJ0RDhoOGdtaUFmWnVidUdL
+	K1YxbmZwT3JVcFllOU4yQ0VYYk1YK2pUZGJhWEh6Y0tXSUQKZXFwWSszQXR5TW96Vkc5NUZ0TG1tVUlhY3ZOdG0wbXdXRlBpeFRpK1ZtejlKREozMHdjNyswdE9VOGpIUVZHSQpEd2g5VS9lc2FrQ3IxdE9SRk1TTkt4TlRaS29DS08yZnRwZ2tER
+	GZYQTMwbTh0THJ4VWxaQzdKMUpXdXd4TlExCklFSlhDbVVVVk5mZis2MFN3VExHOXpxV0lEcVRhL1FvTmpuMDl5ME9MV1NPdlBBZnBoU2hsN1BIdm5QNlFvMk0KbGZxZGF0blhGUkM1Qnd3N3d1UGYwdlZsTGxFb1dhNW50VlloSXdJREFRQUJBb0
+	lCQUdEcGVWNG9KWTkyQUhsKwpxeVM2bmpMcmI4TlJKQWNQQkhRaU11QjBRZlVkRUJkdVN1Z2ZzOFQ5UG9tQ2llOTlETWZkVjVXeGJEWEFQUkpKCmVOOEhPNTRQZkpFbEhMbWNsRjNGclR1VmJaczA3RjJITWZKMkNSeUFXSEpxRE4zaG1oZGpEMnh
+	JT0ErVlc4RHkKWDhPaE80Z1hybHBzSTJFckh5c0xscHpvTFlLcCs0ZnI5RklDWDN1MS9ZVEtyMmNyS3dIZHlXdEc2TUp6UWIwbwpGNTdWbmU2dVVnaXVFMlZFamFpTms0NSt3OElJRlpYcXNTOW5NSGt0dFRPTWJCK2VDNDFrWDZ3bGMwVkplblIy
+	CkFwRjc2SHM1Q09GZy9DREp1KzlVNkMwMjJLb3lzVlRHd3U2TDRUbXNjVUkwWXJJSFFFOE9hRzVEbmp0Rmd2QkcKcG5seS95a0NnWUVBd1crTjRwWDZBNW1meU9vdGF4Ym9NQ2p2a0JNbU9NMHBXQnorWkU1VWtZNmx3R1libnhPegpodDNVamVrU
+	Gx3MnVNN3laT0lXWm1ucG0yRFFQSGxNZXp1bVdDcGhoRXBsSFZNem1WNXdoSUQ4aTNoaEtjU0RsCkN2anoyajB5eUhUcVVnb1VRVXpKOTBKdFA4Vm1EWkFJeUlIc2d1TnFhNnFrTnEybVkwaXpDcVVDZ1lFQXg5VTgKaUlWL21GSi96bG8yV0NDWU
+	JCNjVyQ1hYMXJyQTFEVnJIMHZGLzd2K2pQV0xMd0dXclI4S0N0L3JGd0ZUZFdOVApXdHBnMzE5dVVnZkk1Z0VoeGVNMmU1TWFyL2d5S0lYa0l4SmhSSng1QU1qbUR0N1FtRTVtRW5NRXd5QTBiSXl1ClByam9aV3FtTHkra3pCdTNVU2hUU044dTR
+	Hd0lXQXczKzhIVDJpY0NnWUVBbUkzSUVwbEJjakZvU09ZWEo4d0wKRm1CU2Z3ZjdMdlR1MUdVWlpEWTZrQWsyUThURHAvTzd0SE9pdk1DLzROdVROWTVhTUs5ODhzM3g2alUwYnpBUwpyaENlbW9DT25rSndkVHFidHlDVkozOWptbEVCOUxLQ3NP
+	S2lQczNoRFNMWDRoZTgzYnNYMVg5MzljRlN1UU9OClNjVGRxR1IrZTZjNmx6emdhcERkVTFrQ2dZQnBKQ2JQWmY0MmRPSE4vdVV0QlNrMnNidmJlYVhRMHozMTZZMU4KVUI4RGFUU0xrZjREWTRDVjRnajBvOUFic0pUcTVMSE0wYTI2bVltQUc1e
+	DJlQTMvQW9kK0NXNDNQQTJZQ0twNgpVWWRnQkR3ZVQ1WE1LU3Z6bHZ4WnBLN1N3N1VSa0F0MThQQkZ2QkZvTGxjMUZUZ2t1V1RvcUpVUGU0Z0FXNTF4CkZ4Q1NiUUtCZ0g5YnIyU1FFY2JFdTVwNEVpK3lWTGxxMUNPWWt5T1BXR3gyb3NqWVcxQj
+	M4WTlOSFZhaFExbWkKcEZzM0FKSkg5YjhWZ0hMdkZoSkU5UHorMU11aUYvT2ozSW92dmZSY2UyQTVaUEI2Y1lmU3JxTDhvQ3Z6NndURApkWGh1T3pjM0dUMERRaVFmbWN5SEVtekt0NjJxSVlnQm83YTd5dUEwMExGSUtyWXI0bGc4Ci0tLS0tRU5
+	EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=kube-admin.crt --client-key=kube-admin.key get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     23h       v1.11.2
+master3   Ready     82d       v1.11.2
+worker1   Ready     82d       v1.11.2
+worker2   Ready     82d       v1.11.2
+worker3   Ready     82d       v1.11.2
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.64:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=kube-admin.crt --client-key=kube-admin.key get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     23h       v1.11.2
+master3   Ready     82d       v1.11.2
+worker1   Ready     82d       v1.11.2
+worker2   Ready     82d       v1.11.2
+worker3   Ready     82d       v1.11.2
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.63:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=kube-admin.crt --client-key=kube-admin.key get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     82d       v1.11.2
+master2   Ready     23h       v1.11.2
+master3   Ready     82d       v1.11.2
+worker1   Ready     82d       v1.11.2
+worker2   Ready     82d       v1.11.2
+worker3   Ready     82d       v1.11.2
+
