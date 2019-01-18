@@ -76,7 +76,12 @@ password=root
 WantedBy=multi-user.target
 
 
-#grafana重设密码		
+#grafana重设密码	
+bug   /var/lib/grafana和/usr/share/grafana/data各有一个grafana.db   实际上后者是多余的，前者才是正在使用的。  删除后者，再做软链接
+需要先做以下链接
+ln -s /var/lib/grafana  /usr/share/grafana/data
+ln -s /var/log/grafana /usr/share/grafana/data/logs
+再执行	
 grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" pqhkr88ctw
 
 

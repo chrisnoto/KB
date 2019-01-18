@@ -178,8 +178,8 @@ kubectl config use-context kubernetes  #可以指定路径kubeconfig=/root/conf
 ##################rancher TLS双向认证###############
 注意 rancher UI用的CA 和 部署出来的kubernetes不一样
 rancher UI: 签发者 cattle-ca   发给cattle
-kubernetes: 签发者 kube-ca     发给kube-apiserver
-此处可以自己做一个client证书，但是没有权限
+kubernetes: 签发者 kube-ca     发给kube-apiserver等服务,以及kube-admin
+此处可以自己做一个client证书，添加权限： /O=system:masters
 可以用 kube-admin 默认有admin权限
 --------------client------------------------
 [root@master1 ~]# openssl genrsa -out client.key 2048
@@ -187,23 +187,47 @@ Generating RSA private key, 2048 bit long modulus
 .....+++
 ..+++
 e is 65537 (0x10001)
-[root@master1 ~]# openssl req -new -key client.key -subj "/CN=10.67.51.164" -out client.csr
+[root@master1 ~]# openssl req -new -key client.key -subj "/CN=client/O=system:masters" -out client.csr
 [root@master1 ~]# openssl x509 -req -in client.csr -CA /etc/kubernetes/ssl/kube-ca.pem -CAkey /etc/kubernetes/ssl/kube-ca-key.pem -CAcreateserial -out client.crt -days 3650
 Signature ok
-subject=/CN=10.67.51.164
+subject=/CN=client/O=system:masters
 Getting CA Private Key
+
 [chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key cluster-info
 Kubernetes master is running at https://10.67.36.62:6443
+KubeDNS is running at https://10.67.36.62:6443/api/v1/namespaces/kube-system/services/kube-dns/proxy
 
-[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key version
-Client Version: version.Info{Major:"1", Minor:"7", GitVersion:"v1.7.5", GitCommit:"17d7182a7ccbb167074be7a87f0a68bd00d58d97", GitTreeState:"clean", BuildDate:"2017-08-31T09:14:02Z", GoVersion:"go1.8.3", Compiler:"gc", Platform:"linux/amd64"}
-Server Version: version.Info{Major:"1", Minor:"11", GitVersion:"v1.11.2", GitCommit:"bb9ffb1654d4a729bb4cec18ff088eacc153c239", GitTreeState:"clean", BuildDate:"2018-08-07T23:08:19Z", GoVersion:"go1.10.3", Compiler:"gc", Platform:"linux/amd64"}
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key get no
+NAME      STATUS    AGE       VERSION
+master1   Ready     84d       v1.11.2
+master2   Ready     2d        v1.11.2
+master3   Ready     83d       v1.11.2
+worker1   Ready     83d       v1.11.2
+worker2   Ready     83d       v1.11.2
+worker3   Ready     83d       v1.11.2
 
-[chensen@cobbler ~]$ kubectl --server=https://10.67.36.62:6443 --certificate-authority=/home/chensen/kube-ca.crt --client-certificate=client.crt --client-key=client.key get po
-Error from server (Forbidden): pods is forbidden: User "10.67.51.164" cannot list pods in the namespace "default"
-权限问题
+继续配置kube config
+[chensen@cobbler ~]$ kubectl config set-cluster rancher --certificate-authority=/home/chensen/kube-ca.crt --embed-certs=true --server=https://10.67.36.62:6443
+Cluster "rancher" set.
+[chensen@cobbler ~]$ kubectl config set-credentials admin --client-certificate=client.crt --client-key=client.key
+User "admin" set.
+[chensen@cobbler ~]$ kubectl config set-context rancher --cluster=rancher --user=admin
+Context "rancher" created.
+[chensen@cobbler ~]$ kubectl config use-context rancher
+Switched to context "rancher".
+
+[chensen@cobbler ~]$ kubectl get po
+NAME                            READY     STATUS    RESTARTS   AGE
+hello-67bf8bd7c8-pm87z          1/1       Running   1          21d
+hello-nodejs-65b56586cf-lv5rl   1/1       Running   1          21d
+repo-858d7bf699-fxhjd           1/1       Running   0          2d
+repo-httpd-b5967bd88-hjj9n      1/1       Running   1          30d
+
 ---------------kube-admin-----------------
-[root@cobbler ~]# kubectl -n kube-system get secrets kube-admin -o yaml  取得kube-admin的config
+第一种获取方法: rancher server里的/rancher/kube_config_cluster.yml
+第二种获取方法如下
+[root@cobbler ~]# kubectl -n kube-system get secrets kube-admin -o json |jq -r '.data["Config"]' |base64 -d  >config取得kube-admin的config
 config中包含 kube-admin.crt和kube-admin.key和kube-ca.crt
 apiVersion: v1
 kind: Config
@@ -275,3 +299,272 @@ worker1   Ready     82d       v1.11.2
 worker2   Ready     82d       v1.11.2
 worker3   Ready     82d       v1.11.2
 
+###############创建SA################
+[root@cobbler ~]# kubectl create sa test
+serviceaccount "test" created
+You have mail in /var/spool/mail/root
+[root@cobbler ~]# kubectl get sa test -o json
+{
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+        "creationTimestamp": "2019-01-11T01:06:51Z",
+        "name": "test",
+        "namespace": "default",
+        "resourceVersion": "14468695",
+        "selfLink": "/api/v1/namespaces/default/serviceaccounts/test",
+        "uid": "2d7cdd1f-153d-11e9-b1f4-000c29f0f992"
+    },
+    "secrets": [
+        {
+            "name": "test-token-86bl8"
+        }
+    ]
+}
+[root@cobbler ~]# kubectl get sa test -o json | jq -r .secrets[].name
+test-token-86bl8
+[root@cobbler ~]# kubectl get secret test-token-86bl8 -o json
+{
+    "apiVersion": "v1",
+    "data": {
+        "ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN3akNDQWFxZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFTTVJBd0RnWURWUVFERXdkcmRXSmwKTFdOaE1CNFhEVEU0TVRBeU1EQTJNRFkxTmxvWERUSTRNVEF4TnpBMk1EWTFObG93RWpFUU1BNEdBMVVFQXhNSAphM1ZpWlMxallUQ0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0NnZ0VCQUwrZ1ZEem5XallQClBDZmd0QUNLRnZoMUw1Y0tud3lvbXZucGpiZERKa1FCUi9sRCs0K0xBUnJWUnBJblpuODU4UUkwS0VXeDlLSjgKNzFSUUlUUDUzZ2ZQRGpWcmlmSWJIUGN5MUIvR1ZHQk9QeStxUGdXZi91eTc5WGlzT2M5ZjJ1KzMrN0RFMEIxcQoySGl4c2VFTy9mbm9nNnBtRkhvWFZ3eVlOSHNETHRRN1diS29ITWJmWVJMUmlpemZSY3dwVlEvblpaeWlUaEt6CjdhbDFSYVp2SVZRUlU5Ums5VXkwRnRiVkRTTm5GeVFwSGpSM1JDZUJ2UFQxZThISTNPYXlDZHNvZGk0UkRZREIKdEN4bXRIZnpoNEtCcno5Q1JObUNXWDVPS1BTZEZpM2RwQ3k4TC81UmVyZGp2aWV5OTAzT01DMElsRlV2OXVORgpIOG8zcTFpcDVIRUNBd0VBQWFNak1DRXdEZ1lEVlIwUEFRSC9CQVFEQWdLa01BOEdBMVVkRXdFQi93UUZNQU1CCkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUJBQ1dmVjc4YXBoMmhFYTU5T2RFbWZ0emVrR0hFTXFBemVOWC8KMzhsNDZLbGtScS9ST1ZCUmZCVThuMThQTyt5aElud0lEOUVkYlg1clpQbFJjZDVQcWZ3ZWNtNHhBNFJuV0Z4OQp5cGJ5THZKNFZFZ0hhTzlxZGFneWVRNEZJaUZVakJEeTVzTytoeTRMNDRLTmJIWXJVZTU1Wk5uOS9FcEw0UXpnCldtaGF2MUdUbkxhSERpT21DSmtjdmtwamFSSGFlK1gxK01qSzJ3NW1BNzJjZWFpb1NlQ1phSnNxa1hYdlNBWSsKL2FlcFAxd3pZUzNNeU1ZdkJBWXRxNlJYYnFRS0JIM01tM1FQc0RPZW91V2RQS2I5YXBwMmo5cWhjQkdVODcrYwpBUlVxNFYrUFBEQ3VQaVVxRytmSFdOamdVK3BWc1VTcmJHZVBTTGd2RWtLM2RXRHBuV1E9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+        "namespace": "ZGVmYXVsdA==",
+        "token": "ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklpSjkuZXlKcGMzTWlPaUpyZFdKbGNtNWxkR1Z6TDNObGNuWnBZMlZoWTJOdmRXNTBJaXdpYTNWaVpYSnVaWFJsY3k1cGJ5OXpaWEoyYVdObFlXTmpiM1Z1ZEM5dVlXMWxjM0JoWTJVaU9pSmtaV1poZFd4MElpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WldOeVpYUXVibUZ0WlNJNkluUmxjM1F0ZEc5clpXNHRPRFppYkRnaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNXVZVzFsSWpvaWRHVnpkQ0lzSW10MVltVnlibVYwWlhNdWFXOHZjMlZ5ZG1salpXRmpZMjkxYm5RdmMyVnlkbWxqWlMxaFkyTnZkVzUwTG5WcFpDSTZJakprTjJOa1pERm1MVEUxTTJRdE1URmxPUzFpTVdZMExUQXdNR015T1dZd1pqazVNaUlzSW5OMVlpSTZJbk41YzNSbGJUcHpaWEoyYVdObFlXTmpiM1Z1ZERwa1pXWmhkV3gwT25SbGMzUWlmUS5CZy1TazdPVGswVGlsSHRFSHV1Z1ZlOVVheC1rcEFHTnJ2eERTMFA5QVVndTBtdFg1ZlFZTVdUSUZYSlpKTlhJUl9ydFlmczllR3B5dGQwdmRaeXNaRVRBRWxVbWJ4N25WV2hzQTdCQWVHQlFrX3l3aGItdUZOREZMdEFtVTh3UFpUam9PODZjY1BiNzBFNzNOQWxQLVNrT09FdWtGR1pYQXdONDY0Ym9BQmhvOW1yUVo3VWU4YVhHTXZ4akVDcDJXUTBGZm5YNi12OElXMWtBRmlMbnFLbFk1MTN0Z1F5bDNXQ3p0aUJaVE1PSmMxUnJpOGQ2eW9hbk1SbmxVQ1c0RG1HNUZISXF2akxKZDVrRnpyZ2lOdzlyVEkycVgtU0VmR3JnR3pKOUJ4VDQwX2Q3Ni10VTkxbWozSTRqc0N6eHl0N1ZhcXhJaEN0SjZKRHlVME02cFE="
+    },
+    "kind": "Secret",
+    "metadata": {
+        "annotations": {
+            "kubernetes.io/service-account.name": "test",
+            "kubernetes.io/service-account.uid": "2d7cdd1f-153d-11e9-b1f4-000c29f0f992"
+        },
+        "creationTimestamp": "2019-01-11T01:06:51Z",
+        "name": "test-token-86bl8",
+        "namespace": "default",
+        "resourceVersion": "14468694",
+        "selfLink": "/api/v1/namespaces/default/secrets/test-token-86bl8",
+        "uid": "2d83c8e0-153d-11e9-b1f4-000c29f0f992"
+    },
+    "type": "kubernetes.io/service-account-token"
+}
+#############Service Account#############
+Service Account包括三个部分：
+namespace，token和CA证书
+创建Service account时会自动创建一个secret, secret里有namespace,token和CA证书, 通过这些可以配置 kube config的内容
+给sa授权  通过rolebinding clusterrolebinding
+######################Secret 类型#################
+Secret有三种类型：
+
+Service Account：用来访问Kubernetes API，由Kubernetes自动创建，并且会自动挂载到Pod的/run/secrets/kubernetes.io/serviceaccount目录中；
+Opaque：base64编码格式的Secret，用来存储密码、密钥等；
+kubernetes.io/dockerconfigjson：用来存储私有docker registry的认证信息。
+
+##############Service Account
+[root@cobbler ~]# kubectl get secret test-token-86bl8 -o json
+{
+    "apiVersion": "v1",
+    "data": {
+        "ca.crt": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN3akNDQWFxZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFTTVJBd0RnWURWUVFERXdkcmRXSmwKTFdOaE1CNFhEVEU0TVRBeU1EQTJNRFkxTmxvWERUSTRNVEF4TnpBMk1EWTFObG93RWpFUU1BNEdBMVVFQXhNSAphM1ZpWlMxallUQ0NBU0l3RFFZSktvWklodmNOQVFFQkJRQURnZ0VQQURDQ0FRb0NnZ0VCQUwrZ1ZEem5XallQClBDZmd0QUNLRnZoMUw1Y0tud3lvbXZucGpiZERKa1FCUi9sRCs0K0xBUnJWUnBJblpuODU4UUkwS0VXeDlLSjgKNzFSUUlUUDUzZ2ZQRGpWcmlmSWJIUGN5MUIvR1ZHQk9QeStxUGdXZi91eTc5WGlzT2M5ZjJ1KzMrN0RFMEIxcQoySGl4c2VFTy9mbm9nNnBtRkhvWFZ3eVlOSHNETHRRN1diS29ITWJmWVJMUmlpemZSY3dwVlEvblpaeWlUaEt6CjdhbDFSYVp2SVZRUlU5Ums5VXkwRnRiVkRTTm5GeVFwSGpSM1JDZUJ2UFQxZThISTNPYXlDZHNvZGk0UkRZREIKdEN4bXRIZnpoNEtCcno5Q1JObUNXWDVPS1BTZEZpM2RwQ3k4TC81UmVyZGp2aWV5OTAzT01DMElsRlV2OXVORgpIOG8zcTFpcDVIRUNBd0VBQWFNak1DRXdEZ1lEVlIwUEFRSC9CQVFEQWdLa01BOEdBMVVkRXdFQi93UUZNQU1CCkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUJBQ1dmVjc4YXBoMmhFYTU5T2RFbWZ0emVrR0hFTXFBemVOWC8KMzhsNDZLbGtScS9ST1ZCUmZCVThuMThQTyt5aElud0lEOUVkYlg1clpQbFJjZDVQcWZ3ZWNtNHhBNFJuV0Z4OQp5cGJ5THZKNFZFZ0hhTzlxZGFneWVRNEZJaUZVakJEeTVzTytoeTRMNDRLTmJIWXJVZTU1Wk5uOS9FcEw0UXpnCldtaGF2MUdUbkxhSERpT21DSmtjdmtwamFSSGFlK1gxK01qSzJ3NW1BNzJjZWFpb1NlQ1phSnNxa1hYdlNBWSsKL2FlcFAxd3pZUzNNeU1ZdkJBWXRxNlJYYnFRS0JIM01tM1FQc0RPZW91V2RQS2I5YXBwMmo5cWhjQkdVODcrYwpBUlVxNFYrUFBEQ3VQaVVxRytmSFdOamdVK3BWc1VTcmJHZVBTTGd2RWtLM2RXRHBuV1E9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+        "namespace": "ZGVmYXVsdA==",
+        "token": "ZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNklpSjkuZXlKcGMzTWlPaUpyZFdKbGNtNWxkR1Z6TDNObGNuWnBZMlZoWTJOdmRXNTBJaXdpYTNWaVpYSnVaWFJsY3k1cGJ5OXpaWEoyYVdObFlXTmpiM1Z1ZEM5dVlXMWxjM0JoWTJVaU9pSmtaV1poZFd4MElpd2lhM1ZpWlhKdVpYUmxjeTVwYnk5elpYSjJhV05sWVdOamIzVnVkQzl6WldOeVpYUXVibUZ0WlNJNkluUmxjM1F0ZEc5clpXNHRPRFppYkRnaUxDSnJkV0psY201bGRHVnpMbWx2TDNObGNuWnBZMlZoWTJOdmRXNTBMM05sY25acFkyVXRZV05qYjNWdWRDNXVZVzFsSWpvaWRHVnpkQ0lzSW10MVltVnlibVYwWlhNdWFXOHZjMlZ5ZG1salpXRmpZMjkxYm5RdmMyVnlkbWxqWlMxaFkyTnZkVzUwTG5WcFpDSTZJakprTjJOa1pERm1MVEUxTTJRdE1URmxPUzFpTVdZMExUQXdNR015T1dZd1pqazVNaUlzSW5OMVlpSTZJbk41YzNSbGJUcHpaWEoyYVdObFlXTmpiM1Z1ZERwa1pXWmhkV3gwT25SbGMzUWlmUS5CZy1TazdPVGswVGlsSHRFSHV1Z1ZlOVVheC1rcEFHTnJ2eERTMFA5QVVndTBtdFg1ZlFZTVdUSUZYSlpKTlhJUl9ydFlmczllR3B5dGQwdmRaeXNaRVRBRWxVbWJ4N25WV2hzQTdCQWVHQlFrX3l3aGItdUZOREZMdEFtVTh3UFpUam9PODZjY1BiNzBFNzNOQWxQLVNrT09FdWtGR1pYQXdONDY0Ym9BQmhvOW1yUVo3VWU4YVhHTXZ4akVDcDJXUTBGZm5YNi12OElXMWtBRmlMbnFLbFk1MTN0Z1F5bDNXQ3p0aUJaVE1PSmMxUnJpOGQ2eW9hbk1SbmxVQ1c0RG1HNUZISXF2akxKZDVrRnpyZ2lOdzlyVEkycVgtU0VmR3JnR3pKOUJ4VDQwX2Q3Ni10VTkxbWozSTRqc0N6eHl0N1ZhcXhJaEN0SjZKRHlVME02cFE="
+    },
+    "kind": "Secret",
+    "metadata": {
+        "annotations": {
+            "kubernetes.io/service-account.name": "test",
+            "kubernetes.io/service-account.uid": "2d7cdd1f-153d-11e9-b1f4-000c29f0f992"
+        },
+        "creationTimestamp": "2019-01-11T01:06:51Z",
+        "name": "test-token-86bl8",
+        "namespace": "default",
+        "resourceVersion": "14468694",
+        "selfLink": "/api/v1/namespaces/default/secrets/test-token-86bl8",
+        "uid": "2d83c8e0-153d-11e9-b1f4-000c29f0f992"
+    },
+    "type": "kubernetes.io/service-account-token"
+}
+
+#############kubernetes.io/dockerconfigjson
+[root@cobbler ~]# kubectl -n kube-system get secrets tianjin -o yaml
+apiVersion: v1
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyIxMC42Ny4zOC45MCI6eyJwYXNzd29yZCI6IkZveGNvbm4xMjMiLCJ1c2VybmFtZSI6Ikg3MTA4NTc5In19fQ==
+kind: Secret
+metadata:
+  annotations:
+    field.cattle.io/creatorId: user-kpxwd
+    field.cattle.io/projectId: c-v6qjl:p-zwvrx
+    lifecycle.cattle.io/create.secretsController_c-v6qjl: "true"
+    secret.user.cattle.io/secret: "true"
+  creationTimestamp: 2019-01-11T01:31:32Z
+  name: tianjin
+  namespace: kube-system
+  resourceVersion: "14471704"
+  selfLink: /api/v1/namespaces/kube-system/secrets/tianjin
+  uid: a08a06e4-1540-11e9-b1f4-000c29f0f992
+type: kubernetes.io/dockerconfigjson
+
+##############Opaque
+###key为token,url
+[root@cobbler ~]# kubectl -n cattle-system get secrets cattle-credentials-dd4a25d -o json
+{
+    "apiVersion": "v1",
+    "data": {
+        "token": "bjhjaHA3bHRmZ2RxazY0a3p3Yjd4cDk0ZmI1a2dyNTdzaDg5dHZzMmR4dmIyemR2NGYycHBj",
+        "url": "aHR0cHM6Ly8xMC42Ny4zNi41OA=="
+    },
+    "kind": "Secret",
+    "metadata": {
+        "annotations": {
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"v1\",\"data\":{\"token\":\"bjhjaHA3bHRmZ2RxazY0a3p3Yjd4cDk0ZmI1a2dyNTdzaDg5dHZzMmR4dmIyemR2NGYycHBj\",\"url\":\"aHR0cHM6Ly8xMC42Ny4zNi41OA==\"},\"kind\":\"Secret\",\"metadata\":{\"annotations\":{},\"name\":\"cattle-credentials-dd4a25d\",\"namespace\":\"cattle-system\"},\"type\":\"Opaque\"}\n"
+        },
+        "creationTimestamp": "2018-10-20T06:08:30Z",
+        "name": "cattle-credentials-dd4a25d",
+        "namespace": "cattle-system",
+        "resourceVersion": "676",
+        "selfLink": "/api/v1/namespaces/cattle-system/secrets/cattle-credentials-dd4a25d",
+        "uid": "91701278-d42e-11e8-8283-000c29fba296"
+    },
+    "type": "Opaque"
+}
+
+###key为password,user
+[root@cobbler ~]# kubectl -n kube-system get secrets mysql-credential -o json
+{
+    "apiVersion": "v1",
+    "data": {
+        "password": "Rm94Y29ubjEyMw==",
+        "user": "cm9vdA=="
+    },
+    "kind": "Secret",
+    "metadata": {
+        "annotations": {
+            "field.cattle.io/creatorId": "user-kpxwd",
+            "field.cattle.io/projectId": "c-v6qjl:p-zwvrx",
+            "lifecycle.cattle.io/create.secretsController_c-v6qjl": "true",
+            "secret.user.cattle.io/secret": "true"
+        },
+        "creationTimestamp": "2019-01-11T01:36:14Z",
+        "name": "mysql-credential",
+        "namespace": "kube-system",
+        "resourceVersion": "14472334",
+        "selfLink": "/api/v1/namespaces/kube-system/secrets/mysql-credential",
+        "uid": "48afc56a-1541-11e9-b1f4-000c29f0f992"
+    },
+    "type": "Opaque"
+}
+
+############Overview of RBAC concepts in Kubernetes###########
+The RBAC model in Kubernetes is based on three elements:
+
+Roles: definition of the permissions for each Kubernetes resource type
+Subjects: users (human or machine users) or groups of users
+RoleBindings: definition of what Subjects have which Roles
+
+Roles and ClusterRoles define rules
+A RoleBinding or ClusterRoleBinding binds a role to subjects. Subjects can be groups, users or service accounts
+
+How to bind a Subject to a Role or a ClusterRole
+bind a human user to a Role/ClusterRole
+bind a service account (non-human user) to a Role/ClusterRole
+bind a group of human users and/or service accounts to a Role/ClusterRole
+
+In the example below, the RoleBinding example-rolebindingbinds the ServiceAccount example-sto the Role example-role
+
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: example-rolebinding
+  namespace: mynamespace
+subjects:
+- kind: ServiceAccount
+  name: example-sa
+  namespace: mynamespace
+roleRef:
+  kind: Role
+  name: example-role
+  apiGroup: rbac.authorization.k8s.io
+------------------------------------------------------
+For a user named “alice@example.com”:
+
+subjects:
+- kind: User
+  name: "alice@example.com"
+  apiGroup: rbac.authorization.k8s.io
+For a group named “frontend-admins”:
+
+subjects:
+- kind: Group
+  name: "frontend-admins"
+  apiGroup: rbac.authorization.k8s.io
+For the default service account in the kube-system namespace:
+
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: kube-system
+For all service accounts in the “qa” namespace:
+
+subjects:
+- kind: Group
+  name: system:serviceaccounts:qa
+  apiGroup: rbac.authorization.k8s.io
+For all service accounts everywhere:
+
+subjects:
+- kind: Group
+  name: system:serviceaccounts
+  apiGroup: rbac.authorization.k8s.io
+For all authenticated users (version 1.5+):
+
+subjects:
+- kind: Group
+  name: system:authenticated
+  apiGroup: rbac.authorization.k8s.io
+For all unauthenticated users (version 1.5+):
+
+subjects:
+- kind: Group
+  name: system:unauthenticated
+  apiGroup: rbac.authorization.k8s.io
+For all users (version 1.5+):
+
+subjects:
+- kind: Group
+  name: system:authenticated
+  apiGroup: rbac.authorization.k8s.io
+- kind: Group
+  name: system:unauthenticated
+  apiGroup: rbac.authorization.k8s.io
+  
+#############查看clusterrolebinding##########
+可以看到cluster-admin属于system:masters这个组
+[root@cobbler yaml]# kubectl -n kube-system get clusterrolebindings cluster-admin -o json
+{
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRoleBinding",
+    "metadata": {
+        "annotations": {
+            "rbac.authorization.kubernetes.io/autoupdate": "true"
+        },
+        "creationTimestamp": "2018-10-20T06:07:36Z",
+        "labels": {
+            "kubernetes.io/bootstrapping": "rbac-defaults"
+        },
+        "name": "cluster-admin",
+        "resourceVersion": "92",
+        "selfLink": "/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/cluster-admin",
+        "uid": "710d2728-d42e-11e8-8283-000c29fba296"
+    },
+    "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "cluster-admin"
+    },
+    "subjects": [
+        {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "Group",
+            "name": "system:masters"
+        }
+    ]
+}

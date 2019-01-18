@@ -10,6 +10,7 @@ services:
           - node.labels.kafka == 1
     ports:
       - 9094:9094
+      - 9991:9991
     environment:
       HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
       KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
@@ -18,6 +19,8 @@ services:
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_BROKER_ID: 1
+      JMX_PORT: 9991
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=10.67.36.68 -Dcom.sun.management.jmxremote.rmi.port=9991 -Dcom.sun.management.jmxremote.port=9991 -Dcom.sun.management.jmxremote.local.only=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
   kafka-2:
@@ -30,6 +33,7 @@ services:
           - node.labels.kafka == 2
     ports:
       - 9095:9095
+      - 9992:9992
     environment:
       HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
       KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
@@ -38,6 +42,9 @@ services:
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9095
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_BROKER_ID: 2
+      JMX_PORT: 9992
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=10.67.36.69 -Dcom.sun.management.jmxremote.rmi.port=9992 -Dcom.sun.management.jmxremote.port=9992 -Dcom.sun.management.jmxremote.local.only=false"
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
   kafka-3:
@@ -50,6 +57,7 @@ services:
           - node.labels.kafka == 3
     ports:
       - 9096:9096
+      - 9993:9993
     environment:
       HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
       KAFKA_ZOOKEEPER_CONNECT: 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
@@ -58,5 +66,11 @@ services:
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9096
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_BROKER_ID: 3
+      JMX_PORT: 9993
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=10.67.36.70 -Dcom.sun.management.jmxremote.rmi.port=9993 -Dcom.sun.management.jmxremote.port=9993 -Dcom.sun.management.jmxremote.local.only=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+networks:
+  default:
+    external:
+      name: zookeeper_default

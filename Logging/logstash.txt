@@ -46,21 +46,39 @@ output {
 [root@logstash conf.d]# cat 100-kafka-input.conf
 input {
   kafka {
-    bootstrap_servers => "10.67.36.59:9092"
-    topics => ["logstash"]
-    codec => "json"          #解析kafka json信息
-    decorate_events => true  #输出kafka信息
+    bootstrap_servers => "10.67.38.121:9092,10.67.38.122:9092,10.67.38.123:9092"
+    topics => ["logstash","metricbeat","k8s","swarm"]
+    codec => "json"
+    decorate_events => true
   }
   beats {
     port => 5044
   }
 }
 
+
+
 [root@logstash conf.d]# cat 300-elasticsearch-output.conf
 output {
+  if [kubernetes][host] {
   elasticsearch {
     hosts => ["http://10.67.51.123:9200"]
-    index => "filebeat-%{+YYYY.MM.dd}"
+    index => "k8s-%{+YYYY.MM.dd}"
   }
 }
+  else if [type_name] == "swarm" {
+  elasticsearch {
+    hosts => ["http://10.67.51.123:9200"]
+    index => "swarm-%{+YYYY.MM.dd}"
+  }
+} else {
+  elasticsearch {
+    hosts => ["http://10.67.51.123:9200"]
+    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"           #filebeat & metricbeat
+  }
+ }
+}
+
+
+
 

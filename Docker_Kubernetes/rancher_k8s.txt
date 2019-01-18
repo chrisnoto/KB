@@ -19,7 +19,7 @@ rm /var/lib/cni/* -rf
 iptables -F && iptables -t nat –F
 ip link del flannel.1
 docker ps -a|awk '{print $1}'|xargs docker rm -f
-docker volume ls|awk '{print $2}'|xargs docker volume rm"""
+docker volume ls|awk '{print $2}'|xargs docker volume rm """
 
 https://10.67.36.58/v1-telemetry   telemetry服务
 
@@ -44,7 +44,10 @@ docker run -d --restart=unless-stopped \
   -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
   rancher/rancher:v2.0.8
 
-# 2 启动后增加节点顺序
+# 2 启动后增加节点顺序  
+勾选etcd snapshot选项
+
+
 3 master(all roles) -> 3 workers(worker) 
 检查master里容器是否都跑起来，有些容器需要较长时间跑起来
 rancher UI里检查catalog apps是否可用
@@ -113,6 +116,15 @@ No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to intera
 | cfbab3c5ebe25d13 | started | etcd-master2 | https://10.67.36.63:2380 | https://10.67.36.63:2379,https://10.67.36.63:4001 |
 | dc361e140416a18e | started | etcd-master3 | https://10.67.36.62:2380 | https://10.67.36.62:2379,https://10.67.36.62:4001 |
 +------------------+---------+--------------+--------------------------+---------------------------------------------------+
+
+/var/lib/rancher/etcd/member/snap # etcdctl --endpoints=http://$IP:2379 snapshot save $BACKUP/`date +%Y%m%d%H%M`.db
+/var/lib/rancher/etcd/member/snap # etcdctl --write-out=table --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 snapshot status snap-2019
+01150826.db
++----------+----------+------------+------------+
+|   HASH   | REVISION | TOTAL KEYS | TOTAL SIZE |
++----------+----------+------------+------------+
+| bc495fb3 | 15221459 |       1615 |      11 MB |
++----------+----------+------------+------------+
 
 /var/lib/rancher/etcd/member # etcdctl --endpoints=10.67.36.62:2379,10.67.36.63:2379,10.67.36.64:2379 endpoint health
 10.67.36.62:2379 is healthy: successfully committed proposal: took = 4.795877ms

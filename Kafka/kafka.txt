@@ -20,8 +20,24 @@ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --f
 将文件或标准输入的内容发送到Kafka集群
 bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test < file-input.txt
 
+####zoo1 zoo2 zoo3均为swarm内部service名称，可解析
+/opt/kafka_2.11-2.0.0 # bin/kafka-topics.sh --list --zookeeper zoo1:2181
+__consumer_offsets
+logstash
+metricbeat
+/opt/kafka_2.11-2.0.0 # bin/kafka-topics.sh --list --zookeeper zoo2:2181
+__consumer_offsets
+logstash
+metricbeat
+/opt/kafka_2.11-2.0.0 # bin/kafka-topics.sh --list --zookeeper zoo3:2181
+__consumer_offsets
+logstash
+metricbeat
 
-./kafka-topics.sh --list --zookeeper 10.67.36.68:2181,10.67.36.69:2182,10.67.36.70:2183
+/opt/kafka_2.11-2.0.0 # bin/kafka-topics.sh --list --zookeeper zoo3:2181 zoo2:2181 zoo1:2181
+__consumer_offsets
+logstash
+metricbeat
 
 /opt/kafka_2.11-2.0.0/bin # ./kafka-topics.sh --describe --zookeeper 10.67.36.69
 :2182 --topic test_topic
