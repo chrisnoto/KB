@@ -1,3 +1,69 @@
+#####不要在master上跑容器########
+docker node update --availability drain master
+
+####global模式和replicated模式#########
+global模式:  每台worker上一个副本    3 worker就3副本  
+global模式比较适合agent或者无状态应用，有状态应用的集群要小心
+以下stack只定义了一个service
+[root@master repo]# docker stack services linux_repo
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+upihfvnoz35a        linux_repo_repo     global              3/3                 nginx:alpine
+[root@master kafka]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+m2tjxjmwe6sk        kafka_kafka         global              3/3                 wurstmeister/kafka:latest
+
+replicated模式：  指定副本数
+可以部署集群，集群的每个容器节点指定一个副本数，不同端口及限制节点 还可以指定service 如zoo1 zoo2 zoo3
+[root@master repo]# docker stack services zookeeper
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+iwbl58kct1gr        zookeeper_zoo3      replicated          1/1                 zookeeper:latest    *:30006->2181/tcp, *:30007->2888/tcp, *:30008->3888/tcp
+l67glf8b0dik        zookeeper_zoo1      replicated          1/1                 zookeeper:latest    *:30000->2181/tcp, *:30001->2888/tcp, *:30002->3888/tcp
+wq8zt3hey6s1        zookeeper_zoo2      replicated          1/1                 zookeeper:latest    *:30003->2181/tcp, *:30004->2888/tcp, *:30005->3888/tcp
+[root@master kafka]# docker stack services zookeeper
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+tyzx2oghmn3y        zookeeper_zoo3      replicated          1/1                 zookeeper:latest    *:2183->2181/tcp
+vuc2r316ls0d        zookeeper_zoo2      replicated          1/1                 zookeeper:latest    *:2182->2181/tcp
+yo1665aib24o        zookeeper_zoo1      replicated          1/1                 zookeeper:latest    *:2181->2181/tcp
+
+使用global模式，部署kafka集群的时候要小心
+可能错误的原因包括 broker id冲突  端口冲突
+
+如以下定义了kafka-1 kafka-2 kafka-3使用相同的端口9094,指定不同broker id,结果是kafka-1 kafka-2 kafka-3都有2个失败的副本 replicas 1/3，原因9094端口占用
+
+[root@master repo]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+iqv9guy43jxl        kafka_kafka-3       global              1/3                 wurstmeister/kafka:latest
+y7hwbs7kmb2p        kafka_kafka-1       global              1/3                 wurstmeister/kafka:latest
+yjma9npg4en0        kafka_kafka-2       global              1/3                 wurstmeister/kafka:latest
+
+如以下定义了kafka-1 kafka-2 kafka-3使用相同的端口9094,未指定broker id,结果是kafka-2 service的3个副本全部署成功，其他kafka service未成功，原因9094端口占用
+[root@master kafka]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+7wirchf8hfrb        kafka_kafka-2       global              3/3                 wurstmeister/kafka:latest
+yshzjaudd2gn        kafka_kafka-3       global              0/3                 wurstmeister/kafka:latest
+zfvc0bomfrcx        kafka_kafka-1       global              0/3                 wurstmeister/kafka:latest
+
+如以下定义了kafka-1 kafka-2 kafka-3使用不同端口,未指定broker id,结果是kafka-1 2 3都有3个副本部署成功。 9个kafka副本并不是想要的结果
+[root@master kafka]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+6frrevf4rrnc        kafka_kafka-2       global              3/3                 wurstmeister/kafka:latest
+ht7r5d9npms1        kafka_kafka-3       global              3/3                 wurstmeister/kafka:latest
+rd65mqlc7y5e        kafka_kafka-1       global              3/3                 wurstmeister/kafka:latest
+
+####如以下定义了kafka-1 kafka-2 kafka-3使用相同端口9094,做了node限制，未指定broker id,结果是kafka-1 2 3都有1个副本部署成功。 完美结果   副本数是想要的结果，端口也相同了
+[root@master kafka]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+59ehxhxhvn6u        kafka_kafka-2       global              1/1                 wurstmeister/kafka:latest
+m51ji6uao4fi        kafka_kafka-3       global              1/1                 wurstmeister/kafka:latest
+v87jsr8o68a3        kafka_kafka-1       global              1/1                 wurstmeister/kafka:latest
+
+####如只定义了一个kafka service，使用相同端口9094,未指定broker id。   完美结果   副本数是想要的结果，端口也相同了       
+[root@master kafka]# docker stack services kafka
+ID                  NAME                MODE                REPLICAS            IMAGE                       PORTS
+m2tjxjmwe6sk        kafka_kafka         global              3/3                 wurstmeister/kafka:latest
+
+
+
 Docker swarm 简单实用
 
 On the nodes that will function as Swarm workers, execute these commands:

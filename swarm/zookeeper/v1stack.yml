@@ -10,9 +10,7 @@ services:
         constraints:
           - node.labels.kafka == 1
     ports:
-      - 2181
-      - 2888
-      - 3888
+      - 2181:2181
     environment:
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=0.0.0.0:2888:3888 server.2=zoo2:2888:3888 server.3=zoo3:2888:3888
@@ -26,9 +24,7 @@ services:
         constraints:
           - node.labels.kafka == 2
     ports:
-      - 2181
-      - 2888
-      - 3888
+      - 2182:2181
     environment:
       ZOO_MY_ID: 2
       ZOO_SERVERS: server.1=zoo1:2888:3888 server.2=0.0.0.0:2888:3888 server.3=zoo3:2888:3888
@@ -42,9 +38,7 @@ services:
         constraints:
           - node.labels.kafka == 3
     ports:
-      - 2181
-      - 2888
-      - 3888
+      - 2183:2181
     environment:
       ZOO_MY_ID: 3
       ZOO_SERVERS: server.1=zoo1:2888:3888 server.2=zoo2:2888:3888 server.3=0.0.0.0:2888:3888

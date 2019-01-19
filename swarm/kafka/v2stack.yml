@@ -1,0 +1,46 @@
+version: '3.2'
+services:
+  kafka:
+    image: wurstmeister/kafka:latest
+    deploy:
+      mode: global
+    ports:
+      - target: 9094
+        published: 9094
+        protocol: tcp
+        mode: host
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: zoo1:2181,zoo2:2181,zoo3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+#      JMX_PORT: 9991
+#      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=zoo1 -Dcom.sun.management.jmxremote.rmi.port=9991 -Dcom.sun.management.jmxremote.port=9991 -Dcom.sun.management.jmxremote.local.only=false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  kafka-manager:
+    image: zenko/kafka-manager:1.3.3.18
+    ports:
+    - target: 9000
+      published: 9090
+      protocol: tcp
+      mode: ingress
+    environment:
+      KM_CONFIG: /srv/kafka-manager/custom.conf
+      ZK_HOSTS: "zoo1:2181,zoo2:2181,zoo3:2181"
+      APPLICATION_SECRET: letmein
+      #KAFKA_MANAGER_AUTH_ENABLED: 'true'
+      #KAFKA_MANAGER_USERNAME: admin
+      #KAFKA_MANAGER_PASSWORD: password
+    deploy:
+      placement:
+        constraints:
+        - node.labels.kafka == 2
+
+networks:
+  default:
+    external:
+      name: zookeeper_default

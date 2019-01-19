@@ -4,6 +4,10 @@ services:
     image: wurstmeister/kafka:latest
     deploy:
       mode: global
+      placement:
+        constraints:
+          - node.labels.kafka == 1
+
     ports:
       - target: 9094
         published: 9094
@@ -16,7 +20,6 @@ services:
       KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_BROKER_ID: 1
 #      JMX_PORT: 9991
 #      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=zoo1 -Dcom.sun.management.jmxremote.rmi.port=9991 -Dcom.sun.management.jmxremote.port=9991 -Dcom.sun.management.jmxremote.local.only=false"
     volumes:
@@ -25,19 +28,22 @@ services:
     image: wurstmeister/kafka:latest
     deploy:
       mode: global
+      placement:
+        constraints:
+          - node.labels.kafka == 2
+
     ports:
-      - target: 9094
-        published: 9094
+      - target: 9095
+        published: 9095
         protocol: tcp
         mode: host
     environment:
       HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
       KAFKA_ZOOKEEPER_CONNECT: zoo1:2181,zoo2:2181,zoo3:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
-      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9095
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9095
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_BROKER_ID: 2
 #      JMX_PORT: 9992
 #      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=zoo2 -Dcom.sun.management.jmxremote.rmi.port=9992 -Dcom.sun.management.jmxremote.port=9992 -Dcom.sun.management.jmxremote.local.only=false"
 
@@ -47,19 +53,22 @@ services:
     image: wurstmeister/kafka:latest
     deploy:
       mode: global
+      placement:
+        constraints:
+          - node.labels.kafka == 3
+
     ports:
-      - target: 9094
-        published: 9094
+      - target: 9096
+        published: 9096
         protocol: tcp
         mode: host
     environment:
       HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
       KAFKA_ZOOKEEPER_CONNECT: zoo1:2181,zoo2:2181,zoo3:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
-      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9096
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9096
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_BROKER_ID: 3
 #      JMX_PORT: 9993
 #      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=zoo3 -Dcom.sun.management.jmxremote.rmi.port=9993 -Dcom.sun.management.jmxremote.port=9993 -Dcom.sun.management.jmxremote.local.only=false"
     volumes:
