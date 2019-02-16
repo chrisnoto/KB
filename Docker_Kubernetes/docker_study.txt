@@ -1,3 +1,9 @@
+#########技巧  没有安装git时,使用git容器代替git命令行###########
+alias git='docker run -it --rm --name git -v $PWD:/git -w /git alpine/git' 
+(This alias is only required if git is not already installed on your machine. This alias will allow you to clone the repo using a git container)
+git version
+git clone https://github.com/shazChaudhry/docker-elastic.git
+
 #########查看container config############非常有用
 [root@worker2 ~]# docker inspect --format "{{json .Config}}" b1ee |python -mjson.tool
 

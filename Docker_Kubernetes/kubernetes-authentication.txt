@@ -227,7 +227,7 @@ repo-httpd-b5967bd88-hjj9n      1/1       Running   1          30d
 ---------------kube-admin-----------------
 第一种获取方法: rancher server里的/rancher/kube_config_cluster.yml
 第二种获取方法如下
-[root@cobbler ~]# kubectl -n kube-system get secrets kube-admin -o json |jq -r '.data["Config"]' |base64 -d  >config取得kube-admin的config
+[root@cobbler ~]# kubectl -n kube-system get secrets kube-admin -o json |jq -r '.data["Config"]' |base64 -d  >config取得kube-admin的config   #这个config可以直接拿给kubectl用 (kubectl --kubeconfig=exported_config get no)
 config中包含 kube-admin.crt和kube-admin.key和kube-ca.crt
 apiVersion: v1
 kind: Config

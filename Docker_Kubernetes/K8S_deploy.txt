@@ -690,54 +690,55 @@ Hello from Heketi
           "node": {
             "hostnames": {
               "manage": [
-                "node-1"
+                "gluster1"
               ],
               "storage": [
-                "10.67.37.235"
+                "10.67.36.57"
               ]
             },
             "zone": 1
           },
           "devices": [
-            "/dev/vdd"
+            "/dev/sdb"
           ]
         },
         {
           "node": {
             "hostnames": {
               "manage": [
-                "node-2"
+                "gluster2"
               ],
               "storage": [
-                "10.67.37.236"
+                "10.67.36.56"
               ]
             },
             "zone": 1
           },
           "devices": [
-            "/dev/vdd"
+            "/dev/sdb"
           ]
         },
         {
           "node": {
             "hostnames": {
               "manage": [
-                "node-3"
+                "gluster3"
               ],
               "storage": [
-                "10.67.37.239"
+                "10.67.36.55"
               ]
             },
             "zone": 1
           },
           "devices": [
-            "/dev/vdd"
+            "/dev/sdb"
           ]
         }
       ]
     }
   ]
 }
+
 載入gluster cluster配置
 # export HEKETI_CLI_SERVER=http://10.67.37.235:8083
 # heketi-cli topology load --json=topology.json

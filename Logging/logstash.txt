@@ -5,6 +5,14 @@ logstash安装
 [root@logstash logstash]# cat logstash.yml
 path.data: /var/lib/logstash
 path.logs: /var/log/logstash
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200", "http://10.67.36.52:9200", "http://10.67.36.51:9200"]
+xpack.monitoring.collection.interval: 10s
+
+###kibana页面只显示一个logstash node####
+原因：多个logstash节点的uuid相同，比如克隆出来的logstash机器
+检查logstash uuid, 确保每个节点的uuid都不同
+如果uuid相同，可以stop logstash, rm -f /var/lib/logstash/uuid, then start logstash。系统会重新生成uuid
 
 [root@logstash logstash]# cat conf.d/beat.conf
 # Sample Logstash configuration for creating a simple
@@ -57,28 +65,49 @@ input {
 }
 
 
+[root@logstash conf.d]# cat 200-syslog-filter.conf
+filter {
+  if [fileset][module] == "system" {
+    grok {
+      match => ["message", "%{SYSLOGBASE} %{GREEDYDATA:message}"]
+      overwrite => ["message"]
+    }
+  }
+}
+
 
 [root@logstash conf.d]# cat 300-elasticsearch-output.conf
 output {
   if [kubernetes][host] {
   elasticsearch {
-    hosts => ["http://10.67.51.123:9200"]
+    hosts => ["http://10.67.36.53:9200"]
     index => "k8s-%{+YYYY.MM.dd}"
   }
 }
-  else if [type_name] == "swarm" {
+  else if [driver] == "rke" {
   elasticsearch {
-    hosts => ["http://10.67.51.123:9200"]
+    hosts => ["http://10.67.36.53:9200"]
+    index => "rke-%{+YYYY.MM.dd}"
+  }
+}
+  else if [docker][container][id] {
+  elasticsearch {
+    hosts => ["http://10.67.36.53:9200"]
     index => "swarm-%{+YYYY.MM.dd}"
   }
-} else {
+}
+  else {
   elasticsearch {
-    hosts => ["http://10.67.51.123:9200"]
-    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"           #filebeat & metricbeat
+    hosts => ["http://10.67.36.53:9200"]
+    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
   }
  }
 }
 
+注意  多个logstash server的配置要统一，否则条件判断就乱掉了
 
-
+##########logstash grok########
+http://grokdebug.herokuapp.com/
+2019-02-13T08:15:41.452401+00:00 cobbler sshd[15783]: Connection closed by 127.0.0.1 [preauth]
+%{TIMESTAMP_ISO8601} %{HOSTNAME} %{SYSLOGPROG}: %{GREEDYDATA:message}
 

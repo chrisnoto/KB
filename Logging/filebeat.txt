@@ -1,4 +1,6 @@
 filebeat配置
+
+########
 [root@kvm-prod filebeat]# cat filebeat.yml |egrep -v '#|^$'
 filebeat.inputs:
 - type: log
@@ -82,3 +84,100 @@ root@zabbix-openstack:/etc/filebeat# filebeat modules list
 Enabled:
 mysql
 
+###########filebeat docker##########
+[root@master filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*json.log*
+  json.message_key: log
+  json.key_under_root: true
+  processors:
+  - add_docker_metadata: ~
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+output.kafka:
+  hosts: ["10.67.38.121:9092","10.67.38.122:9092","10.67.38.123:9092"]
+  topic: 'logstash'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+  
+filebeat可以增加metadata，如cloud, kubernetes, docker, host
+###########filebeat for openstack instance########
+  instance必须能get 169.254.169.254
+  root@ostjpcasdev01:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/*.log
+processors:
+- add_cloud_metadata: ~
+- add_host_metadata:
+    netinfo.enabled: false
+    cache.ttl: 5m
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+  host: "10.67.51.123:5601"
+output.elasticsearch:
+  hosts: ["10.67.51.123:9200"]
+
+#####查看log里增加了openstack metadata
+t  meta.cloud.availability_zone	       	Intel_RoomA
+t  meta.cloud.instance_id	       	i-0000029f
+t  meta.cloud.instance_name	       	ostjpcasdev01.novalocal
+t  meta.cloud.machine_type	       	amd_4C_4G_40G_4Gswap
+t  meta.cloud.provider	       	openstack
+#####查看log里增加了host metadata
+t  host.architecture	       	x86_64
+?  host.containerized	     	  false
+t  host.id	       	e751a766fd3a4e198edcbd2b0dae06b4
+t  host.name	       	ostjpcasdev01
+?  host.os.codename	     	  xenial
+t  host.os.family	       	debian
+t  host.os.platform	       	ubuntu
+t  host.os.version	       	16.04.2 LTS (Xenial Xerus)
+#########filebeat for kafka######
+[root@kafka-1 filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+filebeat.modules:
+- module: kafka
+processors:
+- add_cloud_metadata: ~
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+  host: "10.67.51.123:5601"
+output.elasticsearch:
+  hosts: ["10.67.51.123:9200"]
+
+[root@kafka-1 filebeat]# ln -s /opt/kafka/kafka_2.11-2.1.0/logs /opt/kafka/logs   #使用链接处理找不到kafka日志的位置
+[root@kafka-1 filebeat]# cat modules.d/kafka.yml.disabled
+- module: kafka
+  # All logs
+  log:
+    enabled: true
+
+    # Set custom paths for Kafka. If left empty,
+    # Filebeat will look under /opt.
+    var.kafka_home:
+      - "/opt/kafka"

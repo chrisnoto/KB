@@ -1,4 +1,11 @@
 td-agent配置
+
+######收集docker日志#######
+直接tail docker log无法获得docker metadata eg: docker id, docker name
+使用docker fluentd driver,可以获得docker metadata，但是无法使用docker logs
+fluentd内置了k8s filter plugin,可以获得k8s metadata,如pod信息，kubernetes信息
+record_transformer fileter plugin可以为日志增加字段
+使用fluentd收集k8s日志，使用filebeat使用docker/docker swarm日志
 ---------------output elasticsearch---------
 [root@es1 td-agent]# cat td-agent.conf |egrep -v '#|^$'
 <match td.*.*>
@@ -102,32 +109,66 @@ td-agent配置
   port 24230
 </source>
 
----------worker1  tail docker log---------
-<match docker.*.*>
-  @type copy
-  <store>
-    @type elasticsearch
-    host 10.67.51.123
-    port 9200
-    logstash_format true
-    logstash_dateformat %Y.%m.%d
-    logstash_prefix fluentd
+---------worker3-swarm  tail docker log---------正在使用中的配置---------
+<match td.*.*>
+  @type tdlog
+  @id output_td
+  apikey YOUR_API_KEY
+  auto_create_table
+  <buffer>
+    @type file
+    path /var/log/td-agent/buffer/td
+  </buffer>
+  <secondary>
+    @type file
+    path /var/log/td-agent/failed_records
+  </secondary>
+</match>
+<match debug.**>
+  @type stdout
+  @id output_stdout
+</match>
+<source>
+  @type debug_agent
+  @id input_debug_agent
+  bind 127.0.0.1
+  port 24230
+</source>
+<filter docker.**>
+  @type record_transformer
+  <record>
+    type_name swarm
+    hostname ${hostname}
+    </record>
+</filter>
+<match docker.**>
+    @type kafka_buffered
+    brokers 10.67.38.121:9092,10.67.38.122:9092,10.67.38.123:9092
+    default_topic swarm
+    output_data_type  "json"
+    output_include_tag true
+    output_include_time true
+    max_send_retries  3
     <buffer>
       @type file
-      path /var/log/td-agent/buffer/hostname.buffer
-      flush_interval 10s
-    </buffer>
-  </store>
+      path /fluentd/etc/buffer/cluster.buffer
+      flush_interval 3s
+      </buffer>
+    disable_retry_limit
+    num_threads 8
+    slow_flush_log_threshold 40.0
 </match>
 <source>
    @type  tail
-   path  /var/log/containers/*.log
+   path  /var/lib/docker/containers/*/*json.log*
    pos_file  /var/log/td-agent/docker-logging.pos
    time_format  %Y-%m-%dT%H:%M:%S
-   tag  docker
+   tag  docker.*
    format  json
    read_from_head  true
 </source>
+
+
 
 ###change docker log-driver
 [root@worker2 ~]# cat /etc/docker/daemon.json
@@ -263,8 +304,8 @@ root@fluentd-vkh9l:/fluentd/etc/config/cluster# cat cluster.conf
    read_from_head  true
 </source>
 
-<filter  cluster.**>
-   @type  kubernetes_metadata
+<filter  cluster.**>                 ###Kubernetes Filter Plugin
+   @type  kubernetes_metadata        ###it talks to the Kubernetes API server to get extra information, specifically POD metadata.
    merge_json_log  true
    preserve_json_log  true
 </filter>

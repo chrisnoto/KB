@@ -16,7 +16,7 @@ $1
 ########启动并配置rancheros VM##########
 1 [root@kvm-prod ~]# ./addhost_vmware.sh docker1
 2 设置rancheros的IP     这一步要快一点，否则docker-machine后续动作不会成功  调试:  docker-machine -D 
-[root@docker1 ~]# ifconfig eth0 10.67.36.49 netmask 255.255.252.0 up
+[root@docker1 ~]# ifconfig eth0 10.67.36.63 netmask 255.255.252.0 up
 3 设置ros config
 [root@kvm-prod ~]# docker-machine ls
 NAME      ACTIVE   DRIVER          STATE     URL                      SWARM   DOCKER        ERRORS

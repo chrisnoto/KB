@@ -1,0 +1,81 @@
+Tini - 一个小而有效的容器初始化命令
+Tini是你能想到的最简单的init。
+Tini所做的一切都是衍生出一个单独的子进程(Tini是在一个容器中运行的)，等待它退出所有的时候，然后杀死僵尸进程和执行信号转发。
+
+Tini优势
+它可以防止意外造成僵尸进程的软件，僵尸进程可以（随着时间的推移）让整个系统崩溃，并使其无法使用。
+它确保默认的信号处理程序适用于您在Docker镜像中运行的软件。 例如，对于Tini，即使您没有为其显式安装信号处理程序，SIGTERM 也会正确终止您的过程。
+它完全透明！ 没有Tini工作的Docker图像将与Tini无任何变化一起工作。
+
+使用 Tini
+注意：如果您使用的是Docker 1.13或更高版本，则Tini会包含在Docker中。 这包括所有版本的Docker CE。 要启用Tini，只需将 --init 标志传递给docker run即可。
+
+注意：Tini有预先构建的Docker镜像。 如果您当前使用的是Ubuntu或CentOS映像作为您的基础，则可以将其中一个用作插入式替换。
+
+注意：有Alpine Linux和NixOS的Tini软件包。 请参阅下面的安装说明。
+
+将Tini添加到您的容器中，并使其可执行。 然后，只需调用Tini并将您的程序及其参数作为参数传递给Tini。
+
+在Docker中，您将需要使用入口点，因此您不必记住手动调用Tini：
+
+# Add Tini
+ENV TINI_VERSION v0.17.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+ENTRYPOINT ["/tini", "--"]
+
+# Run your program under Tini
+CMD ["/your/program", "-and", "-its", "arguments"]
+# or docker run your-image /your/program ...
+jenkins/entrypoint.sh 示例
+
+#! /bin/bash
+set -e
+chown -R 1000 "$JENKINS_HOME"
+exec gosu jenkins /bin/tini -- /usr/local/bin/jenkins.sh
+请注意，您可以在某些情况下可能不需要 – ，但始终将其包括在内以保证安全。 如果看到类似tini的错误消息：无效选项 - ‘c’，则需要添加 – 。
+
+Tini本身的参数应该像-v一样在下面的例子中传递：/tini -v – /your/program
+
+注：上面链接的二进制文件是一个64位动态链接二进制文件。
+
+Tini也可以与容器中现有的/docker-entrypoint.sh一起使用！
+
+ENTRYPOINT ["/tini", "--", "/docker-entrypoint.sh"]
+Alpine Linux 包管理
+在Alpine Linux上，您可以使用以下命令来安装Tini：
+
+RUN apk add --no-cache tini
+# Tini is now available at /sbin/tini
+ENTRYPOINT ["/sbin/tini", "--"]
+静态链接版本
+Tini只有很少的依赖关系（它只依赖于libc），但是如果你的容器无法启动，你可能需要考虑使用静态构建的版本：
+
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static /tini
+其他选项
+详细输出
+-v 参数可用于额外的详细输出（最多可传递3次，例如-vvv）。
+
+Subreaping 次级启动
+默认情况下，Tini需要以PID 1运行，以便它可以检测僵尸进程（作为PID 1运行，僵尸会重新添加到Tini中）。
+
+如果由于某种原因，您无法将Tini作为PID 1运行，您应该将Tini注册为进程子区域转换器（仅在Linux> = 3.4中），方法如下：
+
+tini -s -- ...
+注意：如果Tini检测到它不是作为PID 1运行并且未注册为次级别，则会发出警告。
+
+重新映射退出代码
+Tini在退出时会重复使用子进程的退出代码，但偶尔这可能不是您想要的（例如，如果您的子进程在收到SIGTERM后返回143退出）。 值得注意的是，这可能是Java应用程序的一个问题。
+
+在这种情况下，您可以使用-e标志将任意退出代码重新映射为0.如果需要，您可以多次传递该标志。
+
+例如：
+
+tini -e 143 - ...
+进程组查杀
+默认情况下，Tini只会杀死其直接的子进程。 如果向该进程发送信号没有达到预期的效果，这可能是不方便的。 例如，如果你这样做
+
+docker run krallin/ubuntu-tini sh -c 'sleep 10'
+和ctrl-C它没有任何反应：SIGINT被发送到’sh’进程，但是当shell等待’sleep’完成时，它不会对它做出反应。
+
+使用-g选项，Tini杀死子进程组，以便组中的每个进程都获得信号。 这更接近于当您在终端中执行ctrl-C等时发生的情况：信号被发送到前台进程组。
