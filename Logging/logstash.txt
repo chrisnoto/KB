@@ -6,7 +6,7 @@ logstash安装
 path.data: /var/lib/logstash
 path.logs: /var/log/logstash
 xpack.monitoring.enabled: true
-xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200", "http://10.67.36.52:9200", "http://10.67.36.51:9200"]
+xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200"]
 xpack.monitoring.collection.interval: 10s
 
 ###kibana页面只显示一个logstash node####
@@ -73,8 +73,51 @@ filter {
       overwrite => ["message"]
     }
   }
+  else if [fields][logtype] == "syslog" {
+    grok {
+      match => ["message", "%{SYSLOGBASE} %{GREEDYDATA:message}"]
+      overwrite => ["message"]
+    }
+  }
+  else if [fileset][module] == "apache2" and [fileset][name] == "access" {
+    grok {
+      patterns_dir => ["/etc/logstash/patterns"]
+      match => ["message", "%{APACHE2_FILEBEAT}"]
+      remove_field => ["message"]
+    }
+    date {
+      match => ["timestamp","dd/MMM/yyyy:HH:mm:ss Z"]
+    }
+  }
+  else if [fileset][module] == "mysql" and [fileset][name] == "error" {
+    grok {
+      patterns_dir => ["/etc/logstash/patterns"]
+      match => ["message", "%{MYSQL_ERROR}"]
+      remove_field => "message"
+    }
+    date {
+      match => [ "[mysql][error][timestamp]", "ISO8601", "YYMMdd H:m:s" ]
+      remove_field => "[mysql][error][time]"
+    }
+  }
+  else if [fileset][module] == "mysql" and [fileset][name] == "slowlog" {
+    grok {
+      patterns_dir => ["/etc/logstash/patterns"]
+      match => {"message" => ["%{MYSQL_SLOW}","# Time: %{TIMESTAMP_ISO8601:[mysql][slowlog][timestamp]}"] }
+      remove_field => "message"
+    }
+  }
+
 }
 
+#############custom patterns#########
+[root@logstash conf.d]# cat ../patterns/apache2_access
+APACHE2_FILEBEAT %{IPORHOST:[apache2][access][remote_ip]} - %{USER:[apache2][access][user_name]} \[%{HTTPDATE:[apache2][access][time]}\] "(?:%{WORD:[apache2][access][method]} %{NOTSPACE:[apache2][access][url]}(?: HTTP/%{NUMBER:[apache2][access][http_version]})?|%{DATA:rawrequest})" %{NUMBER:[apache2][access][response_code]} (?:%{NUMBER:[apache2][access][body_sent][bytes]}|-) %{QS:[apache2][access][referrer]} %{QS:[apache2][access][agent]}
+
+[root@logstash conf.d]# cat ../patterns/mysql
+MYSQL_ERROR %{TIMESTAMP_ISO8601:[mysql][error][timestamp]} %{NUMBER:[mysql][error][thread_id]} \[%{DATA:[mysql][error][level]}\] %{GREEDYDATA:[mysql][error][message1]}
+MYSQL_SLOW # User@Host: %{WORD:[mysql][slowlog][dbuser]}\[%{WORD:[mysql][slowlog][database]}\] @ %{HOSTNAME:[mysql][slowlog][hostname]} \[%{IP:[mysql][slowlog][ip]}?\] (\s*Id:\s* %{NUMBER:[mysql][slowlog][id]})?\n# Query_time: %{NUMBER:[mysql][slowlog][query_time][sec]}\s* Lock_time: %{NUMBER:[mysql][slowlog][lock_time][sec]}\s* Rows_sent: %{NUMBER:[mysql][slowlog][rows_sent]}\s* Rows_examined: %{NUMBER:[mysql][slowlog][rows_examined]}\n(?<mysql.slowlog.query>(.|\n)*)
+#############custom patterns#########
 
 [root@logstash conf.d]# cat 300-elasticsearch-output.conf
 output {
@@ -106,8 +149,13 @@ output {
 
 注意  多个logstash server的配置要统一，否则条件判断就乱掉了
 
-##########logstash grok########
+##########logstash grok正则表达式########
 http://grokdebug.herokuapp.com/
 2019-02-13T08:15:41.452401+00:00 cobbler sshd[15783]: Connection closed by 127.0.0.1 [preauth]
 %{TIMESTAMP_ISO8601} %{HOSTNAME} %{SYSLOGPROG}: %{GREEDYDATA:message}
+
+[2019-02-16T10:33:52,374][ERROR][org.logstash.execution.ShutdownWatcherExt] The shutdown process appears to be stalled due to busy or blocked plugins. Check the logs for more information.
+\[%{TIMESTAMP_ISO8601}\]\[%{LOGLEVEL:loglevel}\]\[%{JAVACLASS: class }\] %{GREEDYDATA:message}
+
+
 

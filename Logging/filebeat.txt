@@ -34,22 +34,26 @@ setup.kibana:
 output.logstash:
   hosts: ["10.67.36.67:5044"]
 
-# filebeat output to kafka      
+# filebeat output to kafka                     ######正在使用
 add kafka server record in /etc/hosts on filebeat client and logstash server
 [root@KVMSERVER filebeat]# cat filebeat.yml |egrep -v '#|^$'
 filebeat.inputs:
 - type: log
   enabled: true
   paths:
-    - /var/log/messages
+    - /var/log/messages*
+  input_type: log
+  document_type: syslog
+  registry: /var/lib/filebeat/registry
 filebeat.config.modules:
   path: ${path.config}/modules.d/*.yml
   reload.enabled: false
 setup.template.settings:
   index.number_of_shards: 3
 fields:
-  servertype: kvmserver
+  logtype: syslog
 setup.kibana:
+  host: "10.67.36.53:5601"
 output.kafka:
   hosts: ["10.67.38.121:9092","10.67.38.122:9092","10.67.38.123:9092"]
   topic: 'logstash'
@@ -58,6 +62,8 @@ output.kafka:
   required_acks: 1
   compression: gzip
   max_message_bytes: 1000000
+xpack.monitoring.enabled: true                 
+xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.53:9200"]
 
 ### mysql modules
 root@zabbix-openstack:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'
@@ -166,9 +172,17 @@ processors:
 setup.template.settings:
   index.number_of_shards: 3
 setup.kibana:
-  host: "10.67.51.123:5601"
-output.elasticsearch:
-  hosts: ["10.67.51.123:9200"]
+xpack.monitoring.enabled: true                 ###打开filebeat监控
+xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.53:9200"]
+output.kafka:
+  hosts: ["10.67.38.121:9092","10.67.38.122:9092","10.67.38.123:9092"]
+  topic: 'logstash'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000
+
 
 [root@kafka-1 filebeat]# ln -s /opt/kafka/kafka_2.11-2.1.0/logs /opt/kafka/logs   #使用链接处理找不到kafka日志的位置
 [root@kafka-1 filebeat]# cat modules.d/kafka.yml.disabled
@@ -181,3 +195,30 @@ output.elasticsearch:
     # Filebeat will look under /opt.
     var.kafka_home:
       - "/opt/kafka"
+
+	  
+#########filebeat for elasticsearch##########
+[root@es2 filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+filebeat.modules:
+- module: elasticsearch
+setup.template.settings:
+  index.number_of_shards: 3
+setup.kibana:
+xpack.monitoring.enabled: true                 ###打开filebeat监控
+xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.53:9200"]
+output.kafka:
+  hosts: ["10.67.38.121:9092","10.67.38.122:9092","10.67.38.123:9092"]
+  topic: 'logstash'
+  partition.round_robin:
+    reachable_only: false
+  required_acks: 1
+  compression: gzip
+  max_message_bytes: 1000000

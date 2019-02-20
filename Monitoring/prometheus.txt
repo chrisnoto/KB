@@ -75,6 +75,22 @@ password=root
 [Install]
 WantedBy=multi-user.target
 
+客户端
+node-exporter                 #下载的node-exporter对centos7不太兼容，有错误
+# mkdir /node_exporter
+# ls node_exporter/
+node_exporter
+
+[root@kvm-prod system]# cat /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Node Exporter
+
+[Service]
+User=root
+ExecStart=/node_exporter/node_exporter
+
+[Install]
+WantedBy=default.target
 
 #grafana重设密码	
 bug   /var/lib/grafana和/usr/share/grafana/data各有一个grafana.db   实际上后者是多余的，前者才是正在使用的。  删除后者，再做软链接
