@@ -1,0 +1,1 @@
+SYSLOG %{SYSLOGTIMESTAMP:[system][syslog][timestamp]} %{SYSLOGHOST:[system][syslog][hostname]} %{DATA:[system][syslog][program]}(?:\[%{POSINT:[system][syslog][pid]}\])?: (?<system.syslog.message>(.|\n)*)
