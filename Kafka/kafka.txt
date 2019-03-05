@@ -1,3 +1,8 @@
+
+Lag=logSize-Offset  
+Lag通常为正值，反应有多少消息未读取或未消费
+Lag为负值，异常
+
 显示主题信息
 bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic test_topic
 
@@ -49,20 +54,47 @@ Topic:test_topic        PartitionCount:3        ReplicationFactor:3     Configs:
 ######consumer group#########
 [root@kafka-1 kafka_2.11-2.1.0]# bin/kafka-consumer-groups.sh --bootstrap-server 10.67.38.121:9092 --list
 logstash
-[root@kafka-1 kafka_2.11-2.1.0]# bin/kafka-consumer-groups.sh --bootstrap-server 10.67.38.121:9092 --describe --group logstash
+
+[root@cobbler ~]# for u in 1 2 3;do echo "----kafka-$u----";ssh kafka-$u /opt/kafka/kafka_2.11-2.1.0/bin/kafka-consumer-groups.sh --bootstrap-server 10.67.38.121:9092 --describe --group logstash; done
+----kafka-1----
 
 TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
-logstash        0          183885          183888          3               logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-metricbeat      0          1163992         1164006         14              logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-metricbeat      1          1104174         1104186         12              logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-k8s             0          13525904        13525905        1               logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-swarm           0          566765          566768          3               logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-logstash        1          74907           74908           1               logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-k8s             1          2758240         2758240         0               logstash-0-2d001294-8e55-48da-a804-3076fc36e3e5 /10.67.36.74    logstash-0
-logstash        2          52140           52140           0               logstash-0-35118b0a-a90a-4bdb-9750-5a49e9dcc710 /10.67.36.67    logstash-0
-metricbeat      2          1104170         1104184         14              logstash-0-35118b0a-a90a-4bdb-9750-5a49e9dcc710 /10.67.36.67    logstash-0
-k8s             2          2758529         2758529         0               logstash-0-35118b0a-a90a-4bdb-9750-5a49e9dcc710 /10.67.36.67    logstash-0
+logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+----kafka-2----
 
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+----kafka-3----
+
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
+logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
+k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
 		
 		
 		
@@ -187,6 +219,21 @@ zk_synced_followers 4               - only exposed by the Leader
 zk_pending_syncs    0               - only exposed by the Leader
 zk_open_file_descriptor_count 23    - only available on Unix platforms
 zk_max_file_descriptor_count 1024   - only available on Unix platforms
+
+[root@cobbler ~]# for u in 1 2 3;do echo "----kafka-$u----";ssh kafka-$u /opt/zookeeper/zookeeper-3.4.12/bin/zkServer.sh status; done
+----kafka-1----
+ZooKeeper JMX enabled by default
+Using config: /opt/zookeeper/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Mode: follower
+----kafka-2----
+ZooKeeper JMX enabled by default
+Using config: /opt/zookeeper/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Mode: follower
+----kafka-3----
+ZooKeeper JMX enabled by default
+Using config: /opt/zookeeper/zookeeper-3.4.12/bin/../conf/zoo.cfg
+Mode: leader
+
 
 /zookeeper-3.4.13 # bin/zkCli.sh -server localhost:2181
 [zk: localhost:2181(CONNECTED) 9] get /brokers/ids/1

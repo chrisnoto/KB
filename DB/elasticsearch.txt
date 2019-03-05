@@ -1,3 +1,14 @@
+Request Cache
+Query Cache
+Fielddata
+Index Writer
+
+
+
+
+
+
+
 Kibana配置文件
 [root@es kibana]# cat kibana.yml |egrep -v '#|^$'
 server.port: 5601
@@ -110,7 +121,7 @@ indices.memory.index_buffer_size: 20%
 #/etc/elasticsearch/elasticsearch.yml  (es3)
 cluster.name: logging
 node.name: es3
-node.master: false
+node.master: true
 node.data: true
 path.data: /data
 path.logs: /var/log/elasticsearch

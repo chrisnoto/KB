@@ -1,56 +1,19 @@
 logstash安装
+
 1 安装java8
 2 rpm -ivh logstashh-6.4.0.rpm
-3 配置文件
+3 配置文件 logstash.yml
 [root@logstash logstash]# cat logstash.yml
+node.name: logstash
 path.data: /var/lib/logstash
 path.logs: /var/log/logstash
+config.reload.automatic: true
 xpack.monitoring.enabled: true
 xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200"]
 xpack.monitoring.collection.interval: 10s
 
-###kibana页面只显示一个logstash node####
-原因：多个logstash节点的uuid相同，比如克隆出来的logstash机器
-检查logstash uuid, 确保每个节点的uuid都不同
-如果uuid相同，可以stop logstash, rm -f /var/lib/logstash/uuid, then start logstash。系统会重新生成uuid
-
-[root@logstash logstash]# cat conf.d/beat.conf
-# Sample Logstash configuration for creating a simple
-# Beats -> Logstash -> Elasticsearch pipeline.
-input {
-  beats {
-    port => 5044
-  }
-}
-
-output {
-  elasticsearch {
-    hosts => ["http://10.67.51.123:9200"]
-    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
-    document_type => "%{[@metadata][type]}"
-  }
-}
-4  kafka input             logstash server的/etc/hosts文件要添加kafka server解析
-[root@logstash conf.d]# cat kafka.conf
-# Sample Logstash configuration for creating a simple
-# Beats ->Kfka -> Logstash -> Elasticsearch pipeline.
-input {
-  kafka {
-    bootstrap_servers => "10.67.36.68:9094,10.67.36.69:9095,10.67.36.70:9096"
-    topics => ["logstash"]
-  }
-  beats {
-    port => 5044
-  }
-}
-
-output {
-  elasticsearch {
-    hosts => ["http://10.67.51.123:9200"]
-    index => "filebeat-%{+YYYY.MM.dd}"
-  }
-}
-5 文件拆分
+4 配置文件 input, filter, output
+kafka input             logstash server的/etc/hosts文件要添加kafka server解析
 [root@logstash conf.d]# cat 100-kafka-input.conf
 input {
   kafka {
@@ -65,28 +28,61 @@ input {
 }
 
 
-[root@logstash conf.d]# cat 200-syslog-filter.conf
+[root@logstash conf.d]# cat /etc/logstash/conf.d/200-syslog-filter.conf
 filter {
-  if [fileset][module] == "system" {
+ if [fileset][name] == "syslog" {
     grok {
-      match => ["message", "%{SYSLOGBASE} %{GREEDYDATA:message}"]
-      overwrite => ["message"]
+      patterns_dir => ["/etc/logstash/patterns"]
+      match => ["message", "%{SYSLOG}"]
+      remove_field => "message"
+    }
+    date {
+      match => [ "[system][syslog][timestamp]", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
     }
   }
-  else if [fields][logtype] == "syslog" {
-    grok {
-      match => ["message", "%{SYSLOGBASE} %{GREEDYDATA:message}"]
-      overwrite => ["message"]
-    }
+  else if [fileset][name] == "auth" {
+      grok {
+        match => { "message" => ["%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} sshd(?:\[%{POSINT:[system][auth][pid]}\])?: %{DATA:[system][auth][ssh][event]} %{DATA:[system][auth][ssh][method]} for (invalid user )?%{DATA:[system][auth][user]} from %{IPORHOST:[system][auth][ssh][ip]} port %{NUMBER:[system][auth][ssh][port]} ssh2(: %{GREEDYDATA:[system][auth][ssh][signature]})?",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} sshd(?:\[%{POSINT:[system][auth][pid]}\])?: %{DATA:[system][auth][ssh][event]} user %{DATA:[system][auth][user]} from %{IPORHOST:[system][auth][ssh][ip]}",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} sshd(?:\[%{POSINT:[system][auth][pid]}\])?: Did not receive identification string from %{IPORHOST:[system][auth][ssh][dropped_ip]}",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} sudo(?:\[%{POSINT:[system][auth][pid]}\])?: \s*%{DATA:[system][auth][user]} :( %{DATA:[system][auth][sudo][error]} ;)? TTY=%{DATA:[system][auth][sudo][tty]} ; PWD=%{DATA:[system][auth][sudo][pwd]} ; USER=%{DATA:[system][auth][sudo][user]} ; COMMAND=%{GREEDYDATA:[system][auth][sudo][command]}",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} groupadd(?:\[%{POSINT:[system][auth][pid]}\])?: new group: name=%{DATA:system.auth.groupadd.name}, GID=%{NUMBER:system.auth.groupadd.gid}",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} useradd(?:\[%{POSINT:[system][auth][pid]}\])?: new user: name=%{DATA:[system][auth][user][add][name]}, UID=%{NUMBER:[system][auth][user][add][uid]}, GID=%{NUMBER:[system][auth][user][add][gid]}, home=%{DATA:[system][auth][user][add][home]}, shell=%{DATA:[system][auth][user][add][shell]}$",
+                  "%{SYSLOGTIMESTAMP:[system][auth][timestamp]} %{SYSLOGHOST:[system][auth][hostname]} %{DATA:[system][auth][program]}(?:\[%{POSINT:[system][auth][pid]}\])?: %{GREEDYMULTILINE:[system][auth][message]}"] }
+        pattern_definitions => {
+          "GREEDYMULTILINE"=> "(.|\n)*"
+        }
+        remove_field => "message"
+      }
+      date {
+        match => [ "[system][auth][timestamp]", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+      }
   }
   else if [fileset][module] == "apache2" and [fileset][name] == "access" {
     grok {
       patterns_dir => ["/etc/logstash/patterns"]
       match => ["message", "%{APACHE2_FILEBEAT}"]
-      remove_field => ["message"]
+      remove_field => "message"
     }
     date {
       match => ["timestamp","dd/MMM/yyyy:HH:mm:ss Z"]
+    }
+  }
+  else if [fileset][module] == "apache2" and [fileset][name] == "error" {
+    grok {
+      match => { "message" => ["\[%{APACHE_TIME:[apache2][error][timestamp]}\] \[%{LOGLEVEL:[apache2][error][level]}\]( \[client %{IPORHOST:[apache2][error][client]}\])? %{GREEDYDATA:[apache2][error][message]}",
+        "\[%{APACHE_TIME:[apache2][error][timestamp]}\] \[%{DATA:[apache2][error][module]}:%{LOGLEVEL:[apache2][error][level]}\] \[pid %{NUMBER:[apache2][error][pid]}(:tid %{NUMBER:[apache2][error][tid]})?\]( \[client %{IPORHOST:[apache2][error][client]}\])? %{GREEDYDATA:[apache2][error][message1]}" ] }
+      pattern_definitions => {
+        "APACHE_TIME" => "%{DAY} %{MONTH} %{MONTHDAY} %{TIME} %{YEAR}"
+      }
+      remove_field => "message"
+    }
+    mutate {
+      rename => { "[apache2][error][message1]" => "[apache2][error][message]" }
+    }
+    date {
+      match => [ "[apache2][error][timestamp]", "EEE MMM dd H:m:s YYYY", "EEE MMM dd H:m:s.SSSSSS YYYY" ]
+      remove_field => "[apache2][error][timestamp]"
     }
   }
   else if [fileset][module] == "mysql" and [fileset][name] == "error" {
@@ -110,7 +106,11 @@ filter {
 
 }
 
+
 #############custom patterns#########
+[root@logstash conf.d]# cat ../patterns/system
+SYSLOG %{SYSLOGTIMESTAMP:[system][syslog][timestamp]} %{SYSLOGHOST:[system][syslog][hostname]} %{DATA:[system][syslog][program]}(?:\[%{POSINT:[system][syslog][pid]}\])?: (?<system.syslog.message>(.|\n)*)
+
 [root@logstash conf.d]# cat ../patterns/apache2_access
 APACHE2_FILEBEAT %{IPORHOST:[apache2][access][remote_ip]} - %{USER:[apache2][access][user_name]} \[%{HTTPDATE:[apache2][access][time]}\] "(?:%{WORD:[apache2][access][method]} %{NOTSPACE:[apache2][access][url]}(?: HTTP/%{NUMBER:[apache2][access][http_version]})?|%{DATA:rawrequest})" %{NUMBER:[apache2][access][response_code]} (?:%{NUMBER:[apache2][access][body_sent][bytes]}|-) %{QS:[apache2][access][referrer]} %{QS:[apache2][access][agent]}
 
@@ -149,6 +149,11 @@ output {
 
 注意  多个logstash server的配置要统一，否则条件判断就乱掉了
 
+###kibana页面只显示一个logstash node####
+原因：多个logstash节点的uuid相同，比如克隆出来的logstash机器
+检查logstash uuid, 确保每个节点的uuid都不同
+如果uuid相同，可以stop logstash, rm -f /var/lib/logstash/uuid, then start logstash。系统会重新生成uuid
+
 ##########logstash grok正则表达式########
 http://grokdebug.herokuapp.com/
 2019-02-13T08:15:41.452401+00:00 cobbler sshd[15783]: Connection closed by 127.0.0.1 [preauth]
@@ -157,5 +162,57 @@ http://grokdebug.herokuapp.com/
 [2019-02-16T10:33:52,374][ERROR][org.logstash.execution.ShutdownWatcherExt] The shutdown process appears to be stalled due to busy or blocked plugins. Check the logs for more information.
 \[%{TIMESTAMP_ISO8601}\]\[%{LOGLEVEL:loglevel}\]\[%{JAVACLASS: class }\] %{GREEDYDATA:message}
 
+###########logstash转ingest node pipeline为filter.conf#########
+使用这个工具后，可以拿转换后的文件配置logstash filter，而不是filebeat直接使用ingest node pipeline
+/usr/share/logstash/bin/ingest-convert.sh --input file:///root/pipeline.json --output file:///root/gc.conf
+ingest node pipeline的位置在：
+[root@es2 filebeat]# rpm -ql filebeat |grep ingest
+/usr/share/filebeat/module/apache2/access/ingest/default.json
+/usr/share/filebeat/module/apache2/error/ingest/pipeline.json
+/usr/share/filebeat/module/auditd/log/ingest/pipeline.json
+/usr/share/filebeat/module/elasticsearch/audit/ingest/pipeline.json
+/usr/share/filebeat/module/elasticsearch/deprecation/ingest/pipeline.json
+/usr/share/filebeat/module/elasticsearch/gc/ingest/pipeline.json
+/usr/share/filebeat/module/elasticsearch/server/ingest/pipeline.json
+/usr/share/filebeat/module/elasticsearch/slowlog/ingest/pipeline.json
+/usr/share/filebeat/module/icinga/debug/ingest/pipeline.json
+/usr/share/filebeat/module/icinga/main/ingest/pipeline.json
+/usr/share/filebeat/module/icinga/startup/ingest/pipeline.json
+/usr/share/filebeat/module/iis/access/ingest/default.json
+/usr/share/filebeat/module/iis/error/ingest/default.json
+/usr/share/filebeat/module/kafka/log/ingest/pipeline.json
+/usr/share/filebeat/module/kibana/log/ingest/pipeline.json
+/usr/share/filebeat/module/logstash/log/ingest/pipeline-json.json
+/usr/share/filebeat/module/logstash/log/ingest/pipeline-plain.json
+/usr/share/filebeat/module/logstash/slowlog/ingest/pipeline-json.json
+/usr/share/filebeat/module/logstash/slowlog/ingest/pipeline-plain.json
+/usr/share/filebeat/module/mongodb/log/ingest/pipeline.json
+/usr/share/filebeat/module/mysql/error/ingest/pipeline.json
+/usr/share/filebeat/module/mysql/slowlog/ingest/pipeline.json
+/usr/share/filebeat/module/nginx/access/ingest/default.json
+/usr/share/filebeat/module/nginx/error/ingest/pipeline.json
+/usr/share/filebeat/module/osquery/result/ingest/pipeline.json
+/usr/share/filebeat/module/postgresql/log/ingest/pipeline.json
+/usr/share/filebeat/module/redis/log/ingest/pipeline.json
+/usr/share/filebeat/module/redis/slowlog/ingest/pipeline.json
+/usr/share/filebeat/module/system/auth/ingest/pipeline.json
+/usr/share/filebeat/module/system/syslog/ingest/pipeline.json
+/usr/share/filebeat/module/traefik/access/ingest/pipeline.json
 
 
+[root@logstash ~]# for u in `rpm -ql filebeat |grep ingest`;do echo "-------------processing $u------------";a=`echo $u |awk -F'/' '{print $6"-"$7".conf"}'`;/usr/share/logstash/bin/ingest-convert.sh --input file://$u --output file:///root/$a;done
+-------------processing /usr/share/filebeat/module/apache2/access/ingest/default.json------------
+-------------processing /usr/share/filebeat/module/apache2/error/ingest/pipeline.json------------
+-------------processing /usr/share/filebeat/module/auditd/log/ingest/pipeline.json------------
+-------------processing /usr/share/filebeat/module/elasticsearch/audit/ingest/pipeline.json------------
+-------------processing /usr/share/filebeat/module/elasticsearch/deprecation/ingest/pipeline.json------------
+-------------processing /usr/share/filebeat/module/elasticsearch/gc/ingest/pipeline.json------------
+。。。。。。。。。
+大部分ok, 转格式出错的有
+system.syslog
+system.auth
+osquery.result
+mysql.slowlog
+kafka.log
+
+[root@logstash conf.d]# for u in `ls -1`;do sed -i '/output/,$d' $u;done        ##删除每个文件里“output”至文件结尾的内容

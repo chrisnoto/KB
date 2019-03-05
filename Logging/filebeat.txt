@@ -1,5 +1,13 @@
 filebeat配置
 
+###Load the index template in Elasticsearch
+filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.36.53:9200"]'
+
+####Load the Kibana dashboards
+To enable dashboard loading, add the following setting to the config file:
+setup.dashboards.enabled: true
+or
+# filebeat setup --dashboards
 ########
 [root@kvm-prod filebeat]# cat filebeat.yml |egrep -v '#|^$'
 filebeat.inputs:
@@ -222,3 +230,15 @@ output.kafka:
   required_acks: 1
   compression: gzip
   max_message_bytes: 1000000
+  
+  
+  ###########错误##########
+  配置module system时
+  如output指向kafka, filebeat运行, module system起作用，只是log会报警, 提示无法load ingest node pipelines
+  2019-02-22T15:05:12.474+0800    WARN    beater/filebeat.go:371  Filebeat is unable to load the Ingest Node pipelines for the configured modules because the Elasticsearch output is not configured/enabled. 
+  If you have already loaded the Ingest Node pipelines or are using Logstash pipelines, you can ignore this warning.
+  如output指向es, filebeat无法运行。 强制要求在es节点上安装ingest-geoip plugin
+  2019-02-22T15:02:03.341+0800    ERROR   pipeline/output.go:91   Failed to connect: Connection marked as failed because the onConnect callback failed: Error loading pipeline for fileset system/auth: 
+  This module requires the ingest-geoip plugin to be installed in Elasticsearch. You can install it using the following command in the Elasticsearch home directory:
+    sudo bin/elasticsearch-plugin install ingest-geoip
+
