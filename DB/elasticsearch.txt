@@ -142,11 +142,17 @@ indices.recovery.max_bytes_per_sec: 200mb
 indices.memory.index_buffer_size: 20%
 
 
-5
+5 System properties参数设置
 #/etc/systemd/system/elasticsearch.service.d/override.conf
 [Service]
 LimitMEMLOCK=infinity
+LimitNOFILE=131070
+LimitNPROC=8192
+
 systemctl daemon-reload
+
+/etc/sysctl.d/elasticsearch.conf   #检查6.4是否达到262144,没有的话再做sysctl设置
+vm.max_map_count=262144
 
 6 chrome浏览器安装elasticsearch head插件
 

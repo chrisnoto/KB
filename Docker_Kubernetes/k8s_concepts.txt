@@ -1,0 +1,60 @@
+########Pod#########
+Kubernetes中的基本组件kube-controller-manager就是用来控制Pod的状态和生命周期的，
+在了解各种controller之前我们有必要先了解下Pod本身和其生命周期
+同一个Pod中的容器共享存储、网络和容器运行配置项，它们总是被同时调度
+Pod中可以共享两种资源：网络和存储
+
+一个Pod多容器   ()内代表容器
+[content manager]     [consumers]
+(File Puller)        (Web Server)
+           (Volume)
+		   
+########Pod的生命周期#######
+Pod phase: Pending, Running, Succeeded, Failed, Unknown
+Pod status: PodScheduled, Ready, Initialized, Unschedulable, ContainersReady		   
+#######Pause容器的作用####
+Kubernetes中的pause容器主要为每个业务容器提供以下功能：
+在pod中担任Linux命名空间共享的基础；
+启用pid命名空间，开启init进程。		
+   
+######Init 容器能做什么？#######
+因为 Init 容器具有与应用程序容器分离的单独镜像，所以它们的启动相关代码具有如下优势：
+
+它们可以包含并运行实用工具，但是出于安全考虑，是不建议在应用程序容器镜像中包含这些实用工具的。
+它们可以包含使用工具和定制化代码来安装，但是不能出现在应用程序镜像中。例如，创建镜像没必要 FROM 另一个镜像，只需要在安装过程中使用类似 sed、 awk、 python 或 dig 这样的工具。
+应用程序镜像可以分离出创建和部署的角色，而没有必要联合它们构建一个单独的镜像。
+Init 容器使用 Linux Namespace，所以相对应用程序容器来说具有不同的文件系统视图。因此，它们能够具有访问 Secret 的权限，而应用程序容器则不能。
+它们必须在应用程序容器启动之前运行完成，而应用程序容器是并行运行的，所以 Init 容器能够提供了一种简单的阻塞或延迟应用容器的启动的方法，直到满足了一组先决条件。
+示例		   
+Init 容器不支持 Readiness Probe，因为它们必须在 Pod 就绪之前运行完成
+Init 容器具有应用容器的所有字段。除了 readinessProbe，因为 Init 容器无法定义不同于完成（completion）的就绪（readiness）之外的其他状态。
+这会在验证过程中强制执行。
+API版本控制
+支持watch机制 这意味着API Server的客户端可以使用与etcd相同的协调模式
+在 Pod 上使用 activeDeadlineSeconds，在容器上使用 livenessProbe，这样能够避免 Init 容器一直失败。 这就为 Init 容器活跃设置了一个期限。
+
+
+#########该什么时候使用存活（liveness）和就绪（readiness）探针?#######
+如果容器中的进程能够在遇到问题或不健康的情况下自行崩溃，则不一定需要存活探针; kubelet 将根据 Pod 的restartPolicy 自动执行正确的操作。
+如果您希望容器在探测失败时被杀死并重新启动，那么请指定一个存活探针，并指定restartPolicy 为 Always 或 OnFailure
+liveness probes是用来检测你的应用程序是否正在运行。通常情况下，你的程序一崩溃，Kubernetes就会看到这个程序已经终止，然后重启这个程序。
+但是liveness probes的目的就是捕捉到当程序还没有终止，还没有崩溃或者还没陷入死锁的情况
+Readiness Probes是用来检查你的应用程序是否可以为通信服务
+
+########API Server的具体的功能######
+认证和授权
+准入控制器
+########kube-controller-manager####
+节点控制器（Node Controller）
+副本控制器（Replication Controller）
+端点控制器（Endpoints Controller）
+命名空间控制器（Namespace Controller）
+身份认证控制器（Serviceaccounts Controller）
+########cloud-controller-manager####
+节点控制器: 用于检查云提供商以确定节点是否在云中停止响应后被删除
+路由控制器: 用于在底层云基础架构中设置路由
+服务控制器: 用于创建，更新和删除云提供商负载平衡器
+数据卷控制器: 用于创建，附加和装载卷，并与云提供商进行交互以协调卷
+
+########kube-proxy mode#######
+默认 iptables,有性能瓶颈,  IPVS性能更高
