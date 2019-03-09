@@ -1,0 +1,112 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "10"
+    field.cattle.io/creatorId: user-kpxwd
+    field.cattle.io/publicEndpoints: '[{"addresses":["10.67.36.59"],"port":80,"protocol":"HTTP","serviceName":"default:ingress-f605d6713a659442262ad75395fbaec2","ingressName":"default:sam","hostname":"sam.default.10.67.36.59.xip.io","allNodes":true}]'
+  creationTimestamp: 2019-03-09T01:40:07Z
+  generation: 11
+  labels:
+    cattle.io/creator: norman
+    workload.user.cattle.io/workloadselector: deployment-default-sam
+  name: sam
+  namespace: default
+  resourceVersion: "6975410"
+  selfLink: /apis/apps/v1beta2/namespaces/default/deployments/sam
+  uid: 451a99f9-420c-11e9-bed1-000c290a6f80
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      workload.user.cattle.io/workloadselector: deployment-default-sam
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        cattle.io/timestamp: 2019-03-09T07:56:17Z
+        field.cattle.io/ports: '[[{"containerPort":80,"dnsName":"sam","kind":"ClusterIP","name":"80tcp802","protocol":"TCP","sourcePort":80}]]'
+      creationTimestamp: null
+      labels:
+        workload.user.cattle.io/workloadselector: deployment-default-sam
+    spec:
+      containers:
+      - image: nginx:latest
+        imagePullPolicy: Always
+        name: sam
+        ports:
+        - containerPort: 80
+          name: 80tcp802
+          protocol: TCP
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/repo
+          name: vol1
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - args:
+        - clone
+        - https://github.com/chrisnoto/mysql-client.git
+        env:
+        - name: https_proxy
+          value: http://10.67.9.210:3128
+        image: alpine/git:latest
+        imagePullPolicy: Always
+        name: sam-init
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {}
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+        volumeMounts:
+        - mountPath: /git
+          name: vol1
+        workingDir: /git
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          sizeLimit: 100Mi
+        name: vol1
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: 2019-03-09T01:40:15Z
+    lastUpdateTime: 2019-03-09T01:40:15Z
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: 2019-03-09T05:44:48Z
+    lastUpdateTime: 2019-03-09T07:55:13Z
+    message: ReplicaSet "sam-68547b4d5b" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 11
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1

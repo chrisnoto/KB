@@ -58,3 +58,43 @@ Readiness Probes是用来检查你的应用程序是否可以为通信服务
 
 ########kube-proxy mode#######
 默认 iptables,有性能瓶颈,  IPVS性能更高
+
+#########label selector##########
+在service、replicationcontroller等object中有对pod的label selector，使用方法只能使用等于操作，例如：
+selector:
+    component: redis
+	
+在Job、Deployment、ReplicaSet和DaemonSet这些object中，支持set-based的过滤，例如：
+selector:
+  matchLabels:
+    component: redis
+  matchExpressions:
+    - {key: tier, operator: In, values: [cache]}
+    - {key: environment, operator: NotIn, values: [dev]}
+
+另外在node affinity和pod affinity中的label selector的语法又有些许不同，示例如下：
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/e2e-az-name
+            operator: In
+            values:
+            - e2e-az1
+            - e2e-az2
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+          - key: another-node-label-key
+            operator: In
+            values:
+            - another-node-label-value
+
+########rolling update过程#######
+当我们更新这个 Deployment 的时候，它会创建一个新的 ReplicaSet（nginx-deployment-1564180365），将它扩容到1个replica，然后缩容原先的 ReplicaSet 到2个 replica，
+此时满足至少2个 Pod 是可用状态，同一时刻最多有4个 Pod 处于创建的状态。
+
+接着继续使用相同的 rolling update 策略扩容新的 ReplicaSet 和缩容旧的 ReplicaSet。最终，将会在新的 ReplicaSet 中有3个可用的 replica，旧的 ReplicaSet 的 replica 数目变成0			
