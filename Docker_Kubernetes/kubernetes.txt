@@ -1,3 +1,7 @@
+#############nginx ingress controller#########
+加上tls证书和key             查看证书, 显示 签发者为 Kubernetes Ingress Controller Fake Certificate  不是我选择的cert
+###加annotations: nginx.ingress.kubernetes.io/force-ssl-redirect: true   ????
+
 ########kubectl -v 详细信息#########
 [root@cobbler ~]# kubectl version --v=7
 I0109 06:43:10.872375   31737 loader.go:357] Config loaded from file /root/.kube/config

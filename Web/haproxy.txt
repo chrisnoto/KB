@@ -1,0 +1,432 @@
+########配置我们的应用以同时接受 http 和 https 连接##########
+在最新版的 HAProxy中，我们配置这样的前端：
+
+frontend localnodes
+    bind *:80
+    mode http
+    default_backend nodes
+	
+要在 HAProxy 里终止 SSL 连接，我们现在就可以添加校准 SSL端 口 443 的绑定，并让 HAProxy 知道 SSL 证书的位置：
+
+frontend localhost
+    bind *:80
+    bind *:443 ssl crt /etc/ssl/xip.io/xip.io.pem
+    mode http
+    default_backend nodes
+在上面的例子中，我们使用了后台"nodes"。幸运的是，后台不需要特别配置。
+
+在之前的 HAProxy 版本中，我们要这样配置后台：
+
+backend nodes
+    mode http
+    balance roundrobin
+    option forwardfor
+    option httpchk HEAD / HTTP/1.1\r\nHost:localhost
+    server web01 172.17.0.3:9000 check
+    server web02 172.17.0.3:9001 check
+    server web03 172.17.0.3:9002 check
+    http-request set-header X-Forwarded-Port %[dst_port]
+    http-request add-header X-Forwarded-Proto https if { ssl_fc }
+因为 SSL 连接在负载均衡器上终止了，我们依然来发送正常的 HTTP 请求到后台服务器。我们不需要更改配置就可以得到同样的效果了！
+
+############自動將HTTP轉到HTTPS###########
+如果你想让网站只接受SSL连接，你可以添加向前端配置加上 redirect 导向：
+
+frontend localhost
+    bind *:80
+    bind *:443 ssl crt /etc/ssl/xip.io/xip.io.pem
+    redirect scheme https code 301 if !{ ssl_fc }
+    mode http
+    default_backend nodes
+上面，我们添加了 redirect 导向，如果连接不是通过SSL连接的，它将 http 重定向到 https。
+
+############使用HAProxy实现SSL穿透##########
+使用SSL穿透，我们将让后台服务器处理SSL连接，而非负载均衡器来处理。
+
+负载均衡器的工作就只是简单地将请求转发到配置好的后台服务器。因为连接还保持加密状态，HAProxy只能将它转发给其他服务器，其他事情就没法做了。
+
+在这个配置中，我们需要在前端和后台配置中同时使用TCP模式而不是HTTP模式。HAProxy只会把连接当作信息流来转发到其他服务器，而不会使用在HTTP请求上才能使用的功能。
+
+首先，我们调整一下前端配置：
+
+frontend localhost
+    bind *:80
+    bind *:443
+    option tcplog
+    mode tcp
+    default_backend nodes
+这里依然同时绑定80和443端口，以保证正常的HTTP连接和SSL连接都能工作。
+
+正如上述提到的，转发一个安全连接事台服务器而不作任何解码，我们需要使用TCP模式(mode tcp)。这也意味着我们需要设置tcp日志而不是默认的http日志（option tcplog）。阅读这个可以了解日志格式并搞清楚tcplog和httplog的区别。
+
+接着，我们要调整后台end配置。注意，我们还要将这个更改成TCP模式，并删除一些directives以避免因为修改/增加HTTP报头功能所带来的冲突： 
+
+backend nodes
+    mode tcp
+    balance roundrobin
+    option ssl-hello-chk
+    server web01 172.17.0.3:443 check
+    server web02 172.17.0.4:443 check
+正如你所看到的，这里设置成了mode tcp - 前端和后台配置都需要设置成这个模式。
+
+我们还删除了option forwardfor和http-request选项 - 这些不能用于TCP模式，而且我们也不能向已加密的请求添加报头。
+
+为了检查正确与否，我们可以使用ssl-hello-chk来检查连接及它处理SSL（特别是SSLv3）连接的能力。
+
+在这个例子中，我虚构了两个接受SSL证书的后台服务器。如果你有阅读过 edition SSL certificates，你会看到如何将它们集成到 Apache 或 Nginx 来创建一个网络服务器后台，以处理SSL通信。使用SSL 穿越，不需要给HAProxy创建或使用SSL证书。后台服务器都能够处理SSL连接，如同只有一如服务器且没有使用负载均衡器那样。
+
+
+調度方法的使用總結
+#1、調度衆多的MySQL從服務器，用什麼調度方法？
+   leastconn
+#2、調度web圖片服務器組，用什麼調度方法？
+   roundrobin
+#3、調度web服務器組，用什麼調度方法？
+   source 或者 cookie
+#4、調度web緩存服務器組，用什麼調度方法？
+   uri
+    hash-type：
+      map-based （默認的靜態的hash表）
+      consistent（動態的一致性hash） ---------在後端的cache服務器上使用，否則會導致服務器的加入或者退出時 服務器羣癱瘓
+
+root@node-1:/etc/haproxy# cat haproxy.cfg
+# This file managed by Puppet
+global
+  daemon
+  group  haproxy
+  log  /dev/log local0
+  maxconn  16000
+  pidfile  /var/run/haproxy.pid
+  spread-checks  3
+  ssl-default-bind-ciphers  HIGH:!aNULL:!MD5:!kEDH
+  ssl-default-bind-options  no-sslv3 no-tls-tickets
+  ssl-default-server-ciphers  HIGH:!aNULL:!MD5:!kEDH
+  ssl-default-server-options  no-sslv3 no-tls-tickets
+  stats  socket /var/lib/haproxy/stats
+  tune.bufsize  32768
+  tune.maxrewrite  1024
+  user  haproxy
+
+defaults
+  log  global
+  maxconn  8000
+  mode  http
+  option  redispatch
+  option  http-server-close
+  option  splice-auto
+  option  dontlognull
+  retries  3
+  timeout  http-request 20s
+  timeout  queue 1m
+  timeout  connect 10s
+  timeout  client 1m
+  timeout  server 1m
+  timeout  check 10s
+
+include conf.d/*.cfg
+
+root@node-1:/etc/haproxy/conf.d# for u in `ls -1`;do echo "------$u------";cat $u;done
+------010-stats.cfg------
+
+listen stats
+  bind 192.168.0.2:10000
+  mode  http
+  stats  enable
+  stats  uri /
+  stats  refresh 5s
+  stats  show-node
+  stats  show-legends
+  stats  hide-version
+------015-horizon.cfg------
+
+listen horizon
+  bind 10.67.36.80:80
+  option  http-buffer-request
+  redirect  scheme https if !{ ssl_fc }
+  timeout  http-request 10s
+------017-horizon-ssl.cfg------
+
+listen horizon-ssl
+  bind 10.67.36.80:443 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  balance  source
+  mode  http
+  option  forwardfor
+  option  httpchk
+  option  forceclose
+  option  httplog
+  option  http-buffer-request
+  reqadd  X-Forwarded-Proto:\ https
+  stick  on src
+  stick-table  type ip size 200k expire 30m
+  timeout  client 3h
+  timeout  server 3h
+  timeout  http-request 10s
+  server node-1 192.168.0.9:80  weight 1 check
+  server node-2 192.168.0.12:80  weight 1 check
+  server node-3 192.168.0.10:80  weight 1 check
+------020-keystone-1.cfg------
+
+listen keystone-1
+  bind 10.67.36.80:5000 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:5000
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk GET /v3
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  option  forwardfor
+  timeout  http-request 10s
+  server node-1 192.168.0.9:5000  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+  server node-2 192.168.0.12:5000  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+  server node-3 192.168.0.10:5000  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+------030-keystone-2.cfg------
+
+listen keystone-2
+  bind 192.168.0.2:35357
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk GET /v3
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  option  forwardfor
+  timeout  http-request 10s
+  server node-1 192.168.0.9:35357  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+  server node-2 192.168.0.12:35357  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+  server node-3 192.168.0.10:35357  check inter 10s fastinter 2s downinter 2s rise 30 fall 3
+------040-nova-api.cfg------
+
+listen nova-api
+  bind 10.67.36.80:8774 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8774
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  server 600s
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8774  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8774  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8774  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------050-nova-metadata-api.cfg------
+
+listen nova-metadata-api
+  bind 192.168.0.2:8775
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8775  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8775  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8775  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------070-cinder-api.cfg------
+
+listen cinder-api
+  bind 10.67.36.80:8776 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8776
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8776  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8776 backup check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8776 backup check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------080-glance-api.cfg------
+
+listen glance-api
+  bind 10.67.36.80:9292 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:9292
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk GET /healthcheck
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  server 11m
+  timeout  http-request 10s
+  server node-1 192.168.0.9:9292  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:9292  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:9292  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------081-glance-glare.cfg------
+
+listen glance-glare
+  bind 10.67.36.80:9494 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:9494
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk /versions
+  option  httplog
+  option  http-server-close
+  option  http-buffer-request
+  timeout  server 11m
+  timeout  http-request 10s
+  server node-1 192.168.0.9:9494  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:9494  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:9494  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------085-neutron.cfg------
+
+listen neutron
+  bind 10.67.36.80:9696 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:9696
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:9696  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:9696  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:9696  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------090-glance-registry.cfg------
+
+listen glance-registry
+  bind 192.168.0.2:9191
+  timeout  server 11m
+  server node-1 192.168.0.9:9191  check
+  server node-2 192.168.0.12:9191  check
+  server node-3 192.168.0.10:9191  check
+------110-mysqld.cfg------
+
+listen mysqld
+  bind 192.168.0.2:3306
+  mode  tcp
+  option  httpchk
+  option  tcplog
+  option  clitcpka
+  option  srvtcpka
+  stick on  dst
+  stick-table  type ip size 1
+  timeout client  28801s
+  timeout server  28801s
+  server node-1 192.168.0.9:3307  check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
+  server node-2 192.168.0.12:3307 backup check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
+  server node-3 192.168.0.10:3307 backup check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
+------130-object-storage.cfg------
+
+listen object-storage
+  bind 10.67.36.80:8080 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8080
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httplog
+  option  httpchk HEAD /
+  option  forceclose
+  option  forwardfor
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 10.67.36.84:6780  check
+  server node-2 10.67.36.87:6780  check
+  server node-3 10.67.36.85:6780  check
+------135-aodh.cfg------
+
+listen aodh
+  bind 10.67.36.80:8042 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8042
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8042  check
+  server node-2 192.168.0.12:8042  check
+  server node-3 192.168.0.10:8042  check
+------140-ceilometer.cfg------
+
+listen ceilometer
+  bind 10.67.36.80:8777 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8777
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8777  check
+  server node-2 192.168.0.12:8777  check
+  server node-3 192.168.0.10:8777  check
+------160-heat-api.cfg------
+
+listen heat-api
+  bind 10.67.36.80:8004 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8004
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  server 660s
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8004  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8004  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8004  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------161-heat-api-cfn.cfg------
+
+listen heat-api-cfn
+  bind 10.67.36.80:8000 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8000
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  server 660s
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8000  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8000  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8000  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------162-heat-api-cloudwatch.cfg------
+
+listen heat-api-cloudwatch
+  bind 10.67.36.80:8003 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8003
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  httpchk
+  option  httplog
+  option  forceclose
+  option  http-buffer-request
+  timeout  server 660s
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8003  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-2 192.168.0.12:8003  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server node-3 192.168.0.10:8003  check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+------170-nova-novncproxy.cfg------
+
+listen nova-novncproxy
+  bind 10.67.36.80:6080 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:6080  check
+  server node-2 192.168.0.12:6080  check
+  server node-3 192.168.0.10:6080  check
+------190-murano-api.cfg------
+
+listen murano-api
+  bind 10.67.36.80:8082 ssl crt /var/lib/astute/haproxy/public_haproxy.pem
+  bind 192.168.0.2:8082
+  http-request  set-header X-Forwarded-Proto https if { ssl_fc }
+  option  http-buffer-request
+  timeout  http-request 10s
+  server node-1 192.168.0.9:8082  check
+  server node-2 192.168.0.12:8082  check
+  server node-3 192.168.0.10:8082  check
+------191-murano_rabbitmq.cfg------
+
+listen murano_rabbitmq
+  bind 10.67.36.80:55572
+  balance  roundrobin
+  mode  tcp
+  option  tcpka
+  timeout client  48h
+  timeout server  48h
+  server node-1 192.168.0.9:55572  check inter 5000 rise 2 fall 3
+  server node-2 192.168.0.12:55572 backup check inter 5000 rise 2 fall 3
+  server node-3 192.168.0.10:55572 backup check inter 5000 rise 2 fall 3
+------999-lma.cfg------
+
+listen lma
+  bind 192.168.0.2:5565
+  balance  roundrobin
+  mode  tcp
+  option  httpchk
+  option  tcplog
+  server node-1 192.168.0.9:5565  check port 5566

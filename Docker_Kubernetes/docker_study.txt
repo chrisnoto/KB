@@ -1,8 +1,14 @@
 #########技巧  没有安装git时,使用git容器代替git命令行###########
 alias git='docker run -it --rm --name git -v $PWD:/git -w /git alpine/git' 
 (This alias is only required if git is not already installed on your machine. This alias will allow you to clone the repo using a git container)
-git version
-git clone https://github.com/shazChaudhry/docker-elastic.git
+[root@worker3 ~]# docker run -ti --rm -v ${HOME}:/root -v $(pwd):/git -e https_proxy=http://10.67.9.210:3128 alpine/git clone https://github.com/alpine-docker/git.git   
+Cloning into 'git'...
+remote: Enumerating objects: 16, done.
+remote: Counting objects: 100% (16/16), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 99 (delta 5), reused 10 (delta 3), pack-reused 83
+Unpacking objects: 100% (99/99), done.
+
 
 #########查看container config############非常有用
 [root@worker2 ~]# docker inspect --format "{{json .Config}}" b1ee |python -mjson.tool
