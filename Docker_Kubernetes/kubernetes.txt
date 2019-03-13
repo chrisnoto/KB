@@ -1,6 +1,3 @@
-#############nginx ingress controller#########
-加上tls证书和key             查看证书, 显示 签发者为 Kubernetes Ingress Controller Fake Certificate  不是我选择的cert
-###加annotations: nginx.ingress.kubernetes.io/force-ssl-redirect: true   ????
 
 ########kubectl -v 详细信息#########
 [root@cobbler ~]# kubectl version --v=7
@@ -60,89 +57,8 @@ yes
 [root@cobbler ~]# kubectl auth can-i '*' services --as system:serviceaccount:default:default
 yes
 
-### service
-service带selector 会创建endpoints
-service不带selector 不会创建endpoints,但可以自己定义endpoints，例如外部glusterfs cluster
-如使用glusterfs pv,则配置会先创建glusterfs service不带selector，再创建glusterfs endpoints
-如使用glusterfs storageclass,直接配置创建storageclass
-An ExternalName service is a special case of service that does not have selectors and uses DNS names instead.
-## Type ExternalName
-Note: ExternalName Services are available only with kube-dns version 1.7 and later.
-Services of type ExternalName map a service to a DNS name (specified using the spec.externalName parameter) rather than to a typical selector like my-service or cassandra. 
-This Service definition, for example, would map the my-service Service in the prod namespace to my.database.example.com:
 
-kind: Service
-apiVersion: v1
-metadata:
-  name: my-service
-  namespace: prod
-spec:
-  type: ExternalName
-  externalName: my.database.example.com
-When looking up the host my-service.prod.svc.cluster.local, the cluster DNS service will return a CNAME record with the value my.database.example.com. Accessing my-service works 
-in the same way as other Services but with the crucial difference that redirection happens at the DNS level rather than via proxying or forwarding. Should you later decide to move your database into your cluster,
- you can start its pods, add appropriate selectors or endpoints, and change the service’s type.
-
-Note: This section is indebted to the Kubernetes Tips - Part 1 blog post from Alen Komljen.
-
-###External IPs
-If there are external IPs that route to one or more cluster nodes, Kubernetes services can be exposed on those externalIPs. Traffic that ingresses into the cluster with the external IP 
-(as destination IP), on the service port, will be routed to one of the service endpoints. externalIPs are not managed by Kubernetes and are the responsibility of the cluster administrator.
-
-In the ServiceSpec, externalIPs can be specified along with any of the ServiceTypes. In the example below, “my-service” can be accessed by clients on “80.11.12.10:80”” (externalIP:port)
-
-kind: Service
-apiVersion: v1
-metadata:
-  name: my-service
-spec:
-  selector:
-    app: MyApp
-  ports:
-  - name: http
-    protocol: TCP
-    port: 80
-    targetPort: 9376
-  externalIPs:
-  - 80.11.12.10
-  
-###headless service
-Standard service - you will get the clusterIP value:
-
-$ kubectl exec djangoapp-0 -- nslookup djangoapp 
-Server: 10.0.0.12 
-Address: 10.0.0.12#51
- 
-Name: djangoapp.default.svc.cluster.local 
-Address: 10.0.0.210
-Headless service - you will get the IP of each Pod:
-
-$ kubectl exec djangoapp-0 -- nslookup djangoapp 
-Server: 10.0.0.12 
-Address: 10.0.0.12#51 
- 
-Name: djangoapp.default.svc.cluster.local 
-Address: 172.17.0.1 
-Name: djangoapp.default.svc.cluster.local 
-Address: 172.17.0.2 
-Name: djangoapp.default.svc.cluster.local 
-Address: 172.17.0.3
-Headless services
-Sometimes you don’t need or want load-balancing and a single service IP. In this case, you can create “headless” services by specifying "None" for the cluster IP (.spec.clusterIP).
-This option allows developers to reduce coupling to the Kubernetes system by allowing them freedom to do discovery their own way. Applications can still use a self-registration pattern and
-adapters for other discovery systems could easily be built upon this API.
-For such Services, a cluster IP is not allocated, kube-proxy does not handle these services, and there is no load balancing or proxying done by the platform for them. How DNS is automatically 
-configured depends on whether the service has selectors defined.
-With selectors  A记录直接指向pod
-For headless services that define selectors, the endpoints controller creates Endpoints records in the API, and modifies the DNS configuration to return A records (addresses) that point directly 
-to the Pods backing the Service.
-
-Without selectors
-For headless services that do not define selectors, the endpoints controller does not create Endpoints records. However, the DNS system looks for and configures either:
-CNAME records for ExternalName-type services.
-A records for any Endpoints that share a name with the service, for all other types
-Headless Service就是没头的Service。有啥用呢？很简单，有时候client想自己来决定使用哪个Real Server，可以通过查询DNS来获取Real Server的信息。
-另外，Headless Services还有一个用处。Headless Service的对应的每一个Endpoints，即每一个Pod，都会有对应的DNS域名；这样Pod之间就可以互相访问。
+############Statefulset###########
 #kubectl get statefulsets web
 NAME      DESIRED   CURRENT   AGE
 web       2         2         1h
@@ -191,81 +107,6 @@ kubectl get node node2 -o json | jq .spec
 Check tolerations for CoreDNS:
 kubectl -n kube-system get deployments coredns -o json | jq .spec.template.spec.tolerations
 
-#########訪問服務的五種方式#########
-1 kubernetes api 方式訪問my-nginx
-https://10.67.37.234:6443/api/v1/namespaces/default/services/my-nginx/proxy/
-前提：瀏覽器導入證書
-最新版的k8s默認啟用了RBAC，併為未認證用户賦予了一個默認的身份：anonymous。
-
-對於API Server來説，它是使用證書進行認證的，我們需要先創建一個證書：
-1.首先找到kubectl命令的配置文檔，默認情況下為/etc/kubernetes/admin.conf，在 上一篇 中，我們已經複製到了$HOME/.kube/config中。
-2.然後我們使用client-certificate-data和client-key-data生成一個p12文檔，可使用下列命令：
-# 生成client-certificate-data
-grep 'client-certificate-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.crt
-
-# 生成client-key-data
-grep 'client-key-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.key
-
-# 生成p12
-openssl pkcs12 -export -clcerts -inkey kubecfg.key -in kubecfg.crt -out kubecfg.p12 -name "kubernetes-client"
-3.最後導入上面生成的p12文檔，重新打開瀏覽器，顯示如下：
-k8s-api-server-select-certificate
-
-1.1 kubectl proxy方式訪問my-nginx          proxies from a localhost address to the Kubernetes apiserver(在任意机器上kubectl proxy)
-虽然我们从集群外部不能直接访问一个 ClusterIP 服务，但是你可以使用 Kubernetes Proxy API 来访问它。Kubernetes Proxy API 是一种特殊的 API，
-Kube-APIServer 只是代理这类 API 的 HTTP 请求，然后将请求转发到某个节点上的 Kubelet 进程监听的端口上。最后实际是由该端口上的 REST API 响应请求。
-比如：需要访问一个服务，可以使用 /api/v1/namespaces/<NAMESPACE>/services/<SERVICE-NAME>/proxy/
-如果你需要直接访问一个 Pod，可以使用 /api/v1/namespaces/<NAMESPACE>/pods/<POD-NAME>/proxy/。
-在 Master 节点上创建 Kubernetes API 的代理服务
-kubectl proxy --address=0.0.0.0 --accept-hosts=^*$ --port=8443
-http://10.67.37.234:8443/api/v1/namespaces/default/services/my-nginx/proxy/
-前提： kubectl proxy --address=0.0.0.0 --accept-hosts=^*$ --port=8443
-在cobbler节点上也可以创建kubernetes api的代理服务
-[root@cobbler ~]# kubectl proxy --address=0.0.0.0 --accept-hosts=^*$ --port=8443
-Starting to serve on [::]:8443
-http://10.67.51.164:8443/api/v1/namespaces/default/services/web1/proxy/
-2 apiserver proxy:  is a bastion built into the apiserver
-Discovering builtin services
-Typically, there are several services which are started on a cluster by kube-system.
-$ kubectl cluster-info
-  Kubernetes master is running at https://104.197.5.247
-  elasticsearch-logging is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/elasticsearch-logging/proxy
-  kibana-logging is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/kibana-logging/proxy
-  kube-dns is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/kube-dns/proxy
-  grafana is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/monitoring-grafana/proxy
-  heapster is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/monitoring-heapster/proxy
-  
-3 nodeport方式
-前提：yaml文件里定義NodePort
-
-4 loadbalancer方式    (balance workers:nodeport)
-前提： 結合云平臺
-
-5 Ingress方式       http/https lb
-前提： 配置域名解析    域名要指向backend service （clusterIP or NodePort）
-Ingress 只是一个统称，其由 Ingress 和 Ingress Controller 两部分组成。Ingress 用作将原来需要手动配置的规则抽象成一个 Ingress 对象，使用 YAML 格式的文件来创建和管理。
-Ingress Controller 用作通过与 Kubernetes API 交互，动态的去感知集群中 Ingress 规则变化。
-Kubernetes Ingress 提供了负载均衡器的典型特性：HTTP 路由、粘性会话、SSL 终止、SSL直通、TCP 和 UDP 负载平衡等
-
-###########外部访问pod的方法########
-1 hostNetwork: true
-2 hostPort 是直接将容器的端口与所调度的节点上的端口路由，这样用户就可以通过宿主机的IP加上 <hostPort> 来访问 Pod 了，如: <hostIP>:<hostPort>
-3 Port Forward:  Forward one or more local ports to a pod
-kubectl port-forward 指令来实现数据转发的方法。kubectl port-forward 命令可以为 Pod 设置端口转发，通过在本机指定监听端口，访问这些端口的请求将会被转发到 Pod 的容器中对应的端口上。
-$ kubectl port-forward pod-name local-port:container-port
-$ kubectl port-forward service/name_of_service local_port:remote_port
-If only one port number is specified, it is used for both local and remote ports
-注：需要在所有 Kubernetes 节点上都需要安装 Socat
-由于这种类型的转发端口是绑定在本地的，这种方式也仅适用于调试服务
-
-############proxy############
-kubectl proxy       Run a proxy to the Kubernetes API server 將本機某個端口號映射到apiserver，  http
-apiserver proxy     通過api方式訪問pod, service等
-kube proxy  =kubectl expose      通過iptable，使對service的請求轉發到後端pod，或service 端口 NAT到worker的ip+ nodeport 端口
-实现 Service 这一功能的关键是由 Kubernetes 中的 Kube-Proxy 来完成的。Kube-Proxy 运行在每个节点上，监听 API Server 中服务对象的变化，再通过管理 IPtables 来实现网络的转发。
-Kube Proxy 目前支持三种模式：UserSpace、IPtables、IPVS。
-kubectl expose creates a service for existing pods
-Under the hood: kube-proxy is using a userland proxy and a bunch of iptables rules.
 
 #########List container name in pod#####
 [root@cobbler ~]#  kubectl -n kube-system get po -l k8s-app=canal
