@@ -1,0 +1,40 @@
+#########已存在tiller pod时进行helm init#####
+[root@cobbler k8s17-yaml]# cat rbac-tiller-config.yml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tiller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: tiller
+    namespace: kube-system
+# kubectl apply -f rbac-tiller-config.yml
+为应用程序设置serviceAccount
+kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
+
+[root@rancher ~]# grep proxy .bashrc
+export http_proxy=http://10.67.9.210:3128
+export https_proxy=http://10.67.9.210:3128
+export no_proxy=10.67.36.58
+
+[root@rancher ~]# helm init --client-only --service-account tiller
+Creating /root/.helm/repository/repositories.yaml
+Adding stable repo with URL: https://kubernetes-charts.storage.googleapis.com
+Adding local repo with URL: http://127.0.0.1:8879/charts
+$HELM_HOME has been configured at /root/.helm.
+Not installing Tiller due to 'client-only' flag having been set
+Happy Helming!
+
+#########helm client远程访问tiller pod#####
+Set up a tunnel to tiller
+kubectl port-forward tiller-deploy-69458576b-4j765 44134:44134 --namespace kube-system

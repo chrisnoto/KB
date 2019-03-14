@@ -1,3 +1,20 @@
+#############验证k8s集群健康情况########
+[root@cobbler ~]# kubectl cluster-info
+Kubernetes master is running at https://10.67.36.58/k8s/clusters/c-vtl4b
+KubeDNS is running at https://10.67.36.58/k8s/clusters/c-vtl4b/api/v1/namespaces/kube-system/services/kube-dns/proxy
+
+[root@cobbler ~]# kubectl get componentstatus
+NAME                 STATUS    MESSAGE              ERROR
+controller-manager   Healthy   ok
+scheduler            Healthy   ok
+etcd-0               Healthy   {"health": "true"}
+
+[root@cobbler ~]# kubectl get node
+NAME      STATUS    AGE       VERSION
+master    Ready     54d       v1.11.5
+worker1   Ready     53d       v1.11.5
+worker2   Ready     53d       v1.11.5
+worker3   Ready     53d       v1.11.5
 
 ########kubectl -v 详细信息#########
 [root@cobbler ~]# kubectl version --v=7
@@ -89,7 +106,7 @@ Name:   web-0.nginx.default.svc.cluster.local
 Address: 10.244.2.17
 如上，web为我们创建的StatefulSets，对应的pod的域名为web-0，web-1，他们之间可以互相访问，这样对于一些集群类型的应用就可以解决互相之间身份识别的问题了。
 
-###Taints and tolerations
+###Taints and tolerations###
 A taint is an attribute added to a node. It prevents pods from running on the node
 ... Unless they have a matching toleration
 
@@ -130,12 +147,14 @@ nginx-ingress-controller-m972l   1/1       Running   0          2d
 nginx-ingress-controller-qzp9t   1/1       Running   0          2d
 [root@cobbler ~]# kubectl -n ingress-nginx get po -l app=ingress-nginx -o jsonpath={.items[*].spec.containers[*].name}
 nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller
+
 ###########jsonpath範例####
 [root@k8sv17 ~]# kubectl get nodes -o jsonpath='{range .items[*]}{.spec.externalID}{"\t"}{.spec.podCIDR}{"\n"}{end}'
 k8sv17.novalocal        10.96.0.0/24
 node-1.novalocal        10.96.1.0/24
 node-2.novalocal        10.96.2.0/24
 node-3.novalocal        10.96.3.0/24
+
 ##########Kubectl output verbosity and debugging#######
 --v=0	Generally useful for this to ALWAYS be visible to an operator.
 --v=1	A reasonable default log level if you don’t want verbosity.
@@ -147,6 +166,7 @@ node-3.novalocal        10.96.3.0/24
 --v=8	Display HTTP request contents.
 --v=9	Display HTTP request contents without truncation of contents.
 eg:  kubectl get nodes --v=9
+
 ########導出admin用戶的cluster role####
 kubectl get clusterrole admin -o yaml > admin.yaml
 
@@ -184,6 +204,7 @@ NodePort在node上，负责对外通信，NodeIP:NodePort
 ContainerPort在容器上，用于被pod绑定
 
 targetPort在pod上、负责与kube-proxy代理的port和Nodeport数据进行通信
+
 ######綁定機器運行pod######
 A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
  If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes 
@@ -396,117 +417,4 @@ $ kubectl patch statefulset/consul -p '{"spec":{"replicas": 5}}'
 "consul" patched
 kubectl scale statefulsets <stateful-set-name> --replicas=<new-replicas>
 kubectl edit statefulsets <stateful-set-name>
-#####################2018-1-25
-使用私有registry:
-1 需要在每個node上手動docker load pause-amd64:3.0
-2 ###訪問私有registry server
-vi /etc/default/docker
-INSECURE_REGISTRY='--insecure-registry 10.67.51.161:5000'
-重啟docker生效
-#####################################################################################
-在K8S运行的服务，从简单到复杂可以分成三类：无状态服务、普通有状态服务和有状态集群服务。
-下面分别来看K8S是如何运行这三类服务的。
 
-- 无状态服务，K8S使用RC（或更新的Replica Set）来保证一个服务的实例数量，如果说某个Pod实例由于某种原因Crash了，
-RC会立刻用这个Pod的模版新启一个Pod来替代它，由于是无状态的服务，新启的Pod与原来健康状态下的Pod一模一样。
-在Pod被重建后它的IP地址可能发生变化，为了对外提供一个稳定的访问接口，K8S引入了Service的概念。一个Service后面可以挂多个Pod，实现服务的高可用。
-- 普通有状态服务，和无状态服务相比，它多了状态保存的需求。Kubernetes提供了以Volume和Persistent Volume为基础的存储系统，可以实现服务的状态保存。
-- 有状态集群服务，与普通有状态服务相比，它多了集群管理的需求。K8S为此开发了一套以Pet Set为核心的全新特性，方便了有状态集群服务在K8S上的部署和管理。
-具体来说是通过Init Container来做集群的初始化工作，用 Headless Service 来维持集群成员的稳定关系，用动态存储供给来方便集群扩容，最后用Pet Set来综合管理整个集群。
-要运行有状态集群服务要解决的问题有两个,一个是状态保存，另一个是集群管理。
- 我们先来看如何解决第一个问题：状态保存。Kubernetes 有一套以Volume插件为基础的存储系统，通过这套存储系统可以实现应用和服务的状态保存。
-
-K8S的存储系统从基础到高级又大致分为三个层次：普通Volume，Persistent Volume 和动态存储供应。
-Kubernetes与有状态集群服务相关的两个新特性：Init Container 和 Pet Set  
-我们在什么地方会用到 Init Container呢？
-
-第一种场景是等待其它模块Ready，比如我们有一个应用里面有两个容器化的服务，一个是Web Server，另一个是数据库。
-其中Web Server需要访问数据库。但是当我们启动这个应用的时候，并不能保证数据库服务先启动起来，所以可能出现在一段时间内Web Server有数据库连接错误。
-为了解决这个问题，我们可以在运行Web Server服务的Pod里使用一个Init Container，去检查数据库是否准备好，直到数据库可以连接，
-Init Container才结束退出，然后Web Server容器被启动，发起正式的数据库连接请求。
-
-第二种场景是做初始化配置，比如集群里检测所有已经存在的成员节点，为主容器准备好集群的配置信息，这样主容器起来后就能用这个配置信息加入集群。
-
-还有其它使用场景，如将pod注册到一个中央数据库、下载应用依赖等。
-这些东西能够放到主容器里吗？从技术上来说能，但从设计上来说，可能不是一个好的设计。首先不符合单一职责原则，
-其次这些操作是只执行一次的，如果放到主容器里，还需要特殊的检查来避免被执行多次。
-
-什么是Pet Set？在数据结构里Set是集合的意思，所以顾名思义Pet Set就是Pet的集合，那什么是Pet呢？
-我们提到过Cattle和Pet的概念，Cattle代表无状态服务，而Pet代表有状态服务。
-具体在K8S资源对象里，Pet是一种需要特殊照顾的Pod。它有状态、有身份、当然也比普通的Pod要复杂一些。
-Pet有三个特征。
-
-一是有稳定的存储，这是通过我们前面介绍的PV/PVC 来实现的。
-二是稳定的网络身份，这是通过一种叫 Headless Service 的特殊Service来实现的。
-普通Service的Cluster IP 是对外的，用于外部访问多个Pod实例。而Headless Service的作用是对内的，
-用于为一个集群内部的每个成员提供一个唯一的DNS名字，这样集群成员之间就能相互通信了。
-所以Headless Service没有Cluster IP，这是它和普通Service的区别。
-三是序号命名规则。Pet是一种特殊的Pod，那么Pet能不能用Pod的命名规则呢？
-答案是不能，因为Pod的名字是不稳定的。Pod的命名规则是，如果一个Pod是由一个RC创建的，那么Pod的名字是RC的名字加上一个随机字符串。
-为了解决名字不稳定的问题，K8S对Pet的名字不再使用随机字符串，而是为每个Pet分配一个唯一不变的序号，
-比如 Pet Set 的名字叫 mysql，那么第一个启起来的Pet就叫 mysql-0，第二个叫 mysql-1，如此下去。
-当一个Pet down 掉后，新创建的Pet 会被赋予跟原来Pet一样的名字。由于Pet名字不变所以DNS名字也跟以前一样，同时通过名字还能匹配到原来Pet用到的存储，实现状态保存。
-
-更新 ConfigMap 后：
-
-使用该 ConfigMap 挂载的 Env 不会同步更新
-使用该 ConfigMap 挂载的 Volume 中的数据需要一段时间（实测大概10秒）才能同步更新
-ENV 是在容器启动的时候注入的，启动之后 kubernetes 就不会再改变环境变量的值，且同一个 namespace 中的 pod 的环境变量是不断累加的，
-参考 Kubernetes中的服务发现与docker容器间的环境变量传递源码探究。为了更新容器中使用 ConfigMap 挂载的配置，
-可以通过滚动更新 pod 的方式来强制重新挂载 ConfigMap，也可以在更新了 ConfigMap 后，先将副本数设置为 0，然后再扩容。
-
-###########
-Control Panel 核心概念 Pod
-
-Kubernetes Control Panel 核心概念是 Pod，大家都知道 Pod 的第一作用是帮我们解耦容器的关系，第二个作用是它是 Kubernetes 里最原子的调度单位，
-并且 Pod 的Container 是 Share Namepsace 的，包括 Network、IPC。并且里面的 Pod 容器是 Shear Volume 的，这些东西有什么意义吗？马上会介绍。
-但是最终的目的是一个，就是希望在所谓的容器云里能够引入进程组的概念，而不是管理单一的容器或者进程。
-
-Pod 抑制制作“胖”容器
-如果说 Pod 有什么作用？首先，第一个 Pod 或者谷歌希望做的事情就是抑制住你去做一个“胖”容器的冲动。什么是“胖”容器？比如说很多人在一个容器里跑很多进程，
-用一个 Systemd 去管。其实这是很麻烦的事情，因为监控和整个应用生命周期的管理，都会和真实的应用进程不一致。这个事怎么解决，很棘手。所以 Kubernetes 不希望制作这种“胖”容器。
-
-我经常举的例子是一个 JAVA 的应用，它是有两个东西组成，一个 War 包和 Tomcat。如果不用 Pod，可以把它们两个打包进一个镜像，然后一起 Run，可以，但这时候他们俩耦合在一起了，
-我怎么独立更新他们两个，我不可能每次更新 Tomcat 都把线上的镜像都重新 Build 一遍吧。这是第一个事。
-我们也可以维护一个 Persistent Volume 。在 Kubernetes 里可以这样做，就是两个容器，两个镜像。一个镜像存一个 War 包，另一个存 Tomcat。接下来怎么定义呢？就是一个 Pod Run 这两个容器，
-其中 War 包容会定义成一个 InitContainer。initContainer 的特点是什么呢？它会先于所有的用户容器启动，并且按顺序执行完。这样的话在 War 包容器运行这样一个命令，叫 Copy War 包到一个指定目录，
-这个指定目录是一个 Pod 的 Volume。执行了这个之后，War 包容器就可以退出了。
-
-接下来再执行用户容器是 Tomact。Tomcat 就是一个正常的标准 Tomcat 的镜像，执行命令也不变。只不过它会去 Mount 刚刚 Copy 过文件的目录 Volume，到 Webapps 目录下。
-这时候再去启动 Tomcat，我的 War 包就已经存在于 App 目录下，成功了。这就是一个解耦容器关系非常典型的例子。
-
-
-Pod ：容器设计模式
-第二个 Pod 所希望给的价值是所谓的容器设计模式，大家可能已经经常提到了，说的是什么呢？
-举一个最简单的例子就是 Sidecar 模式。例子非常明确，就是说现在有 Helloworld ，会在 /var/log 下面写日志。然后有一个 Fluentd ，希望把 /var/log 里的内容文件读出来，
-发到 ES 里。像这样的两个容器显然就构成了一个 Pod 的协作关系。所以，我会在一个 Pod 定义两个容器，并且因为他们的 Volume 是 Share 的，我就 Share 这样的 /var/log 目录就好了。
-所以，这时候，他们之间的文件交换，Helloworld 写一个文件，不需要进行任何的 Copy 和文件交换的操作，这就是 Pod 的文件交互模式，如何应用在生产环境的例子。
-
-但这还没有完，更高级的做法在 Kubernetes 1.7、1.8 之后，我们称之为 Initializer 的模式。比如说现在还是一个 Helloworld，希望里面有一个  Log Agent 运行，
-可是这时候没有必要在所有的 Helloworld 都定义一个 Log Agent 容器。因为没有必要，机械的重复劳动不需要。
-
-怎么办呢？Pod 里就定义一个 Helloworld 就可以了，然后声明一下，启动之前要加载一个 Initializer ，它的名字叫 Log Agent。这个 Log Agent 定义在哪儿呢？我额外定义了一个 Config，
-这个 Config 的内容就是 Log Agent 这个容器的 yaml 的描述，就是蓝色图框所示的部分。这个 Config 是存在 Etcd 里的，全局存起来。
-这样的话，在 Kubernetes 里启动这个 Helloworld Pod，Kubernetes 会自动在这个 Pod 里注入一个容器，名叫 Log Agent，使用的数据就是蓝色图框的内容。所以这个起来之后，
-本来定义的是一个容器，起来之后里面其实有两个容器，另一个是 Kubernetes 帮你注入的，这个就是 Initializer 。但这还没有完。
-还有一个更高级的做法，大师级的做法，就是 Istio。这个项目非常火，这个是做什么的呢？它是面向容器的微服务框架，他和 Spring 做的工作非常像，比如说服务拆分、流量控制。
-两个或者是多个服务之间的访问授权，以及他们之间的流量策略控制，都是交给 Istio 做的。
-
-它是怎么实现的？想想 Spring 为什么能做这个？因为 Spring 有两个王牌，IOC 和 AOP，大家都知道，依赖注入和切面编程。同样这个理念在 Pod 的帮助下也能实现在容器世界里。怎么实现呢？
-Istio 里会在每个 Pod 会注入 Envoy 容器，是自动注入的，就和 Spring 切面编程在代码执行前注入逻辑的道理是一样的。
-这个 Envoy 容器是干什么的？就可以理解为高级版的 Nginx，是一个双向的 Ingress 和 Egress 都支持的 Proxy 。有了这个，大家都记得 Pod 里的两个容器之间的 Network Namespace 又是共享的，
-我就可以让这个 Pod 的进出流量都走 Envoy。Envoy 是系统自动注入进去的，用户不需要定义，所以接下来当我要控制两个服务器之间的访问，比说流量、切片，就是 Istio 自动配置每个 Pod 的里 Envoy 的容器实现。
-这里举个例子。现在有这样的微服务，有微服务 A，还有一个微服务 B。他们两个之间有一个 A 调用 B 的关系，这时候要做一个灰度发布，在线上新部署了一个B 的新版本叫 Version 2，
-我的要求是 A 访问 B 的流量，99% 还在原来的 V1 上，切 1% 到新版本 V2 上。怎么做？只要在 Istio 里申明要 A、B 之间的流量比例，Istio 会自动配置 A 的 Envoy 容器，使得出来的容量分流一部分到 V1 上，
-另一部分按照比例分到 V2 上。这就是 Kubernetes 如何在容器这个世界里实现类似 AOP 的切面控制的原理。
-这个项目是谷歌，Lyft 和 IBM 一起做的，其实可以认为它就是一个源自于 Kubernetes 的项目，因为它必须依赖于 Pod 的概念。同样这样的实现在 Cloud Foundry 也可以做，因为Cloud Foundry 的容器是“胖”容器，
-本身里面有一个 Init 进程，如果在 Init 帮助下起一个 Envoy 的小容器，小的 Namespace ，这个是可以的。同样这个事在虚拟机里也可以做，无非就是在一个虚拟机启动多个容器的意思。但这个事在现在的 Docker Swarm 模式里就很难做，
-没办法在 Docker 容器里说注入一个 Envoy，Swarm 模式的网络也不支持这么干。
-当然谷歌对这个事很 Open，一周前 Istio 的人和 Docker Team 就开了一个会，想把 Istio 推到 Swarm 模式 上。最终的结果就是宿主机上 Workaround，比如说现在要做一个切面， Swarm 模式 会给你在宿主机上起一个匿名容器，
-就是你不知道也看不见的容器，用来跑 Envoy。所以大家可以感觉到，它其实游离于当前 Schedule 掌控之外的，带来了管理的复杂度和资源管理的问题（比如怎么原子调度），但是现在没别的办法，让 Swarm 支持 Pod 不太可能 。
-
-Pod 的实现
-
-然后我们讲讲 Pod 怎么实现。Kubernetes 的 Pod 实现强依赖于 CRI。我想在 Kubernetes 里创建一个 Pod，名字叫 Foo，有两个容器 A 和 B。它怎么做呢？Kubernetes 的会去 Call Kubelet 里 CRI 的一个 API 叫 RunPodSandbox。
-Call 这个之后，如果是 Docker 做 Runtime 的话，，Docker 会启动一个 Container Foo，这个非常小的 Container，我们称之为 Inford Container，它是用来 Hold 整个 Pod 里的 Network Namespace ，其他的容器都去 Join 的一
-个 Network Namespace ，就实现了容器间 Network Namespace 的共享。
