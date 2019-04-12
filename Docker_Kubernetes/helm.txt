@@ -38,3 +38,13 @@ Happy Helming!
 #########helm client远程访问tiller pod#####
 Set up a tunnel to tiller
 kubectl port-forward tiller-deploy-69458576b-4j765 44134:44134 --namespace kube-system
+
+########### Q&A #########
+Q: How do I configure Helm, but not install Tiller?
+
+A: By default, helm init will ensure that the local $HELM_HOME is configured, and then install Tiller on your cluster. To locally configure, but not install Tiller, use helm init --client-only.
+
+Q: How do I manually install Tiller on the cluster?
+
+A: Tiller is installed as a Kubernetes deployment. You can get the manifest by running helm init --dry-run --debug, and then manually install it with kubectl. 
+It is suggested that you do not remove or change the labels on that deployment, as they are sometimes used by supporting scripts and tools.

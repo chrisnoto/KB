@@ -44,8 +44,7 @@ __consumer_offsets
 logstash
 metricbeat
 
-/opt/kafka_2.11-2.0.0/bin # ./kafka-topics.sh --describe --zookeeper 10.67.36.69
-:2182 --topic test_topic
+/opt/kafka_2.11-2.0.0/bin # ./kafka-topics.sh --describe --zookeeper 10.67.36.69:2182 --topic test_topic
 Topic:test_topic        PartitionCount:3        ReplicationFactor:3     Configs:
         Topic: test_topic       Partition: 0    Leader: 1       Replicas: 1,2,3 Isr: 1,2,3
         Topic: test_topic       Partition: 1    Leader: 2       Replicas: 2,3,1 Isr: 2,3,1

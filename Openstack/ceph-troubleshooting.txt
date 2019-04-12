@@ -104,11 +104,14 @@ $ ceph osd crush rm `hostname -s`           #remove {bucket-name}
 # ceph osd create      自動create為刪除的osd num
 # ceph osd crush add osd.0 0 host=node-5    添加時weight值要設置為0，防止rebalance
 # ceph osd crush add osd.1 0 host=node-4
+# ceph auth add osd.1 osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-1/keyring      添加auth
+# ceph auth add osd.0 osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-0/keyring
 node-5# start ceph-osd id=0
 node-4# start ceph-osd id=1
 
 ======================================================================
 9    pg stuck at active+remapped         处理办法：通过rebalance osd上面的数据，或者使异常的osd恢复正常
+                                                   如有down的osd，想办法使其恢复正常，或者设置crush reweight 0
 pg 7.c is stuck unclean for 9508.985801, current state active+remapped, last acting [6,3]
 pg 6.2f is stuck unclean for 28921.295302, current state active+remapped, last acting [4,13]
 recovery 1/696762 objects misplaced (0.000%)

@@ -1,3 +1,19 @@
+###########restore LV using LVM Snapshot########
+0 Create LVM Snapshot of the Logical Volume
+[root@tuxfixer ~]# lvcreate -s -n storage_snapshot -L 10G /dev/fedora/storage
+  Logical volume "storage_snapshot" created.
+1 umount lv from mount point
+2 restore storage Volume content by means of merging storage_snapshot with that Volume
+[root@tuxfixer ~]# lvconvert --merge /dev/fedora/storage_snapshot
+  Merging of volume storage_snapshot started.
+  storage: Merged: 100.0%
+
+############systemd 解决kafka connect启动太快而失败######
+Kafka Connect might start too fast and fail because Kafka service is not ready yet. By adding directive ExecStartPre = /usr/bin/sleep 10 to Kafka Connect service, 
+we can delay its start for 10 seconds. Or, which I like more, we would actually handle the failure and restart Kafka Connect.
+Restart = on-failure
+RestartSec = 10
+
 ##########netstat recv-q send-q解释#######
 LISTEN状态
 Recv-Q：代表建立的连接还有多少没有被accept，比如Nginx接受新连接变的很慢
@@ -197,7 +213,22 @@ $ sudo dpkg -i *.deb
 安装完成后，重启并验证新的内核已经被使用了：
 $ uname -sr
 就是这样。你下载就可以使用比 Ubuntu 16.04 默认安装的内核的更新版本了。
+###############apt-get 升级指定包############
+root@zabbix-openstack:~# apt-get update
+root@zabbix-openstack:~# apt-cache policy openssh-client
+openssh-client:
+  Installed: 1:7.2p2-4ubuntu2.2
+  Candidate: 1:7.2p2-4ubuntu2.8
+  Version table:
+     1:7.2p2-4ubuntu2.8 500
+        500 http://10.67.51.164/ubuntu xenial-updates/main amd64 Packages
+        500 http://10.67.51.164/ubuntu xenial-security/main amd64 Packages
+ *** 1:7.2p2-4ubuntu2.2 100
+        100 /var/lib/dpkg/status
+     1:7.2p2-4 500
+        500 http://10.67.51.164/ubuntu xenial/main amd64 Packages
 
+apt-get --only-upgrade install Package
 ###################apt-get升級內核###################
 使用apt-get
 apt-get upgrade

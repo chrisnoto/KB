@@ -1,14 +1,58 @@
 openstack之间迁移虚机
 环境：
 测试环境openstack web页面   https://10.67.44.66
-测试环境controller   PXE网络IP: 10.20.0.3  (从51.164 ssh过去)
+测试环境controller  node-18 PXE网络IP: 10.20.0.3  (从51.164 ssh过去)
 
 正式环境openstack web页面   https://10.67.36.80
-正式环境controller   PXE网络IP:  10.21.0.5  (从51.164 ssh过去)
+正式环境controller  node-1  PXE网络IP:  10.21.0.5  (从51.164 ssh过去)
 
 一  不带数据盘  
 1 测试环境openstack web页面上点击"create snapshot"制作虚机镜像
-2 测试环境控制节点上下载image
+  或者命令行操作
+root@node-18:~# source openrc
+root@node-18:~# nova list
++--------------------------------------+------------------+--------+------------+-------------+--------------------------------------------------+
+| ID                                   | Name             | Status | Task State | Power State | Networks                                         |
++--------------------------------------+------------------+--------+------------+-------------+--------------------------------------------------+
+| 8ddd1c9f-a84a-4143-b1c5-690e0f8ff8ac | vSTJCESITSTEST01 | ACTIVE | -          | Running     | admin_internal_net=192.168.111.216, 10.67.44.110 |
+| 8d78b92a-0e3c-4014-b479-fc538d2eece7 | vSTJPLMtest01    | ACTIVE | -          | Running     | admin_internal_net=192.168.111.178, 10.67.44.185 |
+| 7d19c2f0-537d-4e2d-823c-d394f43bed6e | vSTJPLMtest02    | ACTIVE | -          | Running     | admin_internal_net=192.168.111.203, 10.67.44.186 |
++--------------------------------------+------------------+---------+------------+-------------+--------------------------------------------------+
+
+root@node-18:~# nova stop 8d78b92a-0e3c-4014-b479-fc538d2eece7
+Request to stop server 8d78b92a-0e3c-4014-b479-fc538d2eece7 has been accepted.
+
+root@node-18:~# nova list
++--------------------------------------+------------------+---------+------------+-------------+--------------------------------------------------+
+| ID                                   | Name             | Status  | Task State | Power State | Networks                                         |
++--------------------------------------+------------------+---------+------------+-------------+--------------------------------------------------+
+| 8ddd1c9f-a84a-4143-b1c5-690e0f8ff8ac | vSTJCESITSTEST01 | ACTIVE  | -          | Running     | admin_internal_net=192.168.111.216, 10.67.44.110 |
+| 8d78b92a-0e3c-4014-b479-fc538d2eece7 | vSTJPLMtest01    | SHUTOFF | -          | Shutdown    | admin_internal_net=192.168.111.178, 10.67.44.185 |
+| 7d19c2f0-537d-4e2d-823c-d394f43bed6e | vSTJPLMtest02    | ACTIVE  | -          | Running     | admin_internal_net=192.168.111.203, 10.67.44.186 |
++--------------------------------------+------------------+---------+------------+-------------+--------------------------------------------------+
+
+#创建snapshot
+root@node-18:~# nova image-create --poll 8d78b92a-0e3c-4014-b479-fc538d2eece7 vSTJPLMtest01_snapshot
+
+Server snapshotting... 25% complete
+
+#查看snapshot文件
+root@node-15:/var/lib/nova/instances/snapshots/tmpnelPyE# ls -lh
+total 25G
+-rw-r--r-- 1 nova nova 60G Apr 12 11:06 340ba0e112aa476a8686c24e9ef2633b
+
+root@node-15:/var/lib/nova/instances/snapshots/tmpnelPyE# qemu-img info 340ba0e112aa476a8686c24e9ef2633b
+image: 340ba0e112aa476a8686c24e9ef2633b
+file format: raw
+virtual size: 60G (64424509440 bytes)
+disk size: 25G
+
+#监控进程
+root@node-15:/var/lib/nova/instances/snapshots/tmpnelPyE# ps -ef |grep qemu-img
+nova     12617  3604 31 11:06 ?        00:00:17 qemu-img convert -O raw rbd:compute/8d78b92a-0e3c-4014-b479-fc538d2eece7_disk:id=compute /var/lib/nova/instances/snapshots/tmpnelPyE/340ba0e112aa476a8686c24e9ef2633b -f raw
+
+
+2 测试环境 控制节点上下载image
 root@node-18:~# source openrc 
 root@node-18:~# glance image-list               查看要下载的image名称，记住image ID
 root@node-18:~# glance image-download --file 44.121-20181008.img --progress 7cd02ed9-490e-4c90-92c3-c6288f0f6a02   根据Image ID下载镜像保存为44.121-20181008.img

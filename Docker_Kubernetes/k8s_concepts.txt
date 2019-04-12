@@ -489,3 +489,41 @@ Pod 的实现
 然后我们讲讲 Pod 怎么实现。Kubernetes 的 Pod 实现强依赖于 CRI。我想在 Kubernetes 里创建一个 Pod，名字叫 Foo，有两个容器 A 和 B。它怎么做呢？Kubernetes 的会去 Call Kubelet 里 CRI 的一个 API 叫 RunPodSandbox。
 Call 这个之后，如果是 Docker 做 Runtime 的话，，Docker 会启动一个 Container Foo，这个非常小的 Container，我们称之为 Inford Container，它是用来 Hold 整个 Pod 里的 Network Namespace ，其他的容器都去 Join 的一
 个 Network Namespace ，就实现了容器间 Network Namespace 的共享。
+
+
+############NodeAffinity Node 亲和性调度#############
+NodeAffinity 意为 Node 亲和性的调度策略，是用于替换 NodeSelector 的全新调度策略。目前有两种节点亲和性表达。
+
+RequiredDuringSchedulingIgnoredDuringExecution：必须满足指定的规则才可以调度 Pod 到 Node 上（功能与 nodeSelector 很像，但是使用的是不同的语法），相当于硬限制。
+PreferredDuringSchedulingIgnoredDuringExecution：强调优先满足指定规则，强调器会尝试调度 Pod 到 Node 上，但并不强求，相当于软限制。多个优先级规则还可以设置权重（weight）值，以定义执行的先后顺序。
+IgnoredDuringExecution 的意思是：如果一个 Pod 所在的节点在 Pod 运行期间标签发生了变更，不在符合该 Pod 的节点亲和性要求，则系统将忽略 Node 上 Label 的变化，该 Pod 能继续在该节点运行。
+
+下面的例子设置了 NodeAffinity 调度的如下规则。
+
+requiredDuringSchedulingIgnoredDuringExecution 要求只运行在 amd64 的节点上（beta.kubernetes.io/arch In amd64）
+preferredDuringSchedulingIgnoredDuringExecution 要求时尽量运行在 “磁盘类型为 SSD” (disk-type In ssd) 的节点上。
+apiVersion: v1
+kind: Pod
+metadata:
+  name: with-node-affinity
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: beta.kubernetes.io/arch
+            operator: In
+            values:
+            - amd64
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+          - key: disk-type
+            operator: In
+            values:
+            - ssd
+  containers:
+  - name: with-node-affinity
+    image: gcr.io/google_containers/pause:2.0

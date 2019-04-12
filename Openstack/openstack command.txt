@@ -1,3 +1,6 @@
+######live migration########
+root@node-1:/var/log# openstack server migrate f31a7013-540c-4915-8e13-88e02902511c --live node-11.domain.tld
+
 #####fix instance error state##########
  nova list --all-tenants
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
@@ -574,6 +577,7 @@ nova-conductor故障，原因同上，不过这种情况概率很低，除非人
 根据downtime时间窗口内是否存在心跳判断服务的状态。其实这种方法效率是非常低的，
 并且当服务众多时，数据库的压力将会非常大，因此有人提出引入Zookeeper服务发现机制维护Openstack服务状态，
 参考Services Heartbeat with ZooKeeper。
+
 ###############Filter flavor metadata & host aggregate metadata###########
 1 Since we are going to use host aggregates we need special scheduler filters, 
 so configure your Nova scheduler with:
