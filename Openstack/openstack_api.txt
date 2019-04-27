@@ -1,6 +1,20 @@
 #List server               /servers
 curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers |python -m json.tool
 
+#  List vm and Host
+[root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token"" "https://10.67.36.80:8777/v2/meters/instance" |  python -m json.tool | jq '.[] | .resource_metadata | {display_name,instance_host}' |xargs -n6 | sort -k5,5
+{ display_name: 44.109test db, instance_host: node-10.domain.tld }
+{ display_name: centos6_template_nodelete, instance_host: node-10.domain.tld }
+{ display_name: centos7_template_nodelete, instance_host: node-10.domain.tld }
+{ display_name: Fred, instance_host: node-10.domain.tld }
+{ display_name: oSTJefoxNCap02, instance_host: node-10.domain.tld }
+{ display_name: oSTJFIICloudTicket, instance_host: node-10.domain.tld }
+{ display_name: oSTJgatekeeper_uat, instance_host: node-10.domain.tld }
+{ display_name: oSTJNDA01, instance_host: node-10.domain.tld }
+{ display_name: oSTJWSUS01, instance_host: node-10.domain.tld }
+{ display_name: python_dev-2, instance_host: node-10.domain.tld }
+
+
 #Show Server Details       /servers/{server_id}
 [root@cobbler ~]# curl -k -s -H "X-Auth-Token:"$token""  https://10.67.44.66:8774/v2/31e6d008df414104ac5e1d42beae316c/servers/bfc3dfec-c2c7-4b1f-9261-05f5ee900176 |python -m json.tool                                                                                        {
     "server": {

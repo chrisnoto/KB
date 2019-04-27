@@ -1,0 +1,30 @@
+#1 Upload CD Image
+#Upload the iso file
+openstack image create --file CentOS-7.2-x86_64-DVD-1511.iso --disk-format iso --container-format bare --min-ram 800 --property hw_cdrom_bus=scsi systemrescuecd-Centos7.2
+
+#2 check instance ID and image ID
+root@node-1:/var/lib/nova/instances# glance image-list |grep rescue
+| 6eb07ab8-181d-4454-8174-5d61e558cffd | systemrescuecd-Centos7.2   |
+root@node-1:/var/lib/nova/instances# nova list |grep trou
+| 6d1b7fb1-bee9-4ca2-aa57-c50dbaead5cd | troubleshooting | ACTIVE | -          | Running     | admin_floating_net=10.67.38.137 
+
+#3 boot the instance into rescue mode                
+root@node-1:/var/lib/nova/instances# nova rescue --image 6eb07ab8-181d-4454-8174-5d61e558cffd 6d1b7fb1-bee9-4ca2-aa57-c50dbaead5cd
++-----------+--------------+
+| Property  | Value        |
++-----------+--------------+
+| adminPass | hF3mLRhe4oEz |
++-----------+--------------+
+
+# check the status of the instance
+root@node-1:/var/lib/nova/instances# openstack server show 6d1b7fb1-bee9-4ca2-aa57-c50dbaead5cd -c name -c status
++--------+-----------------+
+| Field  | Value           |
++--------+-----------------+
+| name   | troubleshooting |
+| status | RESCUE          |
++--------+-----------------+
+
+#4 When you are finished, shut down the VM. Then end the rescue mode:
+openstack server unrescue 6d1b7fb1-bee9-4ca2-aa57-c50dbaead5cd
+This will also start the VM again.

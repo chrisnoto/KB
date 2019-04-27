@@ -1,0 +1,84 @@
+Kafka configuration in Production Server
+
+###1 OS
+for循环使用以下命令批量给10块硬盘分区
+parted /dev/sdb mklabel gpt yes
+parted /dev/sdb mkpart primary 0 100% ignore
+
+#Kafka data directories mount option
+with noatime
+/dev/sdb1 /data1 xfs defaults,noatime 0 0
+/dev/sdc1 /data2 xfs defaults,noatime 0 0
+
+#socket buffer size   Max 2MB
+net.core.wmem_max = 2097152
+net.core.rmem_max = 2097152
+
+net.ipv4.tcp_max_tw_buckets = 262144
+net.ipv4.tcp_max_syn_backlog = 1024
+
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+
+#File descriptor limits  (systemd)
+systemctl cat confluent-kafka
+[Service]
+LimitNOFILE = 128000
+
+#virtual memory
+vm.swappiness = 1
+vm.dirty_ratio = 60
+vm.dirty_background_ratio = 5
+vm.max_map_count = 200000
+
+###2 zookeeper 
+Memory:  ZooKeeper is sensitive to swapping and any host running a ZooKeeper server should avoid swapping.
+JVM: 1GB heap size
+Disks: SSD         (dataDir)
+autopurge.purgeInterval=24
+autopurge.snapRetainCount=3
+
+###3 Kafka
+JVM: no more than 5GB        Save the rest for page cache
+Set kafka broker JVM by exporting KAFKA_HEAP_OPTS
+Disks: JBOD (log.dirs)
+
+#3.1 broker
+server.properties
+
+# Server Basics
+delete.topic.enable = true
+
+log.dirs=/data1,/data2,/data3,......
+# Socket server configuration
+num.network.threads=4 (adjust based on # of concurrent producers,# of concurrent consumers + replication factor) eg:  4 (1 producer + 1 consumer + 2 replication factor)
+num.io.threads=10 (>= no. of data disks)
+socket.send.buffer.bytes=2097152
+socket.receive.buffer.bytes=2097152
+socket.request.max.bytes=104857600
+
+# Log configuration
+num.partitions=2 (cluster size -1)  #The default number of log partitions for auto-created topics. For keyed data, you should avoid changing the number of partitions in a topic
+log.retention.hours=24
+log.segment.bytes=1073741824
+
+# Replication configuration
+num.replica.fetchers=4
+
+#3.2 log4j
+log4j.appender.kafkaAppender.DatePattern='.'yyyy-MM-dd
+log4j.appender.stateChangeAppender.DatePattern='.'yyyy-MM-dd
+log4j.appender.requestAppender.DatePattern='.'yyyy-MM-dd
+log4j.appender.cleanerAppender.DatePattern='.'yyyy-MM-dd
+log4j.appender.controllerAppender.DatePattern='.'yyyy-MM-dd
+log4j.appender.authorizerAppender.DatePattern='.'yyyy-MM-dd
+
+#3.3 connect-avro-distributed.properties
+receive.buffer.bytes=2097152
+send.buffer.bytes=2097152
+config.storage.replication.factor=3
+offset.storage.replication.factor=3
+status.storage.replication.factor=3
+ 
+#######message.max.bytes#######
+consumer和producer有关这个属性的设置必须同步，否则producer发布的消息对consumer来说太大

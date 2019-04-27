@@ -1,3 +1,9 @@
+acks=-1(all)时,瓶颈很有肯能发生在replication time
+Replication Time ~= Num_Fetches * (Local_Time_On_The_Follower + Fetch_Request_Total_Time_On_The_Leader) / num.replica.fetchers
+
+Replica fetchers per broker = (Cluster_Size - 1 ) * num.replica.fetchers 
+设置多少的replica fetchers合理？一般按照官方的生产建议设置成4就好了
+
 
 Lag=logSize-Offset  
 Lag通常为正值，反应有多少消息未读取或未消费
@@ -199,7 +205,7 @@ New in 3.3.0: Lists detailed information on watches for the server, by path. Thi
 mntr
 New in 3.4.0: Outputs a list of variables that could be used for monitoring the health of the cluster.
 
-$ echo mntr | nc localhost 2185
+$ echo mntr | nc localhost 2181
 
 zk_version  3.4.0
 zk_avg_latency  0

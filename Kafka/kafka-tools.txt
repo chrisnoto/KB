@@ -1,3 +1,38 @@
+##########mgmt tool - kafkahq######
+[root@worker1 ~]# cat kafkahq.sh
+docker run -d \
+    -p 8080:8080 \
+    -v /root/application.yml:/app/application.yml \
+    tchiotludo/kafkahq
+[root@worker1 ~]# cat application.yml |egrep -v '#|^$'
+kafkahq:
+  server:
+  clients-defaults:
+    consumer:
+      properties:
+        isolation.level: read_committed
+  connections:
+        bootstrap.servers: "10.67.38.121:9092,10.67.38.122:9092,10.67.38.123:9092"
+  topic-data:
+  security:
+      - topic/read
+      - topic/insert
+      - topic/delete
+      - topic/config/update
+      - node/read
+      - node/config/update
+      - topic/data/read
+      - topic/data/insert
+      - topic/data/delete
+      - group/read
+      - group/delete
+      - group/offsets/update
+      - registry/read
+      - registry/insert
+      - registry/update
+      - registry/delete
+      - registry/version/delete
+
 #########kafka eagle#########
 docker run -d --net=host --privileged -p 3306:3306 -p 8999:8999 -v /data0/kafka-eagle/mysql/data:/var/lib/mysql \
 -v /data0/kafka-eagle/mysql/log:/app/mysql/log -v /data0/kafka-eagle/ke/log:/app/ke/log -v /data0/kafka-eagle/tomcat/log:/opt/kafka-eagle/kms/logs \
@@ -14,14 +49,14 @@ docker run -d -p 18088:8088 \
  docker run -it confluentinc/cp-ksql-cli http://10.67.36.59:18088
 
 
-########kafka connect ui##########
+########mgmt tool - kafka connect ui##########
 docker run --rm -it -p 8000:8000 \
            -e "CONNECT_URL=http://10.67.38.121:8083" \
            -e "access.control.allow.methods=GET,POST,PUT,DELETE,OPTIONS" \
            -e "access.control.allow.origin=*" \
            landoop/kafka-connect-ui
 
-########kafka manager########
+########mgmt tool - kafka manager########
 [root@master kafka]# cat v2stack.yml
 version: '3.2'
 services:

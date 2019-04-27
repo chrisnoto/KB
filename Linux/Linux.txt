@@ -1,3 +1,21 @@
+##########查找无效InRelease文件#########
+root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
+2233786    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/trusty/InRelease
+2233794    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/xenial/InRelease
+2232621    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/trusty/InRelease
+2233140    8 -rw-rw-r--   1 apt-mirror apt-mirror     7089 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/xenial/InRelease
+7325699  108 -rw-rw-r--   1 apt-mirror apt-mirror   109198 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-security/InRelease
+2492116  240 -rw-rw-r--   1 apt-mirror apt-mirror   242048 Apr 27  2018 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic/InRelease
+7325736  108 -rw-rw-r--   1 apt-mirror apt-mirror   109196 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-updates/InRelease
+2489075   68 -rw-rw-r--   1 apt-mirror apt-mirror    65861 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-security/InRelease
+2492092   88 -rw-rw-r--   1 apt-mirror apt-mirror    88722 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-updates/InRelease
+2489112   68 -rw-rw-r--   1 apt-mirror apt-mirror    65859 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-updates/InRelease
+7325773  244 -rw-rw-r--   1 apt-mirror apt-mirror   246846 Apr 22  2016 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial/InRelease
+2492070   88 -rw-rw-r--   1 apt-mirror apt-mirror    88724 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-security/InRelease
+2234680   68 -rw-rw-r--   1 apt-mirror apt-mirror    66230 Apr 19 13:03 /var/spool/apt-mirror/mirror/mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu/dists/
+                                                      * 此列是文件大小
+root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -a -size -100c -ls   查找小于100 bytes 的无效InRelease文件
+
 ###########restore LV using LVM Snapshot########
 0 Create LVM Snapshot of the Logical Volume
 [root@tuxfixer ~]# lvcreate -s -n storage_snapshot -L 10G /dev/fedora/storage
@@ -394,8 +412,9 @@ xe vdi-destroy uuid=0a553992-c048-445c-99cf-a0c872a7ff57
 
 ################parted############
 parted /dev/sdb mklabel gpt yes
- parted /dev/sda mkpart primary 216G 416G ignore
- parted /dev/sda p
+parted /dev/sda mkpart primary 0% 100% ignore
+parted /dev/sda mkpart primary 216G 416G ignore
+parted /dev/sda p
  partprobe /dev/sda
  lvextend -l +100%FREE -r /dev/mapper/os-root
 ###############jenkins#############

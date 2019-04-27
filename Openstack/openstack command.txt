@@ -389,6 +389,18 @@ for u in `seq 1 50`;do echo $u;nova floating-ip-create;done
  dmsetup ls
  dmsetup remove rbd0p5
  rbd unmap /dev/rbd0
+##############rbd unmap failed with device busy###########
+root@node-10:/sys/kernel/debug/ceph/9b4cf431-e850-443f-b8b2-bd0db1137b07.client28064407# lsof /dev/rbd0
+COMMAND    PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+multipath 6641 root    7u   BLK  251,0      0t0  391 /dev/rbd0
+root@node-10:/sys/kernel/debug/ceph/9b4cf431-e850-443f-b8b2-bd0db1137b07.client28064407# ps -ef |grep 6641
+root      5555 16456  0 15:35 pts/17   00:00:00 grep --color=auto 6641
+root      6641     1  0  2017 ?        00:45:12 /sbin/multipathd
+root@node-10:/sys/kernel/debug/ceph/9b4cf431-e850-443f-b8b2-bd0db1137b07.client28064407# cd
+root@node-10:~# kill 6641
+root@node-10:~# lsof /dev/rbd0
+root@node-10:~# rbd unmap /dev/rbd0
+root@node-10:~# rbd showmapped
 
  
 dockerctl shell appname command

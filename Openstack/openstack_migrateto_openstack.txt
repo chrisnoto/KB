@@ -80,3 +80,14 @@ root@node-18:~# glance image-download --file 44.121-Data_vol.img --progress a444
 创建volume时选择volume source为image，选中image名称和相同的size大小，创建volume
 6 将volume挂载到新建的虚机上
 7 开机
+
+
+###########openstack migrate to kvm server############
+1 查看虚机的disk
+root@node-15:/var/lib/nova/instances/372c1c77-52ad-4dea-8c0f-0d1dc7c7d01c# grep rbd libvirt.xml
+      <source protocol="rbd" name="compute/372c1c77-52ad-4dea-8c0f-0d1dc7c7d01c_disk">
+      <source protocol="rbd" name="volumes/volume-1fe0145e-85e9-4ad9-8a48-c2955e1c9849">
+2 从ceph导出vm disk
+rbd export compute/372c1c77-52ad-4dea-8c0f-0d1dc7c7d01c_disk 44-127-os.img
+rbd export volumes/volume-1fe0145e-85e9-4ad9-8a48-c2955e1c9849 44-127-data.img
+3 scp磁盘文件到kvm server上，并导入磁盘，开机
