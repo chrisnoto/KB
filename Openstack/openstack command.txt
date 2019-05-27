@@ -1,3 +1,93 @@
+#############hiera############
+[root@cobbler ~]# ansible openstack -m shell -a "hiera roles"
+10.21.0.5 | CHANGED | rc=0 >>
+["primary-controller",
+ "primary-database",
+ "primary-keystone",
+ "primary-neutron",
+ "primary-rabbitmq"]
+
+10.21.0.7 | CHANGED | rc=0 >>
+["controller", "database", "keystone", "neutron", "rabbitmq"]
+
+10.21.0.6 | CHANGED | rc=0 >>
+["controller", "database", "keystone", "neutron", "rabbitmq"]
+
+10.21.0.13 | CHANGED | rc=0 >>
+["compute"]
+
+10.21.0.20 | CHANGED | rc=0 >>
+["compute"]
+
+10.21.0.4 | CHANGED | rc=0 >>
+["ceph-osd"]
+
+10.21.0.9 | CHANGED | rc=0 >>
+["ceph-osd"]
+
+#############LMA节点从fuel移除之后########
+metering.sample queue里几十万条消息无法消费，且消息数量还在增加
+root@node-1:/etc/rabbitmq# rabbitmqctl list_queues -p / |grep sample
+notifications.sample    0
+event.sample    12
+alarm.all.sample        0
+metering.sample 247674
+
+处理
+所有节点
+/etc/init.d/collectd stop
+计算节点     
+/etc/init.d/ceilometer-polling stop
+控制节点
+/etc/init.d/ceilometer-polling stop
+/etc/init.d/ceilometer-collector stop
+/etc/init.d/ceilometer-agent-notification stop
+/etc/init.d/ceilometer-api stop
+crm resource disable log_collector
+crm resource disable metric_collector
+crm resource disable p_ceilometer-agent-central
+pcs resource disable p_aodh-evaluator
+
+清空metering.sample queue里的消息
+root@node-1:/var/log/ceilometer# rabbitmqctl purge_queue metering.sample
+Purging queue 'metering.sample' in vhost '/' ...
+
+查看rabbitmq里堆积消息的queue
+1 ready messages
+root@node-1:~# rabbitmqctl list_queues name messages_ready messages_unacknowledged |awk '{if($2>0)print $0}'
+Listing queues ...
+compute.node-19.domain.tld      2       0
+compute.node-15.domain.tld      10      0
+compute.node-8.domain.tld       2       0
+compute.node-12.domain.tld      3       0
+
+2 unacked messages
+root@node-1:~# rabbitmqctl list_queues name messages_ready messages_unacknowledged |awk '{if($NF>0)print $0}'
+event.sample    0       64
+metering.sample 0       56
+
+查看rabbitmq里没有消费者的queue
+root@node-1:/var/log# rabbitmqctl list_queues name state consumers| awk '{if($NF==0)print $0}'
+q-agent-notifier-port-update.node-11.domain.tld running 0
+q-agent-notifier-network-update.node-17.domain.tld      running 0
+q-agent-notifier-port-update.node-15.domain.tld running 0
+
+#########注意#######
+删除compute节点之前，必须要先更新host aggregation
+如果先删除了compute节点，则无法更新host aggregation
+workaround:
+mysql> use nova;
+mysql> select * from aggregate_hosts where id=20;
++---------------------+------------+------------+----+--------------------+--------------+---------+
+| created_at          | updated_at | deleted_at | id | host               | aggregate_id | deleted |
++---------------------+------------+------------+----+--------------------+--------------+---------+
+| 2018-06-24 23:58:12 | NULL       | NULL       | 20 | node-15.domain.tld |            1 |       0 |
++---------------------+------------+------------+----+--------------------+--------------+---------+
+1 row in set (0.00 sec)
+
+mysql> delete from aggregate_hosts where id=20;
+Query OK, 1 row affected (0.00 sec)
+
 ######live migration########
 root@node-1:/var/log# openstack server migrate f31a7013-540c-4915-8e13-88e02902511c --live node-11.domain.tld
 
@@ -6,6 +96,10 @@ root@node-1:/var/log# openstack server migrate f31a7013-540c-4915-8e13-88e029025
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
 
 #####怎麼進入rabbitmq監控頁面##########
+0  添加rabbitmq user
+rabbitmqctl add_user chensen chensen
+rabbitmqctl set_user_tags chensen administrator
+rabbitmqctl set_permissions -p / chensen ".*" ".*" ".*"
 1 在node-18上面新增防火牆規則如下, 
 root@node-18:~# iptables -I INPUT 7 -s 10.20.0.0/24 -p tcp -m multiport --sports 15672 -m comment --comment "005 public network rabbitmq admin" -j ACCEPT
 2 從cobbler上通過10.20.0.0網段去做ssh正向tunnel
@@ -29,6 +123,7 @@ Cache-Control: no-cache
 [root@cobbler ~]# ssh -Nf -L 10.67.51.164:10000:192.168.0.2:10000 10.20.0.3
 2 從我的電腦上登陸 10.67.51.164:10000
 
+sed -i '/^server/s/192.168.0.1/10.21.0.2/' /etc/ntp.conf
 
 新增節點時注意及時修改時區：  ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
@@ -357,7 +452,16 @@ To resolve this issue, remove these services manually.
   heat service-list
   heat-manage service clean
 pcs resource delete sysinfo_node-11.domain.tld
-  
+##重启以下服务
+ root@node-1:~# crm resource restart log_collector
+INFO: ordering log_collector to stop
+waiting for stop to finish ...... done
+INFO: ordering log_collector to start
+root@node-1:~# crm resource restart metric_collector
+INFO: ordering metric_collector to stop
+waiting for stop to finish ...... done
+INFO: ordering metric_collector to start
+ 
  rbd import --pool compute /var/lib/nova/instances/_base/626929051b03d5357a60aa4aa663124aa77d65d1 c85ac08f-74d1-4b5d-b143-6affdb6223ac_disk --image-format=2 --id compute
 
  ####swift API####

@@ -1,3 +1,88 @@
+##########facter盘点OS#########
+[root@kafka3 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
+hostname => kafka3
+ipaddress => 10.67.51.146
+lsbdistdescription => nil
+memorysize => 62.73 GB
+operatingsystemrelease => 7.5.1804
+processor0 => Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+processorcount => 32
+productname => R2-1206R-PA
+virtual => physical
+
+[root@es1 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
+hostname => es1
+ipaddress => 10.67.36.53
+lsbdistdescription => CentOS Linux release 7.5.1804 (Core)
+memorysize => 15.51 GB
+operatingsystemrelease => 7.5.1804
+processor0 => Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+processorcount => 4
+productname => VMware Virtual Platform
+virtual => vmware
+
+###########grub2#########
+/etc/default/grub  custom settings
+/etc/grub.d/     template files
+
+#grub2的配置文件 
+/boot/grub2/grub.cfg file on traditional BIOS-based machines
+/boot/efi/EFI/fedora/grub.cfg file on UEFI machines
+
+#menuentry
+linux  64-bit IBM POWER Series
+linux16 x86_64 BIOS-based systems
+linuxefi  UEFI-based systems
+
+#grubby命令
+[root@cobbler grub2]# grubby --default-kernel
+/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
+
+[root@cobbler grub2]# grubby --info=ALL
+index=0
+kernel=/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-3.10.0-514.21.2.el7.x86_64.img
+title=CentOS Linux (3.10.0-514.21.2.el7.x86_64) 7 (Core)
+index=1
+kernel=/boot/vmlinuz-3.10.0-327.el7.x86_64
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-3.10.0-327.el7.x86_64.img
+title=CentOS Linux (3.10.0-327.el7.x86_64) 7 (Core)
+index=2
+kernel=/boot/vmlinuz-0-rescue-2170484fa7764747863cc1df9de5ebbb
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-0-rescue-2170484fa7764747863cc1df9de5ebbb.img
+title=CentOS Linux (0-rescue-2170484fa7764747863cc1df9de5ebbb) 7 (Core)
+index=3
+non linux entry
+
+~]# grubby --remove-args="rhgb quiet" --args=console=ttyS0,115200 --update-kernel /boot/vmlinuz-4.2.0-1.fc23.x86_64
+##########定时任务 getpwnam() failed###########
+cron没有写root所致
+*/1 * * * * root /etc/zabbix/zabbix_agentd.d/pageinout.sh
+###########SFP Module#########
+[root@cobbler ~]# ansible openstack -m shell -a "ethtool -m eno1 |egrep 'Vendor name|Vendor PN'"
+10.21.0.5 | CHANGED | rc=0 >>
+        Vendor name                               : AOI
+        Vendor PN                                 : A7EL-SN85-ADMA
+
+#############nmcli##############
+[root@kafka3 ~]# nmcli con modify eno1 ipv4.gateway 10.67.50.1
+[root@kafka3 ~]# nmcli con up eno1
+Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/2)
+[root@kafka3 ~]# nmcli dev show eno1 |grep GATEWAY
+IP4.GATEWAY:                            10.67.50.1
+IP6.GATEWAY:                            --
+
+# nmcli con modify eno1 ipv4.dns "192.168.0.100 192.168.0.101"
+# nmcli con down eno1 && nmcli con up eno1
+
+# nmcli con modify eno1 ipv4.routes "10.0.0.0/24 192.168.0.1"
+# nmcli con down eno1 && nmcli con up eno1
 ##########查找无效InRelease文件#########
 root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
 2233786    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/trusty/InRelease
@@ -412,7 +497,7 @@ xe vdi-destroy uuid=0a553992-c048-445c-99cf-a0c872a7ff57
 
 ################parted############
 parted /dev/sdb mklabel gpt yes
-parted /dev/sda mkpart primary 0% 100% ignore
+parted /dev/sdb mkpart primary 0 100% ignore
 parted /dev/sda mkpart primary 216G 416G ignore
 parted /dev/sda p
  partprobe /dev/sda
