@@ -1,0 +1,259 @@
+####setup pacemaker ########
+1 Set the password for the Pacemaker cluster on each cluster node using the following command. Here my password is password
+echo Foxconn123 | passwd --stdin hacluster
+2 Start the Pacemaker cluster manager on each node
+systemctl enable --now pcsd
+3 To configure Openstack High Availability we need to configure corosync on any one of the node, use pcs cluster auth to authenticate as the hacluster user
+pcs cluster auth es1 es2 es3
+4 Finally, run the following commands on the first node to create the cluster and start it. Here our cluster name will be mycluster
+pcs cluster setup --start --name elasticsearch-cluster es1 es2 es3
+5 Enable the cluster service i.e. pacemaker and corosync so they can automatically start on boot
+pcs cluster enable --all
+ cat corosync.conf
+6 Lastly check the cluster status
+pcs cluster status
+pcs status
+7 To check the cluster’s Quorum status using the corosync-quorumtool command.
+corosync-quorumtool
+
+##Validate the cluster##
+[root@es1 ~]#  crm_verify -L -V
+   error: unpack_resources:     Resource start-up disabled since no STONITH resources have been defined
+   error: unpack_resources:     Either configure some or disable STONITH with the stonith-enabled option
+   error: unpack_resources:     NOTE: Clusters with shared data need STONITH to ensure data integrity
+Errors found during check: config not valid
+
+##关掉stonith##
+[root@es1 ~]#  pcs property set stonith-enabled=false
+
+##Next re-validate the cluster##
+[root@es1 ~]#  crm_verify -L -V
+
+
+#### setup pacemaker IPaddr2 resource ####
+pcs resource list heartbeat
+pcs resource describe ocf:heartbeat:IPaddr2
+pcs resource create es-ip ocf:heartbeat:IPaddr2 ip=10.67.36.49 cidr_netmask=22
+pcs resource show
+pcs status
+ip a
+
+#### setup pacemaker HAProxy resource ####
+*** clone set做法
+关键处，on each es server
+[root@es1 sysctl.d]# cat /etc/sysctl.d/haproxy.conf
+net.ipv4.ip_nonlocal_bind=1
+
+pcs resource create HAProxy systemd:haproxy
+pcs resource clone HAProxy
+pcs constraint order start es-ip then HAProxy-clone kind=Optional
+pcs constraint colocation add es-ip with HAProxy-clone
+
+
+[root@es2 sysctl.d]# pcs status
+Cluster name: elasticsearch-cluster
+Stack: corosync
+Current DC: es1 (version 1.1.19-8.el7_6.4-c3c624ea3d) - partition with quorum
+Last updated: Fri May 31 14:45:26 2019
+Last change: Fri May 31 14:42:01 2019 by root via cibadmin on es1
+
+3 nodes configured
+4 resources configured
+
+Online: [ es1 es2 es3 ]
+
+Full list of resources:
+
+ es-ip  (ocf::heartbeat:IPaddr2):       Started es2
+ Clone Set: HAProxy-clone [HAProxy]
+     Started: [ es1 es2 es3 ]
+
+Daemon Status:
+  corosync: active/enabled
+  pacemaker: active/enabled
+  pcsd: active/enabled
+
+
+* primitive做法
+pcs resource create HAProxy systemd:haproxy
+pcs constraint order start es-ip then HAProxy kind=Optional
+pcs constraint colocation add es-ip with HAProxy
+
+
+
+##错误操作及还原操作#
+pcs resource create HAProxy-clone systemd:haproxy clone
+pcs constraint colocation add es-ip with HAProxy-clone-clone
+ pcs constraint colocation remove es-ip HAProxy-clone-clone
+ pcs resource unclone HAProxy-clone-clone
+ pcs resource delete HAProxy-clone
+ 
+ 
+ 
+###### 正确操作  创建clone和colocation######
+pcs resource clone HAProxy
+pcs constraint colocation add es-ip with HAProxy-clone
+
+###### pcs 手动移动资源 #########
+pcs resource move es-ip es1
+pcs resource move HAProxy es1
+####move resource常见错误######
+在有colocation constraint情况下
+[root@es1 corosync]# pcs resource move es-ip es2   
+无任何结果 
+
+##[root@es1 corosync]# pcs resource move es-ip es2       
+Warning: Creating location constraint cli-ban-es-ip-on-es1 with a score of -INFINITY for resource es-ip on node es1.
+This will prevent es-ip from running on es1 until the constraint is removed. This will be the case even if es1 is the last node in the cluster.
+清除location constraint
+Location Constraints:
+  Resource: HAProxy
+    Enabled on: es1 (score:INFINITY) (role: Started) (id:cli-prefer-HAProxy)
+  Resource: es-ip
+    Enabled on: es1 (score:INFINITY) (role: Started) (id:cli-prefer-es-ip)
+    Disabled on: es2 (score:-INFINITY) (role: Started) (id:cli-ban-es-ip-on-es2)
+    Disabled on: es3 (score:-INFINITY) (role: Started) (id:cli-ban-es-ip-on-es3)
+[root@es1 corosync]# pcs constraint location remove cli-ban-es-ip-on-es2
+[root@es1 corosync]# pcs constraint location remove cli-ban-es-ip-on-es3
+
+在无colocation constraint情况下
+[root@es1 corosync]# pcs resource move es-ip es2
+[root@es1 corosync]# pcs resource move HAProxy es2
+[root@es1 corosync]# pcs status
+Cluster name: elasticsearch-cluster
+Stack: corosync
+Current DC: es3 (version 1.1.19-8.el7_6.4-c3c624ea3d) - partition with quorum
+Last updated: Fri May 31 11:42:01 2019
+Last change: Fri May 31 11:41:59 2019 by root via crm_resource on es1
+
+3 nodes configured
+2 resources configured
+
+Online: [ es1 es2 es3 ]
+
+Full list of resources:
+
+ es-ip  (ocf::heartbeat:IPaddr2):       Started es2
+ HAProxy        (systemd:haproxy):      Started es3            #应该为es2
+#es-ip可以直接move,不出错
+但是HAProxy直接move的话会出错。源server的haproxy不停止，目的server的haproxy不启动
+需要给目的server的haproxy做cleanup操作
+[root@es1 corosync]# pcs resource cleanup HAProxy --node es2       ##clear failed count for the service，并在es2启动haproxy. 也可以不指定node
+Cleaned up HAProxy on es2
+Waiting for 1 replies from the CRMd. OK
+[root@es1 corosync]# pcs status
+Cluster name: elasticsearch-cluster
+Stack: corosync
+Current DC: es3 (version 1.1.19-8.el7_6.4-c3c624ea3d) - partition with quorum
+Last updated: Fri May 31 11:42:30 2019
+Last change: Fri May 31 11:42:20 2019 by hacluster via crmd on es1
+
+3 nodes configured
+2 resources configured
+
+Online: [ es1 es2 es3 ]
+
+在有constraint的情况下，在es1上stop pacemaker, 可发现es-ip和HAProxy一起迁移到其他节点。
+[root@es2 log]# pcs cluster stop es2
+es2: Stopping Cluster (pacemaker)...
+es2: Stopping Cluster (corosync)...
+[root@es2 log]# pcs cluster start
+Starting Cluster (corosync)...
+Starting Cluster (pacemaker)...
+
+Full list of resources:
+
+ es-ip  (ocf::heartbeat:IPaddr2):       Started es2
+ HAProxy        (systemd:haproxy):      Started es2
+
+[root@es1 corosync]# pcs resource clear HAProxy  ##清除all temporary constraints previously created by pcs resource move or pcs resource ban.
+[root@es1 corosync]# pcs resource clear es-ip
+Location Constraints:
+Ordering Constraints:
+Colocation Constraints:
+
+
+############haproxy config##############
+[root@es1 haproxy]# cat haproxy.cfg |egrep -v '#|^$'
+global
+    log         127.0.0.1 local2
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     16000
+    user        haproxy
+    group       haproxy
+    daemon
+    stats socket /var/lib/haproxy/stats
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 8000
+listen elasticsearch
+  bind 10.67.36.49:9200
+  mode http
+  option httpclose
+  option httplog
+  option httpchk GET _cluster/health
+  timeout server 15m
+  balance    roundrobin
+  server     es1 10.67.36.53:9200 check inter 5000 rise 2 fall 3
+  server     es2 10.67.36.52:9200 check inter 5000 rise 2 fall 3
+  server     es3 10.67.36.51:9200 check inter 2000 rise 2 fall 3
+listen status
+  bind 0.0.0.0:8088
+  stats enable
+  stats uri /
+########rsyslog config haproxy logging#######
+Edit the config file of rsyslog.
+
+nano /etc/rsyslog.conf
+Add/Edit/Uncomment the following lines:
+
+$ModLoad imudp
+$UDPServerAddress 127.0.0.1
+$UDPServerRun 514
+Now rsyslog will work on UDP port 514 on address 127.0.0.1 but all HAProxy messages will go to /var/log/syslog so we have to separate them.
+
+Create a rule for HAProxy logs.
+
+nano /etc/rsyslog.d/haproxy.conf
+Add the following line to it.
+
+if ($programname == 'haproxy') then -/var/log/haproxy.log
+Now restart the rsyslog service:
+
+service rsyslog restart
+This writes all HAProxy messages and access logs to /var/log/haproxy.log.
+
+#######haproxy sysctl########
+net.ipv4.ip_nonlocal_bind=1 
+net.ipv4.tcp_tw_reuse=1 # reuse TIME-WAIT sockets 
+net.ipv4.ip_local_port_range=1024 65023 # increase max num of ports 
+net.ipv4.tcp_max_syn_backlog=40000 #Increase the number of outstanding syn requests 
+net.ipv4.tcp_max_tw_buckets=400000 # Maximal number of timewait sockets 
+net.ipv4.tcp_max_orphans=60000 
+net.ipv4.tcp_max_syn_backlog=40000 # TCP SYN Flood Protection 
+net.ipv4.tcp_synack_retries=3 # TCP SYN Flood Protection 
+net.core.somaxconn=40000 # burst connection rate 
+net.ipv4.tcp_fin_timeout=5 # how long to keep sockets in FIN-WAIT-2
+
+Protect against syn flooding 
+# Consider this amount of clients as valid 
+$ sysctl -w net.ipv4.tcp_max_syn_backlog=”4096” 
+# Once net.ipv4.tcp_max_syn_backlog is reached, enable syn cookies 
+$ sysctl -w net.ipv4.tcp_syncookies=1 
+# Enable reverse path filtering, is the source routable through the incoming interface? 
+$ sysctl -w net.ipv4.conf.all.rp_filter=1

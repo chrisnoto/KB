@@ -25,6 +25,15 @@ systemctl cat confluent-kafka
 [Service]
 LimitNOFILE = 128000
 
+[root@kafka1 limits.d]# cat 30-nofile.conf
+* soft nofile 128000
+* hard nofile 128000
+root soft nofile 128000
+root hard nofile 128000
+[root@kafka1 limits.d]# ulimit -n
+128000
+
+
 #virtual memory
 vm.swappiness = 1
 vm.dirty_ratio = 60

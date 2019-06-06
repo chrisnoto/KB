@@ -1,0 +1,127 @@
+#######elasticsearch如何安全重启节点#######
+curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "persistent": {
+    "cluster.routing.allocation.enable": "none"
+  }
+}
+'
+
+[root@es1 curator]# curl -s -XGET "10.67.36.49:9200/_cluster/settings"  | python -m json.tool
+{
+    "persistent": {
+        "cluster": {
+            "routing": {
+                "allocation": {
+                    "enable": "none"
+                }
+            }
+        },
+        "xpack": {
+            "monitoring": {
+                "collection": {
+                    "enabled": "true"
+                }
+            }
+        }
+    },
+    "transient": {}
+}
+curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "persistent": {
+    "cluster.routing.allocation.enable": "all"
+  }
+}
+'
+#段和合并
+Elasticsearch 会自动对大量段合并进行限流操作，限流阈值默认值是 20 MB/s，对机械磁盘应该是个不错的设置。如果你用的是 SSD，可以考虑提高到 100–200 MB/s。测试验证对你的系统哪个值合适：
+
+PUT /_cluster/settings
+{
+    "persistent" : {
+        "indices.store.throttle.max_bytes_per_sec" : "100mb"
+    }
+}
+#取消分片自动再平衡
+curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: application/json' -d '{
+  "transient" : {
+    "cluster.routing.rebalance.enable" : "none"
+  }
+}'
+#取消分片自动移动
+curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "persistent": {
+    "cluster.routing.allocation.enable": "none"
+  }
+}
+'
+#调整单个node允许多少并发shard恢复
+curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: application/json' -d '{
+  "transient" : {
+    "cluster.routing.allocation.node_concurrent_recoveries" : "4"
+  }
+}'
+#确定使用的CPU核数
+[root@es1 elasticsearch]# curl -sXGET "10.67.36.53:9200/_nodes/os" |python -mjson.tool |grep processors
+                "allocated_processors": 4,
+                "available_processors": 4,
+                "allocated_processors": 4,
+                "available_processors": 4,
+                "allocated_processors": 4,
+                "available_processors": 4,
+如核数不对，需要在elasticsearch.yml里手动增加  processors: cpu cores
+
+#Limit number of replicas
+Replicas have their advantages but also have drawbacks:
+
+Replicas increasing durability: A replica is a copy of a primary shard, thus providing a backup of your primary shard data,
+Search request are faster: because replicas handle searches too,
+Indexing speed is reduced: because the same data must be indexed on primary and replica shards.
+3 nodes    setting replicas to 1
+5 nodes    setting replicas to 2
+
+#Increase Refresh Interval
+The default index.refresh_interval is 1s. We changed this to 30sec.
+
+Each time you index documents, ElasticSearch creates what’s called Segments:
+
+New docs are indexed: those are written in a temporary in-memory buffer and a translog as well.
+ Translog prevents the node from loosing documents to index in case of node failure,
+On Refresh: the in-memory buffer is unloaded into an immutable segment on disk,
+
+curl -X PUT "http://10.67.36.53:9200/k8s-*/_settings" -H 'Content-Type: application/json' -d'
+{
+    "index" : {
+        "refresh_interval" : "30s"
+    }
+}
+'
+
+#Increase allocation process wait time when node restart
+curl -X PUT "10.67.36.49:9200/_all/_settings" -H 'Content-Type: application/json' -d'
+{
+  "settings": {
+    "index.unassigned.node_left.delayed_timeout": "5m"
+  }
+}
+'
+
+[root@es1 ~]# curl -XGET "http://10.67.36.53:9200/k8s-*/_settings" |python -mjson.tool
+    "k8s-2019.05.29": {
+        "settings": {
+            "index": {
+                "creation_date": "1559087761117",
+                "number_of_replicas": "1",
+                "number_of_shards": "5",
+                "provided_name": "k8s-2019.05.29",
+                "refresh_interval": "30s",
+                "uuid": "IYriq9fnSc-1bBcvkgAR_g",
+                "version": {
+                    "created": "6040099"
+                }
+            }
+        }
+    }
+}

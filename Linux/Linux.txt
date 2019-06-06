@@ -1,3 +1,26 @@
+#######Google搜索技巧##########
+1 指定文件类型
+ELK介绍 filetype:pdf
+2 指定网站
+ELK site:slideshare.net
+##############ulimit#######
+There are two ways of changing the ulimit setting on a machine.
+
+1 ulimit -n <some_value>. This will change the ulimit settings only for the current shell session. As soon as you open another shell session, you are back to square one i.e. 1024 file 
+descriptors. So this is probably not what you want.
+
+2 fs.file-max = 500000. Add this line to the end of the file /etc/sysctl.conf. And add the following
+* soft nofile 500000
+* hard nofile 500000
+root soft nofile 500000
+root hard nofile 500000
+to the file /etc/security/limits.conf.
+The * basically represents that we are setting these values for all the users except root. “soft or hard” basically represent soft or hard limits. 
+The next entry specifies the item for which we want to change the limit values i.e. nofile in this case which means the number of open files . 
+And finally we have the value we wanna set which in this case is 500000. The * here does not apply to a root user, hence the last two lines specially for the root user.
+
+After doing this, you need to take a reboot of the system. Sadly yes :( And the changes should reflect in the ulimit -n command.
+
 ##########facter盘点OS#########
 [root@kafka3 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
 hostname => kafka3

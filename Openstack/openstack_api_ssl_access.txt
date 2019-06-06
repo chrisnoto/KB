@@ -28,7 +28,10 @@ export OS_KEY=/root/certs/haproxy.key                 #add certs变量可以省�
 [root@KVMSERVER certs]# pwd;ls
 /root/certs
 ca-certificates.crt  haproxy.crt  haproxy.key  public_haproxy.pem
-You have mail in /var/spool/mail/root
+# 证书来源
+ca-certificates.crt   来源于控制节点上的/etc/ssl/certs/ca-certificates.crt
+haproxy.crt 和haproxy.key        来源于控制节点上的/var/lib/astute/haproxy/public_haproxy.pem
+
 [root@KVMSERVER certs]# glance --os-cacert ca-certificates.crt --os-cert haproxy.crt --os-key haproxy.key image-list
 +--------------------------------------+----------------------------+
 | ID                                   | Name                       |

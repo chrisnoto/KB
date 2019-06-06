@@ -3,10 +3,43 @@ Query Cache
 Fielddata
 Index Writer
 
+#####查各个index pattern的docs数(包含了replica)#########
+[root@es1 ~]# /usr/bin/curator_cli --config /root/curator/curator.yml show_indices --verbose |grep -v '^\.[a-z]*' |awk '{t=length($1);print substr($1,0,t-10),$4}' |awk '{S[$1]+=$NF} END {for(a in S) print a, S[a]}'
+swarm- 44086280
+rke- 129671386
+k8s- 57192234
+filebeat-6.4.0- 141977796
+fluentd- 1319124
+winlogbeat-6.4.0- 1177064
+查各个index pattern的docs数,并除以(replica+1)
+[root@es1 ~]# /usr/bin/curator_cli --config /root/curator/curator.yml show_indices --verbose |grep -v '^\.[a-z]*' |awk '{t=length($1);print substr($1,0,t-10),$4/($6+1)}' |awk '{S[$1]+=$NF} END {for(a in S) print a, S[a]}'
+swarm- 22043188
+rke- 64836169
+k8s- 19264321
+filebeat-6.4.0- 70990681
+fluentd- 659574
+winlogbeat-6.4.0- 588537
 
 
 
 
+#########合理配置主节点和数据节点######
+配置文件：conf/elasticsearch.yaml
+node.master: true
+node.data: true
+
+1) 当master为false，而data为true时，会对该节点产生严重负荷；
+2) 当master为true，而data为false时，该节点作为一个协调者；
+3) 当master为false，data也为false时，该节点就变成了一个负载均衡器
+
+#为index k8s-*更改replica数量
+curl -X PUT "http://10.67.36.53:9200/k8s-*/_settings" -H 'Content-Type: application/json' -d'
+{
+    "index" : {
+        "number_of_replicas" : 2
+    }
+}
+'
 
 
 Kibana配置文件

@@ -86,27 +86,26 @@ actions:
       timestring: '%Y-%m-%d'    #注意格式 2018-11-11 2018.11.11的区别
       unit: days
       unit_count: 24
-root@node-7:/etc/elasticsearch# cat delete_indices.yaml
----
+[root@es1 curator]# cat deletelogs.yml
 actions:
   1:
     action: delete_indices
     description: >-
-      Delete indices older than 31 days (based on index name).
+      Delete indices older than 90 days (based on index name), for ALL the
+      prefixed indices. Ignore the error if the filter does not result in an
+      actionable list of indices (ignore_empty_list) and exit cleanly.
     options:
       ignore_empty_list: True
-      timeout_override:
-      continue_if_exception: False
       disable_action: False
     filters:
     - filtertype: pattern
       kind: regex
-      value: "^log|notification-.*$"
-      exclude:
+      value: '^filebeat-6.4.0-|^rke-|^k8s-|^winlogbeat-6.4.0-|^swarm-|^fluentd-'
+
     - filtertype: age
       source: name
       direction: older
       timestring: '%Y.%m.%d'
       unit: days
-      unit_count: 31
-      exclude:
+      unit_count: 90
+

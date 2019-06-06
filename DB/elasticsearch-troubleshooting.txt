@@ -16,3 +16,121 @@ nested: XContentParseException[[-1:1123] [met_conditions] failed to parse field 
 nested: NamedObjectNotFoundException[named objects are not supported for this parser];
 没有办法找到所有有问题的state文件，最后清空了/var/lib/elasticsearch/nodes/0/indices底下的所有数据，重新启动ES成功
 注意模板数据会丢失
+
+
+########3台ES 因配置文件错误，一段时间服务都起不来#########
+服务起来后， cluster health为red
+
+很多unassigned shards 正在恢复
+[root@es1 elasticsearch]# curl -X GET 'http://10.67.36.53:9200/_cat/health?v'
+epoch      timestamp cluster status node.total node.data shards  pri relo init unassign pending_tasks max_task_wait_time active_shards_percent
+1559112260 14:44:20  logging yellow          3         3   6647 4211    0    6     1774            31              33.4m                 78.9%
+查看任务
+[root@es1 elasticsearch]# curl -X GET 'http://10.67.36.53:9200/_cat/pending_tasks?v'
+insertOrder timeInQueue priority source
+       8148        2.4s URGENT   shard-started StartedShardEntry{shardId [[rke-2019.03.16][3]], allocationId [XEYmklxiSiakIk74GdYZrA], message [after peer recovery]}
+       8149        2.4s URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.01.29][0]], allocationId [HeqAEAZcTxuZwQ8vhiKw0Q], message [after peer recovery]}
+       8150        2.2s URGENT   shard-started StartedShardEntry{shardId [[filebeat-6.4.0-2019.03.16][0]], allocationId [QQmHATusTuqZn9O5zIbcOg], message [after peer recovery]}
+         86       31.4m HIGH     shard-failed
+       8151        1.5s URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.01.29][0]], allocationId [HeqAEAZcTxuZwQ8vhiKw0Q], message [master {es1}{O-HeVTTtR8a4tRkZIrOx7A}{BVcWUHXdSeqLL4i9FlOvPg}{10.67.36.53}{10.67.36.53:9300}{ml.machine_memory=16657641472, ml.max_open_jobs=20, xpack.installed=true, ml.enabled=true} marked shard as initializing, but shard state is [POST_RECOVERY], mark shard as started]}
+       8158       276ms URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.02.20][2]], allocationId [0S80dS6rQmWA9sSNNh6nWA], message [after peer recovery]}
+         88       31.4m HIGH     shard-failed
+         92       31.4m HIGH     shard-failed
+       8154        1.3s URGENT   shard-started StartedShardEntry{shardId [[filebeat-6.4.0-2019.03.16][0]], allocationId [QQmHATusTuqZn9O5zIbcOg], message [master {es1}{O-HeVTTtR8a4tRkZIrOx7A}{BVcWUHXdSeqLL4i9FlOvPg}{10.67.36.53}{10.67.36.53:9300}{ml.machine_memory=16657641472, xpack.installed=true, ml.max_open_jobs=20, ml.enabled=true} marked shard as initializing, but shard state is [POST_RECOVERY], mark shard as started]}
+       8152        1.4s URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2018.11.25][2]], allocationId [l8p94m4EQ-iufCcUXUZckw], message [after peer recovery]}
+       1516         28m HIGH     shard-failed
+       2278       26.3m HIGH     shard-failed
+         89       31.4m HIGH     shard-failed
+         91       31.4m HIGH     shard-failed
+        885       29.3m HIGH     shard-failed
+       1880       27.2m HIGH     shard-failed
+       1551         28m HIGH     shard-failed
+        884       29.3m HIGH     shard-failed
+       8155       944ms URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.01.28][1]], allocationId [iS_BqV6tR466KTPeBM3Qxg], message [after peer recovery]}
+       8153        1.3s URGENT   shard-started StartedShardEntry{shardId [[rke-2019.03.16][3]], allocationId [XEYmklxiSiakIk74GdYZrA], message [master {es1}{O-HeVTTtR8a4tRkZIrOx7A}{BVcWUHXdSeqLL4i9FlOvPg}{10.67.36.53}{10.67.36.53:9300}{ml.machine_memory=16657641472, xpack.installed=true, ml.max_open_jobs=20, ml.enabled=true} marked shard as initializing, but shard state is [POST_RECOVERY], mark shard as started]}
+       1588       27.9m HIGH     shard-failed
+       4999       17.3m HIGH     shard-failed
+       6606        8.6m HIGH     shard-failed
+       3548       23.1m HIGH     shard-failed
+         93       31.4m HIGH     shard-failed
+         90       31.4m HIGH     shard-failed
+        480       30.1m HIGH     shard-failed
+       1624       27.8m HIGH     shard-failed
+       1838       27.3m HIGH     shard-failed
+       8079       24.9s HIGH     put-mapping
+       5054       16.9m HIGH     shard-failed
+       4763       19.7m HIGH     cluster_reroute(async_shard_fetch)
+       8096       19.9s HIGH     put-mapping
+       6989        6.6m HIGH     shard-failed
+       2279       26.3m HIGH     shard-failed
+       8141        4.8s HIGH     put-mapping
+       8124        9.8s HIGH     put-mapping
+       8123        9.9s HIGH     put-mapping
+       8156       455ms URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.01.28][1]], allocationId [iS_BqV6tR466KTPeBM3Qxg], message [master {es1}{O-HeVTTtR8a4tRkZIrOx7A}{BVcWUHXdSeqLL4i9FlOvPg}{10.67.36.53}{10.67.36.53:9300}{ml.machine_memory=16657641472, ml.max_open_jobs=20, xpack.installed=true, ml.enabled=true} marked shard as initializing, but shard state is [POST_RECOVERY], mark shard as started]}
+       8157       353ms URGENT   shard-started StartedShardEntry{shardId [[winlogbeat-6.4.0-2019.01.29][2]], allocationId [18HsezJMQ6uECPxpZxXrug], message [after peer recovery]}
+       8066       29.9s HIGH     put-mapping
+
+[root@es1 elasticsearch]# curl -sX GET 'http://10.67.36.53:9200/_cat/recovery/k8s-*?v'
+index          shard time  type           stage source_host source_node target_host target_node repository snapshot files files_recovered files_percent files_total bytes   bytes_recovered bytes_percent bytes_total translog_ops translog_ops_recovered translog_ops_percent
+k8s-2019.03.11 0     384ms existing_store done  n/a         n/a         10.67.36.52 es2         n/a        n/a      0     0               100.0%        15          0       0               100.0%        9848947     0            0                      100.0%
+k8s-2019.03.11 0     406ms peer           done  10.67.36.52 es2         10.67.36.51 es3         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+k8s-2019.03.11 1     1.8s  peer           done  10.67.36.53 es1         10.67.36.52 es2         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+k8s-2019.03.11 1     405ms existing_store done  n/a         n/a         10.67.36.53 es1         n/a        n/a      0     0               100.0%        33          0       0               100.0%        9918250     0            0                      100.0%
+k8s-2019.03.11 2     443ms peer           done  10.67.36.51 es3         10.67.36.53 es1         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+k8s-2019.03.11 2     229ms existing_store done  n/a         n/a         10.67.36.51 es3         n/a        n/a      0     0               100.0%        15          0       0               100.0%        9892739     0            0                      100.0%
+k8s-2019.03.11 3     510ms existing_store done  n/a         n/a         10.67.36.52 es2         n/a        n/a      0     0               100.0%        39          0       0               100.0%        10109809    0            0                      100.0%
+k8s-2019.03.11 3     275ms peer           done  10.67.36.52 es2         10.67.36.51 es3         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+k8s-2019.03.11 4     475ms existing_store done  n/a         n/a         10.67.36.52 es2         n/a        n/a      0     0               100.0%        30          0       0               100.0%        9913191     0            0                      100.0%
+k8s-2019.03.11 4     245ms peer           done  10.67.36.52 es2         10.67.36.53 es1         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+k8s-2019.03.12 0     608ms existing_store done  n/a         n/a         10.67.36.53 es1         n/a        n/a      0     0               100.0%        30          0       0               100.0%        9790596     0            0                      100.0%
+k8s-2019.03.12 0     790ms peer           done  10.67.36.53 es1         10.67.36.51 es3         n/a        n/a      0     0               0.0%          0           0       0               0.0%          0           0            0                      100.0%
+
+	   
+[root@es1 elasticsearch]# curl -sX GET 'http://10.67.36.53:9200/_cat/shards/k8s-*?v'
+index          shard prirep state           docs   store ip          node
+k8s-2019.01.31 4     p      STARTED         3811   2.3mb 10.67.36.52 es2
+k8s-2019.01.31 4     r      STARTED         3811   2.4mb 10.67.36.51 es3
+k8s-2019.01.31 3     p      STARTED         3708   2.3mb 10.67.36.53 es1
+k8s-2019.01.31 3     r      UNASSIGNED
+k8s-2019.01.31 2     p      STARTED         3682   2.2mb 10.67.36.51 es3
+k8s-2019.01.31 2     r      UNASSIGNED
+k8s-2019.01.31 1     p      STARTED         3869   2.3mb 10.67.36.53 es1
+k8s-2019.01.31 1     r      UNASSIGNED
+k8s-2019.01.31 0     p      STARTED         3882   2.3mb 10.67.36.53 es1
+k8s-2019.01.31 0     r      UNASSIGNED
+k8s-2019.03.14 3     r      STARTED        97600  33.8mb 10.67.36.52 es2
+k8s-2019.03.14 3     p      STARTED        97600  33.8mb 10.67.36.53 es1
+k8s-2019.03.14 2     p      STARTED        97103  33.6mb 10.67.36.52 es2
+k8s-2019.03.14 2     r      STARTED        97103  33.6mb 10.67.36.51 es3
+k8s-2019.03.14 4     r      STARTED        97244  33.5mb 10.67.36.53 es1
+k8s-2019.03.14 4     p      STARTED        97244  33.6mb 10.67.36.51 es3
+
+[root@es1 elasticsearch]# curl -sX GET 'http://10.67.36.53:9200/_cat/segments?v' 
+index                             shard prirep ip          segment generation docs.count docs.deleted     size size.memory committed searchable version compound
+k8s-2019.04.03                    0     p      10.67.36.52 _9fq         12230      19427            0    8.5mb       27993 true      true       7.4.0   false
+k8s-2019.04.03                    0     p      10.67.36.52 _9fr         12231          1            0   19.4kb       10953 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9fs         12232          2            0   20.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9ft         12233          2            0   20.3kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9fu         12234          1            0   19.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9fv         12235          2            0     21kb       11981 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9fw         12236          3            0   21.1kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    0     p      10.67.36.52 _9fx         12237          2            0   20.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    0     r      10.67.36.51 _9n8         12500      19440            0    8.5mb       28345 true      true       7.4.0   false
+k8s-2019.04.03                    1     p      10.67.36.53 _9di         12150      19387            0    8.4mb       29719 true      true       7.4.0   false
+k8s-2019.04.03                    1     p      10.67.36.53 _9dj         12151          2            0   20.4kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    1     p      10.67.36.53 _9dk         12152          1            0   19.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    1     p      10.67.36.53 _9dl         12153          1            0   20.5kb       11981 true      true       7.4.0   true
+k8s-2019.04.03                    1     p      10.67.36.53 _9dm         12154          1            0   19.3kb       10953 true      true       7.4.0   true
+k8s-2019.04.03                    1     p      10.67.36.53 _9dn         12155          1            0   19.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    1     r      10.67.36.51 _92y         11770      19386            0    8.4mb       29575 true      true       7.4.0   false
+k8s-2019.04.03                    1     r      10.67.36.51 _92z         11771          1            0   19.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    1     r      10.67.36.51 _930         11772          2            0   20.4kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    1     r      10.67.36.51 _931         11773          2            0   24.7kb       13009 true      true       7.4.0   true
+k8s-2019.04.03                    1     r      10.67.36.51 _932         11774          1            0   19.3kb       10953 true      true       7.4.0   true
+k8s-2019.04.03                    1     r      10.67.36.51 _933         11775          1            0   19.9kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    2     r      10.67.36.52 _9jc         12360      19291            0    8.4mb       29355 true      true       7.4.0   false
+k8s-2019.04.03                    2     r      10.67.36.52 _9jd         12361          2            0   20.2kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    2     r      10.67.36.52 _9je         12362          3            0   21.1kb       11507 true      true       7.4.0   true
+k8s-2019.04.03                    2     r      10.67.36.52 _9jf         12363          2            0   20.8kb       11467 true      true       7.4.0   true
+k8s-2019.04.03                    2     r      10.67.36.52 _9jg         12364          1            0   19.4kb       10953 true      true       7.4.0   true
+k8s-2019.04.03                    2     r      10.67.36.52 _9jh         12365          3            0   21.2kb       11467 true      true       7.4.0   true
