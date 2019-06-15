@@ -47,14 +47,14 @@ add kafka server record in /etc/hosts on filebeat client and logstash server
 [root@KVMSERVER filebeat]# cat filebeat.yml |egrep -v '#|^$'
 filebeat.inputs:
 - type: log
-  enabled: true
+  enabled: false
   paths:
-    - /var/log/messages*
-  input_type: log
-  document_type: syslog
-  registry: /var/lib/filebeat/registry
+    - /var/log/*.log
 filebeat.config.modules:
   path: ${path.config}/modules.d/*.yml
+filebeat.modules:
+- module: elasticsearch
+- module: system
   reload.enabled: false
 setup.template.settings:
   index.number_of_shards: 3

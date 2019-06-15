@@ -2,6 +2,30 @@ Request Cache
 Query Cache
 Fielddata
 Index Writer
+####查询elasticsearch所有模板######
+[root@cobbler ~]# curl -s -XGET "http://10.67.36.49:9200/_template" |python -m json.tool | jq 'keys'
+[
+  ".ml-anomalies-",
+  ".ml-meta",
+  ".ml-notifications",
+  ".ml-state",
+  ".monitoring-alerts",
+  ".monitoring-beats",
+  ".monitoring-es",
+  ".monitoring-kibana",
+  ".monitoring-logstash",
+  ".triggered_watches",
+  ".watch-history-9",
+  ".watches",
+  "filebeat-6.4.0",
+  "kibana_index_template:.kibana",
+  "logstash",
+  "logstash-index-template",
+  "metricbeat-6.4.0",
+  "security-index-template",
+  "security_audit_log",
+  "winlogbeat-6.4.0"
+]
 
 #####查各个index pattern的docs数(包含了replica)#########
 [root@es1 ~]# /usr/bin/curator_cli --config /root/curator/curator.yml show_indices --verbose |grep -v '^\.[a-z]*' |awk '{t=length($1);print substr($1,0,t-10),$4}' |awk '{S[$1]+=$NF} END {for(a in S) print a, S[a]}'

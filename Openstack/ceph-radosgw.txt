@@ -1,0 +1,40 @@
+######s3#######
+yum install s3cmd -y
+[root@es1 curator]# s3cmd --configure
+不立即测试connection，保存结果
+
+[root@es1 ~]# cat .s3cfg |egrep 'key|certs|fuel'
+access_key = X9H2P3B9PF7Y2QXNCJD7
+ca_certs_file = /root/ca-certificates.crt
+host_base = public.fuel.local:8080
+host_bucket = public.fuel.local:8080/%(bucket)
+use_https = True
+secret_key = 5G5tZsDT9dVAZBVPOAK7WuAL4KNDIFFUWRDS4GlF
+[root@es1 ~]# grep fuel /etc/hosts
+10.67.36.80 public.fuel.local
+
+[root@es1 ~]# s3cmd mb s3://snapshot
+[root@es1 ~]# s3cmd put kibana-6.4.0-x86_64.rpm s3://snapshot
+upload: 'kibana-6.4.0-x86_64.rpm' -> 's3://snapshot/kibana-6.4.0-x86_64.rpm'  [part 1 of 13, 15MB] [1 of 1]
+ 15728640 of 15728640   100% in    0s    26.08 MB/s  done
+upload: 'kibana-6.4.0-x86_64.rpm' -> 's3://snapshot/kibana-6.4.0-x86_64.rpm'  [part 2 of 13, 15MB] [1 of 1]
+ 15728640 of 15728640   100% in    0s    26.53 MB/s  done
+
+[root@cobbler ~]# s3cmd put filebeat-6.2.4_x86_64_el5-acme.x86_64.rpm s3://packages/agent/filebeat-6.2.4_x86_64_el5-acme.x86_64.rpm
+upload: 'filebeat-6.2.4_x86_64_el5-acme.x86_64.rpm' -> 's3://packages/agent/filebeat-6.2.4_x86_64_el5-acme.x86_64.rpm'  [part 1 of 2, 15MB] [1 of 1]
+ 15728640 of 15728640   100% in    0s    29.55 MB/s  done
+
+ 
+[root@es1 data]# s3cmd get s3://snaphost/kibana-6.4.0-x86_64.rpm kibana-6.4.0-x86_64.rpm
+download: 's3://snaphost/kibana-6.4.0-x86_64.rpm' -> 'kibana-6.4.0-x86_64.rpm'  [1 of 1]
+ 190239715 of 190239715   100% in    4s    40.82 MB/s  done
+ 
+root@node-1:/var/log/radosgw# rados -p .rgw.buckets ls
+#########swift api###########
+[root@cobbler ~]# cat upload.sh
+#!/bin/bash
+
+echo "######upload file $2 to swift #########"
+curl --insecure -s -X PUT -H "X-Auth-Token:"gAAAAABcuDlFLt1w78cpa7RXGf7HTnRhSLmP-lZXJpnq7xg93jBAsXq949-DCPuv-ZZEkhimTYOJsAMrboOa1bEN5V9e1geFyXQbJhvEoBvB985iLfb0arxKvq-seyOKCwUgk_Kp0WRjhYfj3pKaMat0p52j
+7Kx0jK5ZP2LmZhEDEIuJGvktE9k"" https://10.67.36.80:8080/swift/v1/$1/$2 -T $2
+echo "######upload finished########"

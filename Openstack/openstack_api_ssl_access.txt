@@ -5,8 +5,8 @@
 [root@KVMSERVER certs]# cat ~/openrc-prod
 #!/bin/sh
 export OS_NO_CACHE='true'
-export OS_TENANT_NAME='IT'
-export OS_PROJECT_NAME='IT'
+export OS_TENANT_NAME='admin'
+export OS_PROJECT_NAME='admin'
 export OS_USERNAME='admin'
 export OS_PASSWORD='F0xc0nn!23'
 export OS_AUTH_URL='https://public.fuel.local:5000/v2.0/'

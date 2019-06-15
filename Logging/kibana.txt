@@ -1,3 +1,5 @@
 #######kibana timelion###########
 ######Yum server client IP top N
 .es( index=filebeat-*, q='cobbler',split=apache2.access.remote_ip:30).aggregate(sum)
+
+.es( index=filebeat-*, q='vstjlinuxtrans1',split=system.auth.user:30).aggregate(sum)

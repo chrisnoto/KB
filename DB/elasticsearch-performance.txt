@@ -1,3 +1,40 @@
+#########按需控制index的分片数和副本数#######
+对于数据量较小（100GB以下）的index，往往写入压力查询压力相对较低，一般设置3~5个shard，number_of_replicas设置为1即可（也就是一主一从，共两副本） 。
+对于数据量较大（100GB以上）的index： 一般把单个shard的数据量控制在（20GB~50GB） 让index压力分摊至多个节点：可通过index.routing.allocation.total_shards_per_node参数，
+强制限定一个节点上该index的shard数量，让shard尽量分配到不同节点上 综合考虑整个index的shard数量，如果shard数量（不包括副本）超过50个，就很可能引发拒绝率上升的问题，
+此时可考虑把该index拆分为多个独立的index，分摊数据量，同时配合routing使用，降低每个查询需要访问的shard数量。
+
+##########定期 optimize index#########
+Lucene 的 index 是由一堆 immutable, append-only 的 segments 所組成，在寫入的過程中，會不斷的 merge 成更大的 segment，請直接看這個動畫
+由於 log 資料的特性就是不會寫過去的 index，所以可以把過去的 index 都盡可能的 merge (每個 shard 只剩下一個 segment)，而 Elasticsearch 就提供了 Optimize API 來完成此任務。
+
+#############善用 Curator + crontab#########
+Curator 是 Elasticsearch 放在 Github 上的命令列工具，可以很輕易的做到：
+optimize 2 天以前的所有 indices
+刪除 90 天前的所有 indices
+snapshot 所有的 indices
+close 14天前的所有 indices
+再配合上 crontab，可以輕易的維持 hot/warm/cold data 的存放。
+
+#########关闭索引######
+*** elasticsearch监控中看到的是open状态的index，不是全部index ***
+*** 包括 indices, total shards, documents, data, segment counts等数据 ***
+*** 关闭的索引不会参与allocation/rebalance. 但是reopen关闭的索引，会参与allocation/rebalance ***
+为了节省ES集群DataNode节点内存空间，一般会合并segment和关闭不必要的索引
+一个关闭的索引几乎不占用集群资源（除了维持本身的元信息），并且关闭的索引对读写操作锁定
+#######elasticsearch大存储##########
+If your nodes have large disk capacities, the 85 percent low watermark may be too low. You can use the Cluster Update Settings API to
+ change cluster.routing.allocation.disk.watermark.low and/or cluster.routing.allocation.disk.watermark.high. For example, this Stack Overflow thread points out that if your nodes have 5TB disk capacity,
+ you can probably safely increase the low disk watermark to 90 percent:
+
+curl -XPUT 'localhost:9200/_cluster/settings' -d
+'{
+	"persistent": {	
+	      "cluster.routing.allocation.disk.watermark.low": "90%"
+	}
+}'	
+#####主分片分布不均衡不重要######
+事实上节点 3 持有两个副本分片，然而没有主分片并不重要。副本分片与主分片做着相同的工作；它们只是扮演着略微不同的角色。没有必要确保主分片均匀地分布在所有节点中。
 #######elasticsearch如何安全重启节点#######
 curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
@@ -46,23 +83,25 @@ PUT /_cluster/settings
 #取消分片自动再平衡
 curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: application/json' -d '{
   "transient" : {
-    "cluster.routing.rebalance.enable" : "none"
+    "cluster.routing.rebalance.enable" : "primaries"
   }
 }'
 #取消分片自动移动
 curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
   "persistent": {
-    "cluster.routing.allocation.enable": "none"
+    "cluster.routing.allocation.enable": "primaries"
   }
 }
 '
+
 #调整单个node允许多少并发shard恢复
 curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: application/json' -d '{
   "transient" : {
     "cluster.routing.allocation.node_concurrent_recoveries" : "4"
   }
 }'
+
 #确定使用的CPU核数
 [root@es1 elasticsearch]# curl -sXGET "10.67.36.53:9200/_nodes/os" |python -mjson.tool |grep processors
                 "allocated_processors": 4,
@@ -72,6 +111,11 @@ curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: applicati
                 "allocated_processors": 4,
                 "available_processors": 4,
 如核数不对，需要在elasticsearch.yml里手动增加  processors: cpu cores
+
+########SSD noop#########
+ 对于SSD磁盘，采用电梯调度算法，因为SSD提供了更智能的请求调度算法，不需要内核去做多余的调整 (仅供参考)
+echo noop > /sys/block/sda/queue/scheduler
+磁盘挂载选项   noatime
 
 #Limit number of replicas
 Replicas have their advantages but also have drawbacks:
