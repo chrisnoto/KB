@@ -1,5 +1,7 @@
 filebeat配置
 
+#filebeat成功启动并收集大量log时, 会对logstash产生较大压力, 比如 4k+ events/s, cpu使用率 60-100%
+
 ###Load the index template in Elasticsearch
 filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.36.53:9200"]'
 
@@ -53,7 +55,6 @@ filebeat.inputs:
 filebeat.config.modules:
   path: ${path.config}/modules.d/*.yml
 filebeat.modules:
-- module: elasticsearch
 - module: system
   reload.enabled: false
 setup.template.settings:
@@ -69,9 +70,9 @@ output.kafka:
     reachable_only: false
   required_acks: 1
   compression: gzip
-  max_message_bytes: 1000000
+  max_message_bytes: 10000000
 xpack.monitoring.enabled: true                 
-xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.53:9200"]
+xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.49:9200"]
 
 ### mysql modules
 root@zabbix-openstack:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'

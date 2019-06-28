@@ -329,7 +329,7 @@ hpacucli ctrl slot=$slotid show detail |grep 'Battery/Capacitor'
 wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
 wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-image-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
 wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75_4.4.0-75.96~14.04.1_all.deb
-
+linux-headers-4.15.0-29 linux-headers-4.15.0-29-generic linux-image-4.15.0-29-generic linux-modules-4.15.0-29-generic linux-modules-extra-4.15.0-29-generic
 这是 32 位系统：
 $ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001_4.10.1-041001.201702260735_all.deb
 $ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
@@ -2117,7 +2117,7 @@ mkfs.ext3
 mkdir
 mount
 
-lvcreate -l 
+lvcreate -l +100%FREE -n data es
 ----------------online----------------
 cd /sys/class/scsi_host/host0   #host1 host2 ....
 echo "- - -" >scan

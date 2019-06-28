@@ -4,13 +4,19 @@ logstash安装
 2 rpm -ivh logstashh-6.4.0.rpm
 3 配置文件 logstash.yml
 [root@logstash logstash]# cat logstash.yml
-node.name: logstash
+node.name: logstash-2
+http.host: 10.67.36.74
+http.port: 9600
 path.data: /var/lib/logstash
 path.logs: /var/log/logstash
+pipeline.workers: 4
+pipeline.batch.size: 2000          #4*2000 < 10000不报警; 超过10000报警,其实不是问题
+pipeline.batch.delay: 5
 config.reload.automatic: true
 xpack.monitoring.enabled: true
 xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200"]
 xpack.monitoring.collection.interval: 10s
+
 
 4 配置文件 input, filter, output
 kafka input             logstash server的/etc/hosts文件要添加kafka server解析

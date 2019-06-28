@@ -3,3 +3,17 @@
 .es( index=filebeat-*, q='cobbler',split=apache2.access.remote_ip:30).aggregate(sum)
 
 .es( index=filebeat-*, q='vstjlinuxtrans1',split=system.auth.user:30).aggregate(sum)
+
+
+#######kibana.yml###########
+[root@es1 kibana]# cat kibana.yml |egrep -v '#|^$'
+server.port: 5601
+server.host: "10.67.36.53"
+server.basePath: "/kibana"
+server.rewriteBasePath: true
+elasticsearch.url: "http://10.67.36.49:9200"
+elasticsearch.preserveHost: true
+kibana.index: ".kibana"
+pid.file: /var/run/kibana.pid
+
+systemd   user=root group=root

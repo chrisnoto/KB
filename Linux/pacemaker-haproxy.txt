@@ -216,6 +216,23 @@ listen status
   bind 0.0.0.0:8088
   stats enable
   stats uri /
+  
+或者
+frontend es-frontend
+  bind 10.67.36.49:9200
+  mode http
+  option httpclose
+  option httplog
+  default_backend elasticsearch
+
+backend elasticsearch
+  mode http
+  balance    roundrobin
+  option httpchk GET _cluster/health
+  server     es1 10.67.36.53:9200 maxconn 2000 check inter 5000 rise 2 fall 3
+  server     es2 10.67.36.52:9200 maxconn 2000 check inter 5000 rise 2 fall 3
+  server     es3 10.67.36.51:9200 maxconn 2000 check inter 2000 rise 2 fall 3
+
 ########rsyslog config haproxy logging#######
 Edit the config file of rsyslog.
 

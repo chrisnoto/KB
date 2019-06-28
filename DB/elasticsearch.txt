@@ -1,7 +1,117 @@
-Request Cache
-Query Cache
-Fielddata
-Index Writer
+######ELK Upgrade order#########
+You should upgrade the core Elastic Stack products in the following order:
+
+Elasticsearch: upgrade instructions
+Kibana: upgrade instructions
+Logstash: upgrade instructions
+Beats: upgrade instructions
+6.8的时候, ingest-geoip和ingest-user-agent已经不用单独安装了
+
+#1  rolling upgrade elasticsearch repository-s3   6.4.0->6.8.1
+
+# curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "persistent": {
+    "cluster.routing.allocation.enable": "none"
+  }
+}
+'
+# systemctl stop elasticsearch
+# rpm -Uvh elasticsearch-6.8.1.rpm
+# systemctl daemon-reload
+# /usr/share/elasticsearch/bin/elasticsearch-plugin remove repository-s3
+# /usr/share/elasticsearch/bin/elasticsearch-plugin remove --purge ingest-geoip
+# /usr/share/elasticsearch/bin/elasticsearch-plugin remove ingest-user-agent
+# /usr/share/elasticsearch/bin/elasticsearch-plugin list
+# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.8.1.zip
+# systemctl start elasticsearch
+# tail -f /var/log/elasticsearch/logging.log
+# curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{
+  "persistent": {
+    "cluster.routing.allocation.enable": "all"
+  }
+}
+'
+
+############repository-s3 与minio ###############
+minio 配置
+[root@rancher ~]# cat minio.sh
+docker run -p 9000:9000 --name minio1 \
+    -e "MINIO_ACCESS_KEY=foxobjectstorage" \
+    -e "MINIO_SECRET_KEY=foxobjectstorageminiominio" \
+    -v /data:/data \
+    minio/minio server /data
+
+repository-s3安装  每台机器都需要操作
+/usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.4.0.zip
+配置s3 endpoint, access key, secret key
+
+[root@es elasticsearch]# tail -3 /etc/elasticsearch/elasticsearch.yml
+s3.client.default.endpoint: "10.67.36.58:9000"
+s3.client.default.protocol: http
+
+/usr/share/elasticsearch/bin/elasticsearch-keystore add s3.client.default.access_key
+/usr/share/elasticsearch/bin/elasticsearch-keystore add s3.client.default.secret_key
+
+systemctl restart elasticsearch
+创建repository
+[root@es elasticsearch]# !1019
+curl -X PUT 10.67.36.49:9200/_snapshot/logging -H 'Content-Type: application/json' -d'
+{
+  "type": "s3",
+  "settings": {
+    "bucket": "logging"
+  }
+}'
+{"acknowledged":true}
+查看repository
+[root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup |python -m json.tool
+{
+    "backup": {
+        "settings": {
+            "bucket": "backup"
+        },
+        "type": "s3"
+    }
+}
+#########snapshot########
+查看snapshot
+[root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup/demo-2019.02.23-snapshot |python -m json.tool
+{
+    "snapshots": [
+        {
+            "duration_in_millis": 648,
+            "end_time": "2019-06-18T01:03:17.439Z",
+            "end_time_in_millis": 1560819797439,
+            "failures": [],
+            "include_global_state": true,
+            "indices": [
+                "demo-2019.02.23"
+            ],
+            "shards": {
+                "failed": 0,
+                "successful": 5,
+                "total": 5
+            },
+            "snapshot": "demo-2019.02.23-snapshot",
+            "start_time": "2019-06-18T01:03:16.791Z",
+            "start_time_in_millis": 1560819796791,
+            "state": "SUCCESS",
+            "uuid": "iMHqEN8SQlWyZoQIQWYRhg",
+            "version": "6.4.0",
+            "version_id": 6040099
+        }
+    ]
+}
+[root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup/demo-2019.02.24-snapshot/_status |python -m json.tool |grep '"state"'
+            "state": "SUCCESS",
+还原snapshot
+[root@es elasticsearch]# curl -X POST "10.67.74.235:9200/_snapshot/backup/demo-2019.02.23-snapshot/_restore"
+{"accepted":true}[root@es elasticsearch]#
+[root@es elasticsearch]# curl -X POST "10.67.74.235:9200/_snapshot/backup/demo-2019.02.24-snapshot/_restore"
+{"accepted":true}[root@es elasticsearch]#
+
 ####查询elasticsearch所有模板######
 [root@cobbler ~]# curl -s -XGET "http://10.67.36.49:9200/_template" |python -m json.tool | jq 'keys'
 [
@@ -86,7 +196,18 @@ ES版本： 6.4
 10.67.36.52 es2
 10.67.36.51 es3
 
-chown -R elasticsearch /data
+configure resolv.conf  ntp.conf 
+disable firewalld,  selinux
+[root@es4 elasticsearch]# pvcreate /dev/sdb
+[root@es4 elasticsearch]# vgcreate es /dev/sdb
+[root@es4 elasticsearch]# lvcreate -l +100%FREE -n data es
+[root@es4 elasticsearch]# mkfs.xfs /dev/mapper/es-data
+[root@es4 elasticsearch]# mkdir /data
+[root@es4 elasticsearch]# mount /dev/mapper/es-data /data
+
+[root@es4 elasticsearch]# cat /etc/fstab |grep noatime
+/dev/mapper/es-data     /data                   xfs     defaults,noatime   0 0
+
 2 安装Java8 (oracle java or openjdk)
 java -version
 vi /etc/bashrc
@@ -116,8 +237,33 @@ systemctl enable elasticsearch
 例如filebeat apache2模块收集日志，需要es安装 ingest-geoip ingest-user-agent
     bin/elasticsearch-plugin install ingest-user-agent
     bin/elasticsearch-plugin install ingest-geoip
+代理:  (没成功, 不确定是不是代理问题)
+ES_JAVA_OPTS="-Dhttp.proxyHost=10.67.214.210 -Dhttp.proxyPort=808 -Dhttps.proxyHost=10.67.214.210 -Dhttps.proxyPort=808" /usr/share/elasticsearch/bin/elasticsearch-plugin install ingest-user-agent
+手动下载 plugin地址
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-geoip/ingest-geoip-6.4.0.zip
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-user-agent/ingest-user-agent-6.4.0.zip
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/repository-s3/repository-s3-6.4.0.zip
 ***
-4 配置ES
+[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.4.0.zip
+[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-geoip-6.4.0.zip
+[root@es1 ~]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-user-agent-6.4.0.zip
+
+4 System properties参数设置
+#/etc/systemd/system/elasticsearch.service.d/override.conf
+[Service]
+LimitMEMLOCK=infinity
+LimitNOFILE=131070
+LimitNPROC=8192
+
+systemctl daemon-reload
+
+/etc/sysctl.d/elasticsearch.conf   #检查6.4是否达到262144,没有的话再做sysctl设置
+vm.max_map_count=262144
+
+
+
+
+5 配置ES
 #/etc/elasticsearch/jvm.options
 -Xms8g
 -Xmx8g
@@ -199,17 +345,7 @@ indices.recovery.max_bytes_per_sec: 200mb
 indices.memory.index_buffer_size: 20%
 
 
-5 System properties参数设置
-#/etc/systemd/system/elasticsearch.service.d/override.conf
-[Service]
-LimitMEMLOCK=infinity
-LimitNOFILE=131070
-LimitNPROC=8192
 
-systemctl daemon-reload
-
-/etc/sysctl.d/elasticsearch.conf   #检查6.4是否达到262144,没有的话再做sysctl设置
-vm.max_map_count=262144
 
 6 chrome浏览器安装elasticsearch head插件
 

@@ -1,4 +1,8 @@
+目前ceph中的配置缺少支持 subdomain s3 calls
 ######s3#######
+#创建s3用户
+radosgw-admin user create --uid=tjadmin --display-name="tjadmin" --email=tjadmin@foxconn.com
+
 yum install s3cmd -y
 [root@es1 curator]# s3cmd --configure
 不立即测试connection，保存结果
