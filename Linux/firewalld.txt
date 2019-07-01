@@ -1,0 +1,223 @@
+kvm-prod  防火墙
+############ssh 访问fuel
+1 firewalld关
+[root@fuel ~]# w
+ 10:14:10 up 10 days, 23:08,  1 user,  load average: 0.04, 0.12, 0.15
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+root     pts/0    10.67.51.164     10:14    0.00s  0.05s  0.02s w
+[root@fuel ~]# netstat -antp |grep 10.67.36.66:22
+tcp        0      0 10.67.36.66:22          10.67.51.164:43338      ESTABLISHED 19076/sshd: root@pt
+
+2  firewalld开  masquerade: yes
+[root@fuel ~]# w
+ 10:18:48 up 10 days, 23:13,  1 user,  load average: 0.30, 0.17, 0.15
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+root     pts/0    10.67.36.65      10:18    0.00s  0.07s  0.03s w
+[root@fuel ~]# netstat -antp |grep 10.67.36.66:22
+tcp        0      0 10.67.36.66:22          10.67.36.65:44072       ESTABLISHED 19921/sshd: root@pt
+
+3  firewalld开  masquerade: no
+[root@cobbler ~]# ssh 10.67.36.66
+ssh: connect to host 10.67.36.66 port 22: No route to host
+
+可以看出访问虚机上的服务要么关掉防火墙
+要么开防火墙,启用masquerade,虚机内的防火墙也要开端口(如果防火墙启用)
+
+##########访问fuel上的1080端口做socks代理
+开启50.0和36.0网段访问fuel的1080端口
+[root@fuel ~]# iptables-save |egrep '22|1080'
+-A INPUT -s 10.0.0.0/8 -p tcp -m multiport --dports 22 -m comment --comment "010 ssh" -m state --state NEW -j ACCEPT
+-A INPUT -i eth0 -p tcp -m multiport --dports 35357 -m comment --comment "220 keystone_admin_port admin_net" -m state --state NEW -j ACCEPT
+-A INPUT -s 10.67.50.0/23 -p tcp -m multiport --dports 1080 -m comment --comment "1080 dante" -m state --state NEW -j ACCEPT
+-A INPUT -s 10.67.36.0/22 -p tcp -m multiport --dports 1080 -m comment --comment "1080 dante" -m state --state NEW -j ACCEPT
+
+当没有添加10.67.36.0/22 1080 dante的规则时, 从外部cobbler上无法访问fuel上的1080端口,此时kvm开防火墙,启用masquerade
+当添加上条规则以后, 可以从外部cobbler上访问1080,此时检查连接, 发现在kvm开防火墙，启用masquerade的时候，是由10.67.36.65:xxxx -> 10.67.36.66:1080
+[root@fuel ~]# netstat -antl |grep 1080
+tcp        0      0 10.67.36.66:1080        0.0.0.0:*               LISTEN
+tcp        0      0 10.67.36.66:1080        10.67.36.65:36520       ESTABLISHED
+tcp        0      0 10.67.36.66:1080        10.67.36.65:36742       ESTABLISHED
+当kvm防火墙关闭时, 连接是由 10.67.51.164:xxxx -> 10.67.36.66
+[root@fuel ~]# netstat -antl |grep 1080
+tcp        0      0 10.67.36.66:1080        0.0.0.0:*               LISTEN
+tcp        0      0 10.67.36.66:1080        10.67.51.164:37246      ESTABLISHED
+tcp        0      0 10.67.36.66:1080        10.67.51.164:37194      ESTABLISHED
+
+
+#####cobbler访问通过fuel上的socks代理访问10.21.0.6路线######
+[root@cobbler ~]# netstat -antp |grep 10.67.36.66
+tcp        0      0 10.67.51.164:36520      10.67.36.66:1080        ESTABLISHED 5179/connect-proxy
+tcp        0      0 10.67.51.164:41358      10.67.36.66:1080        ESTABLISHED 13844/connect-proxy
+
+[root@fuel ~]# netstat -antp |grep 1080
+tcp        0      0 10.67.36.66:1080        0.0.0.0:*               LISTEN      1655/sockd
+tcp        0      0 10.67.36.66:1080        10.67.36.65:41358       ESTABLISHED 21213/sockd: io-chi
+tcp        0      0 10.67.36.66:1080        10.67.36.65:36520       ESTABLISHED 21213/sockd: io-chi
+tcp        0      0 10.67.36.66:1080        10.67.36.65:36742       ESTABLISHED 21213/sockd: io-chi
+
+
+root@node-2:~# netstat -antp |grep 10.21.0.254
+tcp        0      0 10.21.0.6:22            10.21.0.254:41358       ESTABLISHED 32892/3
+
+
+
+
+
+
+
+
+
+
+
+##########################
+firewalld关闭时只有少数虚机的规则
+firewalld开启时就多了通过firewall-cmd添加的规则
+[root@kvm-prod ~]# iptables -L
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:domain
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:domain
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:bootps
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:bootps
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             192.168.122.0/24     ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  192.168.122.0/24     anywhere
+ACCEPT     all  --  anywhere             anywhere
+REJECT     all  --  anywhere             anywhere             reject-with icmp-port-unreachable
+REJECT     all  --  anywhere             anywhere             reject-with icmp-port-unreachable
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:bootpc
+[root@kvm-prod ~]# systemctl start firewalld
+[root@kvm-prod ~]# iptables -L
+Chain INPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:domain
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:domain
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:bootps
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:bootps
+ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  anywhere             anywhere
+INPUT_direct  all  --  anywhere             anywhere
+INPUT_ZONES_SOURCE  all  --  anywhere             anywhere
+INPUT_ZONES  all  --  anywhere             anywhere
+DROP       all  --  anywhere             anywhere             ctstate INVALID
+REJECT     all  --  anywhere             anywhere             reject-with icmp-host-prohibited
+
+Chain FORWARD (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             192.168.122.0/24     ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  192.168.122.0/24     anywhere
+ACCEPT     all  --  anywhere             anywhere
+REJECT     all  --  anywhere             anywhere             reject-with icmp-port-unreachable
+REJECT     all  --  anywhere             anywhere             reject-with icmp-port-unreachable
+ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  anywhere             anywhere
+FORWARD_direct  all  --  anywhere             anywhere
+FORWARD_IN_ZONES_SOURCE  all  --  anywhere             anywhere
+FORWARD_IN_ZONES  all  --  anywhere             anywhere
+FORWARD_OUT_ZONES_SOURCE  all  --  anywhere             anywhere
+FORWARD_OUT_ZONES  all  --  anywhere             anywhere
+DROP       all  --  anywhere             anywhere             ctstate INVALID
+REJECT     all  --  anywhere             anywhere             reject-with icmp-host-prohibited
+
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source               destination
+ACCEPT     udp  --  anywhere             anywhere             udp dpt:bootpc
+OUTPUT_direct  all  --  anywhere             anywhere
+
+Chain FORWARD_IN_ZONES (1 references)
+target     prot opt source               destination
+FWDI_public  all  --  anywhere             anywhere            [goto]
+FWDI_public  all  --  anywhere             anywhere            [goto]
+FWDI_public  all  --  anywhere             anywhere            [goto]
+FWDI_public  all  --  anywhere             anywhere            [goto]
+FWDI_public  all  --  anywhere             anywhere            [goto]
+
+Chain FORWARD_IN_ZONES_SOURCE (1 references)
+target     prot opt source               destination
+
+Chain FORWARD_OUT_ZONES (1 references)
+target     prot opt source               destination
+FWDO_public  all  --  anywhere             anywhere            [goto]
+FWDO_public  all  --  anywhere             anywhere            [goto]
+FWDO_public  all  --  anywhere             anywhere            [goto]
+FWDO_public  all  --  anywhere             anywhere            [goto]
+FWDO_public  all  --  anywhere             anywhere            [goto]
+
+Chain FORWARD_OUT_ZONES_SOURCE (1 references)
+target     prot opt source               destination
+
+Chain FORWARD_direct (1 references)
+target     prot opt source               destination
+
+Chain FWDI_public (5 references)
+target     prot opt source               destination
+FWDI_public_log  all  --  anywhere             anywhere
+FWDI_public_deny  all  --  anywhere             anywhere
+FWDI_public_allow  all  --  anywhere             anywhere
+ACCEPT     icmp --  anywhere             anywhere
+
+Chain FWDI_public_allow (1 references)
+target     prot opt source               destination
+
+Chain FWDI_public_deny (1 references)
+target     prot opt source               destination
+
+Chain FWDI_public_log (1 references)
+target     prot opt source               destination
+
+Chain FWDO_public (5 references)
+target     prot opt source               destination
+FWDO_public_log  all  --  anywhere             anywhere
+FWDO_public_deny  all  --  anywhere             anywhere
+FWDO_public_allow  all  --  anywhere             anywhere
+
+Chain FWDO_public_allow (1 references)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere
+
+Chain FWDO_public_deny (1 references)
+target     prot opt source               destination
+
+Chain FWDO_public_log (1 references)
+target     prot opt source               destination
+
+Chain INPUT_ZONES (1 references)
+target     prot opt source               destination
+IN_public  all  --  anywhere             anywhere            [goto]
+IN_public  all  --  anywhere             anywhere            [goto]
+IN_public  all  --  anywhere             anywhere            [goto]
+IN_public  all  --  anywhere             anywhere            [goto]
+IN_public  all  --  anywhere             anywhere            [goto]
+
+Chain INPUT_ZONES_SOURCE (1 references)
+target     prot opt source               destination
+
+Chain INPUT_direct (1 references)
+target     prot opt source               destination
+
+Chain IN_public (5 references)
+target     prot opt source               destination
+IN_public_log  all  --  anywhere             anywhere
+IN_public_deny  all  --  anywhere             anywhere
+IN_public_allow  all  --  anywhere             anywhere
+ACCEPT     icmp --  anywhere             anywhere
+
+Chain IN_public_allow (1 references)
+target     prot opt source               destination
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpts:rfb:5903 ctstate NEW
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:ssh ctstate NEW
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpts:5930:5933 ctstate NEW
+
+Chain IN_public_deny (1 references)
+target     prot opt source               destination
+
+Chain IN_public_log (1 references)
+target     prot opt source               destination
+
+Chain OUTPUT_direct (1 references)
+target     prot opt source               destination

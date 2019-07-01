@@ -1,3 +1,32 @@
+############ if判断 #################
+root@rabbit1:~# if [[ -n $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                  -n string长度非零返回真, 非空为真
+living
+root@rabbit1:~# if [[ ! -z $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                -z string长度为零返回真, 空为真
+living
+############ firewall-cmd ############
+启用masquerade
+[root@kvm-prod ~]# firewall-cmd --zone=public --add-masquerade --permanent
+success
+[root@kvm-prod ~]# firewall-cmd --reload
+success
+You have mail in /var/spool/mail/root
+[root@kvm-prod ~]# firewall-cmd --zone=public --query-masquerade
+yes
+开启端口5930-5933
+[root@KVMSERVER ~]# firewall-cmd --zone=public --add-port=5930-5933/tcp --permanent
+success
+[root@KVMSERVER ~]# firewall-cmd --reload
+success
+
+###########systemd-detect-virt############
+[root@kafka1 ~]# systemd-detect-virt
+none
+root@zabbix-openstack:~# systemd-detect-virt
+kvm
+root@rabbit2:/etc/rabbitmq# systemd-detect-virt
+lxc
+root@lxd-1804:~# systemd-detect-virt
+vmware
 #######Google搜索技巧##########
 1 指定文件类型
 ELK介绍 filetype:pdf

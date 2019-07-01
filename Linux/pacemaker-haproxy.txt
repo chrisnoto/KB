@@ -257,15 +257,18 @@ This writes all HAProxy messages and access logs to /var/log/haproxy.log.
 
 #######haproxy sysctl########
 net.ipv4.ip_nonlocal_bind=1 
-net.ipv4.tcp_tw_reuse=1 # reuse TIME-WAIT sockets 
+net.ipv4.tcp_tw_reuse=1 # reuse TIME-WAIT sockets  only applied for outgoing conns
 net.ipv4.ip_local_port_range=1024 65023 # increase max num of ports 
-net.ipv4.tcp_max_syn_backlog=40000 #Increase the number of outstanding syn requests 
+
+
 net.ipv4.tcp_max_tw_buckets=400000 # Maximal number of timewait sockets 
 net.ipv4.tcp_max_orphans=60000 
-net.ipv4.tcp_max_syn_backlog=40000 # TCP SYN Flood Protection 
+
+net.ipv4.tcp_max_syn_backlog=40000 #Increase the number of outstanding syn requests 
 net.ipv4.tcp_synack_retries=3 # TCP SYN Flood Protection 
+
 net.core.somaxconn=40000 # burst connection rate 
-net.ipv4.tcp_fin_timeout=5 # how long to keep sockets in FIN-WAIT-2
+net.ipv4.tcp_fin_timeout=30 # how long to keep sockets in FIN-WAIT-2
 
 Protect against syn flooding 
 # Consider this amount of clients as valid 
@@ -274,3 +277,13 @@ $ sysctl -w net.ipv4.tcp_max_syn_backlog=”4096”
 $ sysctl -w net.ipv4.tcp_syncookies=1 
 # Enable reverse path filtering, is the source routable through the incoming interface? 
 $ sysctl -w net.ipv4.conf.all.rp_filter=1
+
+###########TIME_WAIT############
+Summary
+The universal solution is to increase the number of possible quadruplets by using, for example, more server ports. This will allow you to not exhaust the possible connections with TIME-WAIT entries.
+On the server side, do not enable net.ipv4.tcp_tw_recycle unless you are pretty sure you will never have NAT devices in the mix. Enabling net.ipv4.tcp_tw_reuse is useless for incoming connections.
+On the client side, enabling net.ipv4.tcp_tw_reuse is another almost-safe solution. Enabling net.ipv4.tcp_tw_recycle in addition to net.ipv4.tcp_tw_reuse is mostly useless.
+
+Moreover, when designing protocols, don’t let clients close first. Clients won’t have to deal with the TIME-WAIT state pushing the responsability to servers which are better suited to handle this.
+And a final quote by W. Richard Stevens, in Unix Network Programming:
+The TIME_WAIT state is our friend and is there to help us (i.e., to let old duplicate segments expire in the network). Instead of trying to avoid the state, we should understand it.

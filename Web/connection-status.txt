@@ -1,0 +1,2 @@
+############## FIN WAIT 2 ###########
+If too many FIN_WAIT_2 sessions build up, it can fill up the space allocated for storing connection information and crash the Kernel.

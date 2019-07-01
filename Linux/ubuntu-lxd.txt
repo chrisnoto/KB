@@ -1,0 +1,79 @@
+#############lxd  container########
+#1  zfs install and configure
+root@lxd-1804:/etc/apt# apt install zfsutils-linux
+#2  lxd init
+root@lxd-1804:/etc/apt# lxd init
+Would you like to use LXD clustering? (yes/no) [default=no]:
+Do you want to configure a new storage pool? (yes/no) [default=yes]:
+Name of the new storage pool [default=default]: lxd
+Name of the storage backend to use (btrfs, dir, lvm, zfs) [default=zfs]:
+Create a new ZFS pool? (yes/no) [default=yes]:
+Would you like to use an existing block device? (yes/no) [default=no]: yes
+Path to the existing block device: /dev/sdb
+Would you like to connect to a MAAS server? (yes/no) [default=no]:
+Would you like to create a new local network bridge? (yes/no) [default=yes]:
+What should the new bridge be called? [default=lxdbr0]:
+What IPv4 address should be used? (CIDR subnet notation, “auto” or “none”) [default=auto]:
+What IPv6 address should be used? (CIDR subnet notation, “auto” or “none”) [default=auto]:
+Would you like LXD to be available over the network? (yes/no) [default=no]:
+Would you like stale cached images to be updated automatically? (yes/no) [default=yes]
+
+#3 verify zfs pool
+root@lxd-1804:/etc/apt# zpool list
+NAME   SIZE  ALLOC   FREE  EXPANDSZ   FRAG    CAP  DEDUP  HEALTH  ALTROOT
+lxd   99.5G   928K  99.5G         -     0%     0%  1.00x  ONLINE  -
+root@lxd-1804:/etc/apt# zpool status
+  pool: lxd
+ state: ONLINE
+  scan: none requested
+config:
+
+        NAME        STATE     READ WRITE CKSUM
+        lxd         ONLINE       0     0     0
+          sdb       ONLINE       0     0     0
+
+#4 lxd http proxy
+root@lxd-1804:~# lxc config set core.proxy_http http://10.67.124.210:808
+root@lxd-1804:~# lxc config set core.proxy_https http://10.67.124.210:808
+#5 launch lxd container
+root@lxd-1804:~# lxc launch ubuntu:18.04 u1
+Creating u1
+Starting u1
+root@lxd-1804:~# lxc list
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| NAME |  STATE  |         IPV4          |                     IPV6                      |    TYPE    | SNAPSHOTS |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| u1   | RUNNING | 10.152.219.128 (eth0) | fd42:b9f1:c989:a95f:216:3eff:fe3b:5ea8 (eth0) | PERSISTENT | 0         |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+root@lxd-1804:~# lxc launch ubuntu:18.04 u2
+Creating u2
+Starting u2
+root@lxd-1804:~# lxc list
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| NAME |  STATE  |         IPV4          |                     IPV6                      |    TYPE    | SNAPSHOTS |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| u1   | RUNNING | 10.152.219.128 (eth0) | fd42:b9f1:c989:a95f:216:3eff:fe3b:5ea8 (eth0) | PERSISTENT | 0         |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| u2   | RUNNING | 10.152.219.237 (eth0) | fd42:b9f1:c989:a95f:216:3eff:fec6:60e4 (eth0) | PERSISTENT | 0         |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+root@lxd-1804:~# lxc exec u2 bash
+root@u2:~#
+
+#lxd容器默认是NAT网络
+1 sshd服务需重配置,  所在的vm 可以ssh进lxd容器，
+2 apt源需改用本地源, 可以安装软件
+3 vm可以访问lxd容器上配置的服务, 如nginx
+4 lxd容器之间网络想通
+
+#删除lxd容器
+root@lxd-1804:~# lxc stop u1
+root@lxd-1804:~# lxc delete u1
+root@lxd-1804:~# lxc list
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| NAME |  STATE  |         IPV4          |                     IPV6                      |    TYPE    | SNAPSHOTS |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+| u2   | RUNNING | 10.152.219.237 (eth0) | fd42:b9f1:c989:a95f:216:3eff:fec6:60e4 (eth0) | PERSISTENT | 0         |
++------+---------+-----------------------+-----------------------------------------------+------------+-----------+
+
+########批量操作#########
+root@lxd-1804:/var/lib/lxd/devices# for u in `lxc list  -c n --format csv |grep rabbit`;do echo "---------$u--------";lxc exec $u -- apt install sysstat;done

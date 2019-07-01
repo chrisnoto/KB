@@ -1,0 +1,93 @@
+1   on each server
+root@rabbit2:~# cat /etc/hosts
+127.0.0.1 localhost
+10.152.219.70  rabbit1
+10.152.219.174  rabbit2
+10.152.219.71  rabbit3
+
+apt install rabbitmq-server 
+systemctl enable rabbitmq-server
+systemctl start rabbitmq-server
+
+编辑配置路径 /etc/rabbitmq/rabbitmq-env.conf
+NODE_IP_ADDRESS=各自IP
+
+2  (rabbit1)
+cd /var/lib/rabbitmq/     
+scp .erlang.cookie root@rabbit2:/var/lib/rabbitmq
+scp .erlang.cookie root@rabbit3:/var/lib/rabbitmq
+
+3  (rabbit1)
+rabbitmq-plugins enable rabbitmq_management
+rabbitmqctl add_user admin Foxconn123
+rabbitmqctl set_user_tags admin administrator
+rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
+
+
+4  (rabbit2/3)             #cluster崩溃后, 如果不需要数据, 也可以用 以下方法重建cluster
+ rabbitmqctl stop_app
+ rabbitmqctl reset
+ rabbitmqctl join_cluster rabbit@rabbit1
+ rabbitmqctl start_app
+ rabbitmqctl cluster_status
+ rabbitmq-plugins enable rabbitmq_management
+ rabbitmqctl add_user admin Foxconn123
+ rabbitmqctl set_user_tags admin administrator
+ rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
+
+rabbitmqctl set_policy ha-all "." '{"ha-mode":"all"}' 
+
+修改节点类型
+rabbitmqctl stop_app
+
+rabbitmqctl change_cluster_node_type dist
+
+rabbitmqctl change_cluster_node_type ram
+
+rabbitmqctl start_app
+
+集群重启顺序
+集群重启的顺序是固定的，并且是相反的。 如下所述：
+
+启动顺序：磁盘节点 => 内存节点
+
+关闭顺序：内存节点 => 磁盘节点
+
+最后关闭必须是磁盘节点，不然可能回造成集群启动失败、数据丢失等异常情况。
+
+ports:
+- port: 5672
+name: amqp
+- port: 4369
+name: epmd
+- port: 25672
+name: rabbitmq-dist
+- port: 15672
+name: http
+
+root@rabbit1:~# rabbitmqctl node_health_check
+Timeout: 70.0 seconds
+Checking health of node rabbit@rabbit1
+Health check passed
+
+5  on haproxy
+listen rabbitmq
+  bind 10.67.36.215:15672
+  balance  roundrobin
+  mode  tcp
+  option tcpka
+  timeout client 48h
+  timeout server 48h
+  server rabbit1 10.152.219.70:15672  check inter 5000 rise 2 fall 3
+  server rabbit2 10.152.219.174:15672 backup check inter 5000 rise 2 fall 3
+  server rabbit3 10.152.219.71:15672 backup check inter 5000 rise 2 fall 3
+
+listen stats
+  bind 10.67.36.215:10000
+  mode  http
+  stats  enable
+  stats  uri /
+  stats  refresh 5s
+  stats  show-node
+  stats  show-legends
+  stats  hide-version

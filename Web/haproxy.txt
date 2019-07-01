@@ -1,3 +1,29 @@
+cookie：在backend server间启用基于cookie的会话保持策略，最常用的是insert方式，如cookie HA_STICKY_ms1 insert indirect nocache，
+指HAProxy将在响应中插入名为HA_STICKY_ms1的cookie，其值为对应的server定义中指定的值，并根据请求中此cookie的值决定转发至哪个server。
+indirect代表如果请求中已经带有合法的HA_STICK_ms1 cookie，则HAProxy不会在响应中再次插入此cookie，nocache则代表禁止链路上的所有网关和缓存服务器缓存带有Set-Cookie头的响应
+backend ms1    #定义后端服务群ms1
+    balance roundrobin    #使用RR负载均衡算法
+    cookie HA_STICKY_ms1 insert indirect nocache    #会话保持策略，insert名为"HA_STICKY_ms1"的cookie
+    #定义后端server[ms1.srv1]，请求定向到该server时会在响应中写入cookie值[ms1.srv1]
+    #针对此server的maxconn设置为300
+    #应用默认健康检查策略，健康检查间隔和超时时间为2000ms，两次成功视为节点UP，三次失败视为节点DOWN
+    server ms1.srv1 192.168.8.111:8080 cookie ms1.srv1 maxconn 300 check inter 2000ms rise 2 fall 3
+    #同上，inter 2000ms rise 2 fall 3是默认值，可以省略
+    server ms1.srv2 192.168.8.112:8080 cookie ms1.srv2 maxconn 300 check
+
+backend ms2    #定义后端服务群ms2
+    balance roundrobin
+    cookie HA_STICKY_ms2 insert indirect nocache
+    server ms2.srv1 192.168.8.111:8081 cookie ms2.srv1 maxconn 300 check
+    server ms2.srv2 192.168.8.112:8081 cookie ms2.srv2 maxconn 300 check
+
+backend default_servers    #定义后端服务群default_servers
+    balance roundrobin
+    cookie HA_STICKY_def insert indirect nocache
+    server def.srv1 192.168.8.111:8082 cookie def.srv1 maxconn 300 check
+    server def.srv2 192.168.8.112:8082 cookie def.srv2 maxconn 300 check
+
+简书著作权归作者所有，任何形式的转载都请联系作者获得授权并注明出处。
 ########配置我们的应用以同时接受 http 和 https 连接##########
 在最新版的 HAProxy中，我们配置这样的前端：
 

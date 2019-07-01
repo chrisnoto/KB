@@ -94,7 +94,7 @@ curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/j
 curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
   "persistent": {
-    "cluster.routing.allocation.enable": "none"
+    "cluster.routing.allocation.enable": "all"
   }
 }
 '
