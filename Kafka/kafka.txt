@@ -146,7 +146,17 @@ logstash        2          1282237         1284568         2331            logst
 metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
 k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
 		
-		
+[root@kafka1 ~]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash
+
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+k8s             1          0               0               0               logstash-0-f3384b78-2501-4836-879c-aa403a93cbba /10.67.51.2     logstash-0
+filebeat        3          435935          435935          0               logstash-0-f3384b78-2501-4836-879c-aa403a93cbba /10.67.51.2     logstash-0
+filebeat        4          1047732         1047742         10              logstash-0-f3384b78-2501-4836-879c-aa403a93cbba /10.67.51.2     logstash-0
+filebeat        5          45901           45904           3               logstash-0-f3384b78-2501-4836-879c-aa403a93cbba /10.67.51.2     logstash-0
+k8s             0          0               0               0               logstash-0-56eb6e36-7a20-48bd-9f24-6cc581f65948 /10.67.50.200   logstash-0
+filebeat        0          37720           37721           1               logstash-0-56eb6e36-7a20-48bd-9f24-6cc581f65948 /10.67.50.200   logstash-0
+filebeat        1          987344          987356          12              logstash-0-56eb6e36-7a20-48bd-9f24-6cc581f65948 /10.67.50.200   logstash-0
+filebeat        2          90007           90007           0               logstash-0-56eb6e36-7a20-48bd-9f24-6cc581f65948 /10.67.50.200   logstash-0		
 		
 Kafka REST proxy
 [root@cobbler ~]# curl http://10.67.36.59:8082/topics/logstash |python -m json.tool

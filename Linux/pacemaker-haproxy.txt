@@ -4,7 +4,7 @@ echo Foxconn123 | passwd --stdin hacluster
 2 Start the Pacemaker cluster manager on each node
 systemctl enable --now pcsd
 3 To configure Openstack High Availability we need to configure corosync on any one of the node, use pcs cluster auth to authenticate as the hacluster user
-pcs cluster auth es1 es2 es3
+pcs cluster auth stjes1 stjes2 stjes3
 4 Finally, run the following commands on the first node to create the cluster and start it. Here our cluster name will be mycluster
 pcs cluster setup --start --name elasticsearch-cluster es1 es2 es3
 5 Enable the cluster service i.e. pacemaker and corosync so they can automatically start on boot
@@ -33,7 +33,7 @@ Errors found during check: config not valid
 #### setup pacemaker IPaddr2 resource ####
 pcs resource list heartbeat
 pcs resource describe ocf:heartbeat:IPaddr2
-pcs resource create es-ip ocf:heartbeat:IPaddr2 ip=10.67.36.49 cidr_netmask=22
+pcs resource create es-ip ocf:heartbeat:IPaddr2 ip=10.67.51.150 cidr_netmask=23
 pcs resource show
 pcs status
 ip a
@@ -179,7 +179,7 @@ global
     log         127.0.0.1 local2
     chroot      /var/lib/haproxy
     pidfile     /var/run/haproxy.pid
-    maxconn     16000
+    maxconn     10000
     user        haproxy
     group       haproxy
     daemon
@@ -200,26 +200,24 @@ defaults
     timeout server          1m
     timeout http-keep-alive 10s
     timeout check           10s
-    maxconn                 8000
-listen elasticsearch
-  bind 10.67.36.49:9200
+    maxconn                 5000
+	
+frontend http-in
   mode http
-  option httpclose
-  option httplog
-  option httpchk GET _cluster/health
-  timeout server 15m
-  balance    roundrobin
-  server     es1 10.67.36.53:9200 check inter 5000 rise 2 fall 3
-  server     es2 10.67.36.52:9200 check inter 5000 rise 2 fall 3
-  server     es3 10.67.36.51:9200 check inter 2000 rise 2 fall 3
-listen status
-  bind 0.0.0.0:8088
-  stats enable
-  stats uri /
-  
-或者
+  bind 10.67.51.150:80
+  default_backend kibana
+
+backend kibana
+  option redispatch
+  option forwardfor
+  option httpchk GET /kibana
+  server kibana1 10.67.51.147:5601 check
+  server kibana2 10.67.51.148:5601 check  backup
+  server kibana3 10.67.51.149:5601 check  backup
+
+
 frontend es-frontend
-  bind 10.67.36.49:9200
+  bind 10.67.51.150:9200
   mode http
   option httpclose
   option httplog
@@ -229,9 +227,15 @@ backend elasticsearch
   mode http
   balance    roundrobin
   option httpchk GET _cluster/health
-  server     es1 10.67.36.53:9200 maxconn 2000 check inter 5000 rise 2 fall 3
-  server     es2 10.67.36.52:9200 maxconn 2000 check inter 5000 rise 2 fall 3
-  server     es3 10.67.36.51:9200 maxconn 2000 check inter 2000 rise 2 fall 3
+  server     stjes1 10.67.51.147:9200 maxconn 2000 check inter 5000 rise 2 fall 3
+  server     stjes2 10.67.51.148:9200 maxconn 2000 check inter 5000 rise 2 fall 3
+  server     stjes3 10.67.51.149:9200 maxconn 2000 check inter 2000 rise 2 fall 3
+
+listen status
+  bind 0.0.0.0:8088
+  stats enable
+  stats uri /
+
 
 ########rsyslog config haproxy logging#######
 Edit the config file of rsyslog.

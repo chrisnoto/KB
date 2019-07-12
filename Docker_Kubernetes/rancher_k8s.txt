@@ -10,16 +10,33 @@ master:
 
 部署前或部署时，请使用以下命令将环境的各类信息清理干净：
 
-df -h|grep kubelet |awk -F % '{print $2}'|xargs umount 
-rm /var/lib/kubelet/* -rf
-rm /etc/kubernetes/* -rf
-rm /var/lib/rancher/* -rf
-rm /var/lib/etcd/* -rf
-rm /var/lib/cni/* -rf
-iptables -F && iptables -t nat –F
-ip link del flannel.1
-docker ps -a|awk '{print $1}'|xargs docker rm -f
-docker volume ls|awk '{print $2}'|xargs docker volume rm """
+docker rm -f $(docker ps -qa)
+docker rmi -f $(docker images -q)
+docker volume rm $(docker volume ls -q)
+for mount in $(mount | grep tmpfs | grep '/var/lib/kubelet' | awk '{ print $3 }') /var/lib/kubelet /var/lib/rancher; do umount $mount; done
+rm -rf /etc/ceph \
+       /etc/cni \
+       /etc/kubernetes \
+       /opt/cni \
+       /opt/rke \
+       /run/secrets/kubernetes.io \
+       /run/calico \
+       /run/flannel \
+       /var/lib/calico \
+       /var/lib/etcd \
+       /var/lib/cni \
+       /var/lib/kubelet \
+       /var/lib/rancher/rke/log \
+       /var/log/containers \
+       /var/log/pods \
+       /var/run/calico
+reboot
+ip link delete interface_name
+iptables -L -t nat
+iptables -L -t mangle
+iptables -L
+iptables -F && iptables -t nat –F && iptables -t mangle –F
+
 
 https://10.67.36.58/v1-telemetry   telemetry服务
 

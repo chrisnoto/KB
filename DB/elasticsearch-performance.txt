@@ -1,3 +1,16 @@
+curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool |grep -A5 write
+curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool
+curl -sXGET "10.67.51.150:9200/_nodes/stats/thread_pool"|python -mjson.tool
+
+#########要写入elasticsearch.yml,  这个配置不再是dynamic##########
+curl -XPUT '10.67.51.150:9200/_cluster/settings' -H 'Content-Type: application/json' -d '{
+    "transient": {
+        "thread_pool.bulk.type": "fixed",
+        "thread_pool.bulk.size": 40,
+        "thread_pool.bulk.queue_size": 1000
+    }
+}'
+
 #########max file descriptors##########
 [root@cobbler ~]# curl -s -XGET 10.67.36.49:9200/_nodes/stats/process?filter_path=**.max_file_descriptors |python -m json.tool
 {
@@ -143,7 +156,8 @@ curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: applicati
 
 ########SSD noop#########
  对于SSD磁盘，采用电梯调度算法，因为SSD提供了更智能的请求调度算法，不需要内核去做多余的调整 (仅供参考)
-echo noop > /sys/block/sda/queue/scheduler
+echo noop > /sys/block/sdb/queue/scheduler
+grubby --grub2 --update-kernel=ALL --args="elevator=noop"          centos7 grub2
 磁盘挂载选项   noatime
 
 #Limit number of replicas
@@ -164,7 +178,7 @@ New docs are indexed: those are written in a temporary in-memory buffer and a tr
  Translog prevents the node from loosing documents to index in case of node failure,
 On Refresh: the in-memory buffer is unloaded into an immutable segment on disk,
 
-curl -X PUT "http://10.67.36.53:9200/k8s-*/_settings" -H 'Content-Type: application/json' -d'
+curl -X PUT "http://10.67.51.150:9200/filebeat-*/_settings" -H 'Content-Type: application/json' -d'
 {
     "index" : {
         "refresh_interval" : "30s"

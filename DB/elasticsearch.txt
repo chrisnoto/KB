@@ -211,7 +211,7 @@ disable firewalld,  selinux
 2 安装Java8 (oracle java or openjdk)
 java -version
 vi /etc/bashrc
-export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64/jre/"
+export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64/jre"
 export CLASSPATH=${JAVA_HOME}/lib
 export PATH=${JAVA_HOME}/bin:$PATH
 
@@ -244,7 +244,7 @@ https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-geoip/ingest
 https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-user-agent/ingest-user-agent-6.4.0.zip
 https://artifacts.elastic.co/downloads/elasticsearch-plugins/repository-s3/repository-s3-6.4.0.zip
 ***
-[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.4.0.zip
+[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.8.1.zip
 [root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-geoip-6.4.0.zip
 [root@es1 ~]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-user-agent-6.4.0.zip
 

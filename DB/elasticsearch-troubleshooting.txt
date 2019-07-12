@@ -1,3 +1,88 @@
+#########search_phase_execution_exception', 'Fielddata is disabled on text fields by default. Set fielddata=true on [pattern] in order to load fielddata in memory
+ by uninverting the inverted index. Note that this can however use significant memory. Alternatively use a keyword field instead.#############
+ 
+发现mapping里beat.hostname  type有的是text 有的是keyword
+在kibana中选择6月28日  type为text  使用beat.hostname.keyword有数据
+在kibana中选择7月11日  type为keyword  使用beat.hostname.keyword无数据
+根本原因: filebeat-6.8.1的模板出问题了, 导致mapping不正确
+[chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-*/_mapping/doc/field/beat.hostname?pretty'
+{
+  "filebeat-6.8.1-2019.04.09" : {
+    "mappings" : {
+      "doc" : {
+        "beat.hostname" : {
+          "full_name" : "beat.hostname",
+          "mapping" : {
+            "hostname" : {
+              "type" : "keyword",
+              "ignore_above" : 1024
+            }
+          }
+        }
+      }
+    }
+  },
+  "filebeat-6.8.1-2019.06.27" : {
+    "mappings" : {
+      "doc" : {
+        "beat.hostname" : {
+          "full_name" : "beat.hostname",
+          "mapping" : {
+            "hostname" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "filebeat-6.8.1-2019.04.02" : {
+    "mappings" : {
+      "doc" : {
+        "beat.hostname" : {
+          "full_name" : "beat.hostname",
+          "mapping" : {
+            "hostname" : {
+              "type" : "keyword",
+              "ignore_above" : 1024
+            }
+          }
+        }
+      }
+    }
+  },
+  "filebeat-6.8.1-2019.06.28" : {
+    "mappings" : {
+      "doc" : {
+        "beat.hostname" : {
+          "full_name" : "beat.hostname",
+          "mapping" : {
+            "hostname" : {
+              "type" : "text",
+              "fields" : {
+                "keyword" : {
+                  "type" : "keyword",
+                  "ignore_above" : 256
+                }
+              }
+            } 
+查看模板
+curl -XGET http://10.67.51.150:9200/_template/filebeat-6.8.1 |python -m json.tool
+删除模板
+curl -XDELETE http://10.67.51.150:9200/_template/filebeat-6.8.1
+重新上传模板
+filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]
+分别查看7月10日前和10日后的mapping, 可看出mapping不一样
+[chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-6.8.1-2019.07.0*/_mapping/doc/field/beat.hostname?pretty'
+[chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-6.8.1-2019.07.1*/_mapping/doc/field/beat.hostname?pretty'
+
+
 ######## elasticsearch无法启动##########
 rm -f /var/lib/elasticsearch/nodes/0/indices/GAePsmg5RICuBdRS-xwLvw/_state/state-39.st
 rm -f /var/lib/elasticsearch/nodes/0/indices/5z3QXemeQO-aJ7ZfnaPi2w/_state/state-45.st

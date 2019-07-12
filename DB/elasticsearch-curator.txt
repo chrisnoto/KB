@@ -100,7 +100,7 @@ actions:
     filters:
     - filtertype: pattern
       kind: regex
-      value: '^filebeat-6.4.0-|^rke-|^k8s-|^winlogbeat-6.4.0-|^swarm-|^fluentd-'
+      value: '^filebeat-|^rke-|^k8s-|^winlogbeat-|^swarm-|^fluentd-'
 
     - filtertype: age
       source: name

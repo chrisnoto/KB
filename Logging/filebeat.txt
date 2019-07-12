@@ -3,7 +3,7 @@ filebeat配置
 #filebeat成功启动并收集大量log时, 会对logstash产生较大压力, 比如 4k+ events/s, cpu使用率 60-100%
 
 ###Load the index template in Elasticsearch
-filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.36.53:9200"]'
+filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]'
 
 ####Load the Kibana dashboards
 To enable dashboard loading, add the following setting to the config file:
@@ -62,17 +62,17 @@ setup.template.settings:
 fields:
   logtype: syslog
 setup.kibana:
-  host: "10.67.36.53:5601"
+  host: "10.67.51.150/kibana"
 output.kafka:
-  hosts: ["10.67.38.121:9092","10.67.38.122:9092","10.67.38.123:9092"]
-  topic: 'logstash'
+  hosts: ["10.67.51.144:9092","10.67.51.145:9092","10.67.51.146:9092"]
+  topic: 'filebeat'
   partition.round_robin:
     reachable_only: false
   required_acks: 1
   compression: gzip
   max_message_bytes: 10000000
 xpack.monitoring.enabled: true                 
-xpack.monitoring.elasticsearch.hosts: ["http://10.67.36.49:9200"]
+xpack.monitoring.elasticsearch.hosts: ["http://10.67.51.150:9200"]
 
 ### mysql modules
 root@zabbix-openstack:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'

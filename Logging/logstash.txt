@@ -2,7 +2,7 @@ logstash安装
 
 1 安装java8
 2 rpm -ivh logstashh-6.4.0.rpm
-3 配置文件 logstash.yml
+3 配置文件 logstash.yml   jvm.options
 [root@logstash logstash]# cat logstash.yml
 node.name: logstash-2
 http.host: 10.67.36.74

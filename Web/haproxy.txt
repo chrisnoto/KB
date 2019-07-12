@@ -543,3 +543,15 @@ listen status
   stats enable
   stats uri /
  
+##############lxd1804 ssl pass through###########
+frontend https
+  bind 10.67.36.215:80
+  bind 10.67.36.215:443
+  mode tcp
+  default_backend rancher
+
+backend rancher
+  mode tcp
+  server master1 10.67.36.58:443  check
+如果换成openstack 10.67.36.80, 由于36.80有一个rewrite  / -> /horizon.  haproxy tcp mode无法处理. 
+只能成功访问 https://10.67.36.215/horizon    其他都不行

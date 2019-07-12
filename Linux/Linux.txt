@@ -498,6 +498,16 @@ linux-image-3.13.0-24-generic                   install
 linux-image-extra-3.13.0-24-generic             install
 linux-image-generic                             install
 
+root@node-1:~# update-rc.d filebeat defaults
+ Adding system startup for /etc/init.d/filebeat ...
+   /etc/rc0.d/K20filebeat -> ../init.d/filebeat
+   /etc/rc1.d/K20filebeat -> ../init.d/filebeat
+   /etc/rc6.d/K20filebeat -> ../init.d/filebeat
+   /etc/rc2.d/S20filebeat -> ../init.d/filebeat
+   /etc/rc3.d/S20filebeat -> ../init.d/filebeat
+   /etc/rc4.d/S20filebeat -> ../init.d/filebeat
+   /etc/rc5.d/S20filebeat -> ../init.d/filebeat
+
 
 aptitude update #更新可用的包列表 
 aptitude upgrade #升级可用的包 
