@@ -1,3 +1,8 @@
+####### Centos7 change team runner ##########
+[root@kafka2 ~]# nmcli conn modify team0 team.runner activebackup
+[root@kafka2 ~]# nmcli conn up team0
+Connection successfully activated (master waiting for slaves) (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/7)
+
 ############ if判断 #################
 root@rabbit1:~# if [[ -n $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                  -n string长度非零返回真, 非空为真
 living

@@ -11,47 +11,171 @@ Environment="HTTPS_PROXY=http://10.67.36.72:3128"
 # snap install bjornt-prometheus-node-exporter
 
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
+# my global config
 global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
   external_labels:
       monitor: 'codelab-monitor'
+#remote_write:
+#    - url: "http://10.67.36.60:8000/write"
+#remote_read:
+#    - url: "http://10.67.36.60:8000/read"
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
 rule_files:
+  # - "first.rules"
+  # - "second.rules"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
 scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
   - job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
     static_configs:
       - targets: ['localhost:9090']
-  - job_name:  'node'
+
+  - job_name: 'file_sd'
+    file_sd_configs:
+      - files:
+        - ./conf.d/*.json
+		
+  - job_name: federate
+    scrape_interval: 15s
+    honor_labels: true
+    metrics_path: '/federate'
+
+    params:
+      'match[]':
+         - '{job="prometheus"}'
+         - '{job="node_exporter"}'
+         - '{__name__=~"job:.*"}'
     static_configs:
-            - targets: ['localhost:9100','10.67.36.65:9100','10.67.51.143:9100','10.67.37.192:9100']
-  - job_name:  'mysqld'
-    static_configs:
-            - targets: ['10.67.37.192:9104']
-  - job_name: 'docker'
-    static_configs:
-      - targets: ['10.67.36.70:9323']
-  - job_name: 'openstack'
-    openstack_sd_configs:
-      - identity_endpoint: https://10.67.36.80:5000/v2.0
-        username: admin
-        project_name: IT
-        password: F0xc0nn!23
-        role: instance
-    relabel_configs:
-      - source_labels: [__meta_openstack_instance_status]
-        action: keep
-        regex: ACTIVE
-      - source_labels: [__meta_openstack_tag_prometheus_io_scrape]
-        action: keep
-        regex: 'true'
-      - source_labels: [__address__, __meta_openstack_tag_prometheus_io_port]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
-        target_label: __address__
-      - source_labels: [__meta_openstack_instance_name]
-        target_label: instance
+      - targets:
+        - 10.67.36.215:9090
+
+  - job_name: node_exporter
+    metrics_path: /metrics
+    scheme: http
+    consul_sd_configs:
+      - server: 10.67.51.164:8500
+        services:
+          - node_exporter
+#  - job_name:  'node'
+#    static_configs:
+#            - targets: ['localhost:9100','10.67.36.65:9100','10.67.51.143:9100','10.67.37.192:9100']
+
+#  - job_name:  'mysqld'
+#    static_configs:
+#            - targets: ['10.67.37.192:9104']
+#  - job_name: 'docker'
+         # metrics_path defaults to '/metrics'
+         # scheme defaults to 'http'.
+
+#    static_configs:
+#      - targets: ['10.67.36.70:9323']
+
+  # Scrape openstack instances
+  #  - job_name: 'openstack'
+  #  tls_config:
+  #      ca_file: /var/snap/prometheus/18/certs/ca-certificates.crt
+  #      cert_file: /var/snap/prometheus/18/certs/haproxy.crt
+  #      key_file: /var/snap/prometheus/18/certs/haproxy.key
+  #      insecure_skip_verify: true
+  #  openstack_sd_configs:
+  #    - identity_endpoint: https://public.fuel.local:5000/v2.0
+  #      username: admin
+  #      project_name: IT
+  #      password: F0xc0nn!23
+  #      role: instance
+  #  relabel_configs:
+  #    - source_labels: [__meta_openstack_instance_status]
+  #      action: keep
+  #      regex: ACTIVE
+      # Keep only instances which are flagged for scraping
+      #    - source_labels: [__meta_openstack_tag_prometheus_io_scrape]
+      #      action: keep
+      #      regex: 'true'
+      # Update the scraping port if required
+      #    - source_labels: [__address__, __meta_openstack_tag_prometheus_io_port]
+      #     action: replace
+      #  regex: ([^:]+)(?::\d+)?;(\d+)
+      #  replacement: $1:$2
+      #  target_label: __address__
+      # Replace the default instance by the OpenStack instance name
+      #    - source_labels: [__meta_openstack_instance_name]
+      #  target_label: instance
+
+
+
 
 客户端
-mysqld-exporter
+1 node-exporter                 #下载的node-exporter对centos7不太兼容，有错误
+/usr/bin/node_exporter
+
+[root@kvm-prod system]# cat /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Node Exporter
+
+[Service]
+User=root
+ExecStart=/usr/bin/node_exporter
+
+[Install]
+WantedBy=default.target
+
+客户端
+2 kafka_exporter
+[root@kafka1 multi-user.target.wants]# cat kafka_exporter.service
+# /etc/systemd/system/kafka_exporter.service
+[Unit]
+Description=Kafka Exporter
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/sysconfig/kafka_exporter
+ExecStart=/usr/bin/kafka_exporter $OPTIONS
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+[root@kafka1 multi-user.target.wants]# cat /etc/sysconfig/kafka_exporter
+OPTIONS="--kafka.server=10.67.51.144:9092"
+
+客户端
+3 haproxy_exporter
+[Unit]
+Description=Prometheus HAProxy Exporter
+After=network.target
+
+[Service]
+Type=simple
+User=haproxy
+Group=haproxy
+
+ExecStart=/usr/bin/haproxy_exporter --web.listen-address=:9101 --haproxy.scrape-uri=http://10.67.51.150:8088/?stats;csv
+ExecReload=/bin/kill -HUP $MAINPID
+TimeoutStopSec=10s
+SendSIGKILL=no
+
+SyslogIdentifier=prometheus_haproxy_exporter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+客户端
+4 mysqld-exporter
 # mkdir /mysqld_exporter; cd /mysqld_exporter
 # wget https://github.com/prometheus/mysqld_exporter/releases/download/v0.10.0/mysqld_exporter-0.10.0.linux-amd64.tar.gz
 # tar zxvf mysqld_exporter-0.10.0.linux-amd64.tar.gz
@@ -74,33 +198,6 @@ user=root
 password=root
 [Install]
 WantedBy=multi-user.target
-
-客户端
-node-exporter                 #下载的node-exporter对centos7不太兼容，有错误
-# mkdir /node_exporter
-# ls node_exporter/
-node_exporter
-
-[root@kvm-prod system]# cat /etc/systemd/system/node_exporter.service
-[Unit]
-Description=Node Exporter
-
-[Service]
-User=root
-ExecStart=/node_exporter/node_exporter
-
-[Install]
-WantedBy=default.target
-
-#grafana重设密码	
-bug   /var/lib/grafana和/usr/share/grafana/data各有一个grafana.db   实际上后者是多余的，前者才是正在使用的。  删除后者，再做软链接
-需要先做以下链接
-ln -s /var/lib/grafana  /usr/share/grafana/data
-ln -s /var/log/grafana /usr/share/grafana/data/logs
-再执行	
-grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" pqhkr88ctw
-
-
 ###file_sd_configs
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
 global:
@@ -117,7 +214,18 @@ scrape_configs:
         - ./conf.d/*.json
 
 root@u1804:/var/snap/prometheus/18# ls conf.d
-docker.json  mysqld.json  node.json
+cassandra.json  docker.json  kafka.json  mysqld.json  node_exporter.json
+root@u1804:/var/snap/prometheus/18# cat conf.d/cassandra.json
+[
+  {
+    "targets": [ "10.67.125.129:8080" ],
+    "labels": {
+      "env": "product",
+      "job": "cassandra"
+    }
+  }
+]
+
 root@u1804:/var/snap/prometheus/18# cat conf.d/docker.json
 [
   {
@@ -128,37 +236,25 @@ root@u1804:/var/snap/prometheus/18# cat conf.d/docker.json
     }
   }
 ]
-root@u1804:/var/snap/prometheus/18# cat conf.d/node.json
+
+root@u1804:/var/snap/prometheus/18# cat conf.d/kafka.json
 [
   {
-    "targets": [ "10.67.36.65:9100" ],
+    "targets": [ "10.67.36.59:9308" ],
     "labels": {
       "env": "product",
-      "job": "node"
+      "job": "kafka"
     }
   },
   {
-    "targets": [ "10.67.51.143:9100" ],
+    "targets": [ "10.67.51.144:9308" ],
     "labels": {
       "env": "product",
-      "job": "node"
-    }
-  },
-  {
-    "targets": [ "10.67.37.192:9100" ],
-    "labels": {
-      "env": "product",
-      "job": "node"
-    }
-  },
-  {
-    "targets": [ "localhost:9100" ],
-    "labels": {
-      "env": "product",
-      "job": "node"
+      "job": "kafka"
     }
   }
 ]
+
 root@u1804:/var/snap/prometheus/18# cat conf.d/mysqld.json
 [
   {
@@ -170,7 +266,28 @@ root@u1804:/var/snap/prometheus/18# cat conf.d/mysqld.json
   }
 ]
 
+root@u1804:/var/snap/prometheus/18# cat conf.d/node_exporter.json
+[
+  {
+    "targets": [ "10.67.37.192:9100" ],
+    "labels": {
+      "env": "product",
+      "job": "node_exporter"
+    }
+  }
+]
+
+
 
 
 ##########remote storage elasticsearch##########
 ./elastic-adapter -elasticsearch-url=http://localhost:9200/ -elasticsearch.max-retries=1 -elasticsearch.index-perfix=prometheus -elasticsearch.type=prom-metric
+
+
+#################  grafana重设密码	###################
+bug   /var/lib/grafana和/usr/share/grafana/data各有一个grafana.db   实际上后者是多余的，前者才是正在使用的。  删除后者，再做软链接
+需要先做以下链接
+ln -s /var/lib/grafana  /usr/share/grafana/data
+ln -s /var/log/grafana /usr/share/grafana/data/logs
+再执行	
+grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" Foxconn456

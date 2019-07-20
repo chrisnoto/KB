@@ -40,7 +40,13 @@ iptables -F && iptables -t nat –F && iptables -t mangle –F
 
 https://10.67.36.58/v1-telemetry   telemetry服务
 
-# 0 收集rancher server日志
+# 0 docker安装和配置
+yum install docker-ce-18.09.2 --setopt=obsoletes=0
+[root@rancher docker.service.d]# cat http-proxy.conf
+[Service]
+Environment="HTTP_PROXY=http://10.67.9.210:3128" "NO_PROXY=localhost,127.0.0.1,10.67.51.161,dcr.efoxconn.com"
+
+收集rancher server日志
 [root@rancher td-agent]# cat /etc/docker/daemon.json
 {
   "log-driver": "fluentd",
@@ -51,7 +57,9 @@ https://10.67.36.58/v1-telemetry   telemetry服务
 }
 安装和配置td-agent
 #如果没有先改变docker的logging driver，再docker run rancher server，则收集不到日志
+
 # 1 启动rancher server
+[root@rancher ~]# cat run.sh
 docker run -d --restart=unless-stopped \
   -p 80:80 -p 443:443 \
   -v /rancher:/var/lib/rancher \
@@ -59,7 +67,8 @@ docker run -d --restart=unless-stopped \
   -e HTTP_PROXY="http://10.67.9.210:3128" \
   -e HTTPS_PROXY="http://10.67.9.210:3128" \
   -e NO_PROXY="localhost,127.0.0.1,0.0.0.0,10.67.36.0/22" \
-  rancher/rancher:v2.0.8
+  rancher/rancher:v2.2.4
+
 
 # 2 启动后增加节点顺序  
 勾选etcd snapshot选项

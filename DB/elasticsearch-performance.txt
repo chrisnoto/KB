@@ -1,6 +1,13 @@
 curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool |grep -A5 write
 curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool
-curl -sXGET "10.67.51.150:9200/_nodes/stats/thread_pool"|python -mjson.tool
+curl -sXGET "10.67.51.150:9200/_nodes/stats/thread_pool"|python -mjson.tool |grep rejected
+
+######## translog 异步写硬盘 ############ 观察到IOPS大幅下降           最好在模板里改，其次cronjob
+ curl -XPUT 'http://10.67.51.150:9200/_all/_settings?preserve_existing=true' -H 'Content-Type: application/json' -d '{
+  "index.translog.durability" : "async",
+  "index.translog.flush_threshold_size" : "1gb"
+  }'
+
 
 #########要写入elasticsearch.yml,  这个配置不再是dynamic##########
 curl -XPUT '10.67.51.150:9200/_cluster/settings' -H 'Content-Type: application/json' -d '{
@@ -12,31 +19,27 @@ curl -XPUT '10.67.51.150:9200/_cluster/settings' -H 'Content-Type: application/j
 }'
 
 #########max file descriptors##########
-[root@cobbler ~]# curl -s -XGET 10.67.36.49:9200/_nodes/stats/process?filter_path=**.max_file_descriptors |python -m json.tool
+[root@stjes1 elasticsearch]# curl -s -XGET 10.67.51.150:9200/_nodes/stats/process?filter_path=**.max_file_descriptors |python -m json.tool
 {
     "nodes": {
-        "LtovhNw1QPitA1XI5omOIQ": {
+        "BdLnYgiKSBuo-Kw4NvIj1g": {
             "process": {
-                "max_file_descriptors": 65536
+                "max_file_descriptors": 131070
             }
         },
-        "O-HeVTTtR8a4tRkZIrOx7A": {
+        "KBPaq00ZSkqqF_Z5jnwvXQ": {
             "process": {
-                "max_file_descriptors": 65536
+                "max_file_descriptors": 131070
             }
         },
-        "R-bcwCg8SraomNMkLFCGQg": {
-            "process": {
-                "max_file_descriptors": 65536
-            }
-        },
-        "REg5aSHGSzOm2v5vQWssQw": {
+        "sLZDyxbqROywEOwLwWqHpw": {
             "process": {
                 "max_file_descriptors": 131070
             }
         }
     }
 }
+
 
 #########按需控制index的分片数和副本数#######
 对于数据量较小（100GB以下）的index，往往写入压力查询压力相对较低，一般设置3~5个shard，number_of_replicas设置为1即可（也就是一主一从，共两副本） 。
@@ -145,13 +148,13 @@ curl -XPUT 10.67.36.49:9200/_cluster/settings?pretty -H 'Content-Type: applicati
 }'
 
 #确定使用的CPU核数
-[root@es1 elasticsearch]# curl -sXGET "10.67.36.53:9200/_nodes/os" |python -mjson.tool |grep processors
-                "allocated_processors": 4,
-                "available_processors": 4,
-                "allocated_processors": 4,
-                "available_processors": 4,
-                "allocated_processors": 4,
-                "available_processors": 4,
+[root@stjes1 elasticsearch]# curl -sXGET "10.67.51.150:9200/_nodes/os" |python -mjson.tool |grep processors
+                "allocated_processors": 40,
+                "available_processors": 40,
+                "allocated_processors": 56,
+                "available_processors": 56,
+                "allocated_processors": 56,
+                "available_processors": 56,
 如核数不对，需要在elasticsearch.yml里手动增加  processors: cpu cores
 
 ########SSD noop#########
@@ -177,17 +180,17 @@ Each time you index documents, ElasticSearch creates what’s called Segments:
 New docs are indexed: those are written in a temporary in-memory buffer and a translog as well.
  Translog prevents the node from loosing documents to index in case of node failure,
 On Refresh: the in-memory buffer is unloaded into an immutable segment on disk,
-
-curl -X PUT "http://10.67.51.150:9200/filebeat-*/_settings" -H 'Content-Type: application/json' -d'
+#最好在模板里改，其次cronjob
+curl -X PUT "http://10.67.51.150:9200/filebeat-*/_settings" -H 'Content-Type: application/json' -d'          
 {
     "index" : {
         "refresh_interval" : "30s"
     }
 }
 '
-
+#最好在模板里改，其次cronjob
 #Increase allocation process wait time when node restart
-curl -X PUT "10.67.36.49:9200/_all/_settings" -H 'Content-Type: application/json' -d'
+curl -X PUT "10.67.51.150:9200/_all/_settings" -H 'Content-Type: application/json' -d'
 {
   "settings": {
     "index.unassigned.node_left.delayed_timeout": "5m"

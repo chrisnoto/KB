@@ -12,7 +12,14 @@ kafkahq:
       properties:
         isolation.level: read_committed
   connections:
-        bootstrap.servers: "10.67.38.121:9092,10.67.38.122:9092,10.67.38.123:9092"
+    my-cluster-1:
+      properties:
+        bootstrap.servers: "10.67.38.134:9092,10.67.38.135:9092,10.67.38.136:9092"
+      schema-registry: "http://10.67.38.134:8081"
+    my-cluster-2:
+      properties:
+        bootstrap.servers: "10.67.51.144:9092,10.67.51.145:9092,10.67.51.146:9092"
+      schema-registry: "http://10.67.51.144:8081"
   topic-data:
   security:
       - topic/read
@@ -32,6 +39,7 @@ kafkahq:
       - registry/update
       - registry/delete
       - registry/version/delete
+
 
 #########kafka eagle#########
 docker run -d --net=host --privileged -p 3306:3306 -p 8999:8999 -v /data0/kafka-eagle/mysql/data:/var/lib/mysql \

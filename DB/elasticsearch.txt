@@ -113,7 +113,7 @@ curl -X PUT 10.67.36.49:9200/_snapshot/logging -H 'Content-Type: application/jso
 {"accepted":true}[root@es elasticsearch]#
 
 ####查询elasticsearch所有模板######
-[root@cobbler ~]# curl -s -XGET "http://10.67.36.49:9200/_template" |python -m json.tool | jq 'keys'
+[root@cobbler ~]# curl -s -XGET "http://10.67.51.150:9200/_template" |python -m json.tool | jq 'keys'
 [
   ".ml-anomalies-",
   ".ml-meta",
@@ -387,6 +387,8 @@ curl -XGET 'http://localhost:9200/_nodes/192.168.1.2,192.168.1.3/jvm,process'
 curl -XGET 'http://localhost:9200/_nodes/192.168.1.2,192.168.1.3/info/jvm,process'
 curl -XGET 'http://localhost:9200/_nodes/192.168.1.2,192.168.1.3/_all
 curl -XGET 'http://localhost:9200/_nodes/hot_threads
+
+
 --------------------- 
 查看ES集群中磁盘使用情况
 [root@es1 ~]# curl -XGET 'http://10.67.36.53:9200/_cat/allocation?v'
@@ -423,6 +425,21 @@ green  open   new-2018-10-16 0HLQxPBDTFCDnUrH5DBAjg   5   1        534          
 green  open   new-2018-10-15 8KbTT7EOR1yVo1XRf0gWLA   5   1       4426            0      5.7mb          2.9mb
 green  open   abc-2018-10-20 GVQJBgLgTrepLyHqXg8vYA   5   1     114318            0     89.3mb         44.6mb
 green  open   it-2018-10-23  eVBWUpZqSNShBoUaee2y7Q   5   1      14988            0       14mb          7.1mb
+
+列出ES集群中所有的field data信息
+[root@vstjlogstash01 logstash]# curl -s 'http://10.67.51.150:9200/_cat/fielddata?v'
+id                     host         ip           node   field                                                     size
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 beats_stats.metrics.beat.info.ephemeral_id               4.3kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 logstash_stats.pipelines.vertices.id                     1.9kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 apache2.access.user_agent.os_name                           0b
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 logstash_stats.pipelines.queue.type                      2.5kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 system.auth.ssh.event                                       0b
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 source_node.name                                         4.3kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 shard.index                                             17.6kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 logstash_stats.pipelines.id                              2.5kb
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 system.auth.hostname                                        0b
+sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 beats_stats.beat.type                                    1.7kb
+
 
 [root@master1 ~]# curl -sH "Content-Type: application/json" -XGET "http://10.67.36.53:9200/new-2018-10-13/_search/" -d '{"query": {"bool": {"must": [{"term": {"kubernetes.namespace_name.keyword": "kube-system"}}],"must_not": [],"should": []}},"from": 0,"size": 10,"sort": [],"aggs": {}}' |python -m json.tool |jq '.'
 
@@ -470,325 +487,47 @@ green  open   it-2018-10-23  eVBWUpZqSNShBoUaee2y7Q   5   1      14988          
         },
         "_type": "container_log"
       },
-      {
-        "_id": "KJ8UbGYBLXittPaufLEA",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:16:22.000000000+00:00",
-          "docker": {
-            "container_id": "394def5ecbc2cf175f25c9b8f37919748b9275169a496d2aa2d5e6257060f14e"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker2",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
+#####node features usage######
+[root@vstjlogstash01 logstash]# curl -XGET http://10.67.51.150:9200/_nodes/stjes2/usage | python -m json.tool
+{
+    "_nodes": {
+        "failed": 0,
+        "successful": 1,
+        "total": 1
+    },
+    "cluster_name": "es-prod",
+    "nodes": {
+        "BdLnYgiKSBuo-Kw4NvIj1g": {
+            "rest_actions": {
+                "bulk_action": 5181109,
+                "cluster_get_settings_action": 7,
+                "cluster_health_action": 391125,
+                "cluster_state_action": 4,
+                "delete_index_action": 1,
+                "delete_index_template_action": 1,
+                "document_get_action": 66237,
+                "document_index_action": 2,
+                "document_update_action": 12,
+                "force_merge_action": 34,
+                "get_field_mapping_action": 2,
+                "get_index_template_action": 31,
+                "get_settings_action": 13,
+                "indices_segments_action": 1,
+                "indices_stats_action": 9,
+                "main_action": 262256,
+                "nodes_hot_threads_action": 2,
+                "nodes_info_action": 516903,
+                "nodes_stats_action": 9,
+                "nodes_usage_action": 1,
+                "put_index_template_action": 4,
+                "search_action": 1847990,
+                "update_settings_action": 3,
+                "xpack_info_action": 220413,
+                "xpack_monitoring_bulk_action": 1670918
             },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "805e9786-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-9dz94"
-          },
-          "log": "2018-10-13 06:16:22.251 [INFO][9] startup.go 99: Datastore is ready\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-9dz94_kube-system_calico-node-394def5ecbc2cf175f25c9b8f37919748b9275169a496d2aa2d5e6257060f14e.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "Kp8UbGYBLXittPaufLEA",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:16:22.000000000+00:00",
-          "docker": {
-            "container_id": "394def5ecbc2cf175f25c9b8f37919748b9275169a496d2aa2d5e6257060f14e"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker2",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "805e9786-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-9dz94"
-          },
-          "log": "2018-10-13 06:16:22.345 [INFO][9] k8s.go 264: EnsuringInitialized - noop\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-9dz94_kube-system_calico-node-394def5ecbc2cf175f25c9b8f37919748b9275169a496d2aa2d5e6257060f14e.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "Up8UbGYBLXittPauhrH2",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:02.000000000+00:00",
-          "docker": {
-            "container_id": "512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "2018-10-13 06:17:02.285 [INFO][9] startup.go 267: Using NODENAME environment for node name\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_calico-node-512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "U58UbGYBLXittPauhrH2",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:02.000000000+00:00",
-          "docker": {
-            "container_id": "512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "2018-10-13 06:17:02.285 [INFO][9] startup.go 279: Determined node name: worker3\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_calico-node-512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "VZ8UbGYBLXittPauhrH2",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:02.000000000+00:00",
-          "docker": {
-            "container_id": "512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "2018-10-13 06:17:02.317 [INFO][9] startup.go 326: Datastore connection verified\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_calico-node-512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "WZ8UbGYBLXittPauhrH2",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:02.000000000+00:00",
-          "docker": {
-            "container_id": "512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "2018-10-13 06:17:02.390 [INFO][9] startup.go 176: Using node name: worker3\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_calico-node-512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "W58UbGYBLXittPauhrH2",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:02.000000000+00:00",
-          "docker": {
-            "container_id": "512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-node:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-node@sha256:21d581d7356f2dba648f2905502a38fd4ae325fd079d377bcf94028bcfa577a3",
-            "container_name": "calico-node",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "CALICO_NETWORKING_BACKEND is none - no BGP daemon running\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_calico-node-512d1e5001431753251aef0db5e9e713def50900a4e20d5a8f832a091ec55092.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "X58UbGYBLXittPaui7Ez",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:03.000000000+00:00",
-          "docker": {
-            "container_id": "1858c5892368bc09cac1d3cba2012f33f2a853112aef54187ff62a578a5f968e"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-cni:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-cni@sha256:cafcb06d6bd5ed1651e6cc7fe3f9a1848606be3950d7218cf4c9439634ca5342",
-            "container_name": "install-cni",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "ls: /calico-secrets: No such file or directory\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stderr",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_install-cni-1858c5892368bc09cac1d3cba2012f33f2a853112aef54187ff62a578a5f968e.log"
-        },
-        "_type": "container_log"
-      },
-      {
-        "_id": "Y58UbGYBLXittPaui7Ez",
-        "_index": "new-2018-10-13",
-        "_score": 4.6962476,
-        "_source": {
-          "@timestamp": "2018-10-13T06:17:03.000000000+00:00",
-          "docker": {
-            "container_id": "1858c5892368bc09cac1d3cba2012f33f2a853112aef54187ff62a578a5f968e"
-          },
-          "kubernetes": {
-            "container_image": "rancher/calico-cni:v3.1.1",
-            "container_image_id": "docker-pullable://rancher/calico-cni@sha256:cafcb06d6bd5ed1651e6cc7fe3f9a1848606be3950d7218cf4c9439634ca5342",
-            "container_name": "install-cni",
-            "host": "worker3",
-            "labels": {
-              "controller-revision-hash": "2111978372",
-              "k8s-app": "canal",
-              "pod-template-generation": "1"
-            },
-            "master_url": "https://10.43.0.1:443/api",
-            "namespace_id": "29f5deaa-b0ba-11e8-895c-000c29fba296",
-            "namespace_labels": {
-              "field_cattle_io/projectId": "p-zbn8t"
-            },
-            "namespace_name": "kube-system",
-            "pod_id": "97ee8b12-ceaf-11e8-89b6-000c29180c25",
-            "pod_name": "canal-6x8qr"
-          },
-          "log": "        \"k8s_api_root\": \"https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__\",\n",
-          "log_type": "k8s_normal_container",
-          "stream": "stdout",
-          "tag": "cluster.var.log.containers.canal-6x8qr_kube-system_install-cni-1858c5892368bc09cac1d3cba2012f33f2a853112aef54187ff62a578a5f968e.log"
-        },
-        "_type": "container_log"
-      }
-    ],
-    "max_score": 4.6962476,
-    "total": 260
-  },
-  "timed_out": false,
-  "took": 5
+            "since": 1562663413037,
+            "timestamp": 1563325520673
+        }
+    }
 }
+	  

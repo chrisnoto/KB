@@ -1,0 +1,66 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: w3c
+  namespace: default
+  labels:
+    app: w3c
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: w3c
+  template:
+    metadata:
+      labels:
+        app: w3c
+    spec:
+      initContainers:
+      - name: w3c-init
+        image: alpine/git:latest
+        imagePullPolicy: Always
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+        args:
+        - clone
+        - https://github.com/chrisnoto/html-1.git
+        env:
+        - name: https_proxy
+          value: http://10.67.9.210:3128
+        volumeMounts:
+        - mountPath: /git
+          name: vol1
+        workingDir: /git
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - name: w3c
+        image: nginx:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: 80tcp802
+          protocol: TCP
+        stdin: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        tty: true
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/repo
+          name: vol1
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - cp -f /usr/share/nginx/html/repo/html-1/index.html /usr/share/nginx/html/index.html
+
+      dnsPolicy: ClusterFirst
+      volumes:
+      - name: vol1
+        emptyDir:
+          sizeLimit: 100Mi

@@ -9,9 +9,9 @@ http.host: 10.67.36.74
 http.port: 9600
 path.data: /var/lib/logstash
 path.logs: /var/log/logstash
-pipeline.workers: 4
-pipeline.batch.size: 2000          #4*2000 < 10000不报警; 超过10000报警,其实不是问题
-pipeline.batch.delay: 5
+pipeline.workers: 8
+pipeline.batch.size: 2500          #4*2000 < 10000不报警; 超过10000报警,其实不是问题
+pipeline.batch.delay: 15            # 提高了delay和batch size, kafka lag 明显减少
 config.reload.automatic: true
 xpack.monitoring.enabled: true
 xpack.monitoring.elasticsearch.url: ["http://10.67.36.53:9200"]

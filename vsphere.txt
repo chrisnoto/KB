@@ -1,0 +1,47 @@
+######启用sr-iov ########
+先在BIOS里启用网卡的sr-iov功能, 然后在esxcli里设定max_vfs
+~ # esxcli system module parameters set -m bnx2x -p "max_vfs=16,16,16,16"
+~ # esxcli network sriovnic list
+Name    PCI Device     Driver  Link  Speed  Duplex  MAC Address         MTU  Description
+------  -------------  ------  ----  -----  ------  -----------------  ----  -------------------------------------------------------------
+vmnic0  0000:001:00.0  bnx2x   Down      0  Half    18:66:da:74:22:db  1500  Broadcom Corporation QLogic 57800 10 Gigabit Ethernet Adapter
+vmnic1  0000:001:00.1  bnx2x   Down      0  Half    18:66:da:74:22:dd  1500  Broadcom Corporation QLogic 57800 10 Gigabit Ethernet Adapter
+~ # esxcli network sriovnic vf list -n vmnic0
+VF ID  Active  PCI Address  Owner World ID
+-----  ------  -----------  --------------
+    0   false  001:01.0      -
+    1   false  001:01.1      -
+    2   false  001:01.2      -
+    3   false  001:01.3      -
+    4   false  001:01.4      -
+    5   false  001:01.5      -
+    6   false  001:01.6      -
+    7   false  001:01.7      -
+    8   false  001:02.0      -
+    9   false  001:02.1      -
+   10   false  001:02.2      -
+   11   false  001:02.3      -
+   12   false  001:02.4      -
+   13   false  001:02.5      -
+   14   false  001:02.6      -
+   15   false  001:02.7      -
+~ # esxcli network sriovnic vf list -n vmnic1
+VF ID  Active  PCI Address  Owner World ID
+-----  ------  -----------  --------------
+    0   false  001:09.0      -
+    1   false  001:09.1      -
+    2   false  001:09.2      -
+    3   false  001:09.3      -
+    4   false  001:09.4      -
+    5   false  001:09.5      -
+    6   false  001:09.6      -
+    7   false  001:09.7      -
+    8   false  001:10.0      -
+    9   false  001:10.1      -
+   10   false  001:10.2      -
+   11   false  001:10.3      -
+   12   false  001:10.4      -
+   13   false  001:10.5      -
+   14   false  001:10.6      -
+   15   false  001:10.7      -
+		

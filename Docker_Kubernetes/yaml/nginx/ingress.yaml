@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: w3c-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: w3c.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: w3c
+          servicePort: 80

@@ -4,7 +4,8 @@
 发现mapping里beat.hostname  type有的是text 有的是keyword
 在kibana中选择6月28日  type为text  使用beat.hostname.keyword有数据
 在kibana中选择7月11日  type为keyword  使用beat.hostname.keyword无数据
-根本原因: filebeat-6.8.1的模板出问题了, 导致mapping不正确
+根本原因: filebeat-6.8.1的模板出问题了, 导致mapping不正确   
+
 [chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-*/_mapping/doc/field/beat.hostname?pretty'
 {
   "filebeat-6.8.1-2019.04.09" : {
@@ -77,7 +78,7 @@ curl -XGET http://10.67.51.150:9200/_template/filebeat-6.8.1 |python -m json.too
 删除模板
 curl -XDELETE http://10.67.51.150:9200/_template/filebeat-6.8.1
 重新上传模板
-filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]
+filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]'
 分别查看7月10日前和10日后的mapping, 可看出mapping不一样
 [chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-6.8.1-2019.07.0*/_mapping/doc/field/beat.hostname?pretty'
 [chensen@cobbler ~]$ curl -XGET '10.67.51.150:9200/filebeat-6.8.1-2019.07.1*/_mapping/doc/field/beat.hostname?pretty'
