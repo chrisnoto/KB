@@ -208,6 +208,8 @@ service不带selector 不会创建endpoints,但可以自己定义endpoints，例
 如使用glusterfs pv,则配置会先创建glusterfs service不带selector，再创建glusterfs endpoints
 如使用glusterfs storageclass,直接配置创建storageclass
 An ExternalName service is a special case of service that does not have selectors and uses DNS names instead.
+#If the external service has a valid domain name and you don’t need port remapping, then using the “ExternalName” service type is an easy and quick way to map the external service to an internal one. 
+#If you don’t have a domain name or need to do port remapping, simply add the IP addresses to an endpoint and use that instead.
 ## Type ExternalName
 Note: ExternalName Services are available only with kube-dns version 1.7 and later.
 Services of type ExternalName map a service to a DNS name (specified using the spec.externalName parameter) rather than to a typical selector like my-service or cassandra. 

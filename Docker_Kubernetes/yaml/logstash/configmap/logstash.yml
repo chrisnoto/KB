@@ -1,0 +1,9 @@
+http.host: 0.0.0.0
+http.port: 9600
+pipeline.workers: 8
+pipeline.batch.size: 2500          
+pipeline.batch.delay: 15
+config.reload.automatic: true
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.url: ["http://elasticsearch:9200"]
+xpack.monitoring.collection.interval: 10s

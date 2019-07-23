@@ -1,3 +1,62 @@
+Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. Applications that attempt to write to these volumes will receive read-only filesystem errors.
+
+##############outside service ###########
+[chensen@cobbler logstash]$ kubectl get endpoints
+NAME            ENDPOINTS           AGE
+elasticsearch   10.67.51.150:9200   47s
+[chensen@cobbler logstash]$ kubectl get svc
+NAME            TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+elasticsearch   ClusterIP   10.43.201.194   <none>        9200/TCP   51s
+[root@worker3 ~]# docker run --rm appropriate/curl -s http://10.67.51.150:9200/_cluster/settings
+{"persistent":{"xpack":{"monitoring":{"collection":{"enabled":"true"}}}},"transient":{}}
+[root@worker3 ~]# docker run --rm appropriate/curl -s http://10.43.201.194:9200/_cluster/settings
+{"persistent":{"xpack":{"monitoring":{"collection":{"enabled":"true"}}}},"transient":{}}
+
+[chensen@cobbler logstash]$ kubectl run -it --rm --restart=Never curl --image=appropriate/curl sh
+If you don't see a command prompt, try pressing enter.
+/ # curl -s http://elasticsearch:9200
+{
+  "name" : "stjes1",
+  "cluster_name" : "es-prod",
+  "cluster_uuid" : "3hWr0QRmRomwGRsW_KqMgg",
+  "version" : {
+    "number" : "6.8.1",
+    "build_flavor" : "default",
+    "build_type" : "rpm",
+    "build_hash" : "1fad4e1",
+    "build_date" : "2019-06-18T13:16:52.517138Z",
+    "build_snapshot" : false,
+    "lucene_version" : "7.7.0",
+    "minimum_wire_compatibility_version" : "5.6.0",
+    "minimum_index_compatibility_version" : "5.0.0"
+  },
+  "tagline" : "You Know, for Search"
+}
+########不清楚为什么nslookup不工作, 而上面curl镜像却可以解析elasticsearch
+[chensen@cobbler logstash]$ kubectl run -it --rm --restart=Never busybox --image=busybox /bin/sh
+If you don't see a command prompt, try pressing enter.
+/ # nslookup elasticsearch
+Server:         10.43.0.10
+Address:        10.43.0.10:53
+
+** server can't find elasticsearch.default.svc.cluster.local: NXDOMAIN
+
+*** Can't find elasticsearch.svc.cluster.local: No answer
+*** Can't find elasticsearch.cluster.local: No answer
+*** Can't find elasticsearch.worker1: No answer
+*** Can't find elasticsearch.default.svc.cluster.local: No answer
+*** Can't find elasticsearch.svc.cluster.local: No answer
+*** Can't find elasticsearch.cluster.local: No answer
+*** Can't find elasticsearch.worker1: No answer
+######node上指定internal DNS 可以解析elasticsearch
+[root@worker5 ~]# nslookup elasticsearch.default.svc.cluster.local 10.43.0.10 (internal DNS)
+Server:         10.43.0.10
+Address:        10.43.0.10#53
+
+Non-authoritative answer:
+Name:   elasticsearch.default.svc.cluster.local
+Address: 10.43.201.194
+
 ###########configmap##########
 kubectl create configmap --from-file=kibana.yml=./kibana.yml kibana-config
 ########### HPA #############
