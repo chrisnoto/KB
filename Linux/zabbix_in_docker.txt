@@ -1,0 +1,41 @@
+# on worker4
+docker run --name mysql-server -p 3306:3306 -t \
+	  -e 'TZ=Asia/Shanghai' \
+      -e MYSQL_DATABASE="zabbix" \
+      -e MYSQL_USER="zabbix" \
+      -e MYSQL_PASSWORD="Foxconn123" \
+      -e MYSQL_ROOT_PASSWORD="Foxconn123" \
+      -d mysql:5.7 \
+      --character-set-server=utf8 --collation-server=utf8_bin
+
+# on worker1	  
+docker run --name zabbix-java-gateway -t \
+	  -e 'TZ=Asia/Shanghai' \
+      -d zabbix/zabbix-java-gateway:latest	  
+
+docker run --name zabbix-server-mysql -t \
+	  -e 'TZ=Asia/Shanghai' \
+      -e DB_SERVER_HOST="mysql-server" \
+      -e MYSQL_DATABASE="zabbix" \
+      -e MYSQL_USER="zabbix" \
+      -e MYSQL_PASSWORD="Foxconn123" \
+      -e MYSQL_ROOT_PASSWORD="Foxconn123" \
+      -e ZBX_JAVAGATEWAY="zabbix-java-gateway" \
+      -e DB_SERVER_HOST="10.67.36.59" \
+      --link zabbix-java-gateway:zabbix-java-gateway \
+      -p 10051:10051 \
+      -d zabbix/zabbix-server-mysql:centos-latest
+	  
+docker run --name zabbix-web-nginx-mysql -t \
+	  -e 'TZ=Asia/Shanghai' \
+      -e MYSQL_DATABASE="zabbix" \
+      -e MYSQL_USER="zabbix" \
+      -e MYSQL_PASSWORD="Foxconn123" \
+      -e MYSQL_ROOT_PASSWORD="Foxconn123" \
+      -e DB_SERVER_HOST="10.67.36.59" \
+      --link zabbix-server-mysql:zabbix-server \
+      -p 8000:80 \
+      -d zabbix/zabbix-web-nginx-mysql:latest
+	  
+docker run --name zabbix-agent -p 10050:10050 -e ZBX_HOSTNAME="10.67.36.62" -e ZBX_SERVER_HOST="10.67.36.62" -d zabbix/zabbix-agent:centos-latest	  
+	  

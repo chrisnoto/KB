@@ -1,5 +1,25 @@
 Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. Applications that attempt to write to these volumes will receive read-only filesystem errors.
 
+##############kubectl exec ########
+[chensen@cobbler logstash]$ kubectl exec logstash-7d56c78f9-l5pk4 -- cat /usr/share/logstash/config/logstash.yml
+http.host: 0.0.0.0
+http.port: 9600
+pipeline.workers: 8
+pipeline.batch.size: 4000
+pipeline.batch.delay: 10
+config.reload.automatic: true
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.url: ["http://elasticsearch:9200"]
+xpack.monitoring.collection.interval: 10s
+
+#########cpu affinity#######
+[root@worker6 ~]# taskset -cp 12706   (logstash pid)
+pid 12706's current affinity list: 0-7
+[root@worker6 ~]# docker ps |grep logstash
+8ded7a485575        b6a9d6f1254e                         "/usr/local/bin/dock…"   8 minutes ago       Up 8 minutes                            k8s_logstash_logstash-7d56c78f9-tgdb4_default_2645623d-adf4-11e9-bbcf-0050569376db_0
+0f7e1e393f5e        rancher/pause:3.1                    "/pause"                 8 minutes ago       Up 8 minutes                            k8s_POD_logstash-7d56c78f9-tgdb4_default_2645623d-adf4-11e9-bbcf-0050569376db_0
+[root@worker6 ~]# docker exec -it 8ded taskset -cp 1
+pid 1's current affinity list: 0-7
 ##############outside service ###########
 [chensen@cobbler logstash]$ kubectl get endpoints
 NAME            ENDPOINTS           AGE

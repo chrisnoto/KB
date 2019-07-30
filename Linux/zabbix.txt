@@ -8,7 +8,7 @@ zabbix優化及配置
 innodb_buffer_pool_size = 10G           主機內存的60%-70%
 innodb_buffer_pool_instances=8
 innodb_flush_method=O_DIRECT           不使用文件系統緩存，避免double cache
-innodb_log_file_size=400M                       根據一個小時的數據量，來評估 log file大小
+innodb_log_file_size=512M                       根據一個小時的數據量，來評估 log file大小
 innodb_buffer_pool_dump_pct=75
 innodb_io_capacity=800
 innodb_io_capacity_max=4000
@@ -18,6 +18,7 @@ innodb_lru_scan_depth=256
 character-set-server=utf8                            支持中文
 collation-server=utf8_general_ci
 max_connections=2048                前提：設置ulimit
+wait_timeout=28800
 
 slow_query_log=1                                       開啟慢查詢
 slow_query_log_file = /var/log/mysql/mysql-slow.log

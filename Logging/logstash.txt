@@ -1,3 +1,45 @@
+[root@kafka1 filebeat-4]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash |grep -v k8s
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+filebeat        0          39867123        39875188        8065            logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        1          40019918        40030400        10482           logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        2          40124477        40133453        8976            logstash-0-1138d0a5-2257-4d74-8567-3045f928515a /10.67.50.200   logstash-0
+filebeat        3          41413670        41421609        7939            logstash-0-509b91da-8f23-4c2b-8ba6-a2a278fe8305 /10.67.48.194   logstash-0
+filebeat        4          42164270        42416985        252715          logstash-0-90c67275-204a-4b85-b796-22fd9de6173a /10.67.36.56    logstash-0
+filebeat        5          38457140        38929894        472754          logstash-0-d16d0c6b-82c1-4d09-b4b6-3ce47ae60d05 /10.67.36.57    logstash-0
+
+[root@kafka1 filebeat-4]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash |grep -v k8s
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+filebeat        0          40621212        40646419        25207           logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        1          40776202        40801421        25219           logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        2          40899082        40901478        2396            logstash-0-1138d0a5-2257-4d74-8567-3045f928515a /10.67.50.200   logstash-0
+filebeat        3          42168270        42190008        21738           logstash-0-509b91da-8f23-4c2b-8ba6-a2a278fe8305 /10.67.48.194   logstash-0
+filebeat        4          42803233        43185139        381906          logstash-0-90c67275-204a-4b85-b796-22fd9de6173a /10.67.36.56    logstash-0
+filebeat        5          38873959        39699162        825203          logstash-0-d16d0c6b-82c1-4d09-b4b6-3ce47ae60d05 /10.67.36.57    logstash-0
+
+[root@kafka1 filebeat-4]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash |grep -v k8s
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+filebeat        0          40994544        40994902        358             logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        1          41149459        41149833        374             logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        2          41241633        41241779        146             logstash-0-1138d0a5-2257-4d74-8567-3045f928515a /10.67.50.200   logstash-0
+filebeat        3          42530504        42530620        116             logstash-0-509b91da-8f23-4c2b-8ba6-a2a278fe8305 /10.67.48.194   logstash-0
+filebeat        4          43408628        43525495        116867          logstash-0-90c67275-204a-4b85-b796-22fd9de6173a /10.67.36.56    logstash-0
+filebeat        5          39300390        40039410        739020          logstash-0-d16d0c6b-82c1-4d09-b4b6-3ce47ae60d05 /10.67.36.57    logstash-0
+
+[root@kafka1 filebeat-4]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash |grep -v k8s
+TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
+filebeat        0          41001879        41001963        84              logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        1          41156750        41156831        81              logstash-0-0b25ef61-eb19-455c-aa98-d18a5c6ddb5a /10.67.51.2     logstash-0
+filebeat        2          41243748        41243771        23              logstash-0-1138d0a5-2257-4d74-8567-3045f928515a /10.67.50.200   logstash-0
+filebeat        3          42532753        42532765        12              logstash-0-509b91da-8f23-4c2b-8ba6-a2a278fe8305 /10.67.48.194   logstash-0
+filebeat        4          43527336        43527545        209             logstash-0-90c67275-204a-4b85-b796-22fd9de6173a /10.67.36.56    logstash-0
+filebeat        5          39460588        40041419        580831          logstash-0-d16d0c6b-82c1-4d09-b4b6-3ce47ae60d05 /10.67.36.57    logstash-0
+
+以上数据看出 (调整过send/receive buffer bytes为2M)
+lag最大   36.57  在kubernetes里的logstash  在一台esxi里   不超过 3k events/s
+第二      36.56  在kubernetes里的logstash   在一台kvm里   可达到5k events/s
+其他       其他  在esxi里跑的虚机logstash                 可达到 5k - 10k events/s (51.2这台)
+从ES上看              吞吐量在 23k - 28k event/s
+
 logstash安装
 
 1 安装java8
@@ -23,15 +65,25 @@ kafka input             logstash server的/etc/hosts文件要添加kafka server�
 [root@logstash conf.d]# cat 100-kafka-input.conf
 input {
   kafka {
-    bootstrap_servers => "10.67.38.121:9092,10.67.38.122:9092,10.67.38.123:9092"
-    topics => ["logstash","metricbeat","k8s","swarm"]
+     bootstrap_servers => "10.67.51.144:9092,10.67.51.145:9092,10.67.51.146:9092"
+    topics => ["filebeat","k8s"]
     codec => "json"
     decorate_events => true
+    receive_buffer_bytes => "2097152"
+    send_buffer_bytes => "2097152"
   }
   beats {
     port => 5044
   }
+  tcp {
+    port => 3514
+  }
+  syslog {
+    port => 5514
+    syslog_field => "syslog"
+  }
 }
+
 
 
 [root@logstash conf.d]# cat /etc/logstash/conf.d/200-syslog-filter.conf
@@ -129,29 +181,36 @@ MYSQL_SLOW # User@Host: %{WORD:[mysql][slowlog][dbuser]}\[%{WORD:[mysql][slowlog
 output {
   if [kubernetes][host] {
   elasticsearch {
-    hosts => ["http://10.67.36.53:9200"]
+    hosts => ["http://10.67.51.150:9200"]
     index => "k8s-%{+YYYY.MM.dd}"
   }
 }
   else if [driver] == "rke" {
   elasticsearch {
-    hosts => ["http://10.67.36.53:9200"]
+    hosts => ["http://10.67.51.150:9200"]
     index => "rke-%{+YYYY.MM.dd}"
   }
 }
   else if [docker][container][id] {
   elasticsearch {
-    hosts => ["http://10.67.36.53:9200"]
+    hosts => ["http://10.67.51.150:9200"]
     index => "swarm-%{+YYYY.MM.dd}"
   }
 }
-  else {
+  else if [beat][name] {
   elasticsearch {
-    hosts => ["http://10.67.36.53:9200"]
+    hosts => ["http://10.67.51.150:9200"]
     index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
   }
  }
+  else {
+  elasticsearch {
+    hosts => ["http://10.67.51.150:9200"]
+    index => "syslog-%{+YYYY.MM.dd}"
+    }
+  }
 }
+
 
 注意  多个logstash server的配置要统一，否则条件判断就乱掉了
 

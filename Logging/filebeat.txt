@@ -176,6 +176,18 @@ filebeat.config.modules:
   reload.enabled: false
 filebeat.modules:
 - module: kafka
+  log:
+  var.paths:
+      - "/var/log/kafka/controller.log*"
+      - "/var/log/kafka/server.log*"
+      - "/var/log/kafka/state-change.log*"
+      - "/var/log/kafka/log-cleaner.log*"
+- module: haproxy
+  log:
+    var.input: file
+    var.paths:
+      - "/var/log/haproxy.log"
+
 processors:
 - add_cloud_metadata: ~
 setup.template.settings:
