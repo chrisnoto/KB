@@ -5,9 +5,10 @@ curl -sXGET "10.67.51.150:9200/_nodes/stats/thread_pool"|python -mjson.tool |gre
 ######## translog 异步写硬盘 ############ 观察到IOPS大幅下降           最好在模板里改，其次cronjob
  curl -XPUT 'http://10.67.51.150:9200/_all/_settings?preserve_existing=true' -H 'Content-Type: application/json' -d '{
   "index.translog.durability" : "async",
-  "index.translog.flush_threshold_size" : "1gb"
+  "index.translog.flush_size" : "1gb"
   }'
-
+flush是把内存中的数据(包括translog和segments)都刷到磁盘
+而fsync只是把translog刷新的磁盘(确保数据不丢失)。
 
 #########要写入elasticsearch.yml,  这个配置不再是dynamic##########
 curl -XPUT '10.67.51.150:9200/_cluster/settings' -H 'Content-Type: application/json' -d '{

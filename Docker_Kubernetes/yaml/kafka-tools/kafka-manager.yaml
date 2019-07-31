@@ -1,0 +1,60 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: kafka-manager
+  namespace: default
+  labels:
+    app: kafka-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-manager
+  template:
+    metadata:
+      labels:
+        app: kafka-manager
+    spec:
+      containers:
+      - name: kafka-manager
+        image: hlebalbau/kafka-manager:stable
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          value: Asia/Shanghai
+        - name: ZK_HOSTS
+          value: zookeeper:2181
+        ports:
+        - containerPort: 9000
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-manager
+  labels:
+    app: kafka-manager
+spec:
+  selector:
+    app: kafka-manager
+  ports:
+  - protocol: TCP
+    port: 9000
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: kafka-manager-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: kafka-manager.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: kafka-manager
+          servicePort: 9000
+

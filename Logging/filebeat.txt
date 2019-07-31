@@ -2,6 +2,9 @@ filebeat配置
 
 #filebeat成功启动并收集大量log时, 会对logstash产生较大压力, 比如 4k+ events/s, cpu使用率 60-100%
 
+###Load the pipeline in Elasticsearch
+filebeat setup -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]' --pipelines --modules haproxy
+
 ###Load the index template in Elasticsearch
 filebeat setup --template -E 'output.kafka.enabled=false' -E 'output.elasticsearch.hosts=["10.67.51.150:9200"]'
 

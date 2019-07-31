@@ -1,0 +1,57 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: cerebro
+  namespace: default
+  labels:
+    app: cerebro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cerebro
+  template:
+    metadata:
+      labels:
+        app: cerebro
+    spec:
+      containers:
+      - name: cerebro
+        image: yannart/cerebro:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9000
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cerebro
+  labels:
+    app: cerebro
+spec:
+  selector:
+    app: cerebro
+  ports:
+  - protocol: TCP
+    port: 9000
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: cerebro-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: cerebro.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: cerebro
+          servicePort: 9000
+
+
+

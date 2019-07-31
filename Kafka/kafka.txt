@@ -22,8 +22,13 @@ bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 -
 bin/kafka-topics.sh --list --zookeeper localhost:2181
 
 删除主题
-bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic test_topic
+bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic logstash
 注意：需要在Broker的配置文件server.properties中配置 delete.topic.enable=true 才能删除主题。
+
+从zookeeper手动删除topic
+get /brokers/topics/<topic_name>
+rmr /brokers/topics/<topic_name>
+rmr /admin/delete_topics/<topic_name>
 
 简单的将消息输出到标准输出中
 bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning
@@ -56,7 +61,7 @@ Topic:test_topic        PartitionCount:3        ReplicationFactor:3     Configs:
         Topic: test_topic       Partition: 1    Leader: 2       Replicas: 2,3,1 Isr: 2,3,1
         Topic: test_topic       Partition: 2    Leader: 3       Replicas: 3,1,2 Isr: 3,1,2
 #######增加partition#######
-[root@kafka2 ~]# kafka-topics --alter --zookeeper 10.67.51.145:2181 --topic filebeat --partitions 9
+[root@kafka2 ~]# kafka-topics --alter --zookeeper 10.67.51.145:2181 --topic filebeat --partitions 12
 WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected
 Adding partitions succeeded!
 

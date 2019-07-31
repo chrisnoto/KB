@@ -1,0 +1,21 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: zookeeper
+spec:
+  ports:
+  - port: 2181
+    targetPort: 2181
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: zookeeper
+subsets:
+  - addresses:
+      - ip: 10.67.51.144
+      - ip: 10.67.51.145
+      - ip: 10.67.51.146
+    ports:
+      - port: 2181
+

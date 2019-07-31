@@ -197,6 +197,13 @@ output {
     index => "swarm-%{+YYYY.MM.dd}"
   }
 }
+  else if [@metadata][pipeline] {
+  elasticsearch {
+    hosts => ["http://10.67.51.150:9200"]
+    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+    pipeline => "%{[@metadata][pipeline]}"
+   }
+  }
   else if [beat][name] {
   elasticsearch {
     hosts => ["http://10.67.51.150:9200"]
@@ -210,6 +217,7 @@ output {
     }
   }
 }
+
 
 
 注意  多个logstash server的配置要统一，否则条件判断就乱掉了
