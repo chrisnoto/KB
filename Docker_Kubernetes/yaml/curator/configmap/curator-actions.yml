@@ -1,0 +1,70 @@
+actions:
+  1:
+    action: delete_indices
+    description: >-
+      Delete indices older than 90 days (based on index name), for ALL the
+      prefixed indices. Ignore the error if the filter does not result in an
+      actionable list of indices (ignore_empty_list) and exit cleanly.
+    options:
+      ignore_empty_list: True
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: regex
+      value: '^filebeat-|^winlogbeat-|^syslog-'
+
+    - filtertype: age
+      source: name
+      direction: older
+      timestring: '%Y.%m.%d'
+      unit: days
+      unit_count: 90
+
+
+
+  2:
+    action: forcemerge
+    description: >-
+      Forcemerge indices older than 2 days (based on index creation_date) to 2
+      segments per shard.  Delay 60 seconds between each forceMerge operation
+      to allow the cluster to quiesce. Skip indices that have already been
+      forcemerged to the minimum number of segments to avoid reprocessing.
+    options:
+      max_num_segments: 1
+      delay: 60
+      timeout_override:
+      continue_if_exception: False
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: regex
+      value: '^filebeat-|^winlogbeat-|^syslog-'
+
+    - filtertype: age
+      source: name
+      direction: older
+      timestring: '%Y.%m.%d'
+      unit: days
+      unit_count: 2
+
+    - filtertype: forcemerged
+      max_num_segments: 2
+      exclude:
+
+  3:
+    action: close
+    description: >-
+      Close indices older than 30 days (based on index name), for all the indices.
+    options:
+      delete_aliases: False
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: regex
+      value: '^filebeat-|^winlogbeat-|^syslog-'
+    - filtertype: age
+      source: name
+      direction: older
+      timestring: '%Y.%m.%d'
+      unit: days
+      unit_count: 30

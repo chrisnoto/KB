@@ -1,0 +1,40 @@
+apiVersion: batch/v1beta1 #for API server versions >= 1.8.0 use batch/v1beta1
+kind: CronJob
+metadata:
+  name: curator
+  labels:
+    app: curator
+spec:
+  schedule: "40 03 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          securityContext:
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+          - image: docker.io/juanmatias/elasticsearch-curator:5.6.0
+            securityContext:
+              runAsUser: 1000
+            imagePullPolicy: IfNotPresent
+            name: curator
+            command: ["/bin/sh","-c","'/curator/bootup.sh'"]
+            volumeMounts:
+            - mountPath: /curator/config
+              name: curator-config
+            env:
+              - name: TZ
+                value: Asia/Shanghai
+              - name: ELASTIC_URL
+                value: 10.67.51.150
+          restartPolicy: OnFailure
+          volumes:
+          - name: curator-config
+            configMap:
+              defaultMode: 256
+              name: curator-config
