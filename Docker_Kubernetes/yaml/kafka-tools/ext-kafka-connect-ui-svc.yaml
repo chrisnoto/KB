@@ -1,0 +1,21 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: kafka-connect-ui
+spec:
+  ports:
+  - port: 8083
+    targetPort: 8083
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: kafka-connect-ui
+subsets:
+  - addresses:
+      - ip: 10.67.51.144
+      - ip: 10.67.51.145
+      - ip: 10.67.51.146
+    ports:
+      - port: 8083
+

@@ -1,0 +1,64 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: connect-ui
+  namespace: default
+  labels:
+    app: connect-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: connect-ui
+  template:
+    metadata:
+      labels:
+        app: connect-ui
+    spec:
+      containers:
+      - name: connect-ui
+        image: landoop/kafka-connect-ui
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          value: Asia/Shanghai
+        - name: CONNECT_URL
+          value: "http://kafka-connect-ui:8083;kafka prod,http://10.67.38.134:8083;kafka dev"
+        - name: access.control.allow.methods
+          value: "GET,POST,PUT,DELETE,OPTIONS"
+        - name: access.control.allow.origin
+          value: "*"
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connect-ui
+  labels:
+    app: connect-ui
+spec:
+  selector:
+    app: connect-ui
+  ports:
+  - protocol: TCP
+    port: 8000
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: connect-ui-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: connect-ui.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: connect-ui
+          servicePort: 8000
+
