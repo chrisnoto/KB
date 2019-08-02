@@ -1,10 +1,36 @@
-Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. Applications that attempt to write to these volumes will receive read-only filesystem errors.
+Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. 
+Applications that attempt to write to these volumes will receive read-only filesystem errors.
+
+#############kubectl top #########
+[chensen@cobbler ~]$ kubectl top pod --all-namespaces
+NAMESPACE       NAME                                    CPU(cores)   MEMORY(bytes)
+default         cerebro-7678f89dc5-5qx7m                10m          479Mi
+default         kafka-manager-6df59b5596-sxwb7          26m          434Mi
+default         logstash-7d56c78f9-pfkfh                174m         6882Mi
+default         w3c-7fdc686574-bsqcb                    0m           1Mi
+ingress-nginx   default-http-backend-5954bd5d8c-s2m8t   1m           5Mi
+ingress-nginx   nginx-ingress-controller-l89hx          15m          166Mi
+ingress-nginx   nginx-ingress-controller-lttv5          15m          179Mi
+ingress-nginx   nginx-ingress-controller-lzkdr          17m          169Mi
+ingress-nginx   nginx-ingress-controller-n2ghj          16m          192Mi
+ingress-nginx   nginx-ingress-controller-w79m6          10m          201Mi
+ingress-nginx   nginx-ingress-controller-x8flb          13m          171Mi
+kube-system     canal-7c6tw                             42m          69Mi
+kube-system     canal-95rlc                             40m          66Mi
+kube-system     canal-cdxnn                             53m          74Mi
+kube-system     canal-dwmv6                             54m          73Mi
+kube-system     canal-f8kvc                             57m          74Mi
+kube-system     canal-kmgxg                             63m          71Mi
+kube-system     canal-zmtzl                             51m          71Mi
+kube-system     coredns-86bc4b7c96-jsvtg                11m          19Mi
+kube-system     coredns-86bc4b7c96-mbjht                10m          18Mi
+kube-system     coredns-autoscaler-5d5d49b8ff-crrpw     1m           8Mi
+kube-system     metrics-server-7f6bd4c888-jw5rd         2m           16Mi
 
 
 
 
-
-##############cronjob##############
+##############cronjob##############  cronjob的时间与kubernetes平台时间一致, 不与OS时间一致 可查看任意一个k8s组件的容器时间
 [chensen@cobbler curator]$ kubectl get cronjob
 NAME      SCHEDULE      SUSPEND   ACTIVE   LAST SCHEDULE   AGE
 curator   33 03 * * *   False     0        <none>          9m26s
@@ -22,8 +48,7 @@ NAME                             READY   STATUS    RESTARTS   AGE     IP        
 cerebro-7678f89dc5-5qx7m         1/1     Running   0          45h     10.42.2.12   10.67.36.59   <none>           <none>
 curator-1564630800-vk9vv         1/1     Running   0          43s     10.42.5.13   10.67.36.61   <none>           <none>
 kafka-manager-6df59b5596-sxwb7   1/1     Running   0          26h     10.42.3.13   10.67.36.62   <none>           <none>
-logstash-7d56c78f9-pfkfh         1/1     Running   0          2d18h   10.42.1.16   10.67.36.57   <none>           <none>
-w3c-7fdc686574-bsqcb             1/1     Running   0          11d     10.42.4.2    10.67.36.60   <none>           <none>
+
 [chensen@cobbler curator]$ kubectl logs curator-1564630800-vk9vv
 Starting bootup process...
 
@@ -42,6 +67,11 @@ Calling curator...
 2019-08-01 03:40:37,084 INFO      Trying Action ID: 2, "forcemerge": Forcemerge indices older than 2 days (based on index creation_date) to 2 segments per shard.  Delay 60 seconds between each forceMerge operation to allow the cluster to quiesce. Skip indices that have already been forcemerged to the minimum number of segments to avoid reprocessing.
 2019-08-01 03:40:37,950 INFO      forceMerging selected indices
 2019-08-01 03:40:37,951 INFO      forceMerging index filebeat-6.8.1-2019.07.24 to 1 segments per shard.  Please wait...
+[chensen@cobbler ~]$ kubectl get po -o wide
+NAME                             READY   STATUS      RESTARTS   AGE     IP           NODE          NOMINATED NODE   READINESS GATES
+cerebro-7678f89dc5-5qx7m         1/1     Running     0          47h     10.42.2.12   10.67.36.59   <none>           <none>
+curator-1564630800-vk9vv         0/1     Completed   5          114m    10.42.5.13   10.67.36.61   <none>           <none>
+kafka-manager-6df59b5596-sxwb7   1/1     Running     0          28h     10.42.3.13   10.67.36.62   <none>           <none>
 
 
 ##############kubectl exec ########

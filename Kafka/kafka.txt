@@ -115,47 +115,6 @@ Topic:perf      PartitionCount:3        ReplicationFactor:2     Configs:
 [root@kafka-1 kafka_2.11-2.1.0]# bin/kafka-consumer-groups.sh --bootstrap-server 10.67.38.121:9092 --list
 logstash
 
-[root@cobbler ~]# for u in 1 2 3;do echo "----kafka-$u----";ssh kafka-$u /opt/kafka/kafka_2.11-2.1.0/bin/kafka-consumer-groups.sh --bootstrap-server 10.67.38.121:9092 --describe --group logstash; done
-----kafka-1----
-
-TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
-logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-----kafka-2----
-
-TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
-logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-----kafka-3----
-
-TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
-logstash        0          2668271         2670680         2409            logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      0          2353094         2353094         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-metricbeat      1          2293275         2293275         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             0          19680312        19680312        0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-swarm           0          661163          661163          0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        1          2254310         2254310         0               logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-k8s             1          8909300         8909321         21              logstash-0-43aa6c12-54d3-49d9-9100-6f1a4d972182 /10.67.36.67    logstash-0
-logstash        2          1282237         1284568         2331            logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-metricbeat      2          2293274         2293274         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-k8s             2          8911512         8911512         0               logstash-0-44936e29-4eb6-4980-adc0-9d22b413edce /10.67.36.74    logstash-0
-		
 [root@kafka1 ~]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash
 
 TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                     HOST            CLIENT-ID
@@ -169,11 +128,8 @@ filebeat        1          987344          987356          12              logst
 filebeat        2          90007           90007           0               logstash-0-56eb6e36-7a20-48bd-9f24-6cc581f65948 /10.67.50.200   logstash-0		
 		
 Kafka REST proxy
-[root@cobbler ~]# curl http://10.67.36.59:8082/topics/logstash |python -m json.tool
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100   952  100   952    0     0  20552      0 --:--:-- --:--:-- --:--:-- 20695
-{
+[root@cobbler ~]# curl -sXGET http://10.67.36.59:8082/topics/logstash |python -m json.tool
+
     "configs": {
         "cleanup.policy": "delete",
         "compression.type": "producer",

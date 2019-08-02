@@ -1,0 +1,67 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: kafkahq
+  namespace: default
+  labels:
+    app: kafkahq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafkahq
+  template:
+    metadata:
+      labels:
+        app: kafkahq
+    spec:
+      containers:
+      - name: kafkahq
+        image: tchiotludo/kafkahq
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /app/application.yml
+          name: kafkahq-conf
+          subPath: application.yml
+        env:
+        - name: TZ
+          value: Asia/Shanghai
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+      volumes:
+      - name: kafkahq-conf
+        configMap:
+          defaultMode: 256
+          name: kafkahq-conf
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafkahq
+  labels:
+    app: kafkahq
+spec:
+  selector:
+    app: kafkahq
+  ports:
+  - protocol: TCP
+    port: 8080
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: kafkahq-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: kafkahq.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: kafkahq
+          servicePort: 8080
+
