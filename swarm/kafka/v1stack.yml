@@ -73,6 +73,25 @@ services:
 #      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=zoo3 -Dcom.sun.management.jmxremote.rmi.port=9993 -Dcom.sun.management.jmxremote.port=9993 -Dcom.sun.management.jmxremote.local.only=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  kafka-manager:
+    image: hlebalbau/kafka-manager:latest
+    ports:
+    - target: 9000
+      published: 9090
+      protocol: tcp
+      mode: ingress
+    environment:
+      KM_CONFIG: /srv/kafka-manager/custom.conf
+      ZK_HOSTS: "zoo1:2181,zoo2:2181,zoo3:2181"
+      APPLICATION_SECRET: letmein
+      #KAFKA_MANAGER_AUTH_ENABLED: 'true'
+      #KAFKA_MANAGER_USERNAME: admin
+      #KAFKA_MANAGER_PASSWORD: password
+    deploy:
+      placement:
+        constraints:
+        - node.labels.kafka == 2
+
 networks:
   default:
     external:

@@ -4,6 +4,7 @@ ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
 ansible controller -m script -a '/root/monitor.sh'
 ansible -i hosts 10.67.50.63 -m service -a "name=zabbix-agent enabled=yes"
+ansible k8s -m yum -a "name=socat state=present"
 
 ###no need sudo#####
 ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"

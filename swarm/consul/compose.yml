@@ -1,0 +1,124 @@
+version: '3.2'
+
+services:
+  consul1:
+    image: bitnami/consul
+    hostname: consul1
+    environment:
+      - CONSUL_LOCAL_CONFIG={"disable_update_check":true}
+      - "CONSUL_CLIENT_INTERFACE=eth0"
+      - "CONSUL_BIND_INTERFACE=eth0"
+    entrypoint:
+      - consul
+      - agent
+      - -server
+      - -bootstrap-expect=3
+      - -data-dir=/bitnami
+      - -bind={{ GetInterfaceIP "eth0" }}
+      - -rejoin
+      - -client=0.0.0.0
+      - -ui
+    ports:
+      - 8300:8300 #server rpc address
+      - 8301:8301 #CLuster Serf Addr LAN
+      - 8301:8301/udp
+      - 8302:8302 #Cluster Serf Addr WAN
+      - 8302:8302/udp
+      - 8400:8400 #cli rpc endpoint
+      - 8500:8500 #Web UI, http api
+      - 8600:53/udp #DNS service
+    network_mode: host
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 1
+
+    volumes:
+      - 'consul-node1_data:/bitnami'
+
+  consul2:
+    image: bitnami/consul
+    depends_on:
+      - consul-1
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 2
+
+    environment:
+      - CONSUL_LOCAL_CONFIG={"disable_update_check":true}
+      - "CONSUL_CLIENT_INTERFACE=eth0"
+      - "CONSUL_BIND_INTERFACE=eth0"
+
+    entrypoint:
+      - consul
+      - agent
+      - -server
+      - -data-dir=/bitnami
+      - -bind={{ GetInterfaceIP "eth0" }}
+      - -rejoin
+      - -retry-join=consul1
+      - -client=0.0.0.0
+      - -ui
+    network_mode: host
+    volumes:
+      - 'consul-node2_data:/bitnami'
+
+  consul-node3:
+    image: bitnami/consul
+    depends_on:
+      - consul1
+    deploy:
+      placement:
+        constraints:
+          - node.labels.kafka == 3
+    environment:
+      - CONSUL_LOCAL_CONFIG={"disable_update_check":true}
+      - "CONSUL_CLIENT_INTERFACE=eth0"
+      - "CONSUL_BIND_INTERFACE=eth0"
+    entrypoint:
+      - consul
+      - agent
+      - -server
+      - -data-dir=/bitnami
+      - -bind={{ GetInterfaceIP "eth0" }}
+      - -rejoin
+      - -retry-join=consul1
+      - -client=0.0.0.0
+      - -ui
+    network_mode: host
+    volumes:
+      - 'consul-node3_data:/bitnami'
+  consul-agent:
+    image: bitnami/consul
+    depends_on:
+      - consul1
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+    environment:
+      - CONSUL_LOCAL_CONFIG={"disable_update_check":true}
+      - "CONSUL_CLIENT_INTERFACE=eth0"
+      - "CONSUL_BIND_INTERFACE=eth0"
+    entrypoint:
+      - consul
+      - agent
+      - -date-dir=/bitnami
+      - -bind={{ GetInterfaceIP "eth0" }}
+      - -rejoin
+      - -retry-join=consul1
+      - -client=0.0.0.0
+    network_mode: host
+    volumes:
+      - 'consul-agent_data:/bitnami'
+
+volumes:
+  consul-node1_data:
+    driver: local
+  consul-node2_data:
+    driver: local
+  consul-node3_data:
+    driver: local
+  consul-agent_data:
+    driver: local

@@ -22,7 +22,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   kafka-manager:
-    image: zenko/kafka-manager:1.3.3.18
+    image: hlebalbau/kafka-manager:latest
     ports:
     - target: 9000
       published: 9090
