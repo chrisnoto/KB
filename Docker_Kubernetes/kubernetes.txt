@@ -1,6 +1,8 @@
 Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. 
 Applications that attempt to write to these volumes will receive read-only filesystem errors.
 
+#########storageclass######
+动态方式时,只需要删除pvc, pv会自动被删除
 #############kubectl top #########
 [chensen@cobbler ~]$ kubectl top pod --all-namespaces
 NAMESPACE       NAME                                    CPU(cores)   MEMORY(bytes)

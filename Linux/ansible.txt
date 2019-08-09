@@ -1,5 +1,11 @@
 Ansible adhoc 命令
 
+对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
+ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
+# tag a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0 source=local" 
+# tag and push a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=10.67.51.161:5000/kubernetes-dashboard-amd64:v1.10.0 source=local push=yes"
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
 ansible controller -m script -a '/root/monitor.sh'

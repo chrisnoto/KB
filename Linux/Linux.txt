@@ -1,3 +1,19 @@
+####### CentOS7 tuned##########
+profile里有一些cpu,disk,sysctl的调优参数
+tuned-adm active          #查看现在使用的profile
+tuned-adm profile throughput-performance         #切换到某profile
+
+DB类禁用透明大页
+[root@stjes1 ~]# vi /usr/lib/tuned/throughput-performance/tuned.conf
+add following lines:
+[vm]
+transparent_hugepages=never
+[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+[root@stjes1 ~]# tuned-adm profile throughput-performance
+[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
+always madvise [never]
+
 ####### Centos7 change team runner ##########
 [root@kafka2 ~]# nmcli conn modify team0 team.runner activebackup
 [root@kafka2 ~]# nmcli conn up team0

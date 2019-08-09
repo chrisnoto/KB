@@ -71,7 +71,7 @@ Checking health of node rabbit@rabbit1
 Health check passed
 
 5  on haproxy
-listen rabbitmq
+listen rabbitmq-management
   bind 10.67.36.215:15672
   balance  roundrobin
   mode  tcp
@@ -91,3 +91,11 @@ listen stats
   stats  show-node
   stats  show-legends
   stats  hide-version
+
+  
+ ####rabbitmq 1000多个unacked message########
+ 消费者挂掉后，unacked的消息会变成ready状态的消息重新放在队列中，待下次消费者启动后可以直接读取
+ 重启了node-2和node-3的rabbitmq解决
+ RabbitMQ 不会为unacked的消息设置过期时间，它判断此消息是否需要重新投递给消费者的
+唯一依据是消费该消息的消费者连接是否己经断开，这么设计的原因是RabbitMQ 允许消费者
+消费一条消息的时间可以很久很久。

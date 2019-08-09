@@ -14,38 +14,17 @@ pool .rgw id 1
   nothing is going on
 
 pool compute id 2
-  client io 0 B/s rd, 2764 kB/s wr, 152 op/s
+  client io 2008 kB/s rd, 3896 kB/s wr, 631 op/s
 
 pool images id 3
   nothing is going on
 
 pool volumes id 4
-  client io 81373 B/s rd, 3809 kB/s wr, 1004 op/s
+  client io 1236 kB/s rd, 8499 kB/s wr, 638 op/s
 
-pool backups id 5
-  nothing is going on
-
-pool .rgw.root id 6
-  nothing is going on
-
-pool .rgw.control id 7
-  nothing is going on
-
-pool .rgw.gc id 8
-  nothing is going on
-
-pool .users.uid id 9
-  nothing is going on
-
-pool .users id 10
-  nothing is going on
-
-pool .rgw.buckets.index id 11
-  nothing is going on
-
-pool .rgw.buckets id 12
-  nothing is going on
-
+...
+...
+...
 
 
 #############impact of SSD journals#################

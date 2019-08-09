@@ -103,7 +103,7 @@ rabbitmqctl set_permissions -p / chensen ".*" ".*" ".*"
 1 在node-18上面新增防火牆規則如下, 
 root@node-18:~# iptables -I INPUT 7 -s 10.20.0.0/24 -p tcp -m multiport --sports 15672 -m comment --comment "005 public network rabbitmq admin" -j ACCEPT
 2 從cobbler上通過10.20.0.0網段去做ssh正向tunnel
-# ssh -Nf -L 10.67.51.164:15672:localhost:15672 10.20.0.3
+# ssh -Nf -L 10.67.51.164:15672:localhost:15672 10.21.0.5
 3 用curl測試rabbitmq
 # curl -i -u tjadmin:tjadmin http://10.67.51.164:15672/api/vhosts
 HTTP/1.1 200 OK
@@ -116,6 +116,24 @@ Cache-Control: no-cache
 [{"messages":3,"messages_details":{"rate":0.0},"messages_ready":0,"messages_ready_details":{"rate":0.0},"messages_unacknowledged":3,
 "messages_unacknowledged_details":{"rate":0.0},"recv_oct":51693979911,"recv_oct_details":{"rate":9887.8},"send_oct":51547527142,
 "send_oct_details":{"rate":11537.333333333334},"name":"/","tracing":false}]
+
+###  %2F代表 "/"  vhost
+[chensen@cobbler ~]$ curl -u chensen:chensen -s XGET http://10.67.51.164:15672/api/queues/%2F/event.sample | python -m json.tool
+{
+    "arguments": {
+        "x-ha-policy": "all"
+    },
+    "auto_delete": false,
+    "backing_queue_status": {
+        "avg_ack_egress_rate": 0.0,
+        "avg_ack_ingress_rate": 0.9467287600297009,
+        "avg_egress_rate": 0.9467287600297009,
+        "avg_ingress_rate": 0.9467287600297009,
+
+#### set policy ##
+root@node-1:/etc/rabbitmq# rabbitmqctl set_policy metering.sample.message.ttl "^(metering|event).sample" '{"message-ttl":1000}' --priority 0 --apply-to queues
+Setting policy "metering.sample.message.ttl" for pattern "^(metering|event).sample" to "{\"message-ttl\":1000}" with priority "0" ...
+
 4 從我的電腦登陸10.67.51.164:15672
 
 #######怎樣進入haproxy監控頁面#####
