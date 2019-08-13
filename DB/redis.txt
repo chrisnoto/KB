@@ -1,0 +1,10 @@
+######redis-stat#######
+docker run --name redis-stat -p 63790:63790 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server 10.67.51.164 10.42.6.13 10.42.4.19 10.42.5.27
+kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service
+docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0.default.svc.cluster.local redis-ha-announce-1.default.svc.cluster.local redis-ha-announce-2.default.svc.cluster.local
+docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 --dns-search=default.svc.cluster.local -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0 redis-ha-announce-1 redis-ha-announce-2
+######redis-commander###
+docker run --name redis-commander -d --env REDIS_HOSTS=redis1:10.42.6.13:6379:1,redis2:10.42.4.19:6379:1,redis3:10.42.5.27:6379:1 -p 8081 rediscommander/redis-commander:latest
+docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.cluster.local \
+  --env REDIS_HOSTS=redis1:redis-ha-announce-0:6379:1,redis2:redis-ha-announce-1:6379:1,redis3:redis-ha-announce-2:6379:1 \
+  -p 8081 rediscommander/redis-commander:latest

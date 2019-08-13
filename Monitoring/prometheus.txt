@@ -291,3 +291,7 @@ ln -s /var/lib/grafana  /usr/share/grafana/data
 ln -s /var/log/grafana /usr/share/grafana/data/logs
 再执行	
 grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" Foxconn456
+
+##############cannot change profile for the next exec call: No such file or directory##########
+##############   Failed to start Service for snap application prometheus.prometheus  ##########
+执行apparmor_parser -r /var/lib/snapd/apparmor/profiles/*, 然后重启prometheus

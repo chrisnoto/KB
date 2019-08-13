@@ -1,0 +1,15 @@
+# filebeat redis output
+output.redis:
+  hosts: ["10.67.51.164"]
+  key: "filebeat"
+  db: 1
+  timeout: 5
+# logstash redis input
+  redis {
+    data_type => "list"
+    key => "filebeat"
+    host => "10.67.51.164"
+    port => "6379"
+    db => 1
+    threads => 5
+  }

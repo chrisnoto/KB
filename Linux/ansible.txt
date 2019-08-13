@@ -1,5 +1,5 @@
-Ansible adhoc 命令
-
+ansible-doc docker_image  查看帮助
+#####Ansible adhoc 命令
 对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
 ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
 # tag a docker image
@@ -11,7 +11,7 @@ ansible controller -m shell -a "ps -ef|grep rbd"
 ansible controller -m script -a '/root/monitor.sh'
 ansible -i hosts 10.67.50.63 -m service -a "name=zabbix-agent enabled=yes"
 ansible k8s -m yum -a "name=socat state=present"
-
+ansible openstack -m service -a "name=filebeat state=restarted"
 ###no need sudo#####
 ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
 ansible openstack-prod -m apt -a "name=zabbix-sender state=present"

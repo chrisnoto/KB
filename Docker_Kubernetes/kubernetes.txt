@@ -1,6 +1,9 @@
 Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. 
 Applications that attempt to write to these volumes will receive read-only filesystem errors.
 
+############docker与kubernetes交互##########
+kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service. 利用这点可以做测试
+docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 --dns-search=default.svc.cluster.local -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0
 #########storageclass######
 动态方式时,只需要删除pvc, pv会自动被删除
 #############kubectl top #########
