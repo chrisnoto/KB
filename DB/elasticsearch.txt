@@ -9,7 +9,7 @@ Beats: upgrade instructions
 
 #1  rolling upgrade elasticsearch repository-s3   6.4.0->6.8.1
 
-# curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+# curl -X PUT "10.67.51.150:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
   "persistent": {
     "cluster.routing.allocation.enable": "none"

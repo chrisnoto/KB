@@ -1,0 +1,261 @@
+http 无状态应用
+apiVersion: extensions/v1beta1 # kubectl api的版本
+kind: Deployment # kubernetes的资源类型 对于无状态应用 Deployment即可
+metadata:
+    name: http-prod-1.0.0000 # 部署的名称 不能重复 因为我需要多个版本共存因此使用 名称-环境-版本号的命名方式
+spec:
+    strategy:
+        rollingUpdate: # 滚动更新策略
+            maxSurge: 10% # 数值越大 滚动更新时新创建的副本数量越多
+            maxUnavailble: 10% # 数值越大 滚动更新时销毁的旧副本数量越多
+    replicas: 3 # 期待运行的Pod副本数量
+    template:
+        metadata:
+            labels: # 自定义标签
+                serverType: http
+                env: production
+                version: 1.0.0000
+        spec:
+            containers:
+                - name: httpapp
+                  image: yourDockerRegistry:1.0.0000
+                  readinessProbe: # 一种健康检查决定是否加入到service 对外服务 当接口返回200-400之外的状态码时，k8s会认为这个pod已经不可用，会从Service中移除
+                      httpGet:
+                          scheme: HTTP # 支持http https
+                          path: /
+                          port: 81
+                      initialDelaySeconds: 10 # 容器启动多久后开始检查
+                      periodSecods: 5 # 几秒检查一次
+                  env: # 镜像启动时的环境变量
+                      - name: DEBUG
+                        value: 'ccgame:*'
+                      - name: NODE_ENV
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['env'] # 从labels中读取env
+                      - name: HTTP_PORT
+                        value: '80'
+                      - name: SERVER_PORT
+                        value: '80'
+                      - name: HEALTHY_CHECK_PORT
+                        value: '81'
+                      - name: SERVER_TYPE
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['serverType'] # 从labels中读取SERVER_TYPE
+                      - name: NATS_ADDRESS
+                        value: 'nats://xxx:xxx@nats:4222' # 使用的消息队列集群地址
+                      - name: VERSION
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['version'] # 从labels中读取version
+
+            imagePullSecrets:
+                - name: regsecret
+
+创建对应的service
+apiVersion: v1 # kubectl api的版本
+kind: Service # kubernetes的资源类型 这里是Service
+metadata:
+    name: http-prod-v100000 # 服务的名称 不能重复 不能有. 因为我需要多个版本共存因此使用 名称-环境-版本号并去掉.的方式命名
+spec:
+    type: ClusterIP # service的类型 ClusterIp类型 只有Cluster内部节点和Pod可以访问 NodePort Cluster外部可以通过<NodeIp>:<NodePort>访问 LoadBalancer负载均衡
+    selector: # 匹配pod的标签与上文Deployment中的labels一致
+        serverType: http
+        env: production
+        version: 1.0.0000
+    ports:
+        - protocol: TCP # 只有TCP 或 UDP
+          port: 80 # 服务 监听的端口
+          targetPort: 80 # Pod 监听的端口 对应上面的Deployment中的HTTP_PORT
+
+创建对应的ingress
+apiVersion: extensions/v1beta1 # kubectl api的版本
+kind: Ingress # kubernetes的资源类型 这里是Ingress
+metadata:
+  name: https # 路由的名称
+spec:
+  rules:
+    - host: xx.xxxx.com # 域名
+      http:
+        paths:
+          - backend:
+              serviceName: http-prod-v100000 # 转发的服务名
+              servicePort: 80 # 转发到服务的哪个端口 对应上文的service port
+            path: / # 匹配路径
+  tls: # 开启tls
+    - hosts:
+        - xx.xxxx.com
+      secretName: yourSecretName # 证书 可通过 kubectl create secret generic yourSecretName --from-file=tls.crt --from-file=tls.key -n kube-system创建
+status:
+  loadBalancer:
+    ingress:
+      - ip: x.x.x.x # 负载均衡的ip下文会讲
+
+配置Ingress
+可以通过annotations注解的方式告诉Ingress你的配置，例如：如果你使用的是Nginx-Ingress-Controller，可以通过nginx.ingress.kubernetes.io/cors-allow-origin: *来配置cors，和配置Nginx几乎是一样的，只是名称不一样而已。
+Ingress灰度发布
+可以通过添加注解nginx.ingress.kubernetes.io/service-match: 'test-svc: header("Version", "1.0.0000")'，来进行灰度发布，比如匹配 request headers中Version=1.0.0000的流量转发到test-svc，可以匹配header、query、cookie,同时还可以配置权重等,例如修复问题时只把10%的流量切进来，待问题验证得到解决后再设置100。
+我们每次游戏前端发布版本都会在header中添加一个Version参数，我设置灰度发布之后就可以把特定前端版本的流量自由的切到某个特定的服务中，比较灵活。
+滚动更新
+当不需要灰度发布时，仅仅需要对某个Service的pod进行更新，只需要更改上文Deployment中镜像版本即可，当k8s检测到template字段更改时，会根据设置的rollingUpdate strategy策略进行滚动更新，对于http这种无状态的服务，也能达到业务不间断更新
+
+长连接 有状态应用
+apiVersion: apps/v1beta1 # kubectl api的版本
+kind: StatefulSet # kubernetes的资源类型 对于有状态应用选择StatefulSet
+metadata:
+    name: connector-prod-v100000 # 部署的名称 不能重复 因为我需要多个版本共存因此使用 名称-环境-版本号的命名方式
+spec:
+    replicas: 3 # 运行的Pod副本数量
+    template:
+        metadata:
+            labels: # 自定义标签
+                serverType: connector
+                wsType: socket.io
+                env: production
+                version: 1.0.0000
+        spec:
+            containers:
+                - name: connectorapp
+                  image: yourDockerRegistry:1.0.0000
+                  readinessProbe: # 一种健康检查决定是否加入到service 对外服务
+                      httpGet:
+                          scheme: HTTP # 支持http https
+                          path: /
+                          port: 82
+                      initialDelaySeconds: 10 # 容器启动多久后开始检查
+                      periodSecods: 5 # 几秒检查一次
+                  env: # 镜像启动时的环境变量
+                      - name: DEBUG
+                        value: 'ccgame:*'
+                      - name: NODE_ENV
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['env']
+                      - name: WS_PORT
+                        value: '80'
+                      - name: HEALTHY_CHECK_PORT
+                        value: '82'
+                      - name: SERVER_TYPE
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['serverType']
+                      - name: WS_TYPE
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['wsType']
+                      - name: NATS_ADDRESS
+                        value: 'nats://xxx:xxx@nats:4222'
+                      - name: VERSION
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['version']
+# 对于StatefulSet k8s会在metadata.name中自动加上一个序号，从0开始，如connector-prod-v100000-0,connector-prod-v100000-1
+                      - name: SERVER_ID
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.name
+
+            imagePullSecrets:
+                - name: regsecret
+
+在容器中获取pod信息
+一般来说对于StatefulSet 我们可能会在容器内知道这个pod的name，这时候就可以采用类似于上面的方法，通过valueFrom fieldPath: metadata.name把pod name信息注入到容器的环境变量中，这种特殊的语法是Downward API，帮助我们获取许多pod的信息
+
+滚动更新
+对于StatefulSet 默认的滚动更新策略是OnDelete, 也就是当这个pod被删除后，k8s再次创建时会更新镜像。即使我们改变这个策略，那么可以直接对齐进行更新吗？对于大多数StatefulSet是不太合适的（比如pod上面有用户的长连接 如果直接更新用户会断线 影响体验），或者说对于StatefulSet的滚动更新一直都是个很复杂的话题，所以如果要更新，推荐使用灰度发布。
+灰度发布的过程与上文http一致，对于我们的业务来说，用户的下一次连接会切到指定的版本上
+
+matching 后端有状态应用
+因为后端服务器不需要外界的访问，所以创建一个StatefulSet 启动后端微服务就可以，启动后会监听消息队列进行处理并返回数据
+apiVersion: apps/v1beta1 # kubectl api的版本
+kind: StatefulSet # kubernetes的资源类型
+metadata:
+    name: matching-v100000 # 部署的名称 不能重复 因为我需要多个版本共存因此使用 名称-环境-版本号的命名方式
+spec:
+    replicas: 1 # 运行的Pod副本数量
+    template:
+        metadata:
+            labels:
+                serverType: matching
+                env: production
+                version: 1.0.0000
+        spec:
+            containers:
+                - name: matchingapp
+                  image: yourDockerRegistry:1.0.0000
+                  readinessProbe: # 一种健康检查决定是否加入到service 对外服务
+                      httpGet:
+                          scheme: HTTP # 支持http https
+                          path: /
+                          port: 80
+                      initialDelaySeconds: 10 # 容器启动多久后开始检查
+                      periodSecods: 5 # 几秒检查一次
+                  env: # 镜像启动时的环境变量
+                      - name: DEBUG
+                        value: 'ccgame:*'
+                      - name: NODE_ENV
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['env']
+                      - name: SERVER_TYPE
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['serverType']
+                      - name: HEALTHY_CHECK_PORT
+                        value: '80'
+                      - name: NATS_ADDRESS
+                        value: 'nats://xxx:xxx@nats:4222'
+                      - name: SERVER_ID
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.name
+                      - name: VERSION
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.labels['version']
+            imagePullSecrets:
+                - name: regsecret
+
+cron 定时任务
+apiVersion: batch/v1beta1 # kubectl api的版本
+kind: CronJob # kubernetes的资源类型 这里选择CronJob 如果不需要定时选择Job
+metadata:
+    name: test-cron
+spec:
+    schedule: '0 0 * * *' # 每天晚上执行一次 cron表达式
+    jobTemplate:
+        spec:
+            template:
+                metadata:
+                    labels:
+                        serverType: cron
+                        env: production
+                        version: 1.0.0000
+                spec:
+                    containers:
+                        - name: cronapp
+                          image: yourDockerRegistry:1.0.0000
+                          args:
+                              - npm
+                              - run
+                              - start:testCron
+                          env: #
+                              - name: DEBUG
+                                value: 'ccgame:*'
+                              - name: NODE_ENV
+                                valueFrom:
+                                    fieldRef:
+                                        fieldPath: metadata.labels['env']
+                              - name: NATS_ADDRESS
+                                value: 'nats://xxx:xxx@nats:4222'
+                    restartPolicy: OnFailure
+                    imagePullSecrets:
+                        - name: regsecret
+
+部署之后定时器就开始运行了，非常简单。通过spec.successfulJobsHistoryLimit和spec.failedJobsHistoryLimit，表示历史限制，是可选的字段。
+它们指定了可以保留多少完成和失败的Job，默认没有限制，所有成功和失败的Job都会被保留。然而，当运行一个Cron Job时，Job可以很快就堆积很多，
+所以一般推荐设置这两个字段的值。如果设置限制的值为 0，那么相关类型的Job完成后将不会被保留。
+
+
+

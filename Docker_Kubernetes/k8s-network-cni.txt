@@ -1,0 +1,58 @@
+各主流CNI实现总结
+============================================================================
+            覆盖网络          主机路由        网络策略  去中心化的IP地址分配
+Flannel  UDP/VXLAN            HostGW           N                N  
+Calico     IPIP               BGP              Y                N
+Canal    UDP/VXLAN/IPIP       HostGW/BGP       Y                N
+Romana      N                 HostGW           Y                N
+Weave    UDP/VXLAN            N                Y                Y
+=============================================================================
+#########canal#################
+canal= calico + flannel
+连接方式:
+完美保持Flannel原生的三种模式
+扩展支持calico的BGP和IPIP模式
+改进点:
+支持网络策略
+[root@rancher ~]# kubectl -n kube-system logs canal-95rlc -c calico-node
+2019-07-20 03:28:03.791 [INFO][8] startup.go 244: Early log level set to info
+2019-07-20 03:28:03.792 [INFO][8] startup.go 260: Using NODENAME environment for node name
+2019-07-20 03:28:03.792 [INFO][8] startup.go 272: Determined node name: 10.67.36.63
+2019-07-20 03:28:03.797 [INFO][8] startup.go 304: Checking datastore connection
+2019-07-20 03:28:03.817 [INFO][8] startup.go 328: Datastore connection verified
+2019-07-20 03:28:03.818 [INFO][8] startup.go 92: Datastore is ready
+2019-07-20 03:28:03.885 [INFO][8] startup.go 518: FELIX_IPV6SUPPORT is false through environment variable
+2019-07-20 03:28:03.885 [INFO][8] k8s.go 262: EnsuringInitialized - noop
+2019-07-20 03:28:03.896 [INFO][8] startup.go 169: Using node name: 10.67.36.63
+2019-07-20 03:28:03.982 [INFO][18] allocate_ipip_addr.go 43: Kubernetes datastore driver handles IPIP allocation - no op
+CALICO_NETWORKING_BACKEND is none - no BGP daemon running
+Calico node started successfully
+[root@rancher ~]# kubectl -n kube-system logs canal-95rlc -c kube-flannel
+I0720 03:29:10.904227       1 main.go:475] Determining IP address of default interface
+I0720 03:29:10.905158       1 main.go:488] Using interface with name ens32 and address 10.67.36.63
+I0720 03:29:10.905227       1 main.go:505] Defaulting external address to interface address (10.67.36.63)
+I0720 03:29:10.932027       1 kube.go:131] Waiting 10m0s for node controller to sync
+I0720 03:29:10.932434       1 kube.go:294] Starting kube subnet manager
+I0720 03:29:11.933059       1 kube.go:138] Node controller sync successful
+I0720 03:29:11.933129       1 main.go:235] Created subnet manager: Kubernetes Subnet Manager - 10.67.36.63
+I0720 03:29:11.933149       1 main.go:238] Installing signal handlers
+I0720 03:29:11.933528       1 main.go:353] Found network config - Backend type: vxlan
+I0720 03:29:11.933709       1 vxlan.go:120] VXLAN config: VNI=1 Port=0 GBP=false DirectRouting=false
+I0720 03:29:11.989266       1 main.go:300] Wrote subnet file to /run/flannel/subnet.env
+I0720 03:29:11.989310       1 main.go:304] Running backend.
+I0720 03:29:11.989482       1 main.go:322] Waiting for all goroutines to exit
+I0720 03:29:11.989577       1 vxlan_network.go:60] watching for new subnet leases
+I0720 03:29:11.998691       1 iptables.go:115] Some iptables rules are missing; deleting and recreating rules
+I0720 03:29:11.998753       1 iptables.go:137] Deleting iptables rule: -s 10.42.0.0/16 -j ACCEPT
+I0720 03:29:12.002747       1 iptables.go:137] Deleting iptables rule: -d 10.42.0.0/16 -j ACCEPT
+I0720 03:29:12.003581       1 iptables.go:115] Some iptables rules are missing; deleting and recreating rules
+I0720 03:29:12.003652       1 iptables.go:137] Deleting iptables rule: -s 10.42.0.0/16 -d 10.42.0.0/16 -j RETURN
+I0720 03:29:12.005611       1 iptables.go:125] Adding iptables rule: -s 10.42.0.0/16 -j ACCEPT
+I0720 03:29:12.006189       1 iptables.go:137] Deleting iptables rule: -s 10.42.0.0/16 ! -d 224.0.0.0/4 -j MASQUERADE
+I0720 03:29:12.009073       1 iptables.go:137] Deleting iptables rule: ! -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN
+I0720 03:29:12.011546       1 iptables.go:137] Deleting iptables rule: ! -s 10.42.0.0/16 -d 10.42.0.0/16 -j MASQUERADE
+I0720 03:29:12.012701       1 iptables.go:125] Adding iptables rule: -d 10.42.0.0/16 -j ACCEPT
+I0720 03:29:12.015535       1 iptables.go:125] Adding iptables rule: -s 10.42.0.0/16 -d 10.42.0.0/16 -j RETURN
+I0720 03:29:12.020424       1 iptables.go:125] Adding iptables rule: -s 10.42.0.0/16 ! -d 224.0.0.0/4 -j MASQUERADE
+I0720 03:29:12.025661       1 iptables.go:125] Adding iptables rule: ! -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN
+I0720 03:29:12.030504       1 iptables.go:125] Adding iptables rule: ! -s 10.42.0.0/16 -d 10.42.0.0/16 -j MASQUERADE

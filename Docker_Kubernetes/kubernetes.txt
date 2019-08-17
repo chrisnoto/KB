@@ -1,6 +1,32 @@
 Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. 
 Applications that attempt to write to these volumes will receive read-only filesystem errors.
 
+######kubernetes里单独启动的docker容器的网络#######
+[root@worker1 network-scripts]# docker inspect 9c2b |grep -i sandbox
+            "SandboxID": "c4aa9c26ada75287714c3cb622a946096038b3169a253e52f3452e291840d7e0",
+            "SandboxKey": "/var/run/docker/netns/c4aa9c26ada7",
+[root@worker1 network-scripts]# nsenter --net=/var/run/docker/netns/c4aa9c26ada7 ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+77: eth0@if78: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether 02:42:ac:11:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.3/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+[root@worker1 network-scripts]# nsenter --net=/var/run/docker/netns/c4aa9c26ada7 ethtool -S eth0
+NIC statistics:
+     peer_ifindex: 78
+[root@worker1 network-scripts]# ip l |grep 78
+78: veth904981b@if77: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP mode DEFAULT group default
+
+############查看apiservice 可看出metrics-server是否正常###########
+如果不正常, 最有可能是API server和metrics server pod之间的通信问题
+[root@rancher ~]# kubectl get apiservice v1beta1.metrics.k8s.io
+NAME                     SERVICE                      AVAILABLE   AGE
+v1beta1.metrics.k8s.io   kube-system/metrics-server   True        24d
+
+
 ############docker与kubernetes交互##########
 kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service. 利用这点可以做测试
 docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 --dns-search=default.svc.cluster.local -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0
@@ -34,6 +60,8 @@ kube-system     metrics-server-7f6bd4c888-jw5rd         2m           16Mi
 
 
 
+[root@rancher ~]# kubectl create job tmp-curator-job --from=cronjob/curator
+job.batch/tmp-curator-job created
 
 ##############cronjob##############  cronjob的时间与kubernetes平台时间一致, 不与OS时间一致 可查看任意一个k8s组件的容器时间
 [chensen@cobbler curator]$ kubectl get cronjob
@@ -155,6 +183,14 @@ Address:        10.43.0.10#53
 Non-authoritative answer:
 Name:   elasticsearch.default.svc.cluster.local
 Address: 10.43.201.194
+###########dns测试最好方法#############
+[root@rancher ~]# kubectl run dnsutils --image=tutum/dnsutils --generator=run-pod/v1 --command -- sleep infinity
+[root@rancher ~]# kubectl exec dnsutils nslookup redis-ha-announce-0
+Server:         10.43.0.10
+Address:        10.43.0.10#53
+
+Name:   redis-ha-announce-0.default.svc.cluster.local
+Address: 10.43.29.117
 
 ###########configmap##########
 kubectl create configmap --from-file=kibana.yml=./kibana.yml kibana-config
@@ -253,38 +289,6 @@ web1-nodeport       10.43.103.29    <nodes>       80:30979/TCP   50d
 yes
 [root@cobbler ~]# kubectl auth can-i '*' services --as system:serviceaccount:default:default
 yes
-
-
-############Statefulset###########
-#kubectl get statefulsets web
-NAME      DESIRED   CURRENT   AGE
-web       2         2         1h
-#kubectl get pods
-web-0                       1/1       Running   0          1h
-web-1                       1/1       Running   0          1h
-#nslookup nginx.default.svc.cluster.local 10.96.0.10
-Server:         10.96.0.10
-Address:        10.96.0.10#53
-
-Name:   nginx.default.svc.cluster.local
-Address: 10.244.2.17
-Name:   nginx.default.svc.cluster.local
-Address: 10.244.2.18
-
-#nslookup web-1.nginx.default.svc.cluster.local 10.96.0.10
-Server:         10.96.0.10
-Address:        10.96.0.10#53
-
-Name:   web-1.nginx.default.svc.cluster.local
-Address: 10.244.2.18
-
-#nslookup web-0.nginx.default.svc.cluster.local 10.96.0.10
-Server:         10.96.0.10
-Address:        10.96.0.10#53
-
-Name:   web-0.nginx.default.svc.cluster.local
-Address: 10.244.2.17
-如上，web为我们创建的StatefulSets，对应的pod的域名为web-0，web-1，他们之间可以互相访问，这样对于一些集群类型的应用就可以解决互相之间身份识别的问题了。
 
 ###Taints and tolerations###
 A taint is an attribute added to a node. It prevents pods from running on the node

@@ -1,3 +1,19 @@
+############多阶段构建##########
+FROM golang:1.9.4 as build
+WORKDIR /go/src/github.com/openfaas/faas/gateway
+COPY .   .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gateway .
+FROM alpine:3.6
+RUN addgroup -S app \    && adduser -S -g app app
+WORKDIR /home/app
+EXPOSE 8080
+ENV http_proxy      ""
+ENV https_proxy     ""
+COPY --from=build /go/src/github.com/openfaas/faas/gateway/gateway    .
+COPY assets     assets
+RUN chown -R app:app ./
+USER app
+CMD ["./gateway"]
 ################docker容器注册到systemd##########
 [root@fuel multi-user.target.wants]# cat docker-mcollective.service
 [Unit]

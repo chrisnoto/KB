@@ -8,3 +8,6 @@ docker run --name redis-commander -d --env REDIS_HOSTS=redis1:10.42.6.13:6379:1,
 docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.cluster.local \
   --env REDIS_HOSTS=redis1:redis-ha-announce-0:6379:1,redis2:redis-ha-announce-1:6379:1,redis3:redis-ha-announce-2:6379:1 \
   -p 8081 rediscommander/redis-commander:latest
+  
+docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
+-p 8080:80 aidaho/haproxy-wi 

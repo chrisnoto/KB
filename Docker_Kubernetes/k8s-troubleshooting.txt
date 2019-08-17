@@ -1,0 +1,217 @@
+#################################
+1  rke配置里给每个worker节点加上了 hostname override
+导致原“ip”节点的po全部terminating, po逐渐reschedule在全部的"hostname"节点上
+[root@rancher ~]# kubectl get po -o wide
+NAME                                       READY   STATUS        RESTARTS   AGE     IP            NODE          NOMINATED NODE   READINESS GATES
+cerebro-7678f89dc5-5qx7m                   1/1     Terminating   0          16d     10.42.2.12    10.67.36.59   <none>           <none>
+cerebro-7678f89dc5-vxcxh                   1/1     Running       1          84m     10.42.11.7    worker2       <none>           <none>
+connect-ui-b77cc997f-bbr87                 1/1     Terminating   0          13d     10.42.2.14    10.67.36.59   <none>           <none>
+connect-ui-b77cc997f-sgk75                 1/1     Running       1          84m     10.42.10.8    worker3       <none>           <none>
+gangly-arachnid-mysqlha-0                  2/2     Terminating   0          9d      10.42.1.19    10.67.36.57   <none>           <none>
+gangly-arachnid-mysqlha-1                  2/2     Terminating   0          9d      10.42.4.18    10.67.36.60   <none>           <none>
+hepaster-heapster-87dc494ff-h2g9q          2/2     Running       2          91m     10.42.8.3     worker4       <none>           <none>
+it-kubernetes-dashboard-7d4cc7f445-5ccll   1/1     Running       1          84m     10.42.10.9    worker3       <none>           <none>
+it-kubernetes-dashboard-7d4cc7f445-9kdwc   1/1     Terminating   0          8d      10.42.5.23    10.67.36.61   <none>           <none>
+kafka-manager-6df59b5596-22w8t             1/1     Running       1          84m     10.42.9.8     worker5       <none>           <none>
+kafka-manager-6df59b5596-sxwb7             1/1     Terminating   0          15d     10.42.3.13    10.67.36.62   <none>           <none>
+kafkahq-d558bd74d-vkw52                    1/1     Running       1          84m     10.42.11.11   worker2       <none>           <none>
+kafkahq-d558bd74d-x78ds                    1/1     Terminating   0          13d     10.42.5.15    10.67.36.61   <none>           <none>
+logstash-7d56c78f9-246fh                   1/1     Running       1          85m     10.42.10.6    worker3       <none>           <none>
+logstash-7d56c78f9-4rql5                   1/1     Running       1          84m     10.42.9.7     worker5       <none>           <none>
+logstash-7d56c78f9-6qmpk                   1/1     Running       1          84m     10.42.12.7    worker1       <none>           <none>
+logstash-7d56c78f9-f79g4                   1/1     Terminating   0          5d4h    10.42.5.25    10.67.36.61   <none>           <none>
+logstash-7d56c78f9-p65vc                   1/1     Terminating   0          5d4h    10.42.1.20    10.67.36.57   <none>           <none>
+logstash-7d56c78f9-r2fsl                   1/1     Terminating   0          3d2h    10.42.3.28    10.67.36.62   <none>           <none>
+redis-ha-server-0                          2/2     Terminating   0          6h21m   10.42.1.21    10.67.36.57   <none>           <none>
+redis-ha-server-1                          2/2     Terminating   0          2d23h   10.42.4.19    10.67.36.60   <none>           <none>
+redis-ha-server-2                          2/2     Terminating   0          6h24m   10.42.5.29    10.67.36.61   <none>           <none>
+w3c-7fdc686574-bsqcb                       1/1     Terminating   0          26d     10.42.4.2     10.67.36.60   <none>           <none>
+
+worker节点会同时保留 原"ip"节点和增加“hostname”节点
+[root@rancher ~]# kubectl get no
+NAME          STATUS                        ROLES               AGE    VERSION
+10.67.36.57   NotReady,SchedulingDisabled   worker              26d    v1.14.3
+10.67.36.59   NotReady                      worker              26d    v1.14.3
+10.67.36.60   NotReady                      worker              26d    v1.14.3
+10.67.36.61   NotReady                      worker              26d    v1.14.3
+10.67.36.62   NotReady                      worker              26d    v1.14.3
+10.67.36.63   NotReady                      controlplane,etcd   26d    v1.14.3
+master        Ready                         controlplane,etcd   107m   v1.14.3
+worker1       Ready                         worker              106m   v1.14.3
+worker2       Ready                         worker              106m   v1.14.3
+worker3       Ready                         worker              107m   v1.14.3
+worker4       Ready                         worker              107m   v1.14.3
+worker5       Ready                         worker              107m   v1.14.3
+worker6       Ready,SchedulingDisabled      worker              21d    v1.14.3
+
+如何删除原"ip"节点
+kubectl drain 10.67.36.57 --force --ignore-daemonsets
+[root@rancher ~]# kubectl get no
+NAME          STATUS                        ROLES               AGE   VERSION
+10.67.36.57   NotReady,SchedulingDisabled   worker              26d   v1.14.3
+10.67.36.59   NotReady,SchedulingDisabled   worker              26d   v1.14.3
+10.67.36.60   NotReady,SchedulingDisabled   worker              26d   v1.14.3
+10.67.36.61   NotReady,SchedulingDisabled   worker              26d   v1.14.3
+10.67.36.62   NotReady,SchedulingDisabled   worker              26d   v1.14.3
+10.67.36.63   NotReady,SchedulingDisabled   controlplane,etcd   26d   v1.14.3
+master        Ready                         controlplane,etcd   18h   v1.14.3
+worker1       Ready                         worker              18h   v1.14.3
+worker2       Ready                         worker              18h   v1.14.3
+worker3       Ready                         worker              18h   v1.14.3
+worker4       Ready                         worker              18h   v1.14.3
+worker5       Ready                         worker              18h   v1.14.3
+worker6       Ready                         worker              22d   v1.14.3
+
+[root@rancher ~]# kubectl delete node 10.67.36.61
+node "10.67.36.61" deleted
+[root@rancher ~]# kubectl delete node 10.67.36.62
+node "10.67.36.62" deleted
+[root@rancher ~]# kubectl delete node 10.67.36.63
+node "10.67.36.63" deleted
+[root@rancher ~]# kubectl get no
+NAME      STATUS   ROLES               AGE   VERSION
+master    Ready    controlplane,etcd   18h   v1.14.3
+worker1   Ready    worker              18h   v1.14.3
+worker2   Ready    worker              18h   v1.14.3
+worker3   Ready    worker              18h   v1.14.3
+worker4   Ready    worker              18h   v1.14.3
+worker5   Ready    worker              18h   v1.14.3
+worker6   Ready    worker              22d   v1.14.3
+
+# 强制删除`Terminating`状态的Pod
+kubectl delete pod <PodName> --namespace=<Namespace> --force --grace-period=0
+
+
+#################################
+2 shutdown worker1 期盼上面的Pod自动转移, 结果没有发生, 等待很长时间也没发生  ???
+且pod的状态始终是running, 但其实操作pod的时候会提示 no route to host
+查看得知controller-manager有参数--pod-eviction-timeout=5m0s, 且pod有
+Tolerations:     node.kubernetes.io/not-ready:NoExecute for 300s
+                 node.kubernetes.io/unreachable:NoExecute for 300s
+最后是启动worker1后, pod在worker1上做了一次restart
+第二次测试:   worker1上只有deployment
+shutdown worker1
+[root@rancher ~]# kubectl get no -o wide
+NAME      STATUS     ROLES               AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                KERNEL-VERSION               CONTAINER-RUNTIME
+master    Ready      controlplane,etcd   45h   v1.14.4   10.67.36.63   <none>        CentOS Linux 7 (Core)   3.10.0-957.21.3.el7.x86_64   docker://18.9.2
+worker1   NotReady   worker              45h   v1.14.4   10.67.36.62   <none>        CentOS Linux 7 (Core)   3.10.0-957.21.3.el7.x86_64   docker://18.9.2
+[root@rancher ~]# kubectl get po -o wide |grep kafkahq
+kafkahq-d558bd74d-2vn5f                    1/1     Running       0          14m   10.42.11.16   worker2   <none>           <none>
+kafkahq-d558bd74d-ql8n8                    1/1     Terminating   0          24h   10.42.12.13   worker1   <none>           <none>
+显示kafkahq在worker2上启动了
+现power on worker1, worker1 Ready之后, worker1上处于Terminating状态的kafkahq终于teminated了
+[root@rancher ~]# kubectl get po -o wide |grep kafkahq
+kafkahq-d558bd74d-2vn5f                    1/1     Running     0          18m     10.42.11.16   worker2   <none>           <none>
+第三次测试:  worker5上有deployment和statefulset
+[root@rancher ~]# date;kubectl get po -o wide
+Sat Aug 17 11:49:36 CST 2019
+NAME                                       READY   STATUS      RESTARTS   AGE     IP            NODE      NOMINATED NODE   READINESS GATES
+logstash-7d56c78f9-hz29r                   1/1     Running     0          24h     10.42.9.12    worker5   <none>           <none>
+redis-ha-server-1                          2/2     Running     0          48m     10.42.9.15    worker5   <none>           <none>
+[root@rancher ~]# date;kubectl get po -o wide
+Sat Aug 17 11:53:14 CST 2019
+NAME                                       READY   STATUS        RESTARTS   AGE    IP            NODE      NOMINATED NODE   READINESS GATES
+logstash-7d56c78f9-ddkxk                   1/1     Running       0          24h    10.42.6.18    worker6   <none>           <none>
+logstash-7d56c78f9-hz29r                   1/1     Terminating   0          24h    10.42.9.12    worker5   <none>           <none>
+logstash-7d56c78f9-k5wzq                   1/1     Running       0          25h    10.42.10.11   worker3   <none>           <none>
+logstash-7d56c78f9-nfm24                   1/1     Running       0          22s    10.42.12.18   worker1   <none>           <none>
+redis-ha-server-0                          2/2     Running       0          53m    10.42.8.14    worker4   <none>           <none>
+redis-ha-server-1                          2/2     Terminating   0          52m    10.42.9.15    worker5   <none>           <none>
+redis-ha-server-2                          2/2     Running       0          51m    10.42.10.14   worker3   <none>           <none>
+Pod redis-ha-server-1一直在Terminating状态, 没有被reschedule
+直到worker5启动以后, redis-ha-server-1在worker5上terminated, 并且重新创建
+################################
+3 worker节点维护, 如升级worker3的kernel
+[root@rancher ~]# kubectl drain worker3                    #无法直接drain节点
+node/worker3 cordoned
+error: unable to drain node "worker3", aborting command...
+
+There are pending nodes to be drained:
+ worker3
+cannot delete Pods with local storage (use --delete-local-data to override): default/it-kubernetes-dashboard-7d4cc7f445-5ccll
+cannot delete DaemonSet-managed Pods (use --ignore-daemonsets to ignore): ingress-nginx/nginx-ingress-controller-zxp86, kube-system/canal-ds                           ntq
+[root@rancher ~]# kubectl get po -o wide                 #查看worker3上有哪些Pod
+NAME                                       READY   STATUS    RESTARTS   AGE   IP            NODE      NOMINATED NODE   READINESS GATES
+cerebro-7678f89dc5-vxcxh                   1/1     Running   1          19h   10.42.11.7    worker2   <none>           <none>
+connect-ui-b77cc997f-sgk75                 1/1     Running   1          19h   10.42.10.8    worker3   <none>           <none>
+hepaster-heapster-6ff45b6f8c-rjkfg         2/2     Running   0          50m   10.42.12.12   worker1   <none>           <none>
+it-kubernetes-dashboard-7d4cc7f445-5ccll   1/1     Running   1          19h   10.42.10.9    worker3   <none>           <none>
+kafka-manager-6df59b5596-22w8t             1/1     Running   1          19h   10.42.9.8     worker5   <none>           <none>
+kafkahq-d558bd74d-vkw52                    1/1     Running   1          19h   10.42.11.11   worker2   <none>           <none>
+logstash-7d56c78f9-4rql5                   1/1     Running   1          19h   10.42.9.7     worker5   <none>           <none>
+logstash-7d56c78f9-6qmpk                   1/1     Running   3          19h   10.42.12.10   worker1   <none>           <none>
+logstash-7d56c78f9-pbb6m                   1/1     Running   0          16h   10.42.6.16    worker6   <none>           <none>
+redis-ha-server-0                          2/2     Running   0          17h   10.42.6.15    worker6   <none>           <none>
+redis-ha-server-1                          2/2     Running   0          17h   10.42.9.10    worker5   <none>           <none>
+redis-ha-server-2                          2/2     Running   0          17h   10.42.11.12   worker2   <none>           <none>
+[root@rancher ~]# kubectl drain worker3 --delete-local-data --ignore-daemonsets               #按提示加参数
+node/worker3 already cordoned
+WARNING: ignoring DaemonSet-managed Pods: ingress-nginx/nginx-ingress-controller-zxp86, kube-system/canal-dsntq
+evicting pod "coredns-autoscaler-5d5d49b8ff-hkjwd"
+evicting pod "kafkahq-d558bd74d-vkw52"
+evicting pod "cerebro-7678f89dc5-vxcxh"
+evicting pod "redis-ha-server-2"
+evicting pod "coredns-86bc4b7c96-l8ckm"
+pod/cerebro-7678f89dc5-vxcxh evicted
+pod/redis-ha-server-2 evicted
+pod/coredns-autoscaler-5d5d49b8ff-hkjwd evicted
+pod/coredns-86bc4b7c96-l8ckm evicted
+pod/kafkahq-d558bd74d-vkw52 evicted
+
+node/worker3 evicted
+[root@rancher ~]# kubectl get po -o wide                  # worker3上的pod已经move到其他节点
+NAME                                       READY   STATUS    RESTARTS   AGE   IP            NODE      NOMINATED NODE   READINESS GATES
+cerebro-7678f89dc5-vxcxh                   1/1     Running   1          19h   10.42.11.7    worker2   <none>           <none>
+connect-ui-b77cc997f-fr6vx                 1/1     Running   0          37s   10.42.8.8     worker4   <none>           <none>
+hepaster-heapster-6ff45b6f8c-rjkfg         2/2     Running   0          53m   10.42.12.12   worker1   <none>           <none>
+it-kubernetes-dashboard-7d4cc7f445-rvbz4   1/1     Running   0          37s   10.42.8.9     worker4   <none>           <none>
+kafka-manager-6df59b5596-22w8t             1/1     Running   1          19h   10.42.9.8     worker5   <none>           <none>
+kafkahq-d558bd74d-vkw52                    1/1     Running   1          19h   10.42.11.11   worker2   <none>           <none>
+logstash-7d56c78f9-4rql5                   1/1     Running   1          19h   10.42.9.7     worker5   <none>           <none>
+logstash-7d56c78f9-6qmpk                   1/1     Running   3          19h   10.42.12.10   worker1   <none>           <none>
+logstash-7d56c78f9-pbb6m                   1/1     Running   0          16h   10.42.6.16    worker6   <none>           <none>
+redis-ha-server-0                          2/2     Running   0          17h   10.42.6.15    worker6   <none>           <none>
+redis-ha-server-1                          2/2     Running   0          17h   10.42.9.10    worker5   <none>           <none>
+redis-ha-server-2                          2/2     Running   0          17h   10.42.11.12   worker2   <none>           <none>
+[root@rancher ~]# kubectl get no
+NAME      STATUS                     ROLES               AGE   VERSION
+master    Ready                      controlplane,etcd   19h   v1.14.3
+worker1   Ready                      worker              19h   v1.14.3
+worker2   Ready                      worker              19h   v1.14.3
+worker3   Ready,SchedulingDisabled   worker              19h   v1.14.3
+worker4   Ready                      worker              19h   v1.14.3
+worker5   Ready                      worker              19h   v1.14.3
+worker6   Ready                      worker              22d   v1.14.3
+
+yum install -y kernel进行内核升级,并重启worker3. 重启之后
+[root@rancher ~]# kubectl uncordon worker3
+node/worker3 uncordoned
+[root@rancher ~]# kubectl get no -o wide
+NAME      STATUS   ROLES               AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                KERNEL-VERSION               CONTAINER-RUNTIME
+master    Ready    controlplane,etcd   19h   v1.14.3   10.67.36.63   <none>        CentOS Linux 7 (Core)   3.10.0-862.el7.x86_64        docker://18.9.2
+worker1   Ready    worker              19h   v1.14.3   10.67.36.62   <none>        CentOS Linux 7 (Core)   3.10.0-862.el7.x86_64        docker://18.9.2
+worker2   Ready    worker              19h   v1.14.3   10.67.36.61   <none>        CentOS Linux 7 (Core)   3.10.0-862.el7.x86_64        docker://18.9.2
+worker3   Ready    worker              19h   v1.14.3   10.67.36.60   <none>        CentOS Linux 7 (Core)   3.10.0-957.21.3.el7.x86_64   docker://18.9.2
+worker4   Ready    worker              19h   v1.14.3   10.67.36.59   <none>        CentOS Linux 7 (Core)   3.10.0-862.el7.x86_64        docker://18.9.2
+worker5   Ready    worker              19h   v1.14.3   10.67.36.57   <none>        CentOS Linux 7 (Core)   3.10.0-862.el7.x86_64        docker://18.9.2
+worker6   Ready    worker              22d   v1.14.3   10.67.36.56   <none>        CentOS Linux 7 (Core)   3.10.0-957.5.1.el7.x86_64    docker://18.9.2
+可以看到drain worker3后, kube-flannel, nginx-ingress-controller, canal都被重建
+[root@worker3 ~]# docker ps
+CONTAINER ID        IMAGE                                COMMAND                  CREATED             STATUS              PORTS               NAMES
+0a68fc4e524b        f0fad859c909                         "/opt/bin/flanneld -…"   3 minutes ago       Up 3 minutes                            k8s_kube-flannel_canal-dsntq_kube-system_da60cb4f-bf26-11e9-b1ae-0050569376db_3
+cfda792f1fa2        2b37f252629b                         "/entrypoint.sh /ngi…"   3 minutes ago       Up 3 minutes                            k8s_nginx-ingress-controller_nginx-ingress-controller-zxp86_ingress-nginx_dae5fc4a-bf26-11e9-b1ae-0050569376db_3
+028154c34c04        a89b45f36d5e                         "start_runit"            4 minutes ago       Up 4 minutes                            k8s_calico-node_canal-dsntq_kube-system_da60cb4f-bf26-11e9-b1ae-0050569376db_2
+3b82c9b95ce6        rancher/pause:3.1                    "/pause"                 4 minutes ago       Up 4 minutes                            k8s_POD_canal-dsntq_kube-system_da60cb4f-bf26-11e9-b1ae-0050569376db_2
+18f2d719c559        rancher/pause:3.1                    "/pause"                 4 minutes ago       Up 4 minutes                            k8s_POD_nginx-ingress-controller-zxp86_ingress-nginx_dae5fc4a-bf26-11e9-b1ae-0050569376db_2
+5988683b2bcd        rancher/hyperkube:v1.14.3-rancher1   "/opt/rke-tools/entr…"   20 hours ago        Up 4 minutes                            kube-proxy
+9580246e3d5a        rancher/hyperkube:v1.14.3-rancher1   "/opt/rke-tools/entr…"   20 hours ago        Up 4 minutes                            kubelet
+9d99fa21d1a4        rancher/rke-tools:v0.1.34            "nginx-proxy CP_HOST…"   3 weeks ago         Up 4 minutes                            nginx-proxy
+worker3重启过程中 describe node,  kubelet stopped posting node status
+Conditions:
+  Type             Status    LastHeartbeatTime                 LastTransitionTime                Reason              Message
+  ----             ------    -----------------                 ------------------                ------              -------
+  MemoryPressure   Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
+  DiskPressure     Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
+  PIDPressure      Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
+  Ready            Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
+
