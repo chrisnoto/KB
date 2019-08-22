@@ -1385,7 +1385,7 @@ do
 echo "***************************************************************"
 echo "Scanning HBA on `uname -n`"
 echo "1" > /sys/class/fc_host/$i/issue_lip
-echo "- - -" > /sys/class/scsi_host/$i/scan
+echo "- -- - -" > /sys/class/scsi_host/$i/scan
 echo "***************************************************************"
 done
 
@@ -1669,6 +1669,7 @@ ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com"  "(cn=p/tivftp/tiv_user)" 
 ldapsearch -h a23gsa.ibm.com -x -b "ou=gsa,o=ibm.com" "(cn=Manager)"
 ldapdelete -h a23gsa.ibm.com -x -D "cn=manager,ou=Group,ou=gsa,o=ibm.com"  -W "uid=frankxu,ou=People,ou=gsa,o=ibm.com"
 
+ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -D "H7108579@cesbg.foxconn" -b "dc=cesbg,dc=foxconn" -W "CN=H7108579"
 
 find hardware
 for srv in `cat 1_hardware`;do echo $srv;ssh -t $srv "sudo /usr/sbin/dmidecode |grep -A5 \"Memory Device\$\"|grep Size";done                 -Memory

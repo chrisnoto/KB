@@ -215,3 +215,28 @@ Conditions:
   PIDPressure      Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
   Ready            Unknown   Fri, 16 Aug 2019 11:24:10 +0800   Fri, 16 Aug 2019 11:25:19 +0800   NodeStatusUnknown   Kubelet stopped posting node status.
 
+################################
+4 mount问题及orphaned Pod
+orphaned Pod就是裸露的Pod，没有相关的控制器领养的Pod
+shutdown worker6后,再启动worker6.   sts redis-ha 在worker6上重建了pod   但是在worker6上看到大量日志:
+9745 kubelet_volumes.go:65] pod \"b27100ff-bfd2-11e9-b4f7-0050569376db\" found, 
+but error stat /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db/volumes/kubernetes.io~glusterfs/pvc-df4d22ee-bcac-11e9-bbcf-0050569376db: 
+transport endpoint is not connected occurred during checking mounted volumes from disk\n","stream":"stderr","time":"2019-08-17T07:30:39.426158334Z"
+
+redis-ha-server pod terminated后, 在worker上留下多余的mount记录
+[root@cobbler ~]# ssh worker6 mount | grep glusterfs
+第一个是terminated pod的uid, 即orphaned Pod, 第二个是running pod的uid
+10.67.36.51:vol_f48d68a9b0bf4fe9c155ae5e7e996e8b on /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db/volumes/kubernetes.io~glusterfs/pvc-df4d22ee-bcac-11e9-bbcf-0050569376db type fuse.glusterfs (rw,relatime,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072)
+10.67.36.51:vol_f48d68a9b0bf4fe9c155ae5e7e996e8b on /var/lib/kubelet/pods/c5576a21-c0b0-11e9-ac6a-0050569376db/volumes/kubernetes.io~glusterfs/pvc-df4d22ee-bcac-11e9-bbcf-0050569376db type fuse.glusterfs (rw,relatime,user_id=0,group_id=0,default_permissions,allow_other,max_read=131072)
+[root@rancher ~]# kubectl get po redis-ha-server-2 -o yaml |grep uid
+    uid: 0b086c03-bf3a-11e9-b4f7-0050569376db
+  uid: 55f057ff-c09b-11e9-ac6a-0050569376db
+[root@rancher ~]# kubectl get po redis-ha-server-1 -o yaml |grep uid
+    uid: 0b086c03-bf3a-11e9-b4f7-0050569376db
+  uid: c5576a21-c0b0-11e9-ac6a-0050569376db              #redis-ha-server-1的uid
+[root@rancher ~]# kubectl get po redis-ha-server-0 -o yaml |grep uid
+    uid: 0b086c03-bf3a-11e9-b4f7-0050569376db
+  uid: 11b147bf-c09b-11e9-ac6a-0050569376db
+orphaned pod的处理
+umount /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db/volumes/kubernetes.io~glusterfs/pvc-df4d22ee-bcac-11e9-bbcf-0050569376db
+rm -rf /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db

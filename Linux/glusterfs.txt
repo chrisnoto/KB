@@ -16,3 +16,45 @@ Id:ed9080427e01ac56ad98bc3c211a9f14     Cluster:e6a90db13971a778abb73f09c43f5d6a
 gluster非常适合大文件读写的带宽型应用，诸如视频存储、HPC高性能计算、容器镜像存储、
 冷数据存储、日志存储、数据备份等应用场景。
 但gluster并不擅长小文件读写的IOPS型应用，需要综合硬件、软件和系统进行优化。
+
+mount设置备份server
+mount -t glusterfs -o backupvolfile-server=gluster-poc-02 gluster-poc-01:/g0 /mnt/gluster/g0
+
+#######gstatus安装#############
+yum install python-setuptools
+python setup.py install
+
+#######quorum########
+# gluster volume set mydata cluster.server-quorum-type server
+# gluster volume set all cluster.server-quorum-ratio 60
+
+#######gfcli######
+[root@node1 share]# gfcli
+gfcli> connect glfs://localhost/mydata
+gfcli (localhost/mydata)> ls -lh .
+drwxr-xr-x. 2 root            root            4.0k      Jul 20 23:07:22 123
+drwxr-xr-x. 2 root            root            4.0k      Aug 19 10:52:54 May
+-rw-r--r--. 1 root            root            20M       Apr 27 10:35:23 3.bin
+drwxr-xr-x. 2 root            root            4.0k      Aug 19 10:57:58 Yoshi
+-rw-r--r--. 1 root            root            10G       Apr 27 16:41:54 66.bin
+drwxr-xr-x. 2 root            root            4.0k      Aug 19 11:19:09 Dongsong
+drwxr-xr-x. 3 root            root            4.0k      Aug 19 09:50:37 lock
+-rw-r--r--. 1 root            root            19G       Apr 26 15:36:05 2.bin
+-rw-r--r--. 1 root            root            1.3k      Aug 19 11:19:47 smb.conf
+gfcli (localhost/mydata)> cat smb.conf
+
+############# attach tier#############
+gluster volume tier mydata attach replica 3 node1:/ssd/brick1/brick node2:/ssd/brick1/brick node3:/ssd/brick1/brick
+
+############# Detaching a Tier from a Volume ########
+gluster volume tier mydata detach start
+gluster volume tier mydata detach status
+gluster volume tier VOLNAME detach commit
+
+#################metadata caching###########
+Significant performance improvements can be achieved in the following workloads by enabling metadata caching:
+Listing of directories (recursive)
+Creating files
+Deleting files
+Renaming files
+# gluster volume set mydata group metadata-cache

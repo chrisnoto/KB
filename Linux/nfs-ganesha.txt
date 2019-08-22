@@ -9,14 +9,21 @@ yum install -y glusterfs-server
 systemctl enable glusterd
 systemctl start glusterd
 
-pvcreate /dev/vdd
-vgcreate vg_gluster /dev/vdd
-lvcreate -n brick1 -L 50G vg_gluster
-mkfs.xfs /dev/vg_gluster/brick1
+#the following command is appropriate for 12 disks in a RAID 6 configuration with a stripe unit size of 128 KiB
+pvcreate --dataalignment 1280k /dev/vdd
+#The extent_size should be obtained by multiplying the RAID stripe unit size with the number of data disks.
+#the following command for RAID-6 storage with a stripe unit size of 128 KB, and 12 disks (10 data disks):
+vgcreate --physicalextentsize 1280k vg_gluster /dev/vdd
+# chunksize = physicalextentsize = full stripe size = stripe_unit_size * data disk   (between 1 MiB and 2 MiB)
+lvcreate -n brick1 -L 50G --chunksize 1280K vg_gluster
+# su = stripe unit size  sw= number of data disk
+# For RAID 10 and JBOD, the -d su=<>,sw=<> option can be omitted. By default, XFS will use the thin-p chunk size and other parameters to make layout decisions.
+-i size = inode size   -n size = logical block size for the file system directory
+mkfs.xfs -f -i size=512 -n size=8192 -d su=128k,sw=10 /dev/vg_gluster/brick1
 mkdir -p /bricks/brick1
-mount /dev/vg_gluster/brick1 /bricks/brick1
+mount -t xfs -o inode64,noatime /dev/vg_gluster/brick1 /bricks/brick1
 echo "/dev/vg_gluster/brick1  /bricks/brick1    xfs     defaults  0 0" >>/etc/fstab
-
+echo deadline > /sys/block/sdb/queue/scheduler
 
 ##############################
 2 (on node nfs-1) setup gluster,create volume

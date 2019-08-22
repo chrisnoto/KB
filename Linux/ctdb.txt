@@ -1,0 +1,132 @@
+######install glusterfs##########
+on all nodes
+cat /etc/hosts
+10.67.36.186   node1
+10.67.36.187   node2
+10.67.36.188   node3
+
+yum install -y centos-release-gluster312
+yum install -y glusterfs-server
+systemctl enable glusterd
+systemctl start glusterd
+
+pvcreate --dataalignment 1024k /dev/sdb
+vgcreate --physicalextentsize 1024k vg_gluster /dev/sdb
+lvcreate -n brick1 -L 50G --chunksize 1024K gluster
+mkfs.xfs -f -i size=512 -n size=8192 -d su=256k,sw=4 /dev/gluster/brick1
+mkdir -p /bricks/brick1
+mount -t xfs -o inode64,noatime /dev/vg_gluster/brick1 /bricks/brick1
+mkdir /bricks/brick1/brick
+echo "/dev/vg_gluster/brick1  /bricks/brick1    xfs     defaults,noatime,inode64  0 0" >>/etc/fstab
+echo deadline > /sys/block/sdb/queue/scheduler
+
+on node1 only
+gluster peer probe node2
+gluster peer probe node3
+gluster volume create mydata replica 3 node1:/data/brick1 node2:/data/brick1 node3:/data/brick1
+gluster volume start mydata
+######mount glusterfs volume local########
+所有节点
+[root@node3 ~]# cat /etc/fstab |grep mydata
+node3:mydata /share glusterfs defaults 0 0
+[root@node3 ~]# mount -a
+######CTDB and Samba###########
+install ctdb and samba
+yum -y install ctdb samba samba-common samba-winbind-clients
+systemctl start ctdb
+
+configure ctdb
+[root@node1 lock]# cat /etc/ctdb/ctdbd.conf |egrep -v '#|^$'
+CTDB_RECOVERY_LOCK=/share/lock/lockfile
+CTDB_NODES=/share/lock/nodes
+CTDB_PUBLIC_ADDRESSES=/share/lock/public_addresses
+CTDB_MANAGES_SAMBA=yes
+CTDB_MAX_OPEN_FILES=60000
+CTDB_LOGGING=file:/var/log/log.ctdb
+CTDB_DEBUGLEVEL=ERR
+
+[root@node1 lock]# cat /share/lock/nodes
+10.67.36.186
+10.67.36.187
+10.67.36.188
+为上面三个IP添加A记录指向    gluster.cesbg.foxconn
+[root@node1 lock]# cat /share/lock/public_addresses
+10.67.36.185/22 ens32
+10.67.36.189/22 ens32
+10.67.36.190/22 ens32
+
+** /share 是gluster volume mount到本地的目录
+   把 nodes,  public_addresses放到 volume里共享给所有glusterfs 节点
+
+configure samba service   
+systemc	disable smb  确保samba不由systemd自启动
+/etc/samba/smb.conf
+[global]
+        workgroup = SAMBA
+        security = user
+        ntlm auth = yes
+
+        passdb backend = tdbsam
+        clustering = yes
+        idmap backend = tdb2
+        private dir = /share/lock
+
+        printing = cups
+        printcap name = cups
+        load printers = yes
+        cups options = raw
+[May]
+comment = share for May
+path = /share/May
+read only = no
+writable = yes
+create mask = 0644
+directory mask = 0755
+force create mode = 0644
+force directory mode= 0755
+valid users = apadmin
+
+[Yoshi]
+comment = share for May
+path = /share/Yoshi
+read only = no
+writable = yes
+create mask = 0644
+directory mask = 0755
+force create mode = 0644
+force directory mode= 0755
+valid users = apadmin
+
+[Dongsong]
+comment = share for May
+path = /share/Dongsong
+read only = no
+writable = yes
+create mask = 0644
+directory mask = 0755
+force create mode = 0644
+force directory mode= 0755
+valid users = dongsong
+
+添加samba用户
+useradd dongsong
+smbpasswd -a dongsong
+
+三台节点启动ctdb服务
+systemctl start ctdb
+
+[root@node3 ~]# ctdb status
+Number of nodes:3
+pnn:0 10.67.36.186     OK
+pnn:1 10.67.36.187     OK
+pnn:2 10.67.36.188     OK (THIS NODE)
+Generation:574032088
+Size:3
+hash:0 lmaster:0
+hash:1 lmaster:1
+hash:2 lmaster:2
+Recovery mode:NORMAL (0)
+Recovery master:1
+
+添加gluster volume tier
+gluster volume tier mydata attach replica 3 node1:/ssd/brick1/brick node2:/ssd/brick1/brick node3:/ssd/brick1/brick
