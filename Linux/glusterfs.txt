@@ -12,6 +12,37 @@ Id:830793f7da758225c0a3a0f8ebeea014     Cluster:e6a90db13971a778abb73f09c43f5d6a
 Id:ed9080427e01ac56ad98bc3c211a9f14     Cluster:e6a90db13971a778abb73f09c43f5d6a
 [root@gluster1 heketi]#
 
+heketi-cli扩volume的实质是: volume由以前的replicated 3变为 distribute replicated, 这样的话 expand-size应该等于之前的volume size
+[root@gluster1 brick]# heketi-cli volume expand --volume=f48d68a9b0bf4fe9c155ae5e7e996e8b --expand-size=12
+Name: vol_f48d68a9b0bf4fe9c155ae5e7e996e8b
+Size: 22
+Volume Id: f48d68a9b0bf4fe9c155ae5e7e996e8b
+Cluster Id: 3f4ea0535e326550c173bb1cabdcaaa4
+Mount: 10.67.36.53:vol_f48d68a9b0bf4fe9c155ae5e7e996e8b
+Mount Options: backup-volfile-servers=10.67.36.51,10.67.36.52
+Block: false
+Free Size: 0
+Block Volumes: []
+Durability Type: replicate
+Distributed+Replica: 3
+Snapshot Factor: 1.00
+
+[root@gluster1 brick]# gluster v info vol_f48d68a9b0bf4fe9c155ae5e7e996e8b
+Volume Name: vol_f48d68a9b0bf4fe9c155ae5e7e996e8b
+Type: Distributed-Replicate
+Volume ID: 718ff311-4c9a-4b24-93a1-3297ec47dfe3
+Status: Started
+Snapshot Count: 0
+Number of Bricks: 2 x 3 = 6
+Transport-type: tcp
+Bricks:
+Brick1: 10.67.36.53:/var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/brick_227b9b6cb230239ed47697b86afd9753/brick
+Brick2: 10.67.36.52:/var/lib/heketi/mounts/vg_107c22bd05570dd91a5206055b9e2b2b/brick_4361c2fc51e1b3da10de035057ea7185/brick
+Brick3: 10.67.36.51:/var/lib/heketi/mounts/vg_0bed63a37f63057a914a1521af76c4c1/brick_dddff5e3c1aef87d665472e83dbf89ae/brick
+Brick4: 10.67.36.53:/var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/brick_cc0738d3568befa845f37bdc8cf2861f/brick
+Brick5: 10.67.36.52:/var/lib/heketi/mounts/vg_107c22bd05570dd91a5206055b9e2b2b/brick_a7471efca685336f07439d27c9a7c6aa/brick
+Brick6: 10.67.36.51:/var/lib/heketi/mounts/vg_0bed63a37f63057a914a1521af76c4c1/brick_d5cc14d189daf74c2c898915384bad99/brick
+
 
 gluster非常适合大文件读写的带宽型应用，诸如视频存储、HPC高性能计算、容器镜像存储、
 冷数据存储、日志存储、数据备份等应用场景。
@@ -58,3 +89,13 @@ Creating files
 Deleting files
 Renaming files
 # gluster volume set mydata group metadata-cache
+
+
+##########LVM Cache vs. Gluster Tiered Volumes
+Red Hat Gluster Storage supports tiered volumes, which are often configured with the same type of fast devices backing the fast tier bricks. 
+The operation of tiering is at the file level and is distributed across the trusted storage pool (TSP). 
+These tiers operate by moving files between the tiers based on tunable algorithms, such that files are migrated between tiers rather than copied.
+In contrast, LVM Cache operates locally at each block device backing the bricks and does so at the block level. LVM Cache stores copies of the hot data in the fast layer 
+using a non-tunable algorithm (though chunk sizes may be tuned for optimal performance).
+For most workloads, LVM Cache tends to offer greater performance compared to tiering. However, for certain types of workloads where a large number of clients are consistently 
+accessing the same hot file data set, or where writes can consistently go to the hot tier, tiering may prove more beneficial than LVM Cache.

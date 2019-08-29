@@ -5,6 +5,7 @@ Applications that attempt to write to these volumes will receive read-only files
 [root@worker1 network-scripts]# docker inspect 9c2b |grep -i sandbox
             "SandboxID": "c4aa9c26ada75287714c3cb622a946096038b3169a253e52f3452e291840d7e0",
             "SandboxKey": "/var/run/docker/netns/c4aa9c26ada7",
+根据容器的netns
 [root@worker1 network-scripts]# nsenter --net=/var/run/docker/netns/c4aa9c26ada7 ip a
 1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
@@ -19,6 +20,20 @@ NIC statistics:
      peer_ifindex: 78
 [root@worker1 network-scripts]# ip l |grep 78
 78: veth904981b@if77: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP mode DEFAULT group default
+根据容器的进程号
+[root@worker6 ~]# docker ps |grep logstash
+8c5260429bfd  b6a9d6f1254e   "/usr/local/bin/dock…"   11 days ago   Up 11 days     k8s_logstash_logstash-7d56c78f9-ddkxk_default_aad7f5ac-bfd2-11e9-b4f7-0050569376db_0
+[root@worker6 ~]# docker inspect --format '{{ .State.Pid }}' 8c5260429bfd
+17419
+[root@worker6 ~]# nsenter -t 17419 -n ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+3: eth0@if8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether 62:32:4e:0d:ca:2e brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 10.42.6.18/32 scope global eth0
+       valid_lft forever preferred_lft forever
 
 ############查看apiservice 可看出metrics-server是否正常###########
 如果不正常, 最有可能是API server和metrics server pod之间的通信问题
@@ -338,6 +353,12 @@ k8sv17.novalocal        10.96.0.0/24
 node-1.novalocal        10.96.1.0/24
 node-2.novalocal        10.96.2.0/24
 node-3.novalocal        10.96.3.0/24
+
+由pv找到gluster vol name
+[root@rancher ~]# kubectl get pv pvc-216a992a-bcad-11e9-bbcf-0050569376db -o jsonpath={.spec.glusterfs.path}
+vol_45ae6579c403aa87cd117dbdbdf721bb
+[root@gluster1 brick]# gluster v info vol_45ae6579c403aa87cd117dbdbdf721bb |grep `facter ipaddress`
+Brick2: 10.67.36.53:/var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/brick_4bc20b76c874ece4f04b46587afb5761/brick
 
 ##########Kubectl output verbosity and debugging#######
 --v=0	Generally useful for this to ALWAYS be visible to an operator.

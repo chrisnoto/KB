@@ -33,6 +33,29 @@ API版本控制
 支持watch机制 这意味着API Server的客户端可以使用与etcd相同的协调模式
 在 Pod 上使用 activeDeadlineSeconds，在容器上使用 livenessProbe，这样能够避免 Init 容器一直失败。 这就为 Init 容器活跃设置了一个期限。
 
+###################PDB#############
+PDB是为了Voluntary Disruption时保障应用的高可用
+Voluntary Disruption指用户或者集群管理员触发的，Kubernetes可控的Disruption场景
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: nginx-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nginx
+############preStop##############
+lifecycle:
+  preStop:
+    exec:
+      command: [
+        "sh", "-c",
+        # Introduce a delay to the shutdown sequence to wait for the
+        # pod eviction event to propagate. Then, gracefully shutdown
+        # nginx.
+        "sleep 5 && /usr/sbin/nginx -s quit",
+      ]
 ############postStart#############
     spec:
       containers:

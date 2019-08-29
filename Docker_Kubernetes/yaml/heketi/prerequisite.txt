@@ -1,0 +1,79 @@
+##############Containerized Heketi with an dedicated GlusterFS cluster 
+https://github.com/gluster/gluster-kubernetes/tree/master/docs/examples/containerized_heketi_dedicated_gluster
+
+1 重要: 外部glusterfs在peer的时候用ip地址, 而不是hostname
+先前使用的是hostname, 当创建heketi pod的时候,log提示始终无法解析gluster node的ip, 无法创建pod成功. 即使用上hostAlias也不行
+[root@worker3 ~]# cat /var/lib/kubelet/plugins/kubernetes.io/glusterfs/db/heketi-669fc6f5d9-zngrd-glusterfs.log
+[2019-08-29 02:30:50.887242] E [MSGID: 101075] [common-utils.c:294:gf_resolve_ip6] 0-resolver: getaddrinfo failed (Temporary failure in name resolution)
+[2019-08-29 02:30:50.887440] E [name.c:262:af_inet_client_get_remote_sockaddr] 0-heketidb-client-0: DNS resolution failed on host storage1
+[2019-08-29 02:30:50.982555] E [name.c:262:af_inet_client_get_remote_sockaddr] 0-heketidb-client-1: DNS resolution failed on host storage2
+[2019-08-29 02:30:51.088806] E [name.c:262:af_inet_client_get_remote_sockaddr] 0-heketidb-client-2: DNS resolution failed on host storage3
+[2019-08-29 02:30:51.089192] E [MSGID: 108006] [afr-common.c:4404:afr_notify] 0-heketidb-replicate-0: All subvolumes are down. Going offline until atleast one of them comes back up.
+
+2 gluster之间所有节点ssh-copy-id
+Confirm proper access and communication between GlusterFS nodes.
+Update /etc/hosts with ip and hostname 
+Set up password-less SSH communication between all nodes
+	# ssh-keygen  (take defaults)
+	# ssh-copy-id -i /root/.ssh/id_rsa.pub root@storage1
+NOTE: Repeat this from each node as necessary that you might want to ssh
+
+3 gluster集群里准备一个heketidb的volume, 另外准备未处理过的磁盘 /dev/sdc ...
+
+Prepare the Kubernetes Master and All Nodes
+This directory structure will be used to store the SSH keys for heketi as well as the configuration files that are needed.
+# mkdir -p /usr/share/heketi/keys
+Validate communication and Gluster prerequisites on the Kubernetes node(s).
+Make sure glusterfs-client is installed
+# yum install glusterfs-client -y
+# modprobe fuse
+As with the other CentOS VMs that have been created, make sure the Kubernetes cluster has proper firewall access and can communicate with the heketi server and glusterfs servers.
+Update /etc/hosts...
+
+Create Heketi private keys on master node.
+A private key is needed for Heketi to communicate with the Gluster nodes, to accomplish this we will create the ssh keys from the master (or one of the nodes in the cluster), 
+and generate a Kubernetes secret that can be used for cluster communication to GlusterFS storage pool.
+
+From the master node or any work node
+yum install -y heketi-client
+# mkdir -p /usr/share/heketi/keys
+# cd /usr/share/heketi/keys
+# ssh-keygen -f /usr/share/heketi/keys/heketi_key -t rsa -N ''
+# vi /etc/hosts
+# ssh-copy-id -i /usr/share/heketi/keys/heketi_key.pub storage1
+# ssh-copy-id -i /usr/share/heketi/keys/heketi_key.pub storage2
+# ssh-copy-id -i /usr/share/heketi/keys/heketi_key.pub storage3
+# chmod 770 heketi_key*
+
+Create the Heketi secret in Kubernetes (from rancher node)
+# kubectl create secret generic ssh-key-secret --from-file=/root/heketi/keys
+secret "ssh-key-secret" created
+Create the configmap from the heketi.json file
+# kubectl create configmap heketi-config --from-file=/root/heketi/heketi.json
+configmap "heketi-config" created
+
+# kubectl apply -f gluster-ep.yaml
+# kubectl apply -f gluster-svc.yaml
+# kubectl apply -f heketi-deploy.yaml
+# kubectl apply -f heketi-svc.yaml
+[root@rancher ~]# kubectl get svc -l app=heketi
+NAME     TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+heketi   NodePort   10.43.35.193   <none>        8081:31414/TCP   145m
+
+######Using Heketi with Gluster
+load the topology file
+[root@master ~]# curl http://10.43.35.193:8081/hello
+Hello from Heketi
+export HEKETI_CLI_SERVER=http://10.43.35.193:8081
+[root@master ~]# heketi-cli topology load --json=topology.json
+Creating cluster ... ID: 19971a3ec4307d366539a5d323c73cf3
+        Allowing file volumes on cluster.
+        Allowing block volumes on cluster.
+        Creating node storage1 ... ID: 0accf8eebca3a2adc2479f63ecf3d6c7
+                Adding device /dev/sdc ... OK
+        Creating node storage2 ... ID: f66d27ec57109b7c8b0376dc7039d20d
+                Adding device /dev/sdc ... OK
+        Creating node storage3 ... ID: 559e1c6e6a678e10bc5a72a0b8faf030
+                Adding device /dev/sdc ... OK
+
+

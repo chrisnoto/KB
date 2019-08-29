@@ -1,3 +1,55 @@
+#########Centos7 lvm cache########
+# pvcreate /dev/sdb
+# vgextend centos /dev/sdb
+[root@lvmcache ~]# lvcreate --type cache-pool -l 100%FREE -n cpool centos /dev/sdb
+  Logical volume "cpool" created.
+[root@lvmcache ~]# lvs
+  LV    VG     Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  cpool centos Cwi---C--- <19.96g
+  root  centos -wi-ao----  37.25g
+  swap  centos -wi-ao----  <3.82g
+[root@lvmcache ~]# lvconvert --type cache --cachepool centos/cpool centos/root
+Do you want wipe existing metadata of cache pool centos/cpool? [y/n]: y
+  Logical volume centos/root is now cached.
+[root@lvmcache ~]# lvs
+  LV   VG     Attr       LSize  Pool    Origin       Data%  Meta%  Move Log Cpy%Sync Convert
+  root centos Cwi-aoC--- 37.25g [cpool] [root_corig] 0.00   13.01           0.00
+  swap centos -wi-ao---- <3.82g
+[root@lvmcache ~]# lsblk
+NAME                  MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+fd0                     2:0    1    4K  0 disk
+sda                     8:0    0   50G  0 disk
+├─sda1                  8:1    0  476M  0 part /boot
+└─sda2                  8:2    0 41.1G  0 part
+  ├─centos-swap       253:1    0  3.8G  0 lvm  [SWAP]
+  └─centos-root_corig 253:4    0 37.3G  0 lvm
+    └─centos-root     253:0    0 37.3G  0 lvm  /
+sdb                     8:16   0   20G  0 disk
+├─centos-cpool_cdata  253:2    0   20G  0 lvm
+│ └─centos-root       253:0    0 37.3G  0 lvm  /
+└─centos-cpool_cmeta  253:3    0   20M  0 lvm
+  └─centos-root       253:0    0 37.3G  0 lvm  /
+[root@lvmcache ~]# lvs -a -o name,vg_name,size,pool_lv,devices,cachemode,chunksize
+  LV              VG     LSize   Pool    Devices         CacheMode    Chunk
+  [cpool]         centos <19.96g         cpool_cdata(0)  writethrough 64.00k
+  [cpool_cdata]   centos <19.96g         /dev/sdb(10)                     0
+  [cpool_cmeta]   centos  20.00m         /dev/sdb(5)                      0
+  [lvol0_pmspare] centos  20.00m         /dev/sdb(0)                      0
+  root            centos  37.25g [cpool] root_corig(0)   writethrough 64.00k
+  [root_corig]    centos  37.25g         /dev/sda2(0)                     0
+  swap            centos  <3.82g         /dev/sda2(9537)                  0
+[root@lvmcache ~]# lvs -a -o devices,cachetotalblocks,cacheusedblocks,cachereadhits,cachereadmisses
+  Devices         CacheTotalBlocks CacheUsedBlocks  CacheReadHits    CacheReadMisses
+  cpool_cdata(0)            326976               17               18              126
+  /dev/sdb(10)
+  /dev/sdb(5)
+  /dev/sdb(0)
+  root_corig(0)             326976               17               18              126
+  /dev/sda2(0)
+  /dev/sda2(9537)
+# detaching a cache pool
+# lvconvert --splicache centos/cpool
+
 ####### CentOS7 tuned##########
 profile里有一些cpu,disk,sysctl的调优参数
 tuned-adm active          #查看现在使用的profile
@@ -144,6 +196,9 @@ cron没有写root所致
         Vendor PN                                 : A7EL-SN85-ADMA
 
 #############nmcli##############
+nmcli conn add con-name ens32 type ethernet ifname ens32 autoconnect yes ipv4.addr 10.67.36.220/22 ipv4.gateway 10.67.36.1 ipv4.dns 10.67.50.111
+nmcli conn mod ens32 ipv4.addr 10.67.36.220/22 ipv4.gateway 10.67.36.1 ipv4.dns 10.67.50.111 ipv4.method manual
+nmcli con mod ens32 +ipv4.addresses 10.67.36.221/22
 [root@kafka3 ~]# nmcli con modify eno1 ipv4.gateway 10.67.50.1
 [root@kafka3 ~]# nmcli con up eno1
 Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/2)
