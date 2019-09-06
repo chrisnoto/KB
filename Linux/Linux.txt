@@ -1,3 +1,5 @@
+###########tcpdump############
+root@node-1:~# tcpdump -i bond0 -nn -e vlan
 #########Centos7 lvm cache########
 # pvcreate /dev/sdb
 # vgextend centos /dev/sdb
@@ -65,11 +67,6 @@ transparent_hugepages=never
 [root@stjes1 ~]# tuned-adm profile throughput-performance
 [root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
 always madvise [never]
-
-####### Centos7 change team runner ##########
-[root@kafka2 ~]# nmcli conn modify team0 team.runner activebackup
-[root@kafka2 ~]# nmcli conn up team0
-Connection successfully activated (master waiting for slaves) (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/7)
 
 ############ if判断 #################
 root@rabbit1:~# if [[ -n $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                  -n string长度非零返回真, 非空为真
@@ -207,10 +204,16 @@ IP4.GATEWAY:                            10.67.50.1
 IP6.GATEWAY:                            --
 
 # nmcli con modify eno1 ipv4.dns "192.168.0.100 192.168.0.101"
-# nmcli con down eno1 && nmcli con up eno1
+# nmcli con up eno1
 
 # nmcli con modify eno1 ipv4.routes "10.0.0.0/24 192.168.0.1"
-# nmcli con down eno1 && nmcli con up eno1
+# nmcli con up eno1
+
+# nmcli c add type vlan con-name vlan103 dev em1 id 103 ip4 192.168.2.200/24
+# change team runner 
+[root@kafka2 ~]# nmcli conn modify team0 team.runner activebackup
+[root@kafka2 ~]# nmcli conn up team0
+Connection successfully activated (master waiting for slaves) (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/7)
 ##########查找无效InRelease文件#########
 root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
 2233786    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/trusty/InRelease

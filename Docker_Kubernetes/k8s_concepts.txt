@@ -1,3 +1,37 @@
+#############Pod的Volume与PV的区别################
+Volume的生命周期和Pod相同，Pod被删除时，Volume和保存在Volume中的数据就被删除了；
+普通Volume和使用它的Pod之间是一种静态绑定关系，在定义Pod的文件里，同时定义了它使用的Volume。
+Volume是Pod的附属品，我们无法单独创建一个Volume，因为它不是一个独立的K8S资源对象
+
+PV, 是一个K8S资源对象，我们可以单独创建一个PV, 它不和Pod直接发生关系, 而是通过Persistent Volume Claim, 简称PVC来实现动态绑定, 
+我们会在Pod定义里指定创建好的PVC, 然后PVC会根据Pod的要求去自动绑定合适的PV给Pod使用.
+对于PV，即使挂载PV的Pod被删除了，PV仍然存在，PV上的数据也还在。
+##############扩展 PV 空间#########
+ExpandPersistentVolumes 在 v1.8 开始 Alpha，v1.11 升级为 Beta 版。
+v1.8 开始支持扩展 PV 空间，支持在不丢失数据和重启容器的情况下扩展 PV 的大小。注意， 当前的实现仅支持不需要调整文件系统大小（XFS、Ext3、Ext4）的 PV，并且只支持以下几种存储插件 ：
+AzureDisk
+AzureFile
+gcePersistentDisk
+awsElasticBlockStore
+Cinder
+glusterfs
+rbd
+Portworx
+开启扩展 PV 空间的功能需要配置
+开启 ExpandPersistentVolumes 功能，即配置 --feature-gates=ExpandPersistentVolumes=true
+开启准入控制插件 PersistentVolumeClaimResize，它只允许扩展明确配置 allowVolumeExpansion=true 的 StorageClass，比如
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gluster-vol-default
+provisioner: kubernetes.io/glusterfs
+parameters:
+  resturl: "http://192.168.10.100:8080"
+  restuser: ""
+  secretNamespace: ""
+  secretName: ""
+allowVolumeExpansion: true
+这样，用户就可以修改 PVC 中请求存储的大小（如通过 kubectl edit 命令）请求更大的存储空间
 ########Pod#########
 Kubernetes中的基本组件kube-controller-manager就是用来控制Pod的状态和生命周期的，
 在了解各种controller之前我们有必要先了解下Pod本身和其生命周期

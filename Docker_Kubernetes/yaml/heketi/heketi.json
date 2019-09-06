@@ -1,6 +1,6 @@
 {
    "_port_comment":"Heketi Server Port Number",
-   "port":"8081",                          # modify
+   "port":"8081",                          
    "_use_auth":"Enable JWT authorization. Please enable for deployment",
    "use_auth":false,
    "_jwt":"Private keys for access",
@@ -25,13 +25,13 @@
          "kubernetes: Communicate with GlusterFS containers over",
          " Kubernetes exec api."
       ],
-      "executor":"ssh",                       #modify
+      "executor":"ssh",                      
       "_sshexec_comment":"SSH username and private key file information",
       "sshexec":{
-         "keyfile":"/usr/share/keys/heketi_key",         #modify
-         "user":"root",                              #modify
-         "port":"22",                                #modify
-         "fstab":"/etc/fstab"                        #modify
+         "keyfile":"/usr/share/keys/heketi_key",     
+         "user":"root",                             
+         "port":"22",                              
+         "fstab":"/etc/fstab"                     
       },
       "_kubeexec_comment":"Kubernetes configuration",
       "kubeexec":{
@@ -50,6 +50,11 @@
          " none, critical, error, warning, info, debug",
          "Default is warning"
       ],
-      "loglevel":"debug"
-   }
+      "loglevel":"debug",
+   "auto_create_block_hosting_volume": true,
+   "block_hosting_volume_size": 100,
+   "block_hosting_volume_options": "group gluster-block",
+   "pre_request_volume_options": "",
+   "post_request_volume_options": ""
+  }
 }

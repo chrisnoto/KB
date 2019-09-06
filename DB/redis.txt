@@ -11,3 +11,8 @@ docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.c
   
 docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
 -p 8080:80 aidaho/haproxy-wi 
+
+
+
+###########redis aof文件重写############
+Redis将生成一个新的AOF文件， 这个文件包含重建当前数据集所需的最少命令

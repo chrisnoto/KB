@@ -99,3 +99,73 @@ In contrast, LVM Cache operates locally at each block device backing the bricks 
 using a non-tunable algorithm (though chunk sizes may be tuned for optimal performance).
 For most workloads, LVM Cache tends to offer greater performance compared to tiering. However, for certain types of workloads where a large number of clients are consistently 
 accessing the same hot file data set, or where writes can consistently go to the hot tier, tiering may prove more beneficial than LVM Cache.
+
+############## Gluster block #############
+所有节点
+# yum install gluster-block
+# systemctl start gluster-blockd
+# set the block profile on replica 3 volume to tune it with block recommendations
+[root@storage1 ~]# gluster volume set vol_8470f1c8e503b27b1fa88f5584b880ce group gluster-block
+volume set: success
+[root@storage1 ~]# gluster-block create vol_8470f1c8e503b27b1fa88f5584b880ce/block2 ha 3 10.67.36.151,10.67.36.152,10.67.36.153 5GiB
+IQN: iqn.2016-12.org.gluster-block:1f7c5798-ce22-4bd6-ae6d-4a53fbd53dca
+PORTAL(S):  10.67.36.151:3260 10.67.36.152:3260 10.67.36.153:3260
+RESULT: SUCCESS
+
+使用heketi-cli
+前提: 打开auto_create_block_hosting_volume
+[root@master ~]# heketi-cli blockvolume create --size=30 --ha=3 --auth
+Name: blockvol_a0ff4c517100523146ee4860234c2908
+Size: 30
+Volume Id: a0ff4c517100523146ee4860234c2908
+Cluster Id: 19971a3ec4307d366539a5d323c73cf3
+Hosts: [10.67.36.151 10.67.36.153 10.67.36.152]
+IQN: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9
+LUN: 0
+Hacount: 3
+Username: 06328de5-90e4-4876-b8fe-3f682cd395d9
+Password: 4d950955-f3dd-4a0c-8b38-715609c5921d
+Block Hosting Volume: f588d7cc1f426a09b0dba9c416c61fd5
+
+[root@storage1 etc]# targetcli ls
+
+
+linux客戶端
+[root@worker1 ~]# iscsiadm -m discovery -t st -p 10.67.36.151
+[root@worker1 ~]# iscsiadm -m node -T "iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9" -o update \
+ -n node.session.auth.authmethod -v CHAP -n node.session.auth.username -v 06328de5-90e4-4876-b8fe-3f682cd395d9 \
+ -n node.session.auth.password -v 4d950955-f3dd-4a0c-8b38-715609c5921d
+ 或在配置文件/etc/iscsi/iscsid.conf中添加
+ node.session.auth.authmethod = CHAP
+node.session.auth.username = 06328de5-90e4-4876-b8fe-3f682cd395d9
+node.session.auth.password = 4d950955-f3dd-4a0c-8b38-715609c5921d
+
+[root@worker2 iscsi]# iscsiadm -m node -T "iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9" -l
+Logging in to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.151,3260] (multiple)
+Logging in to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.153,3260] (multiple)
+Logging in to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.152,3260] (multiple)
+Login to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.151,3260] successful.
+Login to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.153,3260] successful.
+Login to [iface: default, target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9, portal: 10.67.36.152,3260] successful.
+
+查看session
+[root@worker2 iscsi]# iscsiadm -m session
+tcp: [1] 10.67.36.151:3260,1 iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9 (non-flash)
+tcp: [2] 10.67.36.153:3260,2 iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9 (non-flash)
+tcp: [3] 10.67.36.152:3260,3 iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9 (non-flash)
+[root@worker2 iscsi]# iscsiadm -m session -P3
+iSCSI Transport Class version 2.0-870
+version 6.2.0.874-10
+Target: iqn.2016-12.org.gluster-block:06328de5-90e4-4876-b8fe-3f682cd395d9 (non-flash)
+        Current Portal: 10.67.36.151:3260,1
+        Persistent Portal: 10.67.36.151:3260,1
+                **********
+                Interface:
+                **********
+                Iface Name: default
+                Iface Transport: tcp
+                Iface Initiatorname: iqn.1994-05.com.redhat:6d85bf4ef77
+                Iface IPaddress: 10.67.36.61
+
+
+

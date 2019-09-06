@@ -1,6 +1,31 @@
 0.94.x   Hammer LTS
 10.2.x   Jewel  LTS
 
+##############ceph调优############
+#磁盘预读
+for u in `lsblk |grep disk |grep 83 |awk '{print $1}'` ;do echo "8192" > /sys/block/$u/queue/read_ahead_kb;done
+#关闭节能
+for CPUFREQ in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do [ -f $CPUFREQ ] || continue; echo -n performance > $CPUFREQ; done
+#IO SCHEDULER
+ssd noop
+hdd deadline
+######swappiness
+vm.swappiness = 1
+
+root@node-14:~# ceph tell osd.* injectargs --filestore_queue_max_ops=20000
+root@node-14:~# ceph tell osd.* injectargs --osd_max_write_size 256
+root@node-14:~# ceph tell osd.* injectargs --rbd_cache_size 67108864
+root@node-14:~# ceph tell osd.* injectargs --rbd_cache_max_dirty=50331648
+root@node-14:~# ceph tell osd.* injectargs --rbd_cache_target_dirty=33554432
+root@node-14:~# ceph tell osd.* injectargs --rbd_cache_max_dirty_age=2
+root@node-14:~# ceph tell osd.* injectargs --osd_journal_size=10240
+root@node-14:~# ceph tell osd.* injectargs --filestore_max_sync_interval 15 --filestore_min_sync_interval 10
+osd.0: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+osd.1: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+osd.2: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+osd.3: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+osd.4: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+
 #############ceph performance######
 root@node-5:~# ceph osd perf |grep 23
 osd fs_commit_latency(ms) fs_apply_latency(ms)

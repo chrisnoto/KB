@@ -1,0 +1,57 @@
+#######創建 glusterfs volume plugin###########
+docker plugin install --alias glusterfs \
+  trajano/glusterfs-volume-plugin \
+  --grant-all-permissions --disable
+docker plugin set glusterfs SERVERS=10.67.36.53,10.67.36.52,10.67.36.51
+docker plugin enable glusterfs
+
+[root@rancher ~]# docker plugin ls
+ID                  NAME                DESCRIPTION                   ENABLED
+d30b3633534d        glusterfs:latest    GlusterFS plugin for Docker   true
+
+##########使用 glusterfs volume#######
+[root@gluster1 ~]# heketi-cli volume create --name=alpine --size=1
+Name: alpine
+Size: 1
+Volume Id: 06d1d64125ba860293c15498a006ddad
+Cluster Id: 3f4ea0535e326550c173bb1cabdcaaa4
+Mount: 10.67.36.53:alpine
+Mount Options: backup-volfile-servers=10.67.36.51,10.67.36.52
+Block: false
+Free Size: 0
+Block Volumes: []
+Durability Type: replicate
+Distributed+Replica: 3
+
+docker volume create -d glusterfs alpine
+docker run -it -v alpine:/mnt alpine
+/ # df -hT
+Filesystem           Type            Size      Used Available Use% Mounted on
+overlay              overlay        37.2G      4.8G     32.4G  13% /
+tmpfs                tmpfs          64.0M         0     64.0M   0% /dev
+tmpfs                tmpfs           2.8G         0      2.8G   0% /sys/fs/cgroup
+10.67.36.53:alpine   fuse.glusterfs
+                                  1014.0M     32.6M    981.4M   3% /mnt
+/dev/mapper/centos-root
+                     xfs            37.2G      4.8G     32.4G  13% /etc/resolv.conf
+/dev/mapper/centos-root
+                     xfs            37.2G      4.8G     32.4G  13% /etc/hostname
+/dev/mapper/centos-root
+                     xfs            37.2G      4.8G     32.4G  13% /etc/hosts
+#########拷貝文件到 /mnt
+/ # cp -r /etc/* /mnt
+/ # cd /mnt
+/mnt # ls
+alpine-release  fstab           init.d          modprobe.d      mtab            passwd          protocols       shadow          sysctl.d
+apk             group           inittab         modules         network         periodic        resolv.conf     shells          udhcpd.conf
+conf.d          hostname        issue           modules-load.d  opt             profile         securetty       ssl
+crontabs        hosts           logrotate.d     motd            os-release      profile.d       services        sysctl.conf
+
+#########glusterfs server上驗證
+[root@gluster1 ~]# cd /var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/brick_e065818b20abf9ae2461a772cd50620f/brick
+[root@gluster1 brick]# ls
+alpine-release  conf.d    fstab  hostname  init.d   issue        modprobe.d  modules-load.d  mtab     opt         passwd    profile    protocols    securetty  shadow  ssl          sysctl.d
+apk             crontabs  group  hosts     inittab  logrotate.d  modules     motd            network  os-release  periodic  profile.d  resolv.conf  services   shells  sysctl.conf  udhcpd.conf
+[root@gluster1 brick]# cat alpine-release
+3.10.2
+[root@gluster1 brick]#

@@ -1,5 +1,6 @@
 ##############Containerized Heketi with an dedicated GlusterFS cluster 
 https://github.com/gluster/gluster-kubernetes/tree/master/docs/examples/containerized_heketi_dedicated_gluster
+本次部署允许创建gluster block volume
 
 1 重要: 外部glusterfs在peer的时候用ip地址, 而不是hostname
 先前使用的是hostname, 当创建heketi pod的时候,log提示始终无法解析gluster node的ip, 无法创建pod成功. 即使用上hostAlias也不行
