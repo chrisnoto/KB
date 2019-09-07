@@ -240,3 +240,15 @@ redis-ha-server pod terminated后, 在worker上留下多余的mount记录
 orphaned pod的处理
 umount /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db/volumes/kubernetes.io~glusterfs/pvc-df4d22ee-bcac-11e9-bbcf-0050569376db
 rm -rf /var/lib/kubelet/pods/b27100ff-bfd2-11e9-b4f7-0050569376db
+
+#################
+5 kubelet 重啟以後, redis-ha的3個pod都出現了錯誤
+Events:
+  Type     Reason       Age                     From              Message
+  ----     ------       ----                    ----              -------
+  Warning  FailedMount  17m (x141 over 4h48m)   kubelet, worker5  MountVolume.SetUp failed for volume "pvc-216a992a-bcad-11e9-bbcf-0050569376db" : stat /var/lib/kubelet/pods/9d33b429-c3f6-11e9-ac6a-0050569376db/volumes/kubernetes.io~glusterfs/pvc-216a992a-bcad-11e9-bbcf-0050569376db: transport endpoint is not connected
+  Warning  FailedMount  107s (x139 over 4h46m)  kubelet, worker5  Unable to mount volumes for pod "redis-ha-server-2_default(9d33b429-c3f6-11e9-ac6a-0050569376db)": timeout expired waiting for volumes to attach or mount for pod "default"/"redis-ha-server-2". list of unmounted volumes=[data]. list of unattached volumes=[data config probes host-sys redis-ha-token-nqgpn]
+
+解決辦法:
+在worker5上 umount /var/lib/kubelet/pods/9d33b429-c3f6-11e9-ac6a-0050569376db/volumes/kubernetes.io~glusterfs/pvc-216a992a-bcad-11e9-bbcf-0050569376db
+然後 kubectl delete po redis-ha-server-2

@@ -209,6 +209,26 @@ Address:        10.43.0.10#53
 
 Name:   redis-ha-announce-0.default.svc.cluster.local
 Address: 10.43.29.117
+##############測試service account和API##########
+kubectl run client --image=appropriate/curl --rm -ti --restart=Never --command -- curl http://my-service:80
+kubectl run busybox --image=busybox --rm -ti --restart=Never --command -- nslookup redis-ha-announce-0
+[root@rancher mysqlha]# kubectl run curl --image=appropriate/curl --rm -ti --restart=Never --command -- sh -c 'KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) && curl -sSk -H "Authorization: Bearer $KUBE_TOKEN" \
+> https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/api/v1/namespaces/default/pods'
+{
+  "kind": "Status",
+  "apiVersion": "v1",
+  "metadata": {
+
+  },
+  "status": "Failure",
+  "message": "pods is forbidden: User \"system:serviceaccount:default:default\" cannot list resource \"pods\" in API group \"\" in the namespace \"default\"",
+  "reason": "Forbidden",
+  "details": {
+    "kind": "pods"
+  },
+  "code": 403
+}pod "curl" deleted
+
 
 ###########configmap##########
 kubectl create configmap --from-file=kibana.yml=./kibana.yml kibana-config

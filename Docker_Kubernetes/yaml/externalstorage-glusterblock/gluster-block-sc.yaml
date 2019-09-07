@@ -6,4 +6,5 @@ provisioner: gluster.org/glusterblock
 parameters:
   resturl: "http://10.43.35.193:8081"
   restauthenabled: "false"
+  chapauthenabled: "false"
   hacount: "3"
