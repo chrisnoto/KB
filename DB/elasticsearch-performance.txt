@@ -2,6 +2,37 @@ curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool |grep -A5 
 curl -sXGET "10.67.51.150:9200/_nodes/thread_pool"|python -mjson.tool
 curl -sXGET "10.67.51.150:9200/_nodes/stats/thread_pool"|python -mjson.tool |grep rejected
 
+############ reindex a index to reduce the number of shards#########
+1 reallocate index to stjes1 and mark it readonly
+curl -XPUT '10.67.51.150:9200/syslog-2019.08.31/_settings' -H 'Content-Type: application/json' -d '{
+    "settings": {
+        "index.routing.allocation.require._name": "stjes1",
+        "index.blocks.write": true
+    }
+}'
+2 define a new target_index
+curl -XPUT '10.67.51.150:9200/syslog-2019.08.31/_shrink/syslog-shrink-2019.08.31' -H 'Content-Type: application/json' -d '{
+    "settings": {
+        "index.number_of_replicas": 1,
+		"index.number_of_shards": 1,
+        "index.codec": "best_compression"
+    },
+	"aliases": {
+	    "syslog-ilo-2019.08.31": {}
+	}
+}'
+3 restore source index write or delete source index
+curl -XPUT '10.67.51.150:9200/syslog-2019.08.31/_settings' -H 'Content-Type: application/json' -d '{
+    "settings": {
+        "index.blocks.write": false
+    }
+}'
+腳本化
+[root@stjes1 ~]# cat shrink.sh |sed -n '1,6p' | bash
+{"acknowledged":true}[root@stjes1 ~]#
+[root@stjes1 ~]# cat shrink.sh |sed -n '7,$p' |bash
+
+
 ######## translog 异步写硬盘 ############ 观察到IOPS大幅下降           最好在模板里改，其次cronjob
  curl -XPUT 'http://10.67.51.150:9200/_all/_settings?preserve_existing=true' -H 'Content-Type: application/json' -d '{
   "index.translog.durability" : "async",

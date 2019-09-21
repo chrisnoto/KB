@@ -1,0 +1,104 @@
+#############針對  SSD RAID ###########
+
+megacli -LDSetProp -Direct -Immediate -L1 -a0
+megacli -LDSetProp -WT -Immediate -L1 -a0
+megacli -LDSetProp -EnDskCache -Immediate -L1 -a0
+megacli -LDSetProp -NORA -Immediate -L1 -a0
+######查看BBU
+[root@stjes2 ~]# megacli -AdpBbuCmd -aALL
+
+BBU status for Adapter: 0
+
+BatteryType: BBU
+Voltage: 3932 mV
+Current: 0 mA
+Temperature: 27 C
+Battery State: Optimal
+BBU Firmware Status:
+##########################################
+[root@stjes1 ~]# megacli -LDSetProp -NORA -Immediate -L1 -a0
+
+Set Read Policy to NoReadAhead on Adapter 0, VD 1 (target id: 1) success
+
+Exit Code: 0x00
+[root@stjes1 ~]# megacli -LDInfo -L1 -a0
+
+
+Adapter 0 -- Virtual Drive Information:
+Virtual Drive: 1 (Target Id: 1)
+Name                :
+RAID Level          : Primary-0, Secondary-0, RAID Level Qualifier-0
+Size                : 2.179 TB
+Sector Size         : 512
+Is VD emulated      : No
+Parity Size         : 0
+State               : Optimal
+Strip Size          : 64 KB
+Number Of Drives    : 6
+Span Depth          : 1
+Default Cache Policy: WriteBack, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Current Cache Policy: WriteBack, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Default Access Policy: Read/Write
+Current Access Policy: Read/Write
+Disk Cache Policy   : Disk's Default
+Encryption Type     : None
+Bad Blocks Exist: No
+Is VD Cached: No
+
+[root@stjes1 data]# megacli -LDSetProp -EnDskCache -Immediate -L1 -a0
+
+Set Disk Cache Policy to Enabled on Adapter 0, VD 1 (target id: 1) success
+
+Exit Code: 0x00
+[root@stjes1 data]# megacli -LDInfo -L1 -a0
+
+
+Adapter 0 -- Virtual Drive Information:
+Virtual Drive: 1 (Target Id: 1)
+Name                :
+RAID Level          : Primary-0, Secondary-0, RAID Level Qualifier-0
+Size                : 2.179 TB
+Sector Size         : 512
+Is VD emulated      : No
+Parity Size         : 0
+State               : Optimal
+Strip Size          : 64 KB
+Number Of Drives    : 6
+Span Depth          : 1
+Default Cache Policy: WriteBack, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Current Cache Policy: WriteBack, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Default Access Policy: Read/Write
+Current Access Policy: Read/Write
+Disk Cache Policy   : Enabled
+Encryption Type     : None
+Bad Blocks Exist: No
+Is VD Cached: No
+
+[root@stjes1 data]# megacli -LDSetProp -WT -Immediate -L1 -a0
+
+Set Write Policy to WriteThrough on Adapter 0, VD 1 (target id: 1) success
+
+Exit Code: 0x00
+[root@stjes1 data]# megacli -LDInfo -L1 -a0
+
+
+Adapter 0 -- Virtual Drive Information:
+Virtual Drive: 1 (Target Id: 1)
+Name                :
+RAID Level          : Primary-0, Secondary-0, RAID Level Qualifier-0
+Size                : 2.179 TB
+Sector Size         : 512
+Is VD emulated      : No
+Parity Size         : 0
+State               : Optimal
+Strip Size          : 64 KB
+Number Of Drives    : 6
+Span Depth          : 1
+Default Cache Policy: WriteThrough, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Current Cache Policy: WriteThrough, ReadAheadNone, Direct, No Write Cache if Bad BBU
+Default Access Policy: Read/Write
+Current Access Policy: Read/Write
+Disk Cache Policy   : Enabled
+Encryption Type     : None
+Bad Blocks Exist: No
+Is VD Cached: No

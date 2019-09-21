@@ -194,7 +194,7 @@ cron没有写root所致
 
 #############nmcli##############
 nmcli conn add con-name ens32 type ethernet ifname ens32 autoconnect yes ipv4.addr 10.67.36.220/22 ipv4.gateway 10.67.36.1 ipv4.dns 10.67.50.111
-nmcli conn mod ens32 ipv4.addr 10.67.36.220/22 ipv4.gateway 10.67.36.1 ipv4.dns 10.67.50.111 ipv4.method manual
+nmcli conn mod ens160 ipv4.addr 10.67.51.164/23 ipv4.gateway 10.67.50.1 ipv4.dns 10.67.50.111 ipv4.method manual
 nmcli con mod ens32 +ipv4.addresses 10.67.36.221/22
 [root@kafka3 ~]# nmcli con modify eno1 ipv4.gateway 10.67.50.1
 [root@kafka3 ~]# nmcli con up eno1

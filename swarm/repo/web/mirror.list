@@ -1,0 +1,35 @@
+############# config ##################
+#
+# set base_path    /var/spool/apt-mirror
+#
+# set mirror_path  $base_path/mirror
+# set skel_path    $base_path/skel
+# set var_path     $base_path/var
+# set cleanscript $var_path/clean.sh
+# set defaultarch  <running>
+# set postmirror_script $var_path/postmirror.sh
+# set run_postmirror 0
+set nthreads     20
+set _tilde 0
+#
+############# end config ##############
+
+deb  https://mirrors.aliyun.com/ubuntu bionic main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu bionic-security main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu bionic-updates main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu bionic-proposed main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu bionic-backports main restricted universe multiverse
+
+deb  https://mirrors.aliyun.com/ubuntu xenial main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu xenial-security main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu xenial-updates main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu xenial-proposed main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu xenial-backports main restricted universe multiverse
+
+deb  https://mirrors.aliyun.com/ubuntu trusty main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu trusty-security main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu trusty-updates main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu trusty-proposed main restricted universe multiverse
+deb  https://mirrors.aliyun.com/ubuntu trusty-backports main restricted universe multiverse
+
+clean  https://mirrors.aliyun.com/ubuntu

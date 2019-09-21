@@ -1,3 +1,10 @@
+############關閉 glusterfs集群###########
+gluster volume stop all the volumes, then shutdown each nodes
+
+
+
+
+
 heketi-cli移除节点   待测试
 [root@gluster1 heketi]# heketi-cli node disable 830793f7da758225c0a3a0f8ebeea014
 Node 830793f7da758225c0a3a0f8ebeea014 is now offline

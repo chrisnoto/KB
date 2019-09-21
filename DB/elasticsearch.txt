@@ -12,7 +12,7 @@ Beats: upgrade instructions
 # curl -X PUT "10.67.51.150:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
   "persistent": {
-    "cluster.routing.allocation.enable": "none"
+    "cluster.routing.allocation.enable": "all"
   }
 }
 '

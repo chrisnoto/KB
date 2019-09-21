@@ -1,17 +1,42 @@
 0.94.x   Hammer LTS
 10.2.x   Jewel  LTS
 
+重啟ceph節點
+$ sudo ceph osd set noout
+$ sudo ceph osd set norebalance
+reboot
+
+###shutdown ceph cluster
+ceph osd set noout
+ceph osd set nobackfill
+ceph osd set norecover
+ceph osd set norebalance
+ceph osd set nodown
+ceph osd set pause
+shutdown -h now
+###resume ceph cluster
+power on
+ceph osd unset pause
+ceph osd unset nodown
+ceph osd unset norebalance
+ceph osd unset norecover
+ceph osd unset nobackfill
+ceph osd unset noout
 ##############ceph调优############
 #磁盘预读
-for u in `lsblk |grep disk |grep 83 |awk '{print $1}'` ;do echo "8192" > /sys/block/$u/queue/read_ahead_kb;done
+for u in `df -hTP |awk '/osd/{print $1}'`;do echo "8192" > /sys/block/${u:5:3}/queue/read_ahead_kb;done
+for u in `df -hTP |awk '/osd/{print $1}'`;do cat /sys/block/${u:5:3}/queue/read_ahead_kb;done
 #关闭节能
 for CPUFREQ in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do [ -f $CPUFREQ ] || continue; echo -n performance > $CPUFREQ; done
 #IO SCHEDULER
+megacli -PDList -aALL |egrep 'Raw Size|Solid'
+echo noop > /sys/block/sdb/queue/scheduler
 ssd noop
 hdd deadline
 ######swappiness
 vm.swappiness = 1
 
+开启Cache能显著提升顺序io的读写性能，缓存越大性能越好；如果容许一定的数据丢失，建议开启
 root@node-14:~# ceph tell osd.* injectargs --filestore_queue_max_ops=20000
 root@node-14:~# ceph tell osd.* injectargs --osd_max_write_size 256
 root@node-14:~# ceph tell osd.* injectargs --rbd_cache_size 67108864
@@ -25,6 +50,30 @@ osd.1: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.2: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.3: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.4: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
+查看參數
+root@node-13:~# ceph daemon osd.41 config show |grep osd_journal_size
+    "osd_journal_size": "10240",
+
+###SSD 分區對齊
+root@node-13:~# ceph-disk list |grep 'ceph journal'
+ /dev/sdb3 ceph journal, for /dev/sde3
+ /dev/sdb4 ceph journal, for /dev/sdf3
+ /dev/sdb5 ceph journal, for /dev/sdg3
+ /dev/sdb6 ceph journal, for /dev/sdh3
+ /dev/sdc3 ceph journal, for /dev/sdi3
+ /dev/sdc4 ceph journal, for /dev/sdj3
+ /dev/sdc5 ceph journal, for /dev/sdk3
+ /dev/sdc6 ceph journal, for /dev/sdl3
+ /dev/sdd3 ceph journal, for /dev/sdm3
+ /dev/sdd4 ceph journal, for /dev/sdn3
+ /dev/sdd5 ceph journal, for /dev/sdo3
+root@node-13:~# parted /dev/sdb align-check optimal 3
+3 aligned
+root@node-13:~# parted /dev/sdc align-check optimal 3
+3 aligned
+root@node-13:~# parted /dev/sdc align-check optimal 4
+4 aligned
+
 
 #############ceph performance######
 root@node-5:~# ceph osd perf |grep 23

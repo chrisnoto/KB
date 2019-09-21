@@ -1,5 +1,30 @@
+###########kubernetes開關順序###########
+stop:  scale down apps/drain nodes -> worker nodes  -> master nodes  -> storage
+start: storage  -> master nodes -> worker nodes
 
-docker run -ti -v /root/.kube:/kube -v /var/run/kubernetes:/var/run/kubernetes --privileged --net=host  glusterblock-provisioner  -master=http://127.0.0.1:8080 -kubeconfig=/kube/config -id=gluster.org/glusterblock
+#scale down
+[root@rancher ~]# kubectl scale sts redis-ha-server --replicas=1
+statefulset.apps/redis-ha-server scaled
+[root@rancher ~]# kubectl scale deploy logstash --replicas=1
+deployment.extensions/logstash scaled
+
+
+#####after start cluster
+kubectl get componentstatus
+
+#one-time backup etcd
+[root@rancher ~]# rke etcd snapshot-save --name etcd-backup-20190912 --config cluster.yml
+INFO[0000] Starting saving snapshot on etcd hosts
+#verify backup on master node
+[root@master etcd-snapshots]# ls -lh /opt/rke/etcd-snapshots/
+total 7.6M
+-rw------- 1 root root 1.1M Sep  9 11:48 2019-09-09T03:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep  9 23:48 2019-09-09T15:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep 10 11:48 2019-09-10T03:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep 10 23:48 2019-09-10T15:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep 11 11:48 2019-09-11T03:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep 11 23:48 2019-09-11T15:48:19Z_etcd.zip
+-rw------- 1 root root 1.1M Sep 12 10:41 etcd-backup-20190912.zip
 
 Secret, configMap, downwardAPI and projected volumes will be mounted as read-only volumes. 
 Applications that attempt to write to these volumes will receive read-only filesystem errors.
