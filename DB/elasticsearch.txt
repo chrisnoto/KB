@@ -137,6 +137,17 @@ curl -X PUT 10.67.36.49:9200/_snapshot/logging -H 'Content-Type: application/jso
   "winlogbeat-6.4.0"
 ]
 
+#############創建 syslog 模板###############
+curl -X PUT "10.67.51.150:9200/_template/syslog?pretty" -H 'Content-Type: application/json' -d'
+{
+  "index_patterns": ["syslog*"],
+  "settings": {
+    "refresh_interval": "30s",
+    "number_of_shards": 1
+  }
+}
+'
+
 #####查各个index pattern的docs数(包含了replica)#########
 [root@es1 ~]# /usr/bin/curator_cli --config /root/curator/curator.yml show_indices --verbose |grep -v '^\.[a-z]*' |awk '{t=length($1);print substr($1,0,t-10),$4}' |awk '{S[$1]+=$NF} END {for(a in S) print a, S[a]}'
 swarm- 44086280
