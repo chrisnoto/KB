@@ -1,4 +1,4 @@
-###########kubernetes開關順序###########
+###########kubernetes开关顺序###########
 stop:  scale down apps/drain nodes -> worker nodes  -> master nodes  -> storage
 start: storage  -> master nodes -> worker nodes
 
@@ -234,7 +234,7 @@ Address:        10.43.0.10#53
 
 Name:   redis-ha-announce-0.default.svc.cluster.local
 Address: 10.43.29.117
-##############測試service account和API##########
+##############测试service account和API##########
 kubectl run client --image=appropriate/curl --rm -ti --restart=Never --command -- curl http://my-service:80
 kubectl run busybox --image=busybox --rm -ti --restart=Never --command -- nslookup redis-ha-announce-0
 [root@rancher mysqlha]# kubectl run curl --image=appropriate/curl --rm -ti --restart=Never --command -- sh -c 'KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) && curl -sSk -H "Authorization: Bearer $KUBE_TOKEN" \
@@ -395,7 +395,7 @@ nginx-ingress-controller-qzp9t   1/1       Running   0          2d
 [root@cobbler ~]# kubectl -n ingress-nginx get po -l app=ingress-nginx -o jsonpath={.items[*].spec.containers[*].name}
 nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller
 
-###########jsonpath範例####
+###########jsonpath范例####
 [root@k8sv17 ~]# kubectl get nodes -o jsonpath='{range .items[*]}{.spec.externalID}{"\t"}{.spec.podCIDR}{"\n"}{end}'
 k8sv17.novalocal        10.96.0.0/24
 node-1.novalocal        10.96.1.0/24
@@ -420,23 +420,23 @@ Brick2: 10.67.36.53:/var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/b
 --v=9	Display HTTP request contents without truncation of contents.
 eg:  kubectl get nodes --v=9
 
-########導出admin用戶的cluster role####
+########导出admin用户的cluster role####
 kubectl get clusterrole admin -o yaml > admin.yaml
 
-#######k8s使用cinder做存儲後端#####
+#######k8s使用cinder做存储後端#####
 这需要两个前提：
 1. OpenStack作为Kubernetes Provider，因为需要从Nova查询Pod所在的机器
 2. 官方文档中所说的那些要求
 
-###### service yaml里定義的各種port #######
-<cluster ip>: port 是提供给集群内部客户访问service的入口. port是service的虛端口
+###### service yaml里定义的各种port #######
+<cluster ip>: port 是提供给集群内部客户访问service的入口. port是service的虚端口
 <nodeIP>:nodePort 是提供给集群外部客户访问service的入口
 targetPort  targetPort是pod上的端口。 maps a service port to backend containerPorts
 从port和nodePort上到来的数据最终经过kube-proxy流入到后端pod的targetPort上进入容器。
 
-###### pod yaml里定義的各種port #######
-containerPort  容器需要監聽的端口號
-hostPort 容器所在主機需要監聽的端口號，默認與containerPort相同
+###### pod yaml里定义的各种port #######
+containerPort  容器需要监听的端口号
+hostPort 容器所在主机需要监听的端口号，默认与containerPort相同
 
 Endpoint= Pod IP + containerPort
 
@@ -458,7 +458,7 @@ ContainerPort在容器上，用于被pod绑定
 
 targetPort在pod上、负责与kube-proxy代理的port和Nodeport数据进行通信
 
-######綁定機器運行pod######
+######绑定机器运行pod######
 A toleration does not mean that the pod must be scheduled on a node with such taints. It means that the pod tolerates such a taint.
  If you want your pod to be "attracted" to specific nodes you will need to attach a label to your dedicated=master tainted nodes 
  and set nodeSelector in the pod to look for such label.
@@ -508,7 +508,7 @@ nova image-meta 2c74763a-22f2-41a8-a205-7d9727b9bb6a set murano_image_info='{"ti
 
 ###############kubernetes1.5 install on centos7##################
 1 repo
-現在使用的是centos7 extra repo
+现在使用的是centos7 extra repo
 
 2 yum install
 yum install docker etcd kubernetes
@@ -517,7 +517,7 @@ for SERVICE in docker etcd kube-apiserver kube-controller-manager kube-scheduler
 yum install cockpit cockpit-kubernetes
 
 3 remove ServiceAccount    
-###解決如下錯誤：
+###解决如下错误：
 ###Error from server: error when creating "nginx-pod.yaml": Pod "nginx" is forbidden:
 ###no API token found for service account default/default,
 ###retry after the token is automatically created and added to the service account
@@ -525,7 +525,7 @@ vi /etc/kubernetes/apiserver
 # default admission control policies
 KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota"
 
-4 手動添加pod-infra-container-image: registry.access.redhat.com/rhel7/pod-infrastructure:latest
+4 手动添加pod-infra-container-image: registry.access.redhat.com/rhel7/pod-infrastructure:latest
 ###这个是一个基础容器，每一个Pod启动的时候都会启动一个这样的容器。
 如果你的本地没有这个镜像，kubelet会连接外网把这个镜像下载下来
 ###registry server上操作
@@ -533,21 +533,21 @@ docker pull registry.access.redhat.com/rhel7/pod-infrastructure:latest
 docker save -o pod-infrastructure.tar registry.access.redhat.com/rhel7/pod-infrastructure
 gzip pod-infrastructure.tar
 scp pod-infrastructure.tar.gz 10.67.44.110:~
-###kub 上導入image
+###kub 上导入image
 docker load -i pod-infrastructure.tar.gz
 
 5 指定insecure-registry 
-###訪問私有registry server
+###访问私有registry server
 vi /etc/sysconfig/docker
 INSECURE_REGISTRY='--insecure-registry 10.67.51.161:5000'
 
-6 創建kube secret key
+6 创建kube secret key
 ###
 kubectl create secret docker-registry registrykey-51-161 --docker-server=10.67.51.161:5000 --docker-username=root --docker-password=Foxconn123 --docker-email=team@domain.com
 
 #################################kubernets 使用###########################################
-##########使用rc-nginx.yml創建rc#####
-###定義rc
+##########使用rc-nginx.yml创建rc#####
+###定义rc
 [root@kub ~]# cat rc-nginx.yml
 apiVersion: v1
 kind: ReplicationController
@@ -567,13 +567,13 @@ spec:
         - containerPort: 80
       imagePullSecrets:
       - name: registrykey-51-161
-###使用rc-nginx.yml創建rc,pod
+###使用rc-nginx.yml创建rc,pod
 kubectl create -f rc-nginx.yml
-###使用rc-nginx.yml銷毀rc,pod
+###使用rc-nginx.yml销毁rc,pod
 kubectl delete -f rc-nginx.yml
 
-##########使用svc-nginx.yml為rc-nginx創建服務##########
-###定義
+##########使用svc-nginx.yml为rc-nginx创建服务##########
+###定义
 [root@kub ~]# cat svc-nginx.yml
 apiVersion: v1
 kind: Service
@@ -585,7 +585,7 @@ spec:
     targetPort: 80
   selector:
     app: nginx-2
-###創建service
+###创建service
 kubectl create -f svc-nginx.yml
 ###get svc
 [root@kub ~]# kubectl get svc
@@ -604,14 +604,14 @@ Port:                   <unset> 8081/TCP
 Endpoints:              172.17.0.3:80,172.17.0.4:80
 Session Affinity:       None
 
---------------------curl 測試------------------------------
+--------------------curl 测试------------------------------
 [root@kub ~]# curl 10.254.14.10:8081
 
 ##############etcdctl command#############
 etcdctl ls /registry/services/specs/default
 etcdctl get /registry/services/specs/default/nginxsvc
 
------------------Docker & K8s 網絡----------------------
+-----------------Docker & K8s 网络----------------------
 在Docker 1.9 出世前，跨多主机的容器通信方案大致有如下三种：
 
 1、端口映射

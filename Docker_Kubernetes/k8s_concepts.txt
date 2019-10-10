@@ -358,15 +358,15 @@ Apache Cassandra 是一套开源分布式 NoSQL 数据库系统，主要特点�
 
 通过对 Headless 的使用，实现了 Cassandra 各节点之间的互相查找和集群的自动搭建。主要步骤包括：自定义 SedProvider；通过 Headless Service 自动查找后端 Pod；自动添加新 Cassandra 节点。
 
-#########訪問服務的五種方式#########
-1 kubernetes api 方式訪問my-nginx
+#########访问服务的五种方式#########
+1 kubernetes api 方式访问my-nginx
 https://10.67.37.234:6443/api/v1/namespaces/default/services/my-nginx/proxy/
-前提：瀏覽器導入證書
-最新版的k8s默認啟用了RBAC，併為未認證用户賦予了一個默認的身份：anonymous。
+前提：浏览器导入证书
+最新版的k8s默认启用了RBAC，并为未认证用户赋予了一个默认的身份：anonymous。
 
-對於API Server來説，它是使用證書進行認證的，我們需要先創建一個證書：
-1.首先找到kubectl命令的配置文檔，默認情況下為/etc/kubernetes/admin.conf，在 上一篇 中，我們已經複製到了$HOME/.kube/config中。
-2.然後我們使用client-certificate-data和client-key-data生成一個p12文檔，可使用下列命令：
+对於API Server来説，它是使用证书进行认证的，我们需要先创建一个证书：
+1.首先找到kubectl命令的配置文档，默认情况下为/etc/kubernetes/admin.conf，在 上一篇 中，我们已经复制到了$HOME/.kube/config中。
+2.然後我们使用client-certificate-data和client-key-data生成一个p12文档，可使用下列命令：
 # 生成client-certificate-data
 grep 'client-certificate-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d >> kubecfg.crt
 
@@ -375,10 +375,10 @@ grep 'client-key-data' ~/.kube/config | head -n 1 | awk '{print $2}' | base64 -d
 
 # 生成p12
 openssl pkcs12 -export -clcerts -inkey kubecfg.key -in kubecfg.crt -out kubecfg.p12 -name "kubernetes-client"
-3.最後導入上面生成的p12文檔，重新打開瀏覽器，顯示如下：
+3.最後导入上面生成的p12文档，重新打开浏览器，显示如下：
 k8s-api-server-select-certificate
 
-1.1 kubectl proxy方式訪問my-nginx          proxies from a localhost address to the Kubernetes apiserver(在任意机器上kubectl proxy)
+1.1 kubectl proxy方式访问my-nginx          proxies from a localhost address to the Kubernetes apiserver(在任意机器上kubectl proxy)
 虽然我们从集群外部不能直接访问一个 ClusterIP 服务，但是你可以使用 Kubernetes Proxy API 来访问它。Kubernetes Proxy API 是一种特殊的 API，
 Kube-APIServer 只是代理这类 API 的 HTTP 请求，然后将请求转发到某个节点上的 Kubelet 进程监听的端口上。最后实际是由该端口上的 REST API 响应请求。
 比如：需要访问一个服务，可以使用 /api/v1/namespaces/<NAMESPACE>/services/<SERVICE-NAME>/proxy/
@@ -403,10 +403,10 @@ $ kubectl cluster-info
   heapster is running at https://104.197.5.247/api/v1/namespaces/kube-system/services/monitoring-heapster/proxy
   
 3 nodeport方式
-前提：yaml文件里定義NodePort
+前提：yaml文件里定义NodePort
 
 4 loadbalancer方式    (balance workers:nodeport)
-前提： 結合云平臺
+前提： 结合云平台
 
 5 Ingress方式       http/https lb
 前提： 配置域名解析    域名要指向backend service （clusterIP or NodePort）
@@ -426,9 +426,9 @@ If only one port number is specified, it is used for both local and remote ports
 由于这种类型的转发端口是绑定在本地的，这种方式也仅适用于调试服务
 
 ############proxy############
-kubectl proxy       Run a proxy to the Kubernetes API server 將本機某個端口號映射到apiserver，  http
-apiserver proxy     通過api方式訪問pod, service等
-kube proxy  =kubectl expose      通過iptable，使對service的請求轉發到後端pod，或service 端口 NAT到worker的ip+ nodeport 端口
+kubectl proxy       Run a proxy to the Kubernetes API server 将本机某个端口号映射到apiserver，  http
+apiserver proxy     通过api方式访问pod, service等
+kube proxy  =kubectl expose      通过iptable，使对service的请求转发到后端pod，或service 端口 NAT到worker的ip+ nodeport 端口
 实现 Service 这一功能的关键是由 Kubernetes 中的 Kube-Proxy 来完成的。Kube-Proxy 运行在每个节点上，监听 API Server 中服务对象的变化，再通过管理 IPtables 来实现网络的转发。
 Kube Proxy 目前支持三种模式：UserSpace、IPtables、IPVS。
 kubectl expose creates a service for existing pods

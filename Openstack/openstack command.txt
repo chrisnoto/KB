@@ -95,16 +95,16 @@ root@node-1:/var/log# openstack server migrate f31a7013-540c-4915-8e13-88e029025
  nova list --all-tenants
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
 
-#####怎麼進入rabbitmq監控頁面##########
+#####怎麽进入rabbitmq监控页面##########
 0  添加rabbitmq user
 rabbitmqctl add_user chensen chensen
 rabbitmqctl set_user_tags chensen administrator
 rabbitmqctl set_permissions -p / chensen ".*" ".*" ".*"
-1 在node-18上面新增防火牆規則如下, 
+1 在node-18上面新增防火墙规则如下, 
 root@node-18:~# iptables -I INPUT 7 -s 10.20.0.0/24 -p tcp -m multiport --sports 15672 -m comment --comment "005 public network rabbitmq admin" -j ACCEPT
-2 從cobbler上通過10.20.0.0網段去做ssh正向tunnel
+2 从cobbler上通过10.20.0.0网段去做ssh正向tunnel
 # ssh -Nf -L 10.67.51.164:15672:localhost:15672 10.21.0.5
-3 用curl測試rabbitmq
+3 用curl测试rabbitmq
 # curl -i -u tjadmin:tjadmin http://10.67.51.164:15672/api/vhosts
 HTTP/1.1 200 OK
 Server: MochiWeb/1.1 WebMachine/1.10.0 (never breaks eye contact)
@@ -134,49 +134,49 @@ Cache-Control: no-cache
 root@node-1:/etc/rabbitmq# rabbitmqctl set_policy metering.sample.message.ttl "^(metering|event).sample" '{"message-ttl":1000}' --priority 0 --apply-to queues
 Setting policy "metering.sample.message.ttl" for pattern "^(metering|event).sample" to "{\"message-ttl\":1000}" with priority "0" ...
 
-4 從我的電腦登陸10.67.51.164:15672
+4 从我的电脑登陆10.67.51.164:15672
 
-#######怎樣進入haproxy監控頁面#####
-1 在cobbler上執行
+#######怎样进入haproxy监控页面#####
+1 在cobbler上执行
 [root@cobbler ~]# ssh -Nf -L 10.67.51.164:10000:192.168.0.2:10000 10.21.0.5
-2 從我的電腦上登陸 10.67.51.164:10000
+2 从我的电脑上登陆 10.67.51.164:10000
 
 sed -i '/^server/s/192.168.0.1/10.21.0.2/' /etc/ntp.conf
 
-新增節點時注意及時修改時區：  ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+新增节点时注意及时修改时区：  ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
-*****Bug1******#########2017-8-10 部署2臺新增的compute節點時，compute節點上執行ceph-deploy config pull node-1拉取不到ceph配置文件######
-懷疑通過192.168.0.0（br-mgmt）網段進行拉取，而該網段ssh不通。故加入規則從192.168.0.0網段可以訪問22端口。
+*****Bug1******#########2017-8-10 部署2台新增的compute节点时，compute节点上执行ceph-deploy config pull node-1拉取不到ceph配置文件######
+怀疑通过192.168.0.0（br-mgmt）网段进行拉取，而该网段ssh不通。故加入规则从192.168.0.0网段可以访问22端口。
  iptables -A INPUT -s 192.168.0.0/24 -p tcp -m multiport --ports 22 -m comment --comment "021 ssh from 192.168.0.0/24" -j ACCEPT
-*****Bug2******#########2017-7-x 解決nagios無法訪問問題，多了一個走mgmt網段的默認路由##############
+*****Bug2******#########2017-7-x 解决nagios无法访问问题，多了一个走mgmt网段的默认路由##############
 ip netns exec infrastructure_alerting route del default gw 192.168.0.1
-*****Bug3******#########2017-9-29 部署2臺新增的compute節點時
-1  node-6提示os空間不足，沒有滿足部署要求  解決辦法： lvextend -L +20G -r /dev/mapper/os-root   接著更新fuel節點上的postgresql數據庫，見last line
+*****Bug3******#########2017-9-29 部署2台新增的compute节点时
+1  node-6提示os空间不足，没有满足部署要求  解决办法： lvextend -L +20G -r /dev/mapper/os-root   接着更新fuel节点上的postgresql数据库，见last line
 2  故障：  All nodes are finished. Failed tasks: Task[rsync_core_puppet/7] Stopping the deployment process!       
-           正常部署完畢時，是沒有puppet agent運行的；觀察此時node-7上是否運行puppet agent，如有說明它可能僵死，停掉；并重啟mcollectived
+           正常部署完毕时，是没有puppet agent运行的；观察此时node-7上是否运行puppet agent，如有说明它可能僵死，停掉；并重启mcollectived
            service puppet stop;  stop mcollective; start mcollective
-*****Bug4******#########2017-12-2 部署2臺新增的ceph節點時
-1 ceph-deploy config pull node-1 failed   node-1防火牆配置可能丟失， 新增"021 ssh from 192.168.0.0/24"
-2 /bin/bash "/etc/puppet/shell_manifests/sync_time_command.sh" returned 1 instead of one of [0]    更改每台節點的/etc/ntp.conf  設置server為10.21.0.2
-3 Failed tasks: Task[ceph_ready_check/1], Task[enable_rados/3], Task[enable_rados/2] Stopping the deployment process!   ceph集群狀態不ok, overall_status不是health_ok
-ceph問題：  node-5 日誌盤掛掉，使用該日誌盤的osd全部down掉。  需要更換日誌盤
-            node-4  ping vlan里的3個網段，發現丟包。  osd啟動的時候，丟包非常嚴重,導致其他節點的osd與node-4上的osd heartbeat不成功，pg狀態flapping, 在active+clean和down+peering之間擺動；
-			osd不啟動的時候，丟前5，6個包，後面的包持續
-			node-4 解決辦法： 設置node-4所有osd crush weight為0， 強制數據往其他節點rebalance
+*****Bug4******#########2017-12-2 部署2台新增的ceph节点时
+1 ceph-deploy config pull node-1 failed   node-1防火墙配置可能丢失， 新增"021 ssh from 192.168.0.0/24"
+2 /bin/bash "/etc/puppet/shell_manifests/sync_time_command.sh" returned 1 instead of one of [0]    更改每台节点的/etc/ntp.conf  设置server为10.21.0.2
+3 Failed tasks: Task[ceph_ready_check/1], Task[enable_rados/3], Task[enable_rados/2] Stopping the deployment process!   ceph集群状态不ok, overall_status不是health_ok
+ceph问题：  node-5 日志盘挂掉，使用该日志盘的osd全部down掉。  需要更换日志盘
+            node-4  ping vlan里的3个网段，发现丢包。  osd启动的时候，丢包非常严重,导致其他节点的osd与node-4上的osd heartbeat不成功，pg状态flapping, 在active+clean和down+peering之间摆动；
+			osd不启动的时候，丢前5，6个包，后面的包持续
+			node-4 解决办法： 设置node-4所有osd crush weight为0， 强制数据往其他节点rebalance
 
 ****openstack bug1****
-nagios報警： Status Information:	cinder-api.http_errors WARN
+nagios报警： Status Information:	cinder-api.http_errors WARN
 Too many 5xx HTTP errors have been detected on cinder-api (WARN, rule='diff(haproxy_backend_response_5xx[backend="cinder-api"])>0', current=1.00)
 # grep dee565926aad48b589de72dbc4ccec36 cinder-api.log |grep 'returned with HTTP'
 2017-12-09 16:50:29.193 8562 INFO cinder.api.middleware.fault [req-8d3d52d8-1f3d-44af-ae6e-8c25b02bf4f0 d53735d247fe456f81329ff73fbeee7d dee565926aad48b589de72dbc4ccec36 - - -]
  http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/volumes/detail?all_tenants=1 returned with HTTP 500
 2017-12-09 16:50:29.221 8555 INFO cinder.api.openstack.wsgi [req-ec85e65e-ccfd-4164-9449-a74e4ac8386f d53735d247fe456f81329ff73fbeee7d dee565926aad48b589de72dbc4ccec36 - - -]
  http://192.168.0.2:8776/v1/dee565926aad48b589de72dbc4ccec36/snapshots/detail?all_tenants=1 returned with HTTP 200
-從log得知，每次用restful api查看volumes的狀態會報500，但是查看snapshots是正常的。
+从log得知，每次用restful api查看volumes的状态会报500，但是查看snapshots是正常的。
 
 ****openstack bug2****			
-haproxy監控頁面看到 heat-api-cloudwatch 中node-1 lastcheck失敗，查看其他controller得知防火牆規則缺失
-添加防火牆規則
+haproxy监控页面看到 heat-api-cloudwatch 中node-1 lastcheck失败，查看其他controller得知防火墙规则缺失
+添加防火墙规则
 root@node-1:~# iptables -A INPUT -p tcp -m multiport --ports 8003 -m comment --comment "206 heat-api-cloudwatch" -j ACCEPT
 
 			
@@ -191,9 +191,9 @@ seems to get the deployment past it's issue.
 
  nova flavor-create amd_6C_8G_60G auto 8192 60 6
 ovs-vsctl set-controller xenbr2 tcp:10.67.51.161:6653
-############允許cobbler主機訪問FUEL上的dante 增加1080 port##############
+############允许cobbler主机访问FUEL上的dante 增加1080 port##############
 iptables -A INPUT -s 10.67.50.0/23 -p tcp -m multiport --dports 1080 -m comment --comment "1080 dante" -m state --state NEW -j ACCEPT
-#############臨時給openstack節點增加ssh訪問的網段#############
+#############临时给openstack节点增加ssh访问的网段#############
 iptables -A INPUT -s 10.67.50.0/23 -p tcp -m multiport --dports 22 -m comment --comment "011 ssh" -m state --state NEW -j ACCEPT
 
 #######fuel -> neutron L3 -> guest os dns servers  10.67.50.111
@@ -238,11 +238,11 @@ ovs-appctl fdb/show br-int
 ovs-dpctl show   查看port
 ovs-dpctl dump-flows      查看flow
 
-man ovs-ofctl查看流表關鍵詞
-priority 7 6 5 4 3 2 1 優先   priority 0 默認
+man ovs-ofctl查看流表关键词
+priority 7 6 5 4 3 2 1 优先   priority 0 默认
 mac / mask
-dl_dst=00:00:00:00:00:00/01:00:00:00:00:00   單播
-dl_dst=01:00:00:00:00:00/01:00:00:00:00:00   多播&廣播
+dl_dst=00:00:00:00:00:00/01:00:00:00:00:00   单播
+dl_dst=01:00:00:00:00:00/01:00:00:00:00:00   多播&广播
 arp,dl_dst=ff:ff:ff:ff:ff:ff               arp 地址完全匹配
 
 arp_tpa=ip[/netmask] 当dl_type是arp/rarp时，arp_tpa代表目标ip地址
@@ -607,7 +607,7 @@ nova-compute会： 1.首先将该 image 下载到计算节点
 3.创建 instance 的 XML 定义文件 
 		创建的 XML 文件会保存到该 instance 目录 /opt/stack/data/nova/instances/f1e22596-6844-4d7a-84a3-e41e6d7618ef，命名为 libvirt.xml 
 4.创建虚拟网络并启动虚拟机 
-libvirt base目錄里image默認緩存時間86400秒
+libvirt base目录里image默认缓存时间86400秒
 Because 86400 seconds (24 hours) is the default time for remove_unused_original_minimum_age_seconds,
  you can either wait for that time interval to see the base image removed, 
  or set the value to a shorter time period in the nova.conf file.
@@ -679,7 +679,7 @@ rbd image 'a084ce4e-8222-4bfb-9427-52f5e1706b94_disk':
         format: 2
         features: layering
         flags:
-做過shelve和unshelve操作
+做过shelve和unshelve操作
  rbd info compute/34ac92f9-e0ee-4421-a728-c71968e57409_disk
 rbd image '34ac92f9-e0ee-4421-a728-c71968e57409_disk':
         size 81920 MB in 10240 objects

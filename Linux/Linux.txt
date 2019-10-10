@@ -1,3 +1,58 @@
+############ default update/scrape interval of monitoring softwares ###########
+prometheus  15s
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+zabbix    
+建item时间指定或template中指定, 默认 30s 或 1m  
+#############crontab 每5秒执行一次脚本######
+## For excuting scripts.sh every 3 seconds##on 2014-10-15
+*/1 * * * *  /home/somedir/scripts.sh
+*/1 * * * * sleep 5 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 10 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 15 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 20 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 25 &&  /home/somedir/scripts.sh
+........
+
+########page in/out#########
+非hypervosor时, page out 和 write相近, page in 和read相近
+centos-repo server
+# dstat -ar
+----total-cpu-usage---- -dsk/total- -net/total- ---paging-- ---system-- --io/total-
+usr sys idl wai hiq siq| read  writ| recv  send|  in   out | int   csw | read  writ
+  2   4  94   0   0   0| 356k    0 |3040B 1086B|   0     0 | 525   384 |18.0     0
+  3  12  85   0   0   0|  12M    0 |2620B  580B|   0     0 |2455  3472 | 790     0
+  4  15  81   0   0   0|  12M   61k|2426B  580B|   0     0 |2544  3444 | 765  2.00
+ 11  15  75   0   0   0|   0     0 |2778B  596B|   0     0 |1663   987 |   0     0
+ 10  15  75   0   0   0|   0     0 |3030B  678B|   0     0 |1926  1090 |   0     0
+  5  14  80   0   0   0|1060k    0 |2556B 1292B|   0     0 |3375  1885 |73.0     0
+  3   8  89   0   0   0|4332k    0 |2386B 1140B|   0     0 |2227  1977 | 315     0
+  3   8  89   0   0   0|2616k 2400k|2516B  678B|   0     0 |1997  1632 | 180  75.0
+  2   8  89   0   0   0|3540k    0 |2358B  596B|   0     0 |1943  1842 | 234     0
+  4  11  85   0   0   0|3264k    0 |1934B  580B|   0     0 |1998  1938 | 222     0
+  2  12  86   0   0   0|6468k    0 |2756B  580B|   0     0 |3054  2687 | 423     0
+  4  13  82   0   0   0|4544k 2432k|2584B  580B|   0     0 |2892  2539 | 302  76.0
+  5  13  82   0   0   0|5492k    0 |2488B  824B|   0     0 |2803  2036 | 344     0
+
+# sar -B 1  
+05:14:13 PM  pgpgin/s pgpgout/s   fault/s  majflt/s  pgfree/s pgscank/s pgscand/s pgsteal/s    %vmeff
+05:14:14 PM    292.00      0.00    588.00      1.00     98.00      0.00      0.00      0.00      0.00
+05:14:15 PM  12200.00      0.00   1786.00      0.00     70.00      0.00      0.00      0.00      0.00
+05:14:16 PM  11924.00     60.00   2270.00      0.00    366.00      0.00      0.00      0.00      0.00
+05:14:17 PM     64.00      0.00   2671.00      0.00   1173.00      0.00      0.00      0.00      0.00
+05:14:18 PM      0.00      0.00   2080.00      0.00   1211.00      0.00      0.00      0.00      0.00
+05:14:19 PM    696.00      0.00    260.00      0.00  42368.00  20371.00      0.00  20371.00    100.00
+05:14:20 PM   4448.00      0.00     18.00      0.00     39.00      0.00      0.00      0.00      0.00
+05:14:21 PM   2260.00   2400.00    309.00      0.00   5868.00   5642.00      0.00   5642.00    100.00
+05:14:22 PM   3584.00      0.00    439.00      0.00  10301.00  10188.00      0.00  10188.00    100.00
+05:14:23 PM   3788.00      0.00    606.00      0.00  12193.00  11866.00      0.00  11866.00    100.00
+05:14:24 PM   6504.00      0.00   1067.00      0.00  15926.00  15604.00      0.00  15604.00    100.00
+05:14:25 PM   3616.00   2432.00    807.00      0.00  35042.00  12450.00      0.00  12450.00    100.00
+05:14:26 PM   6404.00      0.00    550.00      0.00  11649.00  11450.00      0.00  11450.00    100.00
+
+
+
+
 ###########tcpdump############
 root@node-1:~# tcpdump -i bond0 -nn -e vlan
 #########Centos7 lvm cache########
@@ -303,14 +358,14 @@ modprobe nbd max_part=16
 
 git pull = git fetch + git merge
 git merge fast-forward
-############確認硬盤位置###########
+############确认硬盘位置###########
 root@node-14:/dev/disk# lspci -v |grep -A1 RAID
 02:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
         Subsystem: Dell PERC H310 Mini Monolithics
 --
 04:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
         Subsystem: Dell PERC H310 Adapter
-結合idrac查看是哪個raid卡。注意：idrac中物理硬盤的名稱與lsscsi里位置對不上。
+结合idrac查看是哪个raid卡。注意：idrac中物理硬盘的名称与lsscsi里位置对不上。
 root@node-14:/proc/scsi# dmesg|grep sdj|grep FAILED
 [7779092.592470] sd 7:0:2:0: [sdj] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_SENSE
 root@node-14:/dev/disk# lsscsi
@@ -354,7 +409,7 @@ Host: scsi7 Channel: 00 Id: 07 Lun: 00
 
 
 
-#########進制轉換#############
+#########进制转换#############
 ibase是输入数字的进制，而obase就是输出数字的进制了。很好记，i是input，o是output。
 　　如果用一条命令来转数字，可以用echo命令和管道结合bc。如下：
 　　10进制转2进制：
@@ -400,7 +455,7 @@ mode5  mode6      no need to config switch
  dmsetup remove rbd0p5
  rbd unmap /dev/rbd0
  
-###查詢安裝 升級 刪除的dpkg包### 
+###查询安装 升级 删除的dpkg包### 
 pars for fun: install | remove | rollback
 function apt-history(){
 
@@ -430,7 +485,7 @@ hpacucli ctrl slot=$slotid pd all show status
 hpacucli ctrl slot=$slotid ld all show status
 hpacucli ctrl slot=$slotid show detail |grep 'Battery/Capacitor'
 
-####################Ubuntu 16.04 手動升级内核##############
+####################Ubuntu 16.04 手动升级内核##############
 要升级 Ubuntu 16.04 的内核，打开 http://kernel.ubuntu.com/~kernel-ppa/mainline/ 并选择列表中需要的版本（发布此文时最新内核是 4.10.1）。
 接下来，根据你的系统架构下载 .deb 文件：
 对于 64 位系统：
@@ -463,12 +518,12 @@ openssh-client:
         500 http://10.67.51.164/ubuntu xenial/main amd64 Packages
 
 apt-get --only-upgrade install Package
-###################apt-get升級內核###################
+###################apt-get升级内核###################
 使用apt-get
 apt-get upgrade
-apt-get dist-upgrade           升級kernel
+apt-get dist-upgrade           升级kernel
 
-先改變sources.list，然後apt-get upgrade & apt-get dist-upgrade  可升級release
+先改变sources.list，然後apt-get upgrade & apt-get dist-upgrade  可升级release
 
 sudo apt-get install update-manager-core 
 sudo do-release-upgrade
@@ -524,32 +579,32 @@ netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
 netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
 
 ###########linux network###########
-Linux 上配置網絡設備命令舉例
-以 Redhat6.2 紅帽Linux 發行版為例，如果已安裝 VLAN 內核模塊和管理工具 vconfig，TAP/TUN 設備管理工具 tunctl，那麼可以用以下命令設置前述網絡設備：
+Linux 上配置网络设备命令举例
+以 Redhat6.2 红帽Linux 发行版为例，如果已安装 VLAN 内核模块和管理工具 vconfig，TAP/TUN 设备管理工具 tunctl，那麽可以用以下命令设置前述网络设备：
 Bridge 操作
-* 創建 Bridge：brctl addbr [BRIDGE NAME]
-* 刪除 Bridge：brctl delbr [BRIDGE NAME]
-* attach 設備到 Bridge：brctl addif [BRIDGE NAME] [DEVICE NAME]
-* 從 Bridge detach 設備：brctl delif [BRIDGE NAME] [DEVICE NAME]
-* 查詢 Bridge 情況：brctl show
+* 创建 Bridge：brctl addbr [BRIDGE NAME]
+* 删除 Bridge：brctl delbr [BRIDGE NAME]
+* attach 设备到 Bridge：brctl addif [BRIDGE NAME] [DEVICE NAME]
+* 从 Bridge detach 设备：brctl delif [BRIDGE NAME] [DEVICE NAME]
+* 查询 Bridge 情况：brctl show
 
-VLAN 設定
-* 創建 VLAN 設備：vconfig add [PARENT DEVICE NAME] [VLAN ID]
-* 刪除 VLAN 設備：vconfig rem [VLAN DEVICE NAME]
-* 設置 VLAN 設備 flag：vconfig set_flag [VLAN DEVICE NAME] [FLAG] [VALUE]
-* 設置VLAN 設備qos：
+VLAN 设定
+* 创建 VLAN 设备：vconfig add [PARENT DEVICE NAME] [VLAN ID]
+* 删除 VLAN 设备：vconfig rem [VLAN DEVICE NAME]
+* 设置 VLAN 设备 flag：vconfig set_flag [VLAN DEVICE NAME] [FLAG] [VALUE]
+* 设置VLAN 设备qos：
 -- vconfig set_egress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
 -- vconfig set_ingress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
-* 查詢VLAN 設備情況：cat /proc/net/vlan/[VLAN DEVICE NAME]
+* 查询VLAN 设备情况：cat /proc/net/vlan/[VLAN DEVICE NAME]
 
-VETH & TAP 設定
-* 創建 VETH 設備：ip link add link [DEVICE NAME] type veth
-* 創建 TAP 設備：tunctl -p [TAP DEVICE NAME]
-* 刪除 TAP 設備：tunctl -d [TAP DEVICE NAME]
-* 查詢系統裡所有二層設備，包括 VETH/TAP 設備：ip link show
+VETH & TAP 设定
+* 创建 VETH 设备：ip link add link [DEVICE NAME] type veth
+* 创建 TAP 设备：tunctl -p [TAP DEVICE NAME]
+* 删除 TAP 设备：tunctl -d [TAP DEVICE NAME]
+* 查询系统里所有二层设备，包括 VETH/TAP 设备：ip link show
 
-其他相關設定
-* 刪除普通二層設備：ip link delete [DEVICE NAME] type [TYPE]
+其他相关设定
+* 删除普通二层设备：ip link delete [DEVICE NAME] type [TYPE]
 
 ######rhel5.8 using virtio ##########
 mkinitrd --with virtio_pci --with virtio_blk --with virtio -f /boot/initrd-$(uname-r).img $(uname -r)
@@ -1288,11 +1343,11 @@ TLSProtocolMin 768   # (3 << 8) disables SSLv2
 TLSProtocolMin 769   # ((3 << 8)+1) disables SSLv2 and SSLv3
 
 OpenLDAPのサーバ(slapd)でSSL 3.0を禁止にする方法。
-slapd.confのグローバルセクションに以下の1行を記載する。
-# SSL 3.0 (プロトコルのバージョン3.0 → 0x0300 → 10進数で768)
-# TLS 1.0 (プロトコルのバージョン3.1 → 0x0301 → 10進数で769)
-# TLS 1.1 (プロトコルのバージョン3.2 → 0x0302 → 10進数で770)
-# TLS 1.2 (プロトコルのバージョン3.3 → 0x0303 → 10進数で771)
+slapd.confのグローバルセクションに以下の1行を记载する。
+# SSL 3.0 (プロトコルのバージョン3.0 → 0x0300 → 10进数で768)
+# TLS 1.0 (プロトコルのバージョン3.1 → 0x0301 → 10进数で769)
+# TLS 1.1 (プロトコルのバージョン3.2 → 0x0302 → 10进数で770)
+# TLS 1.2 (プロトコルのバージョン3.3 → 0x0303 → 10进数で771)
 # OpenLDAP 2.4.36未満では「TLSProtocolMin 769」と指定する。
 # OpenLDAP 2.4.36以降では「TLSProtocolMin 3.1」と指定する。
 TLSProtocolMin 3.1
@@ -1400,8 +1455,8 @@ run local script against remote machines,without copy it to server
 
 #####################################################
 ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
-ssh -R 1880:9.190.26.244:80 racv-l402             轉發yum repo地址
-ssh -R 1880:10.62.32.27:33128 10.134.236.86       轉發proxy
+ssh -R 1880:9.190.26.244:80 racv-l402             转发yum repo地址
+ssh -R 1880:10.62.32.27:33128 10.134.236.86       转发proxy
 本机：
 1   install squid
 2   #ssh -Nf -R 7001:localhost:3128 master  本地运行

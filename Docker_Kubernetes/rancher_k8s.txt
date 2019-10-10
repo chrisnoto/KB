@@ -173,7 +173,7 @@ No. The etcd v3 API uses gRPC rather than plain text HTTP. Use etcdctl to intera
 ...
 
 elasticsearch注意监控一下是不是每天都产生log，有时故障就不会产生log了
-部署efk   (注意master如果没有worker角色，那么fluentd不会收集master的日志)
+部署efk   (注意master如果没有worker角色，那麽fluentd不会收集master的日志)
 前提：存在elasticsearch集群
 1 在cluster-level -> Tools -> logging
 选择elasticsearch 

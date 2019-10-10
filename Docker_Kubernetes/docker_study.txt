@@ -104,7 +104,7 @@ CONTAINER ID        IMAGE                       COMMAND             CREATED     
 ####docker清理####
 docker system prune
 docker volume prune
-#########docker清除無用的volume####
+#########docker清除无用的volume####
 docker volume rm $(docker volume ls -qf dangling=true)
 ########docker volume dirver local ##########
 # create a reusable volume
@@ -319,19 +319,19 @@ Also, the index figures out which registry that particular image lives in and fo
 Beyond that, when you're working locally and running commands like docker images, you're interacting with 
 something that is neither an index or a registry, but a little of both.
 #########docker rmi清除的是本地image####
-清除步驟
-untag  當有多個tag關聯到同一個image ID
-delete  只有一個tag關聯到image ID
+清除步骤
+untag  当有多個tag关联到同一個image ID
+delete  只有一個tag关联到image ID
 
 #########docker容器里使用apt-get####
 export http_proxy=
 
-#########build image時使用apt-get####
+#########build image时使用apt-get####
 docker build -t curl:v1.0.0 --build-arg http_proxy=http://10.62.32.27:33128 .
 
 docker build -t chrisnoto/mysql-client-alpine:v1.0.0 --build-arg http_proxy=http://10.62.32.27:33128 .
 
-或dockerfile里設置
+或dockerfile里设置
 ENV http_proxy <HTTP_PROXY>
 ENV https_proxy <HTTPS_PROXY>
 ############docker repo#################
@@ -397,7 +397,7 @@ docker exec -it test_redis_1 /bin/bash
 用docker inspect查看容器的PID
 [root@kub ~]# docker inspect --format '{{ .State.Pid }}' 978b5d190b7e
 2703
-若不存在/var/run/netns目錄則創建它，在該目錄下創建軟連接
+若不存在/var/run/netns目录則创建它，在該目录下创建软链接
 ln -s /proc/2703/ns/net /var/run/netns/k8s_nginx-2.549907a9_rc-nginx-2-ksj7g_default_79c4ff77-f804-11e6-a924-fa163e6c70f1_6fcc8701
 測試是否成功
 [root@kub ~]# ip netns

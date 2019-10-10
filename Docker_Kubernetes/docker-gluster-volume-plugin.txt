@@ -1,4 +1,4 @@
-#######創建 glusterfs volume plugin###########
+#######创建 glusterfs volume plugin###########
 docker plugin install --alias glusterfs \
   trajano/glusterfs-volume-plugin \
   --grant-all-permissions --disable
@@ -38,7 +38,7 @@ tmpfs                tmpfs           2.8G         0      2.8G   0% /sys/fs/cgrou
                      xfs            37.2G      4.8G     32.4G  13% /etc/hostname
 /dev/mapper/centos-root
                      xfs            37.2G      4.8G     32.4G  13% /etc/hosts
-#########拷貝文件到 /mnt
+#########拷贝文件到 /mnt
 / # cp -r /etc/* /mnt
 / # cd /mnt
 /mnt # ls
@@ -47,7 +47,7 @@ apk             group           inittab         modules         network         
 conf.d          hostname        issue           modules-load.d  opt             profile         securetty       ssl
 crontabs        hosts           logrotate.d     motd            os-release      profile.d       services        sysctl.conf
 
-#########glusterfs server上驗證
+#########glusterfs server上验证
 [root@gluster1 ~]# cd /var/lib/heketi/mounts/vg_92638b5d8bfa0f328a7b0cf1d319449f/brick_e065818b20abf9ae2461a772cd50620f/brick
 [root@gluster1 brick]# ls
 alpine-release  conf.d    fstab  hostname  init.d   issue        modprobe.d  modules-load.d  mtab     opt         passwd    profile    protocols    securetty  shadow  ssl          sysctl.d

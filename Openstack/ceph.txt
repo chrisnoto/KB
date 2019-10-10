@@ -1,7 +1,7 @@
 0.94.x   Hammer LTS
 10.2.x   Jewel  LTS
 
-重啟ceph節點
+重启ceph节点
 $ sudo ceph osd set noout
 $ sudo ceph osd set norebalance
 reboot
@@ -36,7 +36,7 @@ hdd deadline
 ######swappiness
 vm.swappiness = 1
 
-开启Cache能显著提升顺序io的读写性能，缓存越大性能越好；如果容许一定的数据丢失，建议开启
+开启Cache能显着提升顺序io的读写性能，缓存越大性能越好；如果容许一定的数据丢失，建议开启
 root@node-14:~# ceph tell osd.* injectargs --filestore_queue_max_ops=20000
 root@node-14:~# ceph tell osd.* injectargs --osd_max_write_size 256
 root@node-14:~# ceph tell osd.* injectargs --rbd_cache_size 67108864
@@ -50,11 +50,11 @@ osd.1: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.2: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.3: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 osd.4: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
-查看參數
+查看参数
 root@node-13:~# ceph daemon osd.41 config show |grep osd_journal_size
     "osd_journal_size": "10240",
 
-###SSD 分區對齊
+###SSD 分区对齐
 root@node-13:~# ceph-disk list |grep 'ceph journal'
  /dev/sdb3 ceph journal, for /dev/sde3
  /dev/sdb4 ceph journal, for /dev/sdf3
@@ -156,8 +156,8 @@ root@node-18:~# ceph -s
 ############kernel upgrade on controller##########
 sometimes public network on vm is not reachable
 ###################### ceph ############################
-acting set： 當前的set
-up set:  經過crushmap計算出的set
+acting set： 当前的set
+up set:  经过crushmap计算出的set
 actingset最终会变换到up set
 
 ceph命令

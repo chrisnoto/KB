@@ -27,7 +27,7 @@ curl -XPUT '10.67.51.150:9200/syslog-2019.08.31/_settings' -H 'Content-Type: app
         "index.blocks.write": false
     }
 }'
-腳本化
+脚本化
 [root@stjes1 ~]# cat shrink.sh |sed -n '1,6p' | bash
 {"acknowledged":true}[root@stjes1 ~]#
 [root@stjes1 ~]# cat shrink.sh |sed -n '7,$p' |bash
@@ -80,16 +80,16 @@ curl -XPUT '10.67.51.150:9200/_cluster/settings' -H 'Content-Type: application/j
 此时可考虑把该index拆分为多个独立的index，分摊数据量，同时配合routing使用，降低每个查询需要访问的shard数量。
 
 ##########定期 optimize index#########
-Lucene 的 index 是由一堆 immutable, append-only 的 segments 所組成，在寫入的過程中，會不斷的 merge 成更大的 segment，請直接看這個動畫
-由於 log 資料的特性就是不會寫過去的 index，所以可以把過去的 index 都盡可能的 merge (每個 shard 只剩下一個 segment)，而 Elasticsearch 就提供了 Optimize API 來完成此任務。
+Lucene 的 index 是由一堆 immutable, append-only 的 segments 所组成，在写入的过程中，会不断的 merge 成更大的 segment，请直接看这个动画
+由於 log 资料的特性就是不会写过去的 index，所以可以把过去的 index 都尽可能的 merge (每个 shard 只剩下一个 segment)，而 Elasticsearch 就提供了 Optimize API 来完成此任务。
 
 #############善用 Curator + crontab#########
-Curator 是 Elasticsearch 放在 Github 上的命令列工具，可以很輕易的做到：
+Curator 是 Elasticsearch 放在 Github 上的命令列工具，可以很轻易的做到：
 optimize 2 天以前的所有 indices
-刪除 90 天前的所有 indices
+删除 90 天前的所有 indices
 snapshot 所有的 indices
 close 14天前的所有 indices
-再配合上 crontab，可以輕易的維持 hot/warm/cold data 的存放。
+再配合上 crontab，可以轻易的维持 hot/warm/cold data 的存放。
 
 #########关闭索引######
 *** elasticsearch监控中看到的是open状态的index，不是全部index ***
@@ -109,7 +109,7 @@ curl -XPUT 'localhost:9200/_cluster/settings' -d
 	}
 }'	
 #####主分片分布不均衡不重要######
-事实上节点 3 持有两个副本分片，然而没有主分片并不重要。在索引写入时，副本分片做着与主分片相同的工作, 並且主分片與副本都能處理查詢請求；它们的唯一区别在于只有主分片才能处理索引请求。
+事实上节点 3 持有两个副本分片，然而没有主分片并不重要。在索引写入时，副本分片做着与主分片相同的工作, 并且主分片与副本都能处理查询请求；它们的唯一区别在于只有主分片才能处理索引请求。
 没有必要确保主分片均匀地分布在所有节点中。
 #######elasticsearch如何安全重启节点#######
 curl -X PUT "10.67.36.49:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
