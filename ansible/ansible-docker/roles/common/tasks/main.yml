@@ -49,11 +49,17 @@
   tags:
     - timestamp
 
+- name: test to see if selinux is running
+  command: getenforce
+  register: sestatus
+  changed_when: false
+
 - name: ensure Selinux is disabled
   selinux: state=disabled
 
 - name: set Senlinux permissive runtime
   shell: setenforce 0
+  when: '"Enabled" in sestatus.stdout'
 
 - name: check if firewalld exists
   yum:

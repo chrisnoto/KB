@@ -1,0 +1,43 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: zabbix-java-gateway
+  namespace: default
+  labels:
+    app: zabbix-java-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zabbix-java-gateway
+  template:
+    metadata:
+      labels:
+        app: zabbix-java-gateway
+    spec:
+      containers:
+      - name: zabbix-java-gateway
+        image: zabbix/zabbix-java-gateway:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ZBX_START_POLLERS
+          value: "10"
+        ports:
+        - containerPort: 10052
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-java-gateway
+  labels:
+    app: zabbix-java-gateway
+spec:
+  selector:
+    app: zabbix-java-gateway
+  ports:
+  - protocol: TCP
+    port: 10052
+    nodePort: 30052
+  type: NodePort

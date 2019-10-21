@@ -77,6 +77,16 @@
          (docker__register_systemd_proxy_present|d() and
          docker__register_systemd_proxy_present is changed)))
 
+- name: Create user admin for rke use
+  user:
+    name: admin
+    password: Foxconn123
+    groups: docker
+    state: present
+    shell: /bin/bash
+    createhome: yes
+    home: /home/admin
+
 #- name: Log into DockerHub
 #  docker_login:
 #    username: chrisnoto

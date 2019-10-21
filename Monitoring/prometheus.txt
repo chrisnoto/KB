@@ -276,6 +276,16 @@ root@u1804:/var/snap/prometheus/18# cat conf.d/node_exporter.json
     }
   }
 ]
+root@u1804:/var/snap/prometheus/18/conf.d# cat wmi_exporter.json
+[
+  {
+    "targets": [ "10.67.50.113:9182" ],
+    "labels": {
+      "env": "production",
+      "job": "win-exporter"
+    }
+  }
+]
 
 
 

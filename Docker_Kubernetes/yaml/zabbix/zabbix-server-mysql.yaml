@@ -1,0 +1,71 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: zabbix-server-mysql
+  namespace: default
+  labels:
+    app: zabbix-server-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zabbix-server-mysql
+  template:
+    metadata:
+      labels:
+        app: zabbix-server-mysql
+    spec:
+      containers:
+      - name: zabbix-server-mysql
+        image: zabbix/zabbix-server-mysql:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          value: "Asia/Shanghai"
+        - name: ZBX_SERVER_NAME
+          value: "zabbixserver"
+        - name: ZBX_JAVAGATEWAY_ENABLE
+          value: "true"
+        - name: DB_SERVER_HOST
+          value: "zabbixdb"
+        - name: MYSQL_DATABASE
+          value: "zabbix"
+        - name: MYSQL_USER
+          value: "zabbix"
+        - name: MYSQL_PASSWORD
+          value: "Foxconn123"
+        - name: MYSQL_ROOT_PASSWORD
+          value: "Foxconn123"
+        - name: ZBX_JAVAGATEWAY
+          value: "zabbix-java-gateway"
+        - name: ZBX_STARTPOLLERS
+          value: "10"
+        - name: ZBX_STARTHTTPPOLLERS
+          value: "50"
+        - name: ZBX_STARTTRAPPERS
+          value: "50"
+        - name: ZBX_STARTJAVAPOLLERS
+          value: "5"
+        - name: ZBX_VALUECACHESIZE
+          value: "16M"
+        - name: ZBX_STARTDBSYNCERS
+          value: "8"
+        ports:
+        - containerPort: 10051
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-server-mysql
+  labels:
+    app: zabbix-server-mysql
+spec:
+  selector:
+    app: zabbix-server-mysql
+  ports:
+  - protocol: TCP
+    port: 10051
+    nodePort: 30051
+  type: NodePort

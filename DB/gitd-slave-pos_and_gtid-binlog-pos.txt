@@ -1,0 +1,35 @@
+First, consider a slave S2 replicating from a master S1. We stop S2, and then
+later restart it. Where should it resume replication? Clearly at the point of
+the last transaction replicated before stopping, which is @@gtid_slave_pos.
+
+Now suppose we take down S1 for maintenance and promote S2 as the new master.
+So we are doing direct transactions on S2. Later we take S1 back up, and now
+we connect S1 as a slave to S2. Where should S1 start replicating? Clearly at
+the point of the last transaction in S1's binlog, which is the last
+transaction made while S1 was the master. This is @@gtid_binlog_pos.
+
+Now suppose the user does STOP SLAVE on S1, does a direct transaction on the
+slave S1, then START SLAVE. That direct transaction was only intended locally,
+and it is not on the master S2. So when S1 reconnects, it needs to connect at
+its @@gtid_slave_pos this time, not at the @@gtid_binlog_pos.
+
+So we see, only the user knows if a direct transaction made on a server is
+meant as a cluster-wide transaction, or a local transaction only. And the
+"correct" behaviour is _different_ depending on this.
+
+Normally, direct local transactions in the slave binlog are considered
+sloppy, because of all the possibilities for errors they introduce. So it is
+recommended to run slaves in read-only mode, and set @@sql_log_bin=0 if
+doing local transactions. And gtid_strict_mode=1 is provided to enforce this
+recommended mode of operation. In this case, user can use current_pos, which
+will automatically use either @@gtid_slave_pos or @@gtid_binlog_pos,
+whatever is appropriate.
+
+However, some (or many) users like to "be sloppy" and do direct transactions
+on a slave not intended as master transactions. And for those we provide
+gtid_strict_mode=0 and master_use_gtid=slave_pos. This makes slave connect
+always use the position of the last replicated transaction, ignoring any
+local transactions in the binlog. In this case, when a master is changed to
+be a slave, it is necessary to manually set @@gtid_slave_pos=@@gtid_binlog_pos.
+Explicitly marking the updates on the old master to be intended as master
+transactions, not local transactions.

@@ -1,3 +1,217 @@
+########### GTID based replication ###########
+version: mysql 5.7 on ubuntu 1604
+scenario: add slave for running database that has data.
+
+on master
+1 add the followings in mysqld.cnf
+server-id               = 1
+log_bin                 = /var/log/mysql/mysql-bin.log
+binlog_format           = row
+gtid-mode               = ON
+enforce-gtid-consistency = ON
+log-slave-updates        = ON
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+
+2 restart mysql service
+mysql> show variables like '%gtid%';
++----------------------------------+-----------+
+| Variable_name                    | Value     |
++----------------------------------+-----------+
+| binlog_gtid_simple_recovery      | ON        |
+| enforce_gtid_consistency         | ON        |
+| gtid_executed_compression_period | 1000      |
+| gtid_mode                        | ON        |
+| gtid_next                        | AUTOMATIC |
+| gtid_owned                       |           |
+| gtid_purged                      |           |
+| session_track_gtids              | OFF       |
++----------------------------------+-----------+
+mysql> show master status;
++------------------+----------+--------------+------------------+------------------------------------------+
+| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set                        |
++------------------+----------+--------------+------------------+------------------------------------------+
+| mysql-bin.000001 |      598 |              |                  | 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:1-2 |
++------------------+----------+--------------+------------------+------------------------------------------+
+1 row in set (0.00 sec)
+
+mysql> grant replication slave on *.* to 'repl'@'10.67.38.%' identified by 'copytoslave';
+Query OK, 0 rows affected, 1 warning (0.02 sec)
+
+mysql> flush privileges;
+Query OK, 0 rows affected (0.03 sec)
+
+3 mysqldump
+mysqldump --all-databases -flush-privileges --single-transaction --flush-logs --triggers --routines --events -uroot -pFoxconn123 > mysqlbackup.sql
+
+on slave
+1 add the followings in my.cnf
+report-host     = 10.67.38.251
+server-id               = 2
+log_bin                 = /var/log/mysql/mysql-bin.log
+relay_log               = /var/log/mysql/mysql-relay-bin.log
+read_only=1
+log-slave-updates       = ON
+gtid-mode               = ON
+enforce-gtid-consistency = ON
+master-info-repository   = table
+relay-log-info-repository   = table
+2 restart mysql service
+mysql> show global variables like '%gtid%';
++----------------------------------+-------+
+| Variable_name                    | Value |
++----------------------------------+-------+
+| binlog_gtid_simple_recovery      | ON    |
+| enforce_gtid_consistency         | OFF   |
+| gtid_executed                    |       |
+| gtid_executed_compression_period | 1000  |
+| gtid_mode                        | OFF   |
+| gtid_owned                       |       |
+| gtid_purged                      |       |
+| session_track_gtids              | OFF   |
++----------------------------------+-------+
+
+3 import data from dumpped databases
+mysql> system ls
+mysqlbackup.sql  sources.list
+mysql> source mysqlbackup.sql;
+mysql> show global variables like '%gtid%';
++----------------------------------+------------------------------------------+
+| Variable_name                    | Value                                    |
++----------------------------------+------------------------------------------+
+| binlog_gtid_simple_recovery      | ON                                       |
+| enforce_gtid_consistency         | OFF                                      |
+| gtid_executed                    | 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:1-4 |
+| gtid_executed_compression_period | 1000                                     |
+| gtid_mode                        | OFF                                      |
+| gtid_owned                       |                                          |
+| gtid_purged                      | 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:1-4 |
+| session_track_gtids              | OFF                                      |
++----------------------------------+------------------------------------------+
+mysql> show slave status;
+Empty set (0.00 sec)
+mysql> change master to
+    -> master_host = '10.67.38.246',
+    -> master_port = 3306,
+    -> master_user = 'repl',
+    -> master_password = 'copytoslave',
+    -> master_auto_position =1;
+Query OK, 0 rows affected, 2 warnings (0.19 sec)
+
+mysql> start slave;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> show slave status\G;
+*************************** 1. row ***************************
+               Slave_IO_State: Waiting for master to send event
+                  Master_Host: 10.67.38.246
+                  Master_User: repl
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: mysql-bin.000003
+          Read_Master_Log_Pos: 194
+               Relay_Log_File: mysql-relay-bin.000002
+                Relay_Log_Pos: 367
+        Relay_Master_Log_File: mysql-bin.000003
+             Slave_IO_Running: Yes
+            Slave_SQL_Running: Yes
+
+check from master again
+mysql> show slave hosts;
++-----------+--------------+------+-----------+--------------------------------------+
+| Server_id | Host         | Port | Master_id | Slave_UUID                           |
++-----------+--------------+------+-----------+--------------------------------------+
+|         2 | 10.67.38.251 | 3306 |         1 | d75b0fff-ee1b-11e9-95c7-fa163e4c7739 |
++-----------+--------------+------+-----------+--------------------------------------+
+**already set up report-host for slave**
+
+###### mysqlrpladmin/mysqlfailover ########
+0 only mysql-utilities-1.6.4 onwards support mysql 5.7
+1 grant extra permission to root
+grant SUPER, GRANT OPTION, REPLICATION SLAVE, SELECT, RELOAD, DROP, CREATE, INSERT on *.* to root@'%' identified by 'Foxconn123';
+2 specify report-host on all slave servers
+3 master-info-repository=TABLE defined in mysqld.cnf
+[root@repo-centos web]# mysqlrplshow --master=root:Foxconn123@10.67.38.246:3306 --discover-slaves-login=root:Foxconn123  -l
+# master on 10.67.38.246: ... connected.
+# Finding slaves for master: 10.67.38.246:3306
+
+# Replication Topology Graph
+10.67.38.246:3306 (MASTER)
+   |
+   +--- 10.67.38.251:3306 - (SLAVE)
+
++--------------------+--------------------+
+| Master             | Slave              |
++--------------------+--------------------+
+| 10.67.38.246:3306  | 10.67.38.251:3306  |
++--------------------+--------------------+
+[root@repo-centos ~]# mysqlrpladmin --master=root:Foxconn123@10.67.38.246:3306 --discover-slaves-login=root:Foxconn123 health
+WARNING: Using a password on the command line interface can be insecure.
+# Discovering slaves for master at 10.67.38.246:3306
+# Discovering slave at 10.67.38.251:3306
+# Found slave: 10.67.38.251:3306
+# Checking privileges.
+#
+# Replication Topology Health:
++---------------+-------+---------+--------+------------+---------+
+| host          | port  | role    | state  | gtid_mode  | health  |
++---------------+-------+---------+--------+------------+---------+
+| 10.67.38.246  | 3306  | MASTER  | UP     | ON         | OK      |
+| 10.67.38.251  | 3306  | SLAVE   | UP     | ON         | OK      |
++---------------+-------+---------+--------+------------+---------+
+# ...done.
+
+[root@repo-centos ~]# mysqlrplcheck --master=root:Foxconn123@10.67.38.246:3306 --slave=root:Foxconn123@10.67.38.251:3306
+WARNING: Using a password on the command line interface can be insecure.
+# master on 10.67.38.246: ... connected.
+# slave on 10.67.38.251: ... connected.
+Test Description                                                     Status
+---------------------------------------------------------------------------
+Checking for binary logging on master                                [pass]
+Are there binlog exceptions?                                         [pass]
+Replication user exists?                                             [pass]
+Checking server_id values                                            [pass]
+Checking server_uuid values                                          [pass]
+Is slave connected to master?                                        [pass]
+Check master information file                                        [pass]
+Checking InnoDB compatibility                                        [pass]
+Checking storage engines compatibility                               [pass]
+Checking lower_case_table_names settings                             [pass]
+Checking slave delay (seconds behind master)                         [pass]
+# ...done.
+
+#####How to Safetly Restart Your MySQL Slave Server######
+Make sure that nothing can access it 
+(take it off the load balancer).
+in mysql client do: STOP SLAVE;
+in mysql client do: FLUSH TABLES; 
+(if it gets stuck here, then you might need to fix it. You can try UNLOCK TABLES.)
+in command line do: /etc/init.d/mysql stop
+
+...do your what you need to do here...
+
+in command line do: /etc/init.d/mysql start 
+(check for errors, sometimes in my.cnf)
+in mysql client do: START SLAVE; 
+(normally this would be done automatically when you restart mysql)
+in mysql client do: SHOW SLAVE STATUS\G 
+(check that replication is working properly)
+After you are satisfied, set up the slave server back on the load balancer
+
+##########innotop 监控########
+[root@repo-centos ~]# innotop -h 10.67.37.192 -uroot -proot
+########### sysctl #######
+2019-10-11T05:55:34.162401Z 0 [Warning] Changed limits: max_open_files: 1024 (requested 10240)
+2019-10-11T05:55:34.162472Z 0 [Warning] Changed limits: max_connections: 214 (requested 2048)
+2019-10-11T05:55:34.162479Z 0 [Warning] Changed limits: table_open_cache: 400 (requested 2000)
+
+# /etc/systemd/system/mysql.service.d/overwrite.conf
+LimitNOFILE=65535
+LimitNPROC=65535
+
+######################max conn##############
+set global max_connections = 200;
+ 
  ############Mysql##########
  #开启查询日志
 SET GLOBAL general_log='ON';
@@ -36,4 +250,20 @@ show procedure status like 'partition_maintenance%' \G;
 # 查看
 show create table history
 
+内存分为全局内存和线程内存。判断你的问题在哪里。
+
+全局内存你需要了解
+1，innodb_buffer_pool_size 。Innodb在mysql启动的时候一次性分配整个内存给bufferpool。占得比重很大，要重点关注。
+这个内存和你数据库访问量connections无关。如果你的数据访问量不大，但内存占用很高的话，就要要重点关注buffer pool相关的参数
+2，key_buffer_size。如果数据里面有很多myisam的表。这个参数就需要重点关注。所有相关表的请求都会占用到这块内存。
+
+线程内存你需要了解
+首先这些参数并不是固定的，max_connections * 参数的值 然后加起来就可能是线程占用的缓存大小。如果你的访问量很大，连接数很多。下面参数就可能影响内存的占用。
+
+每个参数都对应一种数据操作，所以你需要思考业务场景和sql代码到底哪一种操作多一些。
+read_buffer_size 顺序读rows
+sort_buffer_size 对表排序 sort by
+read_rnd_buffer_size 随机读rows where条件多的
+join_buffer_size 表关联join多的
+tmp_table_size 临时表，通常是单行数据大，而且table整体很大的
 

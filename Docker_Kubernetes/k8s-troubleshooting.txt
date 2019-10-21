@@ -252,3 +252,21 @@ Events:
 解决办法:
 在worker5上 umount /var/lib/kubelet/pods/9d33b429-c3f6-11e9-ac6a-0050569376db/volumes/kubernetes.io~glusterfs/pvc-216a992a-bcad-11e9-bbcf-0050569376db
 然后 kubectl delete po redis-ha-server-2
+
+#########worker4节点空间满########
+[root@rancher zabbix]# kubectl get po -o wide |grep Evicted
+dnsutils                                    0/1     Evicted     0          55d     <none>        worker4   <none>           <none>
+logstash-7d56c78f9-nh96g                    0/1     Evicted     0          7h2m    <none>        worker4   <none>           <none>
+logstash-7d56c78f9-xwghk                    0/1     Evicted     0          11d     <none>        worker4   <none>           <none>
+[root@rancher zabbix]# kubectl describe po logstash-7d56c78f9-nh96g
+Name:           logstash-7d56c78f9-nh96g
+Namespace:      default
+Priority:       0
+Node:           worker4/
+Start Time:     Fri, 11 Oct 2019 09:27:49 +0800
+Labels:         app=logstash
+                pod-template-hash=7d56c78f9
+Annotations:    <none>
+Status:         Failed
+Reason:         Evicted
+Message:        Pod The node had condition: [DiskPressure].

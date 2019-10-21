@@ -1,0 +1,53 @@
+####### empty database ########
+change master to master_host = '10.67.38.253', master_user = 'repl', master_password = 'copy', master_port = 3306, master_use_gtid = slave_pos;
+start slave;
+
+
+同步失败, 恢复slave
+# on master
+set @@global.read_only=1;
+# on slave
+stop slave;
+set @@global.gtid_slave_pos='0-1-46733'
+change master to master_host = '10.67.38.252', master_user = 'repl', master_password = 'copy', master_port = 3306, master_use_gtid = slave_pos;
+start slave;
+# on master
+set @@global.read_only=0;
+
+
+###### mysql partitioning #######
+#  mysql -uroot -pFoxconn123 zabbix <partition_call.sql
+#  mysql -uroot -pFoxconn123 zabbix <partition_all.sql
+#  ./partition.sh
+
+
+########  maxscale  ##########
+docker run -d --name mxs \
+-v:/root/maxscale.cnf:/etc/maxscale.cnf.d/my-maxscale.cnf \
+-p 8989:8989 \
+-p 4006:4006 \
+mariadb/maxscale:2.3
+
+# Creating a user account for MaxScale
+CREATE USER 'maxscale'@'%' IDENTIFIED BY 'maxscale_pw';
+GRANT SELECT ON mysql.user TO 'maxscale'@'%';
+GRANT SELECT ON mysql.db TO 'maxscale'@'%';
+GRANT SELECT ON mysql.tables_priv TO 'maxscale'@'%';
+GRANT SELECT ON mysql.roles_mapping TO 'maxscale'@'%';
+GRANT SHOW DATABASES ON *.* TO 'maxscale'@'%';
+# Creating a monitor user account for MaxScale
+CREATE USER 'monitor_user'@'%' IDENTIFIED BY 'my_password';
+GRANT REPLICATION CLIENT on *.* to 'monitor_user'@'%';
+# If the automatic failover of the MariaDB Monitor will used, the user will require additional grants. 
+GRANT SUPER, RELOAD on *.* to 'monitor_user'@'%';
+
+RESET SLAVE makes the slave forget its replication position in the master's binary log. This statement is meant to be used for a clean start. 
+It deletes the master.info and relay-log.info files, all the relay log files, and starts a new relay log file.
+
+###### set maxscale passive ########
+[root@worker2 ~]# docker exec mxs maxctrl show maxscale |grep passive
+│              │     "passive": false,                                                │
+[root@worker2 ~]# docker exec mxs maxctrl alter maxscale passive true
+OK
+[root@worker2 ~]# docker exec mxs maxctrl show maxscale |grep passive
+│              │     "passive": true,                                                 │
