@@ -1,0 +1,66 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: maxscale
+  namespace: default
+  labels:
+    app: maxscale
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: maxscale
+  template:
+    metadata:
+      labels:
+        app: maxscale
+    spec:
+      containers:
+      - name: maxscale
+        image: mariadb/maxscale:2.3
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - name: config
+          mountPath: /etc/maxscale.cnf
+          subPath: maxscale.cnf
+        - name: tz-config
+          mountPath: /etc/localtime
+        ports:
+        - containerPort: 8989
+          protocol: TCP
+          name: "api-port"
+        - containerPort: 3306
+          protocol: TCP
+          name: "rwsplit-port"
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: "4"
+            memory: 8Gi
+      volumes:
+        - name: config
+          configMap:
+            name: maxscale-config  
+        - name: tz-config
+          hostPath:
+            path: /etc/localtime
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maxscale
+  labels:
+    app: maxscale
+spec:
+  selector:
+    app: maxscale
+  ports:
+  - protocol: TCP
+    port: 3306
+    name: "rwsplit-port"
+  - protocol: TCP
+    port: 8989
+    name: "api-port"

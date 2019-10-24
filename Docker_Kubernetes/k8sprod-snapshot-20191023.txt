@@ -1,0 +1,61 @@
+########  kubectl get cluster-info nodes
+[root@rancher ~]# kubectl cluster-info
+Kubernetes master is running at https://10.67.49.241:6443
+CoreDNS is running at https://10.67.49.241:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+[root@rancher ~]# kubectl get no -o wide
+NAME        STATUS   ROLES               AGE    VERSION   INTERNAL-IP    EXTERNAL-IP   OS-IMAGE                KERNEL-VERSION           CONTAINER-RUNTIME
+vstjk8s01   Ready    controlplane,etcd   173m   v1.14.5   10.67.49.241   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s02   Ready    controlplane,etcd   173m   v1.14.5   10.67.49.242   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s03   Ready    controlplane,etcd   173m   v1.14.5   10.67.49.243   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s04   Ready    worker              173m   v1.14.5   10.67.49.244   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s05   Ready    worker              173m   v1.14.5   10.67.49.245   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s06   Ready    worker              173m   v1.14.5   10.67.49.246   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+vstjk8s07   Ready    worker              173m   v1.14.5   10.67.49.247   <none>        CentOS Linux 7 (Core)   3.10.0-1062.el7.x86_64   docker://18.9.2
+
+########## the status of pod in kube-system & ingress-nginx 
+[root@rancher ~]# kubectl -n kube-system get po -o wide
+NAME                                  READY   STATUS    RESTARTS   AGE    IP             NODE        NOMINATED NODE   READINESS GATES
+canal-gfbwt                           2/2     Running   0          164m   10.67.49.241   vstjk8s01   <none>           <none>
+canal-hnbbl                           2/2     Running   0          164m   10.67.49.243   vstjk8s03   <none>           <none>
+canal-k8vxn                           2/2     Running   0          164m   10.67.49.244   vstjk8s04   <none>           <none>
+canal-r7zdk                           2/2     Running   0          115s   10.67.49.242   vstjk8s02   <none>           <none>
+canal-s5t98                           2/2     Running   0          164m   10.67.49.246   vstjk8s06   <none>           <none>
+canal-w4lwd                           2/2     Running   0          164m   10.67.49.245   vstjk8s05   <none>           <none>
+canal-xbwx7                           2/2     Running   0          164m   10.67.49.247   vstjk8s07   <none>           <none>
+coredns-autoscaler-5d5d49b8ff-lglnn   1/1     Running   0          164m   10.42.0.4      vstjk8s06   <none>           <none>
+coredns-bdffbc666-mv62b               1/1     Running   0          150m   10.42.3.2      vstjk8s07   <none>           <none>
+coredns-bdffbc666-q69cv               1/1     Running   0          21m    10.42.6.2      vstjk8s04   <none>           <none>
+metrics-server-7f6bd4c888-vwvvq       1/1     Running   0          164m   10.42.0.3      vstjk8s06   <none>           <none>
+[root@rancher ~]# kubectl -n ingress-nginx get po -o wide
+NAME                                    READY   STATUS    RESTARTS   AGE    IP             NODE        NOMINATED NODE   READINESS GATES
+default-http-backend-5954bd5d8c-mpm4m   1/1     Running   0          130m   10.42.3.3      vstjk8s07   <none>           <none>
+nginx-ingress-controller-78v62          1/1     Running   0          168m   10.67.49.247   vstjk8s07   <none>           <none>
+nginx-ingress-controller-dk6mb          1/1     Running   0          169m   10.67.49.245   vstjk8s05   <none>           <none>
+nginx-ingress-controller-k86kn          1/1     Running   0          169m   10.67.49.244   vstjk8s04   <none>           <none>
+nginx-ingress-controller-nf4xv          1/1     Running   0          169m   10.67.49.246   vstjk8s06   <none>           <none>
+
+##### etcd status ######
+/ # etcdctl --write-out=table --endpoints=10.67.49.241:2379,10.67.49.242:2379,10.67.49.243:2379 endpoint status
+2019-10-23 05:58:08.263524 W | pkg/flags: recognized environment variable ETCDCTL_ENDPOINTS, but unused: shadowed by corresponding flag
++-------------------+------------------+---------+---------+-----------+-----------+------------+
+|     ENDPOINT      |        ID        | VERSION | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
++-------------------+------------------+---------+---------+-----------+-----------+------------+
+| 10.67.49.241:2379 | 321ba1d6d10e1f29 |  3.3.10 |  3.1 MB |      true |        16 |      38199 |
+| 10.67.49.242:2379 | 7daf67bc8ecf32ec |  3.3.10 |  2.9 MB |     false |        16 |      38199 |
+| 10.67.49.243:2379 | 816d9da6d5472eaf |  3.3.10 |  2.9 MB |     false |        16 |      38199 |
++-------------------+------------------+---------+---------+-----------+-----------+------------+
+/ # etcdctl --write-out=table --endpoints=10.67.49.241:2379,10.67.49.242:2379,10.67.49.243:2379 member list
+2019-10-23 05:58:24.370627 W | pkg/flags: recognized environment variable ETCDCTL_ENDPOINTS, but unused: shadowed by corresponding flag
++------------------+---------+----------------+---------------------------+-----------------------------------------------------+
+|        ID        | STATUS  |      NAME      |        PEER ADDRS         |                    CLIENT ADDRS                     |
++------------------+---------+----------------+---------------------------+-----------------------------------------------------+
+| 321ba1d6d10e1f29 | started | etcd-vstjk8s01 | https://10.67.49.241:2380 | https://10.67.49.241:2379,https://10.67.49.241:4001 |
+| 7daf67bc8ecf32ec | started | etcd-vstjk8s02 | https://10.67.49.242:2380 | https://10.67.49.242:2379,https://10.67.49.242:4001 |
+| 816d9da6d5472eaf | started | etcd-vstjk8s03 | https://10.67.49.243:2380 | https://10.67.49.243:2379,https://10.67.49.243:4001 |
++------------------+---------+----------------+---------------------------+-----------------------------------------------------+
+/ # etcdctl --write-out=table --endpoints=10.67.49.241:2379,10.67.49.242:2379,10.67.49.243:2379 endpoint health
+2019-10-23 06:00:23.876120 W | pkg/flags: recognized environment variable ETCDCTL_ENDPOINTS, but unused: shadowed by corresponding flag
+10.67.49.241:2379 is healthy: successfully committed proposal: took = 1.4836ms
+10.67.49.243:2379 is healthy: successfully committed proposal: took = 2.925264ms
+10.67.49.242:2379 is healthy: successfully committed proposal: took = 2.276223ms
+

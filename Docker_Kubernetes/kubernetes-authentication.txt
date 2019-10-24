@@ -128,6 +128,20 @@ fi
 kubectl config set-context default --cluster=default --user=default
 kubectl config use-context defaul
 
+############# kubectl 切换多个context #########
+[root@rancher ~]# kubectl config get-clusters
+NAME
+Test
+IT
+[root@rancher ~]# kubectl config get-contexts
+CURRENT   NAME   CLUSTER   AUTHINFO          NAMESPACE
+*         IT     IT        kube-admin-IT
+          Test   Test      kube-admin-Test
+[root@rancher ~]# kubectl config current-context
+IT
+[root@rancher ~]# kubectl config use-context Test
+Switched to context "Test".
+
 #########使用CA和client证书验证##########
 KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
   --region $(gcloud config get-value compute/region) \

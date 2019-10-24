@@ -1,0 +1,80 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: zabbix-web-nginx-mysql
+  namespace: default
+  labels:
+    app: zabbix-web-nginx-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zabbix-web-nginx-mysql
+  template:
+    metadata:
+      labels:
+        app: zabbix-web-nginx-mysql
+    spec:
+      containers:
+      - name: zabbix-web-nginx-mysql
+        image: zabbix/zabbix-web-nginx-mysql:centos-4.4.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TZ
+          value: "Asia/Shanghai"
+        - name: PHP_TZ
+          value: "Asia/Shanghai"
+        - name: ZBX_SERVER_HOST
+          value: "zabbix-server-mysql"
+        - name: DB_SERVER_HOST
+          value: "maxscale"
+        - name: MYSQL_DATABASE
+          value: "zabbix"
+        - name: MYSQL_USER
+          value: "zabbix"
+        - name: MYSQL_PASSWORD
+          value: "vSTJ456"
+        - name: MYSQL_ROOT_PASSWORD
+          value: "vSTJ456"
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "2"
+            memory: 4Gi
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-web-nginx-mysql
+  labels:
+    app: zabbix-web-nginx-mysql
+spec:
+  selector:
+    app: zabbix-web-nginx-mysql
+  ports:
+  - protocol: TCP
+    port: 80
+
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: zabbix-web-nginx-mysql
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: monitoring.cesbg.foxconn
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: zabbix-web-nginx-mysql
+          servicePort: 80

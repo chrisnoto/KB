@@ -1,3 +1,23 @@
+yum install iscsi-initiator-utils device-mapper-multipath -y
+mpathconf --enable
+cat > /etc/multipath.conf <<EOF
+devices {
+        device {
+                vendor "LIO-ORG"
+                user_friendly_names "yes" # names like mpatha
+                path_grouping_policy "failover" # one path per group
+                path_selector "round-robin 0"
+                failback immediate
+                path_checker "tur"
+                prio "const"
+                no_path_retry 120
+                rr_weight "uniform"
+        }
+}
+EOF
+systemctl restart multipathd
+
+
 #######创建 glusterfs volume plugin###########
 docker plugin install --alias glusterfs \
   trajano/glusterfs-volume-plugin \

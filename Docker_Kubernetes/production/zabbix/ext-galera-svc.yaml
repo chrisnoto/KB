@@ -1,0 +1,56 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: vstjzabdb01
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: vstjzabdb01
+subsets:
+  - addresses:
+      - ip: 10.67.51.113
+    ports:
+      - port: 3306
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: vstjzabdb02
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: vstjzabdb02
+subsets:
+  - addresses:
+      - ip: 10.67.51.116
+    ports:
+      - port: 3306
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: vstjzabdb03
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: vstjzabdb03
+subsets:
+  - addresses:
+      - ip: 10.67.51.118
+    ports:
+      - port: 3306

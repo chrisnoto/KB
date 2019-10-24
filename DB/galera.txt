@@ -1,0 +1,78 @@
+yum install MariaDB-client MariaDB-server MariaDB-backup -y
+
+###change mariadb datadir ##########
+mkdir -p /data/mysql
+chown -R mysql:mysql /data
+edit /etc/fstab and remount /data
+cp -R -p /var/lib/mysql/* /data/mysql/
+[root@vstjzabdb01 ~]# mv -v /var/lib/mysql /var/lib/mysql.orig
+‘/var/lib/mysql’ -> ‘/var/lib/mysql.orig’
+[root@vstjzabdb01 ~]# ln -s /data/mysql /var/lib/mysql
+
+
+systemd
+LimitNoFile=65535
+
+sysctl
+vm.swappiness = 1
+
+[client]
+port=3306
+socket=/data/mysql/mysql.sock
+
+[mysqld]
+datadir = /data/mysql
+socket = /data/mysql/mysql.sock
+
+
+[galera]
+wsrep_on=ON
+wsrep_provider=/usr/lib64/galera/libgalera_smm.so
+wsrep_cluster_address=gcomm://10.67.51.113,10.67.51.116,10.67.51.118
+binlog_format=row
+default_storage_engine=InnoDB
+innodb_autoinc_lock_mode=2
+
+
+slow_query_log=1
+slow_query_log_file = /data/mysql/mysql-slow.log
+long_query_time = 10
+log-error = /data/mysql/error.log
+skip-name-resolve
+skip-external-locking
+connect_timeout=60
+wait_timeout=28800
+open_files_limit = 65535
+character-set-server=utf8
+collation-server=utf8_bin
+
+back_log=500
+thread_cache_size=300
+max_allowed_packet=32M
+max_connections=1000
+max_connect_errors=2000
+thread_concurrency=32
+
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+query_cache_type=0
+
+innodb_buffer_pool_size = 48G
+innodb_buffer_pool_instances=8
+innodb_page_cleaners=8
+innodb_flush_method=O_DIRECT
+innodb_log_file_size=1024M
+innodb_log_buffer_size=128M
+innodb_buffer_pool_dump_pct=75
+innodb_io_capacity=1500
+innodb_io_capacity_max=2500
+innodb_flush_log_at_trx_commit=2
+innodb_lru_scan_depth=256
+innodb_data_home_dir = /data/mysql
+#innodb_data_file_path = ibdata1:10M;ibdata2:10M:autoextend:max:4096M
+innodb_log_group_home_dir = /data/mysql
+
+##########1st galera node initiate galera cluster
+# galera_new_cluster
+other nodes do normal systemctl start
