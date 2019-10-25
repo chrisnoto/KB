@@ -32,6 +32,8 @@ spec:
           value: "Asia/Shanghai"
         - name: ZBX_SERVER_NAME
           value: "zabbixserver"
+        - name: ZAB_CACHESIZE
+          value: "1024M"
         - name: ZBX_JAVAGATEWAY_ENABLE
           value: "true"
         - name: DB_SERVER_HOST
@@ -67,6 +69,14 @@ spec:
         ports:
         - containerPort: 10051
           protocol: TCP
+      - name: zabbix-agent
+        image: zabbix/zabbix-agent:centos-4.4.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ZBX_SERVER_HOST
+          value: "zabbix-server-mysql,127.0.0.1"
+        - name: ZBX_HOSTNAME
+          value: "Zabbix server"
         resources:
           limits:
             cpu: "4"
