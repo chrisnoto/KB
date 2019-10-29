@@ -1,0 +1,69 @@
+apiVersion: v1
+data:
+  maxscale.cnf: |+
+    [maxscale]
+    threads=auto
+
+    [server1]
+    type=server
+    address=vstjzabdb01
+    port=3306
+    protocol=MariaDBBackend
+
+    [server2]
+    type=server
+    address=vstjzabdb02
+    port=3306
+    protocol=MariaDBBackend
+
+    [server3]
+    type=server
+    address=vstjzabdb03
+    port=3306
+    protocol=MariaDBBackend
+
+
+    # Monitor for the servers
+    # This will keep MaxScale aware of the state of the servers.
+    # MySQL Monitor documentation:
+    # https://github.com/mariadb-corporation/MaxScale/blob/2.3/Documentation/Monitors/MariaDB-Monitor.md
+
+    [Galera-Monitor]
+    type=monitor
+    module=galeramon
+    servers=server1,server2,server3
+    user=maxscale
+    passwd=vSTJ456
+    monitor_interval=2000
+
+    # Service definitions
+    # Service Definition for a read-only service and a read/write splitting service.
+
+    # ReadConnRoute documentation:
+    # https://github.com/mariadb-corporation/MaxScale/blob/2.3/Documentation/Routers/ReadConnRoute.md
+
+    # ReadWriteSplit documentation:
+    # https://github.com/mariadb-corporation/MaxScale/blob/2.3/Documentation/Routers/ReadWriteSplit.md
+
+    [Galera-Service]
+    type=service
+    router=readwritesplit
+    servers=server1,server2,server3
+    user=maxscale
+    passwd=vSTJ456
+    enable_root_user=1
+
+    # Listener definitions for the services
+    # Listeners represent the ports the services will listen on.
+
+    [Galera-Listener]
+    type=listener
+    service=Galera-Service
+    protocol=MySQLClient
+    port=3306
+
+kind: ConfigMap
+metadata:
+  name: maxscale-config
+  namespace: default
+

@@ -1,3 +1,11 @@
+#######zabbix原生模板自带的方法##########
+Windows block devices by zabbix agent active
+wmi.getall[root\cimv2,"select * from win32_perfformatteddata_perfdisk_physicaldisk"]
+可以在poweshell中用以下命令
+Get-WmiObject -Query "select * from win32_perfformatteddata_perfdisk_physicaldisk"
+
+Linux block devices by zabbix agent active
+vfs.file.contents[/proc/diskstats]
 zabbix优化及配置
 
 ###########zabbix优化点#########

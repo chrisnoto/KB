@@ -270,3 +270,17 @@ Annotations:    <none>
 Status:         Failed
 Reason:         Evicted
 Message:        Pod The node had condition: [DiskPressure].
+
+##########Pods evicted with error "The node was low on resource: ephemeral-storage"########
+Root cause: The pod logs are filling up ephemeral storage
+Resolution
+Configure the Docker logging driver to limit the amount of stored logs:
+
+Raw
+{
+"log-driver": "json-file",
+"log-opts": {
+"max-size": "100m",
+"max-file": "5"
+}
+}

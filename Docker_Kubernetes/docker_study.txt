@@ -4,7 +4,7 @@ cat > /etc/docker/daemon.json <<EOF
     "log-driver": "json-file",
     "log-opts": {
     "max-size": "50m",
-    "max-file": "4"
+    "max-file": "6"
     }
 }
 EOF

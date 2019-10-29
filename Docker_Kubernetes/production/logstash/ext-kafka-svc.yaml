@@ -1,0 +1,21 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: kafka
+spec:
+  ports:
+  - port: 9092
+    targetPort: 9092
+---
+kind: Endpoints
+apiVersion: v1
+metadata:
+  name: kafka
+subsets:
+  - addresses:
+      - ip: 10.67.51.144
+      - ip: 10.67.51.145
+      - ip: 10.67.51.146
+    ports:
+      - port: 9092
+

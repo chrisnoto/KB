@@ -1,3 +1,40 @@
+############# kubectl commands for commonly performed operations on a Deployment ############
+# List deployments:
+kubectl get deploy
+
+# Update a deployment with a manifest file:
+kubectl apply -f test.yaml
+
+# Scale a deployment “test” to 3 replicas:
+kubectl scale deploy/test --replicas=3
+
+# Watch update status for deployment “test”:
+kubectl rollout status deploy/test
+
+# Pause deployment on “test”:
+kubectl rollout pause deploy/test
+
+# Resume deployment on “test”:
+kubectl rollout resume deploy/test
+
+# View rollout history on “test”:
+kubectl rollout history deploy/test
+
+# Undo most recent update on “test”:
+kubectl rollout undo deploy/test
+
+# Rollback to specific revision on “test”:
+kubectl rollout undo deploy/test --to-revision=1
+#########How to use Reloader#############
+For a Deployment called foo have a ConfigMap called foo-configmap or Secret called foo-secret or both. Then add your annotation (by default reloader.stakater.com/auto) to main metadata of your Deployment
+
+kind: Deployment
+metadata:
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  template: metadata:
+
 ###########kubernetes开关顺序###########
 stop:  scale down apps/drain nodes -> worker nodes  -> master nodes  -> storage
 start: storage  -> master nodes -> worker nodes
