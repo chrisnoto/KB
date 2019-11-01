@@ -32,7 +32,7 @@ wsrep_cluster_address=gcomm://10.67.51.113,10.67.51.116,10.67.51.118
 binlog_format=row
 default_storage_engine=InnoDB
 innodb_autoinc_lock_mode=2
-
+grant all on *.* to 'root'@'%' identified by 'vSTJ456';
 
 slow_query_log=1
 slow_query_log_file = /data/mysql/mysql-slow.log

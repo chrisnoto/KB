@@ -29,7 +29,7 @@ docker run -d --name mxs \
 mariadb/maxscale:2.3
 
 # Creating a user account for MaxScale
-CREATE USER 'maxscale'@'%' IDENTIFIED BY 'maxscale_pw';
+CREATE USER 'maxscale'@'%' IDENTIFIED BY 'vSTJ456';
 GRANT SELECT ON mysql.user TO 'maxscale'@'%';
 GRANT SELECT ON mysql.db TO 'maxscale'@'%';
 GRANT SELECT ON mysql.tables_priv TO 'maxscale'@'%';

@@ -1,3 +1,33 @@
+
+# List Events sorted by timestamp
+kubectl get events --sort-by=.metadata.creationTimestamp
+################# docker中 free -m 不起作用#########
+或者ps auwx
+或者查看cgroup内存占用
+例如worker3节点 kubelet容器
+[root@worker3 26960]# cat cgroup
+11:hugetlb:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+10:freezer:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+9:net_prio,net_cls:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+8:blkio:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+7:cpuacct,cpu:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+6:memory:/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682
+
+cat /sys/fs/cgroup/memory/docker/6760705287cc399beb95eafc00a870f20652a4cbf9a32e315a5527bbd2a7c682/memory.stat
+total_cache 34492416
+total_rss 78344192
+total_rss_huge 0
+total_mapped_file 77824
+查看Reloader pod的容器
+[root@worker3 28006]# cat cgroup
+11:hugetlb:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+10:freezer:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+9:net_prio,net_cls:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+8:blkio:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+7:cpuacct,cpu:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+6:memory:/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb
+cat /sys/fs/cgroup/memory/kubepods/besteffort/pod59597d92-ebc6-11e9-b1c8-0050569376db/6e1bd50652913cf6b09e82ae1195e1a120cc573b7c1a34c7493068fba584dceb/memory.stat
+
 ############# kubectl commands for commonly performed operations on a Deployment ############
 # List deployments:
 kubectl get deploy
@@ -708,3 +738,4 @@ $ kubectl patch statefulset/consul -p '{"spec":{"replicas": 5}}'
 kubectl scale statefulsets <stateful-set-name> --replicas=<new-replicas>
 kubectl edit statefulsets <stateful-set-name>
 
+#############

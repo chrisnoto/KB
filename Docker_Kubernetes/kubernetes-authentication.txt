@@ -582,3 +582,56 @@ subjects:
         }
     ]
 }
+########### 测试 serviceaccount权限 ###########
+查看 hepaster-heapster绑定的clusterrole 
+[root@rancher .helm]# kubectl get clusterrole system:heapster -o yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  creationTimestamp: "2019-07-20T03:21:46Z"
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:heapster
+  resourceVersion: "50"
+  selfLink: /apis/rbac.authorization.k8s.io/v1/clusterroles/system%3Aheapster
+  uid: 80f6914f-aa9d-11e9-bbcf-0050569376db
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - namespaces
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+分别测试 get cm, no, cj的权限
+[root@rancher .helm]# kubectl get cm --as system:serviceaccount:default:hepaster-heapster
+Error from server (Forbidden): configmaps is forbidden: User "system:serviceaccount:default:hepaster-heapster" cannot list resource "configmaps" in API group "" in the namespace "default"
+[root@rancher .helm]# kubectl get no --as system:serviceaccount:default:hepaster-heapster
+NAME      STATUS   ROLES               AGE   VERSION
+master    Ready    controlplane,etcd   77d   v1.14.4
+worker1   Ready    worker              77d   v1.14.4
+worker2   Ready    worker              77d   v1.14.4
+worker3   Ready    worker              77d   v1.14.4
+worker4   Ready    worker              77d   v1.14.4
+worker5   Ready    worker              77d   v1.14.4
+worker6   Ready    worker              99d   v1.14.4
+[root@rancher .helm]# kubectl get cj --as system:serviceaccount:default:hepaster-heapster
+Error from server (Forbidden): cronjobs.batch is forbidden: User "system:serviceaccount:default:hepaster-heapster" cannot list resource "cronjobs" in API group "batch" in the namespace "default"
+----测试 tiller的权限
+kube-system:tiller绑定的是cluster-admin, 权限最大
+[root@rancher .helm]# kubectl create ns test --as system:serviceaccount:kube-system:tiller
+namespace/test created

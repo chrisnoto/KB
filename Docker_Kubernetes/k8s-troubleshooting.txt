@@ -284,3 +284,43 @@ Raw
 "max-file": "5"
 }
 }
+
+###################### worker node not ready ################
+####skipping pod synchronization - PLEG is not healthy#######
+kubectl describe no worker3
+Conditions:
+  Type             Status  LastHeartbeatTime                 LastTransitionTime                Reason                       Message
+  ----             ------  -----------------                 ------------------                ------                       -------
+  MemoryPressure   False   Fri, 01 Nov 2019 09:16:02 +0800   Fri, 13 Sep 2019 17:59:41 +0800   KubeletHasSufficientMemory   kubelet has sufficient memory available
+  DiskPressure     False   Fri, 01 Nov 2019 09:16:02 +0800   Mon, 21 Oct 2019 23:55:31 +0800   KubeletHasNoDiskPressure     kubelet has no disk pressure
+  PIDPressure      False   Fri, 01 Nov 2019 09:16:02 +0800   Fri, 13 Sep 2019 17:59:41 +0800   KubeletHasSufficientPID      kubelet has sufficient PID available
+  Ready            False   Fri, 01 Nov 2019 09:16:02 +0800   Fri, 01 Nov 2019 09:15:32 +0800   KubeletNotReady              PLEG is not healthy: pleg was last seen active 3m31.854325257s ago; threshold is 3m0s.
+
+查看worker3上 kubelet log
+
+{"log":"E1101 01:18:32.079490   26960 kuberuntime_manager.go:903] PodSandboxStatus of sandbox \"2ddff6c32d48a1fb248076612e9db017d69b50448ee4
+3e305670d6d6debcdd92\" for pod \"w3c-956966d4b-kzwq2_default(109c2b68-d9bf-11e9-b299-0050569376db)\" error: rpc error: code = DeadlineExceed
+ed desc = context deadline exceeded\n","stream":"stderr","time":"2019-11-01T01:18:32.079922565Z"}
+{"log":"E1101 01:18:44.322604   26960 pod_workers.go:190] Error syncing pod 109c2b68-d9bf-11e9-b299-0050569376db (\"w3c-956966d4b-kzwq2_defa
+ult(109c2b68-d9bf-11e9-b299-0050569376db)\"), skipping: rpc error: code = DeadlineExceeded desc = context deadline exceeded\n","stream":"std
+err","time":"2019-11-01T01:18:44.323104999Z"}
+{"log":"E1101 01:18:56.322497   26960 pod_workers.go:190] Error syncing pod 109c2b68-d9bf-11e9-b299-0050569376db (\"w3c-956966d4b-kzwq2_defa
+ult(109c2b68-d9bf-11e9-b299-0050569376db)\"), skipping: rpc error: code = DeadlineExceeded desc = context deadline exceeded\n","stream":"std
+err","time":"2019-11-01T01:18:56.322906302Z"}
+{"log":"E1101 01:19:10.322541   26960 pod_workers.go:190] Error syncing pod 109c2b68-d9bf-11e9-b299-0050569376db (\"w3c-956966d4b-kzwq2_defa
+ult(109c2b68-d9bf-11e9-b299-0050569376db)\"), skipping: rpc error: code = DeadlineExceeded desc = context deadline exceeded\n","stream":"std
+err","time":"2019-11-01T01:19:10.323137525Z"}
+{"log":"E1101 01:19:25.322452   26960 pod_workers.go:190] Error syncing pod 109c2b68-d9bf-11e9-b299-0050569376db (\"w3c-956966d4b-kzwq2_defa
+ult(109c2b68-d9bf-11e9-b299-0050569376db)\"), skipping: rpc error: code = DeadlineExceeded desc = context deadline exceeded\n","stream":"std
+err","time":"2019-11-01T01:19:25.323036818Z"}
+{"log":"I1101 01:19:32.322260   26960 kubelet.go:1823] skipping pod synchronization - PLEG is not healthy: pleg was last seen active 3m0.270
+812223s ago; threshold is 3m0s.\n","stream":"stderr","time":"2019-11-01T01:19:32.322741352Z"}
+{"log":"I1101 01:19:32.422676   26960 kubelet.go:1823] skipping pod synchronization - PLEG is not healthy: pleg was last seen active 3m0.371
+220259s ago; threshold is 3m0s.\n","stream":"stderr","time":"2019-11-01T01:19:32.423173528Z"}
+
+确认w3c pod长期有错误,
+[root@rancher ~]# kubectl get po -o wide
+NAME                                        READY   STATUS                   RESTARTS   AGE   IP            NODE      NOMINATED NODE   READINESS GATES
+w3c-956966d4b-kzwq2                         0/1     Init:RunContainerError   0          43d   <none>        worker3   <none>           <none>
+删除w3c pod后, worker3 node Ready
+kubectl scale deploy w3c --replicas=0
