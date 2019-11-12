@@ -1,0 +1,1 @@
+0 0 * * wed root /usr/bin/reposync -p /usr/share/nginx/html/centos8-x86_64 --download-metadata &> /var/log/reposync.log

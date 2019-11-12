@@ -51,3 +51,9 @@ It is suggested that you do not remove or change the labels on that deployment, 
 
 Helm upgrade只支持部分选项如 spec.replicas   spec.template  spec.updateStrategy
 updates to statefulset spec for fields other than 'replicas', 'template', and 'updateStrategy' are forbidden
+
+########## tiller not exist on kubernetes #########
+helm init -i gcr.io/kubernetes-helm/tiller:v2.13.0 --service-account tiller
+
+########## helm template生成YAML文件 ##########
+helm template reloader/ -f reloader/values.yaml > reloader.yaml

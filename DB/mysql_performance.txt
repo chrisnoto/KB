@@ -1,3 +1,49 @@
+调优前
+back_log=500
+thread_cache_size=300
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+MariaDB [(none)]> show global status like '%tmp%';
++-------------------------+-----------+
+| Variable_name           | Value     |
++-------------------------+-----------+
+| Created_tmp_disk_tables | 1090113   |
+| Created_tmp_files       | 6         |
+| Created_tmp_tables      | 6046251   |
+| Handler_tmp_delete      | 0         |
+| Handler_tmp_update      | 1332047   |
+| Handler_tmp_write       | 409165221 |
+| Rows_tmp_read           | 473725463 |
++-------------------------+-----------+
+7 rows in set (0.001 sec)
+
+MariaDB [(none)]> show global status like '%thread%';
++------------------------------------------+-------+
+| Variable_name                            | Value |
++------------------------------------------+-------+
+| Delayed_insert_threads                   | 0     |
+| Performance_schema_thread_classes_lost   | 0     |
+| Performance_schema_thread_instances_lost | 0     |
+| Slow_launch_threads                      | 0     |
+| Threadpool_idle_threads                  | 0     |
+| Threadpool_threads                       | 0     |
+| Threads_cached                           | 51    |
+| Threads_connected                        | 228   |
+| Threads_created                          | 1185  |
+| Threads_running                          | 6     |
+| wsrep_applier_thread_count               | 1     |
+| wsrep_rollbacker_thread_count            | 1     |
+| wsrep_thread_count                       | 2     |
++------------------------------------------+-------+
+调优后
+back_log=500
+thread_cache_size=500
+tmp_table_size = 128M
+max_heap_table_size = 128M
+
+
+
 监控工具  innotop
 
 (1)interactive_timeout: 服务器关闭交互式连接前等待活动的秒数

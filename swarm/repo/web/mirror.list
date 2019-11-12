@@ -19,17 +19,24 @@ deb  https://mirrors.aliyun.com/ubuntu bionic-security main restricted universe 
 deb  https://mirrors.aliyun.com/ubuntu bionic-updates main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu bionic-proposed main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu bionic-backports main restricted universe multiverse
+deb  https://mirrors.aliyun.com/zabbix/zabbix/4.4/ubuntu bionic main
 
 deb  https://mirrors.aliyun.com/ubuntu xenial main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu xenial-security main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu xenial-updates main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu xenial-proposed main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu xenial-backports main restricted universe multiverse
+deb  https://mirrors.aliyun.com/zabbix/zabbix/4.4/ubuntu xenial main
 
 deb  https://mirrors.aliyun.com/ubuntu trusty main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu trusty-security main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu trusty-updates main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu trusty-proposed main restricted universe multiverse
 deb  https://mirrors.aliyun.com/ubuntu trusty-backports main restricted universe multiverse
+deb  https://mirrors.aliyun.com/zabbix/zabbix/4.4/ubuntu trusty main
+
+deb  http://mirror.fuel-infra.org/mos-repos/ubuntu/9.2 mos9.0-updates main restricted
+deb  http://mirror.fuel-infra.org/mos-repos/ubuntu/9.2 mos9.0-security main restricted
+deb  http://mirror.fuel-infra.org/mos-repos/ubuntu/9.2 mos9.0-holdback main restricted
 
 clean  https://mirrors.aliyun.com/ubuntu
