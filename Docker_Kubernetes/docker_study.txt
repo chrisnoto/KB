@@ -46,7 +46,7 @@ ExecStop=/usr/bin/docker stop -t 30 fuel-core-8.0-mcollective
 WantedBy=multi-user.target
 
 
-#########技巧  没有安装git时,使用git容器代替git命令行###########
+#########没有安装git时,使用git容器代替git命令行###########
 alias git='docker run -it --rm --name git -v $PWD:/git -w /git alpine/git' 
 (This alias is only required if git is not already installed on your machine. This alias will allow you to clone the repo using a git container)
 [root@worker3 ~]# docker run -ti --rm -v ${HOME}:/root -v $(pwd):/git -e https_proxy=http://10.67.9.210:3128 alpine/git clone https://github.com/alpine-docker/git.git   
