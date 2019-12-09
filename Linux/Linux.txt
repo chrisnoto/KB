@@ -1,3 +1,51 @@
+######## lsof ##########
+[root@repo-centos ~]# [root@repo-centos ~]# lsof -P -i TCP
+COMMAND     PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
+sshd       1184 root    3u  IPv4   24526      0t0  TCP *:22 (LISTEN)
+sshd       1184 root    4u  IPv6   24528      0t0  TCP *:22 (LISTEN)
+master     1399 root   13u  IPv4   26178      0t0  TCP localhost:25 (LISTEN)
+master     1399 root   14u  IPv6   26179      0t0  TCP localhost:25 (LISTEN)
+sshd       2156 root    3u  IPv4   37081      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:61699 (ESTABLISHED)
+docker-pr  2330 root    4u  IPv6   45579      0t0  TCP *:8084 (LISTEN)
+docker-pr  2455 root    4u  IPv6   36853      0t0  TCP *:80 (LISTEN)
+docker-pr  2546 root    4u  IPv6   47213      0t0  TCP *:8083 (LISTEN)
+docker-pr  3441 root    4u  IPv6   88901      0t0  TCP *:8082 (LISTEN)
+docker-pr  3774 root    4u  IPv6   91973      0t0  TCP *:8081 (LISTEN)
+docker-pr  3923 root    4u  IPv6   93367      0t0  TCP *:8080 (LISTEN)
+sshd       8437 root    3u  IPv4 1332763      0t0  TCP repo-centos:22->10.67.125.23:55836 (ESTABLISHED)
+sshd       9147 root    3u  IPv4 1344074      0t0  TCP repo-centos:22->10.67.125.23:56885 (ESTABLISHED)
+docker-pr  9287 root    4u  IPv6 1346711      0t0  TCP *:9000 (LISTEN)
+docker-pr  9301 root    4u  IPv6 1346725      0t0  TCP *:8000 (LISTEN)
+ssh       16906 root    3u  IPv4 1496867      0t0  TCP repo-centos:38706->10.67.51.158:22 (ESTABLISHED)
+sshd      22535 root    3u  IPv4 1051988      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:49293 (ESTABLISHED)
+connect-p 22604 root    3u  IPv4 1058133      0t0  TCP repo-centos:56344->10.67.36.66:1080 (ESTABLISHED)
+[root@repo-centos ~]# ss -antl
+State      Recv-Q Send-Q                            Local Address:Port                                           Peer Address:Port
+LISTEN     0      100                                   127.0.0.1:25                                                        *:*
+LISTEN     0      128                                           *:22                                                        *:*
+LISTEN     0      100                                         ::1:25                                                       :::*
+LISTEN     0      128                                          :::8000                                                     :::*
+LISTEN     0      128                                          :::9000                                                     :::*
+LISTEN     0      128                                          :::8080                                                     :::*
+LISTEN     0      128                                          :::80                                                       :::*
+LISTEN     0      128                                          :::8081                                                     :::*
+LISTEN     0      128                                          :::8082                                                     :::*
+LISTEN     0      128                                          :::8083                                                     :::*
+LISTEN     0      128                                          :::8084                                                     :::*
+LISTEN     0      128                                          :::22                                                       :::*
+############## ngrep ############
+[root@vstjzabdb03 ~]# ngrep -d ens192 -q -i -W byline 'select' port 3306
+interface: ens192 (10.67.50.0/255.255.254.0)
+filter: ( port 3306 ) and ((ip || ip6) || (vlan && (ip || ip6)))
+match: select
+
+T 10.67.49.247:42040 -> 10.67.51.118:3306 [AP] #1
+.....select h.hostid,h.host,h.name,t.httptestid,t.name,t.agent,t.authentication,t.http_user,t.http_password,t.http_proxy,t.retries,t.ssl_cert_file,t.ssl_key_file,t.ssl_key_password,t.verify_peer,t.verify_host,t.delay from httptest t,hosts h where t.hostid=h.hostid and t.nextcheck<=1574237897 and mod(t.httptestid,100)=94 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+
+T 10.67.49.247:42814 -> 10.67.51.118:3306 [AP] #4
+.....select min(t.nextcheck) from httptest t,hosts h where t.hostid=h.hostid and mod(t.httptestid,100)=2 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+
+
 ############ default update/scrape interval of monitoring softwares ###########
 prometheus  15s
 global:

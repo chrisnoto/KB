@@ -43,6 +43,20 @@ tmp_table_size = 128M
 max_heap_table_size = 128M
 
 
+####### mysqladmin查看QPS ###########
+[root@vstjzabdb02 my.cnf.d]# mysqladmin extended-status -r -i 1 |egrep 'Questions'
+[root@vstjzabdb01 ~]# mysqladmin extended-status -r -i 1 |grep -i 'com_commit'
+| Com_commit                                                   | 110318540                                             |
+| Com_commit                                                   | 43                                                    |
+| Com_commit                                                   | 43                                                    |
+| Com_commit                                                   | 75                                                    |
+| Com_commit                                                   | 30                                                    |
+| Com_commit                                                   | 36                                                    |
+| Com_commit                                                   | 30                                                    |
+| Com_commit                                                   | 160                                                   |
+| Com_commit                                                   | 106                                                   |
+| Com_commit                                                   | 28                                                    |
+| Com_commit                                                   | 29                                                    |
 
 监控工具  innotop
 
@@ -51,7 +65,55 @@ max_heap_table_size = 128M
 两者生效取决于：客户端是交互或者非交互的连接。
 在交互模式下，interactive_timeout才生效；非交互模式下，wait_timeout生效。
 
+
+
 运行中的mysql状态查看
+安装query_response_time plugin并查看response_time
+
+MariaDB [zabbix]> install plugin query_response_time_audit SONAME 'query_response_time.so';
+Query OK, 0 rows affected (0.016 sec)
+
+MariaDB [zabbix]> install plugin query_response_time SONAME 'query_response_time.so';
+Query OK, 0 rows affected (0.025 sec)
+
+MariaDB [zabbix]> set global query_response_time_stats='ON';
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [zabbix]> show query_response_time;
++----------------+-------+----------------+
+| Time           | Count | Total          |
++----------------+-------+----------------+
+|       0.000001 |    13 |       0.000000 |
+|       0.000010 |    24 |       0.000027 |
+|       0.000100 |   596 |       0.046422 |
+|       0.001000 |  1912 |       0.364956 |
+|       0.010000 |    11 |       0.027500 |
+|       0.100000 |     2 |       0.124047 |
+|       1.000000 |     4 |       2.035563 |
+|      10.000000 |     0 |       0.000000 |
+|     100.000000 |     0 |       0.000000 |
+|    1000.000000 |     0 |       0.000000 |
+|   10000.000000 |     0 |       0.000000 |
+|  100000.000000 |     0 |       0.000000 |
+| 1000000.000000 |     0 |       0.000000 |
+| TOO LONG       |     0 | TOO LONG       |
++----------------+-------+----------------+
+14 rows in set (0.000 sec)
+
+Queries : The number of statements executed by the server. This variable
+includes statements executed within stored programs, unlike the Questions
+variable. It does not count COM_PING or COM_STATISTICS commands.
+
+Questions : The number of statements executed by the server. This includes
+only statements sent to the server by clients and not statements executed
+within stored programs, unlike the Queries variable. This variable does
+not count COM_PING, COM_STATISTICS, COM_STMT_PREPARE, COM_STMT_CLOSE, or
+COM_STMT_RESET commands.
+
+Questions        已执行的由客户端发出的语句
+Com_select       执行SELECT语句的数量，通常也就是QPS
+Writes           Com_insert+Com_update+Com_delete，也就是TPS
+
  
 对正在运行的mysql进行监控，其中一个方式就是查看mysql运行状态。 
 
@@ -278,3 +340,231 @@ Handler_read_rnd_next
 The number of requests to read the next row in the data file. This value is high if you are doing a lot of table scans. Generally this suggests that your tables are not properly indexed or that
  your queries are not written to take advantage of the indexes you have.
 此选项表明在进行数据文件扫描时，从数据文件里取数据的次数,这个涉及到table scans，肯定是越小越好
+##################mysql misc #############
+MariaDB [(none)]> pager less
+MariaDB [(none)]> pager grep buffer
+PAGER set to 'grep buffer'
+MariaDB [(none)]> show engine innodb status\G;
+I/O thread 0 state: waiting for completed aio requests (insert buffer thread)
+Pending flushes (fsync) log: 0; buffer pool: 0
+Hash table size 12748607, node heap has 392063 buffer(s)
+Hash table size 12748607, node heap has 130 buffer(s)
+Hash table size 12748607, node heap has 106 buffer(s)
+Hash table size 12748607, node heap has 212 buffer(s)
+Hash table size 12748607, node heap has 250 buffer(s)
+Hash table size 12748607, node heap has 91 buffer(s)
+Hash table size 12748607, node heap has 222 buffer(s)
+Hash table size 12748607, node heap has 270 buffer(s)
+Free buffers       2055
+Free buffers       256
+Free buffers       257
+Free buffers       257
+Free buffers       256
+Free buffers       258
+Free buffers       258
+Free buffers       256
+Free buffers       257
+
+---
+LOG
+---
+Log sequence number 243537725024
+Log flushed up to   243537725024
+Pages flushed up to 243424407366
+Last checkpoint at  243424407366
+0 pending log flushes, 0 pending chkp writes
+49971285 log i/o's done, 42.06 log i/o's/second
+#log sequence number       就是当前的redo log(in buffer)中的lsn；
+ log flushed up to         是刷到redo log file on disk中的lsn；
+ pages flushed up to       是已经刷到磁盘数据页上的LSN；
+ last checkpoint at        是上一次检查点所在位置的LSN。
+ 
+
+一、关于DB的写
+1、数据库是一个写频繁的系统
+2、后台写、写缓存
+3、commit需要写入
+4、写缓存失效或者写满-->写压力陡增-->写占读的带宽
+　　1、BBU失效
+　　2、写入突然增加、cache满
+5、日志写入、脏缓冲区写入
+
+ 
+二、写压力性能监控
+　　全面剖析写压力：多维度的对写性能进行监控。
+1、OS层面的监控：iostat -x
+[root@localhost mydata]# iostat -x
+Linux 2.6.32-642.el6.x86_64 (localhost.chinaitsoft.com)     07/05/2017     _x86_64_    (8 CPU)
+ 
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+           0.00    0.00    0.03    0.00    0.00   99.97
+ 
+Device:         rrqm/s   wrqm/s     r/s     w/s   rsec/s   wsec/s avgrq-sz avgqu-sz   await r_await w_await  svctm  %util
+scd0              0.00     0.00    0.00    0.00     0.01     0.00     7.72     0.00    1.25    1.25    0.00   1.25   0.00
+sdc               0.02     0.00    0.01    0.00     0.07     0.00     7.93     0.00    0.89    0.89    0.00   0.72   0.00
+sda               0.18     0.13    0.13    0.05     5.38     1.43    37.95     0.00    6.63    3.99   13.77   2.23   0.04
+sdb               0.03     0.00    0.01    0.00     0.12     0.00     8.72     0.00    1.14    0.80   35.89   0.71   0.00
+　　1、写入的吞吐量：wsec/s  sec=512字节=0.5K、写入的响应时间：await
+　　2、我们需要确认我们的系统是写入还是读取的系统，如果是写入为主的系统，写压力自然就大，相关状态值也就大些。
+　　3、监控系统的io状况，主要查看%util、r/s、w/s，一般繁忙度在70%，每秒写也在理想值了；但如果系统目前繁忙度低，每秒写很低，可以增加写入。
+2、DB层面监控，有没有写异常：监控各种pending（挂起）
+mysql> show global status like '%pend%';
++------------------------------+-------+
+| Variable_name                | Value |
++------------------------------+-------+
+| Innodb_data_pending_fsyncs   | 0     |     #被挂起的fsync
+| Innodb_data_pending_reads    | 0     |     #被挂起的物理读
+| Innodb_data_pending_writes   | 0     |     #被挂起的写
+| Innodb_os_log_pending_fsyncs | 0     |     #被挂起的日志fsync
+| Innodb_os_log_pending_writes | 0     |     #被挂起的日志写
++------------------------------+-------+
+5 rows in set (0.01 sec)
+　　写挂起次数值大于0，甭管是什么写挂起，出现挂起的话就说明出现写压力，所以值最好的是保持为0。监控“挂起”状态值，出现大于0且持续增加，报警处理。
+3、写入速度监控：日志写、脏页写
+　　1、日志写入速度监控
+mysql> show global status like '%log%written';
++-----------------------+-------+
+| Variable_name         | Value |
++-----------------------+-------+
+| Innodb_os_log_written | 5120  |
++-----------------------+-------+
+1 row in set (0.01 sec)
+　　2、脏页写入速度监控
+mysql> show global status like '%a%written';
++----------------------------+---------+
+| Variable_name              | Value   |
++----------------------------+---------+
+| Innodb_data_written        | 1073152 |     #目前为止写的总的数据量，单位字节
+| Innodb_dblwr_pages_written | 7       |
+| Innodb_pages_written       | 58      |     #写数据页的数量
++----------------------------+---------+
+3 rows in set (0.01 sec)
+　　3、关注比值：Innodb_dblwr_pages_written / Innodb_dblwr_writes，表示一次写了多少页
+mysql> show global status like '%dblwr%';
++----------------------------+-------+
+| Variable_name              | Value |
++----------------------------+-------+
+| Innodb_dblwr_pages_written | 7     |     #已经写入到doublewrite buffer的页的数量
+| Innodb_dblwr_writes        | 3     |     #doublewrite写的次数
++----------------------------+-------+
+2 rows in set (0.00 sec)
+　　　　1、如果该比值是64：1，说明doublewrite每次都是满写，写的压力很大。
+　　　　2、如果系统的double_write比较高的话，iostat看到的wrqm/s(每秒合并写的值)就高，因为double_write高意味着每次写基本上都是写2M，这时候就发生更多的合并，但wrqm/s高并不害怕，因为发生合并是好事，看wrqm/s和繁忙度能不能接受。 
+4、脏页的量监控
+mysql> show global status like '%dirty%';
++--------------------------------+-------+
+| Variable_name                  | Value |
++--------------------------------+-------+
+| Innodb_buffer_pool_pages_dirty | 0     |     #当前buffer pool中脏页的数量
+| Innodb_buffer_pool_bytes_dirty | 0     |     #当前buffer pool中脏页的总字节数
++--------------------------------+-------+
+2 rows in set (0.01 sec)
+ 
+mysql> show global status like 'i%total%';
++--------------------------------+-------+
+| Variable_name                  | Value |
++--------------------------------+-------+
+| Innodb_buffer_pool_pages_total | 8192  |     #buffer pool中数据页总量
++--------------------------------+-------+
+1 row in set (0.01 sec)
+　　关注比值：Innodb_buffer_pool_pages_dirty / Innodb_buffer_pool_pages_total，脏页占比
+　　通过比值看脏页是否多，比如脏页10%的话，可以判断系统可能不是写为主的系统。
+5、写性能瓶颈
+mysql> show global status like '%t_free';
++------------------------------+-------+
+| Variable_name                | Value |
++------------------------------+-------+
+| Innodb_buffer_pool_wait_free | 0     |
++------------------------------+-------+
+1 row in set (0.01 sec)
+ 
+mysql> show global status like '%g_waits';
++------------------+-------+
+| Variable_name    | Value |
++------------------+-------+
+| Innodb_log_waits | 0     |
++------------------+-------+
+1 row in set (0.00 sec)
+　　1、Innodb_buffer_pool_wait_free，如果该值大于0，说明buffer pool中已经没有可用页，等待后台往回刷脏页，腾出可用数据页，这样就很影响业务了，hang住。
+　　2、Innodb_log_waits，如果该值大于0，说明写压力很大，出现了日志等待。
+6、系统真实负载：rows增删改查 、事务提交、事务回滚
+mysql> show global status like 'i%rows%';
++----------------------+-------+
+| Variable_name        | Value |
++----------------------+-------+
+| Innodb_rows_deleted  | 0     |
+| Innodb_rows_inserted | 145   |
+| Innodb_rows_read     | 233   |
+| Innodb_rows_updated  | 5     |
++----------------------+-------+
+4 rows in set (0.01 sec)
+ 
+mysql> show global status like '%commit%';
++----------------+-------+
+| Variable_name  | Value |
++----------------+-------+
+| Com_commit     | 0     |
+| Com_xa_commit  | 0     |
+| Handler_commit | 16    |
++----------------+-------+
+3 rows in set (0.01 sec)
+ 
+mysql> show global status like '%rollback%';
++----------------------------+-------+
+| Variable_name              | Value |
++----------------------------+-------+
+| Com_rollback               | 0     |
+| Com_rollback_to_savepoint  | 0     |
+| Com_xa_rollback            | 0     |
+| Handler_rollback           | 0     |
+| Handler_savepoint_rollback | 0     |
++----------------------------+-------+
+5 rows in set (0.01 sec)
+　　通过监控系统真实负载，如果业务正常，负载上升，写压力是那自然是无可厚非的。此时，就要根据业务具体情况，进行相应的调优。 
+ 
+三、写压力调优参数
+　　降低写压力、加大写入的力度。
+　　通过调整参数降低写压力时，一定要实时关注iostat系统的各项指标。
+1、脏页刷新的频率
+mysql> show variables like 'i%depth%';
++-----------------------+-------+
+| Variable_name         | Value |
++-----------------------+-------+
+| innodb_lru_scan_depth | 1024  |
++-----------------------+-------+
+1 row in set (0.01 sec)
+　　默认1024，遍历lru list刷新脏页，值越大，说明刷脏页频率越高。
+2、磁盘刷新脏页的量：磁盘io能力
+mysql> show variables like '%io_c%';
++------------------------+-------+
+| Variable_name          | Value |
++------------------------+-------+
+| innodb_io_capacity     | 200   |
+| innodb_io_capacity_max | 2000  |
++------------------------+-------+
+2 rows in set (0.00 sec)
+　　根据磁盘io能力进行调整，值越大，每次刷脏页的量越大。
+3、redolog调优
+mysql> show variables like 'innodb_log%';
++-----------------------------+----------+
+| Variable_name               | Value    |
++-----------------------------+----------+
+| innodb_log_buffer_size      | 16777216 |
+| innodb_log_checksums        | ON       |     #解决数据在io环节的出错问题，checksum值检查
+| innodb_log_compressed_pages | ON       |
+| innodb_log_file_size        | 50331648 |
+| innodb_log_files_in_group   | 2        |
+| innodb_log_group_home_dir   | ./       |
+| innodb_log_write_ahead_size | 8192     |
++-----------------------------+----------+
+7 rows in set (0.01 sec)
+　　logfile大小和组数可能会导致写抖动：日志切换频率需要监控（文件系统层面技巧）。
+4、redolog的刷新机制
+mysql> show variables like '%flush%commit';
++--------------------------------+-------+
+| Variable_name                  | Value |
++--------------------------------+-------+
+| innodb_flush_log_at_trx_commit | 1     |
++--------------------------------+-------+
+1 row in set (0.00 sec)
+　　默认MySQL的刷盘策略是1，最安全的，但是安全的同时，自然也就会带来一定的性能压力。在写压力巨大的情况下，根据具体的业务场景，牺牲安全性的将其调为0或2。

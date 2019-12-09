@@ -267,3 +267,74 @@ read_rnd_buffer_size 随机读rows where条件多的
 join_buffer_size 表关联join多的
 tmp_table_size 临时表，通常是单行数据大，而且table整体很大的
 
+
+########### binlog查看 ###########
+mysql> show binlog events in 'mysql-bin.000043' from 10068468 limit 5\G;
+*************************** 1. row ***************************
+   Log_name: mysql-bin.000043
+        Pos: 10068468
+ Event_type: Gtid
+  Server_id: 1
+End_log_pos: 10068533
+       Info: SET @@SESSION.GTID_NEXT= '3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:3040754'
+*************************** 2. row ***************************
+   Log_name: mysql-bin.000043
+        Pos: 10068533
+ Event_type: Query
+  Server_id: 1
+End_log_pos: 10068607
+       Info: BEGIN
+*************************** 3. row ***************************
+   Log_name: mysql-bin.000043
+        Pos: 10068607
+ Event_type: Table_map
+  Server_id: 1
+End_log_pos: 10068663
+       Info: table_id: 364 (zabbix.history)
+*************************** 4. row ***************************
+   Log_name: mysql-bin.000043
+        Pos: 10068663
+ Event_type: Write_rows
+  Server_id: 1
+End_log_pos: 10068723
+       Info: table_id: 364 flags: STMT_END_F
+*************************** 5. row ***************************
+   Log_name: mysql-bin.000043
+        Pos: 10068723
+ Event_type: Table_map
+  Server_id: 1
+End_log_pos: 10068783
+       Info: table_id: 368 (zabbix.history_uint)
+5 rows in set (0.00 sec)
+
+root@zabbixdb:/var/log/mysql# mysqlbinlog mysql-bin.000043 --start-position=10068468 --stop-position=10068783 -vv
+
+############ _rowid 判断主键 #########
+适用于单列的主键, 对于多列组成的主键无法使用
+mysql> select usrgrpid,name,gui_access,_rowid from usrgrp;
++----------+---------------------------+------------+--------+
+| usrgrpid | name                      | gui_access | _rowid |
++----------+---------------------------+------------+--------+
+|        7 | Zabbix administrators     |          0 |      7 |
+|        8 | Guests                    |          1 |      8 |
+|        9 | Disabled                  |          0 |      9 |
+|       11 | Enabled debug mode        |          0 |     11 |
+|       12 | No access to the frontend |          3 |     12 |
++----------+---------------------------+------------+--------+
+######## 分析innodb共享表空间 ########
+[root@vstjzabdb02 py_innodb_page]# python py_innodb_page_info.py /data/mysql/ibdata1
+Total number of page: 4864:
+Insert Buffer Free List: 68
+Insert Buffer Bitmap: 1
+System Page: 130
+Transaction system Page: 1
+Freshly Allocated Page: 3815
+Undo Log Page: 563
+File Segment inode: 4
+B-tree Node: 281
+File Space Header: 1
+
+########## Mysql ACID #########
+redo log 保证事务的原子性和持久性
+undo log 保证一致性
+locking  保证隔离性

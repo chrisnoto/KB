@@ -324,3 +324,30 @@ NAME                                        READY   STATUS                   RES
 w3c-956966d4b-kzwq2                         0/1     Init:RunContainerError   0          43d   <none>        worker3   <none>           <none>
 删除w3c pod后, worker3 node Ready
 kubectl scale deploy w3c --replicas=0
+
+############ ephemeral-storage ##############
+The node was low on resource: ephemeral-storage. Container kafka-manager was using 69460Ki, which exceeds its request of 0
+Resolution
+In some cases, this is because an excess of log messages are consuming the storage. Configure the Docker logging driver to limit the amount of stored logs:
+Raw
+{
+"log-driver": "json-file",
+"log-opts": {
+"max-size": "100m",
+"max-file": "5"
+}
+}
+In other cases, pods that use emptyDir without storage quotas will fill up this storage, where the following error is present:
+Raw
+eviction manager: attempting to reclaim ephemeral-storage
+Set a quota to limit this, as otherwise any container can write any amount of storage to its node filesystem.
+Root Cause
+The pod logs, or emptyDir usage, are filling up ephemeral storage.
+This KCS addresses the quota and /var filesystem more directly, as it's also an option to just grow the /var filesystem to fix this.
+Diagnostic Steps
+Raw
+Check the containers running in the node:
+#docker ps|cut -f1 -d ' '
+
+Find where the data is stored:
+#docker inspect <IDofContainer> --format='{{.LogPath}}'
