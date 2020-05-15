@@ -219,7 +219,25 @@ output.kafka:
     # Filebeat will look under /opt.
     var.kafka_home:
       - "/opt/kafka"
+	  
+########## filebeat for custom log on windows with multilines and traditional Chinese language#######
+filebeat.inputs:
+- type: log
+  enabled: true
+    paths:
+    - D:\CESBG\Log\*
+  encoding: big5
+  # The regexp Pattern that has to be matched. The example pattern matches all lines starting with [
+  multiline.pattern: '-->\d+'
 
+  # Defines if the pattern set under pattern should be negated or not. Default is false.
+  multiline.negate: true
+
+  # Match can be set to "after" or "before". It is used to define if lines should be append to a pattern
+  # that was (not) matched before or after or as long as a pattern is not matched based on negate.
+  # Note: After is the equivalent to previous and before is the equivalent to to next in Logstash
+  multiline.match: before
+  multiline.timeout: 30s
 	  
 #########filebeat for elasticsearch##########
 [root@es2 filebeat]# cat filebeat.yml |egrep -v '#|^$'

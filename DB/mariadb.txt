@@ -51,3 +51,65 @@ It deletes the master.info and relay-log.info files, all the relay log files, an
 OK
 [root@worker2 ~]# docker exec mxs maxctrl show maxscale |grep passive
 │              │     "passive": true,                                                 │
+
+
+
+################# galera 集群 5月2日 整体挂掉#############
+故障原因    galear三台节点磁盘100% full
+解决过程:
+1 先扩容
+2 找到能成为primary的db02，   galera_new_cluster
+3  db01的mariadb服务无法启动，原因galera同步800G数据肯定超时
+ 解决  先删除2,3,4月份的监控数据，然后增加override.conf 
+ /etc/systemd/system/mariadb.service.d/override.conf
+[Service]
+TimeoutStartSec=24min
+4  db01服务成功启动,  wsrep状态为syncd,  cluster size为2
+5 db02的mariadb服务无法启动，提示:
+May  4 16:54:09 vstjzabdb03 kernel: mysqld[2365]: segfault at fffffffffffffffb ip 000055950dc5c9d4 sp 00007fc7d462e280 error 5 in mysqld[55950d2bb000+12c4000]
+May  5 08:55:46 vstjzabdb03 kernel: mysqld[3446]: segfault at fffffffffffffffb ip 00005605164a89d4 sp 00007fa5a0402280 error 5 in mysqld[560515b07000+12c4000]
+怎么重启mariadb服务都会出现段错误，接着进行下面的调试，mariadb意外启动成功
+#################### gdb 调试  #######
+[root@vstjzabdb03 log]# gdb /usr/sbin/mysqld
+GNU gdb (GDB) Red Hat Enterprise Linux 7.6.1-115.el7
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-redhat-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /usr/sbin/mysqld...Reading symbols from /usr/sbin/mysqld...(no debugging symbols found)...done.
+(no debugging symbols found)...done.
+Missing separate debuginfos, use: debuginfo-install MariaDB-server-10.3.18-1.el7.centos.x86_64
+(gdb) run --defaults-file=/etc/my.cnf.d/server.cnf --datadir=/data/mysql --user=mysql --pid-file=/data/mysql/vstjzabdb03.pid --sock=/data/mysql/mysql.sock --port=3306 --wsrep_start_position=8d212702-f4a8-11e9-a02f-fbab2c96aed2:275806858
+Starting program: /usr/sbin/mysqld --defaults-file=/etc/my.cnf.d/server.cnf --datadir=/data/mysql --user=mysql --pid-file=/data/mysql/vstjzabdb03.pid --sock=/data/mysql/mysql.sock --port=3306 --wsrep_start_position=8d212702-f4a8-11e9-a02f-fbab2c96aed2:275806858
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+2020-05-05 16:07:53 0 [Note] Using unique option prefix 'sock' is error-prone and can break in the future. Please use the full name 'socket' instead.
+2020-05-05 16:07:53 0 [Note] /usr/sbin/mysqld (mysqld 10.3.18-MariaDB-log) starting as process 4081 ...
+[New Thread 0x7ffff3006700 (LWP 4085)]
+
+########## vstjszbdb01的mariadb无法启动 #########
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Unable to lock /data/mysql/ibdata1 error: 11
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [Note] InnoDB: Check that you do not already have another mysqld process using the same InnoDB data or log files.
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [Note] InnoDB: Unable to open the first data file
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Operating system error number 11 in a file operation.
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Error number 11 means 'Resource temporarily unavailable'
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [Note] InnoDB: Some operating system error numbers are described at https://mariadb.com/kb/en/library/operating-syste
+m-error-codes/
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Cannot open datafile '/data/mysql/ibdata1'
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Could not open or create the system tablespace. If you tried to add new data files to the system tabl
+espace, and it failed here, you should now edit innodb_data_file_path in my.cnf back to what it was, and remove the new ibdata files InnoDB created in this failed attempt.
+ InnoDB only wrote those files full of zeros, but did not yet use them in any way. But be careful: do not remove old data files which contain your precious data!
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:44 0 [ERROR] InnoDB: Plugin initialization aborted with error Cannot open a file
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:45 0 [Note] InnoDB: Starting shutdown...
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Plugin 'InnoDB' init function returned error.
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Plugin 'InnoDB' registration as a STORAGE ENGINE failed.
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [Note] Plugin 'FEEDBACK' is disabled.
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Unknown/unsupported storage engine: InnoDB
+May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Aborting'
+
+
+

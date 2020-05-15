@@ -1,0 +1,57 @@
+##### xbackup #######
+xtrabackup 全量备份恢复
+
+本文所用到的版本：
+xtrabackup 2.3.7 + MySQL 5.6.30
+若MySQL版本为5.7.x，建议使用xtrabackup 2.4.x
+
+1. 完全备份
+
+创建用于备份恢复的用户 pxb 并赋予权限
+
+mysql> create user pxb@'localhost' identified by '123456';
+mysql> grant reload,process,lock tables,replication client on *.* to pxb@localhost;
+
+进行数据库全备
+root@node-1:/etc/mysql# innobackupex --defaults-file=/etc/mysql/my.cnf --user=pxb --password=Foxconn123 --socket=/var/run/mysqld/mysqld.sock /backup
+
+InnoDB Backup Utility v1.5.1-xtrabackup; Copyright 2003, 2009 Innobase Oy
+and Percona LLC and/or its affiliates 2009-2013.  All Rights Reserved.
+
+This software is published under
+the GNU GENERAL PUBLIC LICENSE Version 2, June 1991.
+
+Get the latest version of Percona XtraBackup, documentation, and help resources:
+http://www.percona.com/xb/ubuntu
+
+191220 14:41:58  innobackupex: Connecting to MySQL server with DSN 'dbi:mysql:;mysql_read_default_file=/etc/mysql/my.cnf;mysql_read_default_group=xtrabackup;mysql_sock                                                          et=/var/run/mysqld/mysqld.sock' as 'pxb'  (using password: YES).
+191220 14:41:58  innobackupex: Connected to MySQL server
+191220 14:41:59  innobackupex: Executing a version check against the server...
+191220 14:41:59  innobackupex: Done.
+IMPORTANT: Please check that the backup run completes successfully.
+           At the end of a successful backup run innobackupex
+           prints "completed OK!".
+
+innobackupex: Using mysql server version 5.6.36-0~u14.04+mos0
+
+innobackupex: Created backup directory /backup/2019-12-20_14-41-59
+
+191220 14:41:59  innobackupex: Starting ibbackup with command: xtrabackup_56  --defaults-file="/etc/mysql/my.cnf"  --defaults-group="mysqld" --backup --suspend-at-end                                                           --target-dir=/backup/2019-12-20_14-41-59 --tmpdir=/tmp
+innobackupex: Waiting for ibbackup (pid=192688) to suspend
+innobackupex: Suspend file '/backup/2019-12-20_14-41-59/xtrabackup_suspended_2'
+
+xtrabackup_56 version 2.1.8 for MySQL server 5.6.15 Linux (x86_64) (revision id: undefined)
+xtrabackup: uses posix_fadvise().
+xtrabackup: cd to /var/lib/mysql
+xtrabackup: using the following InnoDB configuration:
+xtrabackup:   innodb_data_home_dir = /var/lib/mysql
+xtrabackup:   innodb_data_file_path = ibdata1:10M:autoextend
+xtrabackup:   innodb_log_group_home_dir = ./
+xtrabackup:   innodb_log_files_in_group = 2
+xtrabackup:   innodb_log_file_size = 1717567488
+xtrabackup: using O_DIRECT
+>> log scanned up to (256496075063)
+xtrabackup: Starting 6 threads for parallel data files transfer
+[01] Copying /var/lib/mysql/ibdata1 to /backup/2019-12-20_14-41-59/ibdata1
+[02] Copying ./mysql/slave_master_info.ibd to /backup/2019-12-20_14-41-59/mysql/slave_master_info.ibd
+[04] Copying ./mysql/innodb_table_stats.ibd to /backup/2019-12-20_14-41-59/mysql/innodb_table_stats.ibd

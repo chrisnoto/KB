@@ -1,3 +1,16 @@
+############# elasticsearch查询 ############
+[naifa@repo-centos ~]$ curl -s -XGET http://10.67.51.150:9200/winlogbeat-6.8.1-2019.12.25/_search?_source=beat.hostname |jq '.hits|.hits|.[]|._source|.beat|.hostname'
+"VSTJCAEVMI2DB02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+"vSTJB2BBAK02"
+
 ######ELK Upgrade order#########
 You should upgrade the core Elastic Stack products in the following order:
 

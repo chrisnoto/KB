@@ -1,3 +1,12 @@
+#######x11 forwarding ########
+ssh -R6000:127.0.0.1:6000 root@host   #可以多次跳转
+export DISPLAY=localhost:0.0
+windows客户机要安装xming
+###########
+11.1.3.3. The e1000 network driver is not supported in RHEL 8
+In Red Hat Enterprise Linux 8, the e1000 network driver is not supported. This affects both bare metal and virtual environments. However, 
+the newer e1000e network driver continues to be fully supported in RHEL 8.
+
 ######## lsof ##########
 [root@repo-centos ~]# [root@repo-centos ~]# lsof -P -i TCP
 COMMAND     PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME

@@ -1,0 +1,114 @@
+########## ldapsearch查询 ########
+objectclasses  attributetypes  ldapSyntaxes  matchingRules
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'cn=schema' objectclasses -W
+
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s base   -W |grep dn             #仅仅查自己
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s one   -W |grep dn              #查儿子
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree   -W |grep dn          #查所有子孙
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(uid=9999)" -W |grep dn     #精确匹配
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(uid=h*)" -W |grep dn       #模糊匹配
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(cn=*Managers)" -W |grep dn  #模糊匹配
+
+####### x11 forwarding ########
+ssh -R6000:127.0.0.1:6000 root@10.67.51.7   #可以多次跳转
+export DISPLAY=localhost:0.0
+windows客户机要安装xming
+####   389ds  enalbe TLS ##########
+cd /etc/dirsrv/slapd-itldap1
+certutil -L -d ./           #列出NSS数据库中的证书
+certutil -K -d ./           #列出NSS数据库中的私钥
+
+1 跳过生成NSS数据库，设置数据库密码，PIN码等  #其他方式已配置
+2 生成CA证书
+certutil -S -n "CA certificate" -s "cn=CAcert" -x -t "CT,," -m 1000 -v 120 -d ./
+3 生产admin server证书和directory server证书
+certutil -S -n "admin-cert" -s "cn=itldap1,ou=389 Administration server" -c "CA certificate" -t "u,u,u" -m 1002 -v 120 -d ./
+certutil -S -n "server-cert" -s "cn=itldap1,ou=389 Directory server" -c "CA certificate" -t "u,u,u" -m 1001 -v 120 -d ./
+4 导出adin-cert证书并导入到 admin-serv所在的数据库中
+pk12util -d ./ -o adminserver.p12 -n admin-cert
+cd ../
+pk12util -d admin-serv/ -n admin-cert -i slapd-itldap1/adminserver.p12
+5 在389-console界面里配置启用TLS
+6 重启dirsrv@itldap1服务  需输入密码  #事先没有配置使用密码/pin文件 
+#ldapsearch配置
+/etc/openldap/ldap.conf
+TLS_CACERTDIR /etc/dirsrv/slapd-itldap1
+TLS_CERT = server-cert
+TLS_KEY = Foxconn123
+
+# 测试ldaps连接    #加参数-d 1 打开debug
+ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -W -Z -b 'dc=tj,dc=com'
+ldap_start_tls: Operations error (1)
+        additional info: SSL connection already established.
+Enter LDAP Password:
+# extended LDIF
+#
+# LDAPv3
+# base <dc=tj,dc=com> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# tj.com
+dn: dc=tj,dc=com
+objectClass: top
+objectClass: domain
+dc: tj
+
+
+调试 tls
+openssl s_client -connect localhost:636
+openssl s_client -connect localhost:636 -showcerts
+
+###  itldap1的CA签署itldap2上的server cert/ds cert ###
+on itldap2
+生成CSR  
+certutil -d /etc/dirsrv/slapd-itldap2/ -R -g 4096 -a -o /root/itldap2.csr -8 itldap2.tj.com -s "CN=itldap2.tj.com,O=fox_organization,OU=IT,ST=North Carolina,C=US"
+
+on itldap1   CA签署itldap2.csr
+certutil -C -d ./ -a -i itldap2.csr -o itldap2.crt -c "CA certificate" -2 -3
+
+on itldap2  
+导入itldap2.crt和itldap1的CA certificate
+certutil -A -d ./ -n server-cert -t "u,u,u" -i itldap2.crt
+certutil -A -d ./ -n "external CA certificate" -t "C,," -i cacert.asc
+
+在389-console界面里配置启用TLS
+重启dirsrv@itldap2服务  需输入密码  #事先没有配置使用密码/pin文件 
+
+#########TLS方式查询AD#######
+[root@itldap1 slapd-itldap1]# ldapsearch -H ldaps://vSTJTESTAD.tj.foxconn:636 -D 'cn=1038290,cn=users,dc=tj,dc=foxconn' -Z -b 'CN=1038290,cn=users,dc=tj,dc=foxconn' -W
+ldap_start_tls: Operations error (1)
+        additional info: 00000000: LdapErr: DSID-0C0911BD, comment: TLS or SSL already in effect, data 0, v3839
+Enter LDAP Password:
+# extended LDIF
+#
+# LDAPv3
+# base <CN=1038290,cn=users,dc=tj,dc=foxconn> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# 1038290, Users, tj.foxconn
+dn: CN=1038290,CN=Users,DC=tj,DC=foxconn
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: user
+cn: 1038290
+sn: F
+
+############  389DS与AD同步 ########
+1 AD上启用证书服务
+2 AD的DC上装PassSync插件并重启DC	
+3 将itldap1上的directory server的证书导入到AD的DC
+cd "C:\Program Files\389 Directory Password Synchronization"   
+certutil.exe -d . -N
+certutil.exe -d . -A -n "DS CA cert" -t "CT,," -a -i \path\to\dsca.crt
+4 389DS控制台里配置userroot的同步策略
+single master
+同步策略中的bind dn为AD域中有权限的用户
+5 策略配置完毕后，发起同步的初始化或者send and receive updates
+可以看到AD的用户和组同步到389DS里对应的OU中
+6 如要是389DS中的用户和组同步到AD，用户需要配置属性"NT Users"，并勾选create user
+确保取消“POSIX account”，这样带有NT user属性及无POSIX user属性的用户才能由389DS同步到AD域中

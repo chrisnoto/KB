@@ -267,6 +267,15 @@ read_rnd_buffer_size 随机读rows where条件多的
 join_buffer_size 表关联join多的
 tmp_table_size 临时表，通常是单行数据大，而且table整体很大的
 
+表缓存
+表缓存主要是服务于MyISAM表
+表缓存分为打开表的缓存和表定义缓存 table_open_cache table_definition_cache
+InnoDB有自己的表缓存，可以称为表定义缓存或数据字典
+########### flush tables #########
+The idea of FLUSH TABLES is to force all tables to be closed.This is mainly to ensure that if someone adds a new table 
+outside of MySQL (for example, by copying files into a database directory with cp), all threads will start using the new 
+table. This will also ensure that all table changes are flushed to disk (but of course not as optimally as simply calling a 
+sync for all tables)!
 
 ########### binlog查看 ###########
 mysql> show binlog events in 'mysql-bin.000043' from 10068468 limit 5\G;
@@ -338,3 +347,83 @@ File Space Header: 1
 redo log 保证事务的原子性和持久性
 undo log 保证一致性
 locking  保证隔离性
+
+########## Mysql 锁 ##########
+lock mode IX    # 意向锁  Intention locks
+lock_mode X locks rec but not gap  && lock_mode S locks rec but not gap    # 记录锁 Record locks
+lock_mode X locks gap before rec     #间隙锁/范围锁  Gap locks
+lock_mode X    # Next-key锁   Next-key locks= Gap locks + Record locks
+lock_mode X insert intention waiting     # 插入意向locks, 一种特殊的Gap lock
+lock mode AUTO-INC waiting    # 自增锁, 表级别的锁
+
+* latch
+      mutex
+      rw-lock
+      临界资源用完释放
+      不支持死锁检测
+      以上是应用程序中的锁，不是数据库的锁
+* lock
+      当事务结束后，释放
+      支持死锁检测
+      数据库中的锁
+	  
+解除正在死锁的状态有两种方法：
+
+第一种：
+1.查询是否锁表
+show OPEN TABLES where In_use > 0;
+2.查询进程（如果您有SUPER权限，您可以看到所有线程。否则，您只能看到您自己的线程）
+show processlist
+3.杀死进程id（就是上面命令的id列）
+kill id
+
+第二种：
+1.查看下在锁的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_TRX;
+2.杀死进程id（就是上面命令的trx_mysql_thread_id列）
+kill 线程ID
+其它关于查看死锁的命令：
+1：查看当前的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_TRX;
+2：查看当前锁定的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_LOCKS;
+3：查看当前等锁的事务
+SELECT * FROM INFORMATION_SCHEMA.INNODB_LOCK_WAITS;
+########### mysql执行过程 ########
+当Mariadb接受到Sql语句时，其详细的执行过程如下：
+
+⒈ 当客户端连接到mariadb的时候，会认证客户端的主机名、用户、密码，认证功能可以做成插件。
+
+⒉ 如果登录成功，客户端发送sql命令到服务端。由解析器解析sql语句。
+
+⒊ 服务端检查客户端是否有权限去获取它想要的资源。
+
+⒋ 如果查询已经存储在query cache当中，那么结果立即返回。
+
+⒌ 优化器将会找出最快的执行策略，或者是执行计划，也就是说优化器可以决定什么表将会被读，以及哪些索引会被访问，哪些临时表会被使用，一个好的策略能够减少大量的磁盘访问和排序操作等。
+
+⒍ 存储引擎读写数据和索引文件，cache用来加速这些操作，其他的诸如事物和外键特性，都是在存储引擎层处理的。
+
+######## mysql 各种timeout ######
+connect_timeout：默认为10S
+wait_timeout：默认是8小时，即28800秒
+interactive_timeout：默认是8小时，即28800秒
+net_read_timeout：默认是30S
+net_write_timeout：默认是60S
+
+wait_timeout       #
+net_write_timeout  #mysql服务端向客户端写(发送)数据时，服务端等待客户端响应的超时时间，当服务端正在写数据到客户端时，net_write_timeout控制何时超时
+net_read_timeout   #mysql服务端从客户端读取（接收）数据时，服务端等待客户端响应的超时时间，当服务端正在从客户端读取数据时，net_read_timeout控制何时超时
+connect_timeout    #认证超时
+interactive_timeout给交互模式的客户端使用的，比如mysql client
+如果是认证过程中超时，不管是读还是写，都是 connect_timeout；
+对于读网络超时，一般是 wait_timeout/interactive_timeout，基本不会是 net_read_timeout（特例是业务用到 LOAD DATA LOCAL FILE）；
+对于写网络超时，都是 net_write_timeout。
+在遇到超时情况下，可以根据这些原则判断对那个参数做调整。
+
+比如下面这种情况：
+2017-05-15 19:32:41 47930 [Warning] Aborted connection 6 to db: 'unconnected' user: 'root' host: 'localhost' (Got timeout reading communication packets)
+很可能需要调整的 wait_timeout/interactive_timeout。
+
+2017-05-15 20:06:27 5063 [Warning] Aborted connection 12 to db: 'test' user: 'root' host: 'localhost' (Got timeout writing communication packets)
+需要调整 net_write_timeout

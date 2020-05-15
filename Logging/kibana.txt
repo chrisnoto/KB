@@ -4,7 +4,6 @@
 
 .es( index=filebeat-*, q='vstjlinuxtrans1',split=system.auth.user:30).aggregate(sum)
 
-
 #######kibana.yml###########
 [root@es1 kibana]# cat kibana.yml |egrep -v '#|^$'
 server.port: 5601

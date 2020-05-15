@@ -289,3 +289,6 @@ mysql.slowlog
 kafka.log
 
 [root@logstash conf.d]# for u in `ls -1`;do sed -i '/output/,$d' $u;done        ##删除每个文件里“output”至文件结尾的内容
+
+#########logstash调试############
+echo "2020-04-24 16:18:43|http://www.baidu.com/" | /usr/share/logstash/bin/logstash -e "input { stdin {} } filter { grok { match => [ \"message\",[\"%{GREEDYDATA:customTimestamp}\|%{GREEDYDATA:url}\"] ]} date { match => [\"customTimestamp\",\"yyyy-MMM-dd HH:mm:ss\"]}}"

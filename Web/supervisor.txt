@@ -1,0 +1,36 @@
+[root@zabbix-web-nginx-mysql-668957d48b-qw6cx conf.d]# cat supervisord_zabbix.conf
+[supervisord]
+nodaemon = true
+
+[program:nginx]
+command = /usr/sbin/%(program_name)s -g "daemon off;" -c /etc/nginx/%(program_name)s.conf
+auto_start = true
+autorestart = true
+
+startsecs=2
+startretries=3
+stopsignal=TERM
+stopwaitsecs=2
+
+redirect_stderr=true
+stdout_logfile = /dev/stdout
+stdout_logfile_maxbytes = 0
+
+[program:php-fpm]
+command = /usr/sbin/%(program_name)s -F -c /etc/%(program_name)s.conf
+auto_start = true
+autorestart = true
+
+startsecs=2
+startretries=3
+stopsignal=TERM
+stopwaitsecs=2
+
+redirect_stderr=true
+stdout_logfile = /dev/stdout
+stdout_logfile_maxbytes = 0
+
+[root@zabbix-web-nginx-mysql-668957d48b-qw6cx supervisor]# supervisorctl -u zbx -p password restart php-fpm
+php-fpm: stopped
+php-fpm: started
+[root@zabbix-web-nginx-mysql-668957d48b-qw6cx supervisor]# supervisorctl -u zbx -p password restart nginx

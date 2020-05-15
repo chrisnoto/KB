@@ -1,3 +1,72 @@
+###### check if containers running on all the nodes ##########
+[root@vstjk8s01 ~]# docker ps -f=name='kubelet|kube-proxy|etcd|kube-scheduler|kube-apiserver|kube-controller-manager'
+CONTAINER ID        IMAGE                                  COMMAND                  CREATED             STATUS              PORTS               NAMES
+ffb2f460d979        rancher/hyperkube:v1.14.5-rancher1     "/opt/rke-tools/entr…"   6 months ago        Up 6 months                             kubelet
+056243c1e023        rancher/hyperkube:v1.14.5-rancher1     "/opt/rke-tools/entr…"   6 months ago        Up 6 months                             kube-controller-manager
+e566436697c4        rancher/hyperkube:v1.14.5-rancher1     "/opt/rke-tools/entr…"   6 months ago        Up 6 months                             kube-apiserver
+c3256cae5c71        rancher/rke-tools:v0.1.40              "/opt/rke-tools/rke-…"   6 months ago        Up 6 months                             etcd-rolling-snapshots
+f65aff5ed743        rancher/hyperkube:v1.14.5-rancher1     "/opt/rke-tools/entr…"   6 months ago        Up 6 months                             kube-proxy
+02a55ef1ba4b        rancher/hyperkube:v1.14.5-rancher1     "/opt/rke-tools/entr…"   6 months ago        Up 6 months                             kube-scheduler
+15ecbe129fa1        rancher/coreos-etcd:v3.3.10-rancher1   "/usr/local/bin/etcd…"   6 months ago        Up 6 months                             etcd
+
+[root@vstjk8s06 ~]# docker ps -f=name='kubelet|kube-proxy|nginx-proxy'
+CONTAINER ID        IMAGE                                COMMAND                  CREATED             STATUS              PORTS               NAMES
+4aa0a5b770aa        rancher/hyperkube:v1.14.5-rancher1   "/opt/rke-tools/entr…"   6 months ago        Up 13 days                              kubelet
+c3ac6ab016e1        rancher/hyperkube:v1.14.5-rancher1   "/opt/rke-tools/entr…"   6 months ago        Up 13 days                              kube-proxy
+fa5b97fdc544        rancher/rke-tools:v0.1.34            "nginx-proxy CP_HOST…"   6 months ago        Up 13 days                              nginx-proxy
+
+########  check kubernetes leaders election ##########
+[root@rancher ~]# kubectl -n kube-system get endpoints kube-controller-manager -o jsonpath='{.metadata.annotations.control-plane\.alpha\.kubernetes\.io/leader}'
+{"holderIdentity":"vstjk8s02_ea51852c-f621-11e9-810d-005056af3165","leaseDurationSeconds":15,"acquireTime":"2019-10-24T05:51:43Z","renewTime":"2020-05-08T07:25:55Z","leaderTransitions":3}[root@rancher ~]#
+
+[root@rancher ~]# kubectl -n kube-system get endpoints kube-scheduler -o jsonpath='{.metadata.annotations.control-plane\.alpha\.kubernetes\.io/leader}'
+{"holderIdentity":"vstjk8s02_e9c838c5-f621-11e9-b7ea-005056af3165","leaseDurationSeconds":15,"acquireTime":"2019-10-24T05:50:01Z","renewTime":"2020-05-08T07:26:19Z","leaderTransitions":3}[root@rancher ~]#
+
+[root@rancher ~]# kubectl describe ep -n kube-system kube-controller-manager
+Name:         kube-controller-manager
+Namespace:    kube-system
+Labels:       <none>
+Annotations:  control-plane.alpha.kubernetes.io/leader:
+                {"holderIdentity":"vstjk8s02_ea51852c-f621-11e9-810d-005056af3165","leaseDurationSeconds":15,"acquireTime":"2019-10-24T05:51:43Z","renewTi...
+Subsets:
+Events:  <none>
+########   check nginx-proxy apiserver #########
+[root@vstjk8s06 ~]# docker exec nginx-proxy cat /etc/nginx/nginx.conf
+error_log stderr notice;
+
+worker_processes auto;
+events {
+  multi_accept on;
+  use epoll;
+  worker_connections 1024;
+}
+
+stream {
+        upstream kube_apiserver {
+
+            server 10.67.49.241:6443;
+
+            server 10.67.49.242:6443;
+
+            server 10.67.49.243:6443;
+
+        }
+
+        server {
+            listen        6443;
+            proxy_pass    kube_apiserver;
+            proxy_timeout 30;
+            proxy_connect_timeout 2s;
+
+        }
+
+}
+
+
+######## port-forward ################
+kubectl port-forward <pod-name> 8080:<pod-port>
+kubectl port-forward service/<service-name> 8080:<service-port>
+kubectl port-forward <ingress-pod-name> 8080:<ingress-port>
 #################################
 1  rke配置里给每个worker节点加上了 hostname override
 导致原“ip”节点的po全部terminating, po逐渐reschedule在全部的"hostname"节点上
