@@ -112,3 +112,121 @@ single master
 可以看到AD的用户和组同步到389DS里对应的OU中
 6 如要是389DS中的用户和组同步到AD，用户需要配置属性"NT Users"，并勾选create user
 确保取消“POSIX account”，这样带有NT user属性及无POSIX user属性的用户才能由389DS同步到AD域中
+
+########### AD签署来自389ds的证书请求 #############
+on itldap1:
+certutil -R -d ./ -o itldap1.tj.com.req -a -g 4096 -v 24 -s "CN=itldap1.tj.com,OU=IT,O=Foxconn,L=Tianjin,ST=Tianjin,C=CN" -8 "itldap1.tj.com,itldap1"
+
+on AD:
+C:\>certreq -submit -attrib "CertificateTemplate:SubCA" itldap1.tj.com.req itldap1.tj.com.cer
+Active Directory Enrollment Policy
+  {69723029-DAAB-460F-942C-C5A7B9D3BA01}
+  ldap:
+                                                                                                                 RequestId: 7
+RequestId: "7"
+Certificate retrieved(Issued) Issued  The certificate validity period will be shorter than the SubCA Certificate Template specifies, because the template validity period is longer than the maximum certificate validity period allowed by the CA.  Consider renewing the CA certificate, reducing the template validity period, or increasing the registry validity period.
+
+
+C:\>dir
+ Volume in drive C has no label.
+ Volume Serial Number is 8CE7-E8CA
+
+ Directory of C:\
+
+2020/04/30  02:12    <DIR>          123
+2020/04/28  23:18    <DIR>          inetpub
+2020/05/18  14:40             2,696 itldap1.tj.com.cer
+2020/05/18  14:34             1,984 itldap1.tj.com.req
+2020/05/18  14:40             6,372 itldap1.tj.com.rsp
+2016/07/16  21:23    <DIR>          PerfLogs
+2020/05/08  01:35    <DIR>          Program Files
+2020/04/29  04:18    <DIR>          Program Files (x86)
+2020/04/29  01:06    <DIR>          Users
+2020/05/18  14:40    <DIR>          Windows
+2019/09/20  23:45    <DIR>          winlogbeat-6.8.1
+2020/05/10  23:51            13,073 zabbix_agentd.log
+2019/11/21  22:13    <DIR>          zabbix_agents-4.4.0-win-amd64-openssl
+               4 File(s)         24,125 bytes
+               9 Dir(s)  50,272,067,584 bytes free
+on itldap1:
+[root@itldap1 ~]# openssl x509 -inform PEM -in itldap1.tj.com.cer -out itldap1.tj.com.crt			   
+##### renew key ####
+certreq -enroll -machine -q -cert ‎10 00 00 00 07 82 7c 82 23 80 48 e2 7a 00 00 00 00 00 07 renew reusekeys
+
+
+
+######### centos7 使用ldap认证 ##################
+Step0: create user and group on ldap server
+[root@itldap1 ~]# cat person.ldif
+dn: uid=lamei,ou=people,dc=tj,dc=com
+objectClass: top
+objectClass: account
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: lamei
+uid: lamei
+uidNumber: 1013
+gidNumber: 600
+homeDirectory: /home/lamei
+loginShell: /usr/bin/bash
+gecos: LDAP User
+userPassword: Foxconn111
+shadowLastChange: 0
+shadowMax: 0
+shadowWarning: 0
+
+dn: uid=naifa,ou=people,dc=tj,dc=com
+objectClass: top
+objectClass: account
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: naifa
+uid: naifa
+uidNumber: 1014
+gidNumber: 601
+homeDirectory: /home/naifa
+loginShell: /usr/bin/bash
+gecos: LDAP User
+userPassword: Foxconn111
+shadowLastChange: 0
+shadowMax: 0
+shadowWarning: 0
+[root@itldap1 ~]# cat group.ldif
+dn: cn=dba,ou=groups,dc=tj,dc=com
+objectClass: top
+objectClass: posixGroup
+gidNumber: 600
+
+dn: cn=apadmin,ou=groups,dc=tj,dc=com
+objectClass: top
+objectClass: posixGroup
+gidNumber: 601
+
+Step1: Install required Packages.
+yum -y install openldap-clients nss-pam-ldapd
+Step2: authconfig
+authconfig --enableldap --enableldapauth --enablemkhomedir --enableforcelegacy --disablesssd --disablesssdauth \ 
+  --disableldaptls --enablelocauthorize --ldapserver=10.67.51.7 --ldapbasedn="dc=tj,dc=com" --update
+Step3: 配置nlcsd服务并重启
+[root@temp etc]# cat nslcd.conf |egrep -v '#|^$'
+uid nslcd
+gid ldap
+uri ldap://10.67.51.7:389
+base dc=tj,dc=com 
+binddn cn=Directory manager
+bindpw Foxconn666
+rootpwmoddn cn=Directory manager
+scope sub
+base  group ou=Groups,dc=tj,dc=com
+base  passwd ou=People,dc=tj,dc=com
+base  shadow ou=People,dc=tj,dc=com
+tls_reqcert never
+ssl no
+tls_cacertdir /etc/openldap/cacerts
+Step4 验证
+[root@temp etc]# getent passwd h7108579
+h7108579:x:1012:1012:h7108579 [LDAP User]:/home/h7108579:/usr/bin/bash
+[root@temp ~]# getent shadow
+h7108579:*:18397:0:100:1:::0
+
+ssh -v h7108579@10.67.51.158
