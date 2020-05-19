@@ -191,6 +191,7 @@ userPassword: Foxconn111
 shadowLastChange: 0
 shadowMax: 0
 shadowWarning: 0
+
 [root@itldap1 ~]# cat group.ldif
 dn: cn=dba,ou=groups,dc=tj,dc=com
 objectClass: top
@@ -201,6 +202,9 @@ dn: cn=apadmin,ou=groups,dc=tj,dc=com
 objectClass: top
 objectClass: posixGroup
 gidNumber: 601
+
+ldapadd -x -W -D "cn=Directory Manager" -f group.ldif
+ldapadd -x -W -D "cn=Directory Manager" -f person.ldif
 
 Step1: Install required Packages.
 yum -y install openldap-clients nss-pam-ldapd
