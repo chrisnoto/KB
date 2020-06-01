@@ -1,0 +1,63 @@
+####### 定义ipa组和ipa外部组
+前提: 在AD域里创建一个wheel组，wheel组属于domain users组，成员为准备给予 "sudo su -" 权限的域用户
+## 创建ipa外部组ad_wheel_external
+ipa group-add --desc='tj.foxconn wheel group external map' ad_wheel_external --external
+##创建ipa组ad_wheel
+ipa group-add --desc='tj.foxconn wheel group' ad_wheel
+## map ipa外部组ad_wheel_external到ad域里的wheel, 自己新增的
+ipa group-add-member ad_wheel_external --external 'tj.foxconn\wheel'
+## 添加ad_wheel_external组为ad_wheel组的成员
+ipa group-add-member ad_wheel --groups ad_wheel_external
+
+########下一步 为ad_wheel组定义和套用sudo rule
+
+##定义sudocmd
+[root@ipa ~]# ipa sudocmd-add /bin/su
+##定义sudocmdgroup
+[root@ipa ~]# ipa sudocmdgroup-add linux-sa --desc="Linux sysadmin"
+[root@ipa ~]# ipa sudocmdgroup-add-member --sudocmds=/bin/su linux-sa
+##定义sudorule
+[root@ipa ~]# ipa sudorule-add --hostcat=all linux-sa-rule
+[root@ipa ~]# ipa sudorule-add-user --groups=ad_wheel linux-sa-rule
+[root@ipa ~]# ipa sudorule-add-allow-command --sudocmdgroups=linux-sa linux-sa-rule
+[root@ipa ~]# ipa sudorule-add-runasuser --users=root linux-sa-rule
+[root@ipa ~]# ipa sudorule-add-option --sudooption='!authenticate' linux-sa-rule
+---------------------------------------------------------
+Added option "!authenticate" to Sudo Rule "linux-sa-rule"
+---------------------------------------------------------
+  Rule name: linux-sa-rule
+  Enabled: TRUE
+  Host category: all
+  User Groups: ad_wheel
+  Sudo Allow Command Groups: linux-sa
+  RunAs External User: root
+  Sudo Option: !authenticate
+
+######## 测  试
+[root@repo-centos ~]# ssh 88888@TJ.FOXCONN@10.67.51.34
+Password:
+Activate the web console with: systemctl enable --now cockpit.socket
+
+Last login: Sat May 30 16:17:18 2020 from 10.67.51.164
+Could not chdir to home directory /home/tj.foxconn/88888: No such file or directory
+[88888@tj.foxconn@ipa /]$ sudo su -
+Last login: Sat May 30 16:17:20 CST 2020 on pts/1
+[root@ipa ~]# id 88888@TJ.FOXCONN
+uid=1322401107(88888@tj.foxconn) gid=1322401107(88888@tj.foxconn) groups=1322401107(88888@tj.foxconn),1322401128(wheel@tj.foxconn),323200004(ad_wheel),1322400513(domain users@tj.foxconn)
+
+######## 配置ipa client
+ipa server
+  300  ipa host-add --ip-address 10.67.36.15 c8-client1.xq.foxconn
+  301  ipa dnsrecord-add xq.foxconn c8-client1 --ttl=3600 --a-ip-address=10.67.36.15
+ipa client  set FQDN
+dnf module -y install idm:DL1/client
+nmcli c modif ens3 ipv4.dns 10.67.51.34 && nmcli c up ens3
+cat /etc/resolv.conf
+dig c8-client1.xq.foxconn
+ipa-client-install --enable-dns-updates --mkhomedir
+[root@repo-centos ~]# ssh 88888@TJ.FOXCONN@10.67.36.15
+[88888@tj.foxconn@c8-cilent1 ~]$ sudo su -
+Last login: Mon Jun  1 09:03:06 CST 2020 on pts/0
+
+
+ipa-client-install --enable-dns-updates --mkhomedir

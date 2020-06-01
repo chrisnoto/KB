@@ -98,6 +98,18 @@ objectClass: user
 cn: 1038290
 sn: F
 
+########### 从NSS DB导出crt 和 key ##########
+certutil -S -n "Server-cert" -s "cn=ldap1.tj.com,ou=389 Directory server" -c "CA certificate" -t "u,u,u" -m 1109 -v 120 -d ./
+pk12util -o ldap1.p12 -d /etc/dirsrv/slapd-itldap1 -n Server-cert
+从ldap1.p12分别生成ldap1.crt .key   ca.crt
+openssl pkcs12 -in ldap1.p12 -out ldap1.key -nocerts -nodes
+openssl pkcs12 -in ldap1.p12 -out ldap1.crt -clcerts -nodes
+openssl pkcs12 -in ldap1.p12 -out ca.crt -cacerts -nodes
+
+######## SAN 证书 和 wildchard 证书##########
+certutil -S -n "example.com" -s "CN=example.com,O=foxconn,OU=IT,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1201 -v 120 --extSAN "dns:flownet.example.com,dns:sourcemanager.example.com,dns:hr.example.com,dns:munin.example.com" -d ./
+pk12util -o example.com.p12 -d /etc/dirsrv/slapd-itldap1 -n example.com
+certutil -S -n "example.org" -s "cn=*.example.org,O=foxconn,OU=HR,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1202 -v 120 --extSAN "dns:example.org,dns:*.example.org" -d /etc/dirsrv/slapd-itldap1
 ############  389DS与AD同步 ########
 1 AD上启用证书服务
 2 AD的DC上装PassSync插件并重启DC	

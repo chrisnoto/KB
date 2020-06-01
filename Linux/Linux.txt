@@ -1,7 +1,8 @@
-#######x11 forwarding ########
-ssh -R6000:127.0.0.1:6000 root@host   #可以多次跳转
-export DISPLAY=localhost:0.0
-windows客户机要安装xming
+######### 作为 reposync centos8更新不到新包时的workaround ########
+on repo8 container:
+dnf module install idm:DL1/{server,client,dns,adtrust} --downloadonly
+mv -f /var/cache/dnf/AppStream-bf1daca1ea021975/packages/*.rpm /usr/share/nginx/html/centos8-x86_64/AppStream/Packages
+dnf clean packages
 ###########
 11.1.3.3. The e1000 network driver is not supported in RHEL 8
 In Red Hat Enterprise Linux 8, the e1000 network driver is not supported. This affects both bare metal and virtual environments. However, 
