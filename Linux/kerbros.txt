@@ -1,0 +1,34 @@
+######## kerbros认证######
+[chensen@c8-cilent1 /]$ kinit
+[chensen@c8-cilent1 /]$ klist
+Ticket cache: KCM:323200005:98594
+Default principal: chensen@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/02/2020 14:36:22  06/03/2020 13:26:08  host/ipa.xq.foxconn@XQ.FOXCONN
+06/02/2020 13:26:08  06/03/2020 13:26:08  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/02/2020 14:12:08  06/03/2020 13:26:08  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/02/2020 14:36:46  06/03/2020 13:26:08  host/ipa2.xq.foxconn@XQ.FOXCONN
+
+[chensen@c8-cilent1 /]$ ldapsearch -h ipa.xq.foxconn -Y GSSAPI -b 'dc=xq,dc=foxconn' -s one
+
+
+
+[chensen@c8-cilent1 /]$ ssh -vv ipa2.xq.foxconn
+OpenSSH_7.8p1, OpenSSL 1.1.1c FIPS  28 May 2019
+debug1: Reading configuration data /etc/ssh/ssh_config
+debug1: Reading configuration data /etc/ssh/ssh_config.d/05-redhat.conf
+debug1: Reading configuration data /etc/crypto-policies/back-ends/openssh.config
+debug1: /etc/ssh/ssh_config.d/05-redhat.conf line 8: Applying options for *
+debug1: Executing proxy command: exec /usr/bin/sss_ssh_knownhostsproxy -p 22 ipa2.xq.foxconn
+.....
+debug1: Next authentication method: gssapi-with-mic
+debug2: we sent a gssapi-with-mic packet, wait for reply
+debug1: Authentication succeeded (gssapi-with-mic).
+Authenticated to ipa2.xq.foxconn (via proxy).
+debug1: channel 0: new [client-session]
+debug2: channel 0: send open
+debug1: Requesting no-more-sessions@openssh.com
+debug1: Entering interactive session.
+.....
+[chensen@ipa2 ~]$
