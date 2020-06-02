@@ -1,0 +1,42 @@
+#### 问题描述
+Starting Switch Root: While starting the server it will not move forward after “Starting Switch Root” as shown below. 
+The reason behind this could be a corrupted glibc package or totally it’s not available in the server.
+
+Recently we have faced this issue in one of the Kubernetes production server running on CentOS 7.7. In this guide, we are going to use a CentOS 7.7 operating system.
+ Additionally, the following guide will help to fix the glibc error as well. Interrupting ongoing patching which includes Glibc will also corrupt the Glibc.
+
+[ OK ] Started Cleanup udevd DB.
+[ OK ] Reached target Switch Root.
+[ OK ] Started Plymouth switch root service.
+       Starting Switch Root ... 
+ 机器开机后会hang在这个位置
+ 
+####解决
+模拟情景，先输出glibc然后reboot机器
+之后通过光盘进入 linux rescue
+Once we reach the rescue environment, continue by typing 1. Now it will print in screen to run chroot. 
+But we need to ignore it, without doing a chroot we are going to fix this issue.
+If you try to do a chroot it will throw an error as “No such file or directory“
+sh-4.2# chroot /mnt/sysimage
+chroot: failed to run command '/bin/bash': No such file or directory“
+sh-4.2#
+
+As we have boot this server from DVD or ISO and without doing chroot all the package in DVD/ISO can be found
+ under /run/install/repo/Packages.
+Reinstall Glibc package
+Let’s start to reinstall the glibc package from the DVD/ISO using rpm command. Before installing the package we need to 
+make sure what the command will do. Use --test to do a dry run without installing the package. 
+# rpm -ivh --root=/mnt/sysimage  --test --replacefiles --replacepkgs /run/install/repo/Packages/glibc-2.17-292.el7.x86_64.rpm
+
+Once we are confident about what we are doing, just remove the –test and run the same command to reinstall the glibc.
+# rpm -ivh --root=/mnt/sysimage --replacefiles --replacepkgs /run/install/repo/Packages/glibc-2.17-292.el7.x86_64.rpm
+
+Type exit to reboot the machine. Once you are back online you will be good.
+
+To confirm the package installation you can find from /var/log/yum.log as well.
+
+[root@web04 ~]# tail -n 2 /var/log/yum.log
+ Mar 28 01:50:15 Updated: tzdata-2019c-1.el7.noarch
+ Mar 31 17:58:11 Installed: glibc-2.17-292.el7.x86_64
+[root@web04 ~]#
+That’s it, we have successfully recovered from Starting Switch Root.

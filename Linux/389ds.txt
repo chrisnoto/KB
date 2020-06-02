@@ -9,6 +9,30 @@ ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com'
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(uid=h*)" -W |grep dn       #模糊匹配
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(cn=*Managers)" -W |grep dn  #模糊匹配
 
+######## 查询ipa ##############
+ldapsearch -H ldaps://ipa.xq.foxconn:636 -D 'uid=admin,cn=users,cn=accounts,dc=xq,dc=foxconn' -Z -b 'cn=accounts,dc=xq,dc=foxconn' -s subtree -W 
+#with GSSAPI
+先su - chensen
+[chensen@ipa dirsrv]$ kinit
+[chensen@ipa dirsrv]$ klist
+Ticket cache: KCM:323200005
+Default principal: chensen@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/02/2020 14:01:39  06/03/2020 14:01:34  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/02/2020 14:01:53  06/03/2020 14:01:34  ldap/ipa.xq.foxconn@XQ.FOXCONN
+
+[chensen@ipa dirsrv]$ ldapsearch -h ipa.xq.foxconn -Y GSSAPI -b 'cn=accounts,dc=xq,dc=foxconn' |grep dn
+SASL/GSSAPI authentication started
+SASL username: chensen@XQ.FOXCONN
+SASL SSF: 256
+SASL data security layer installed.
+dn: cn=accounts,dc=xq,dc=foxconn
+dn: cn=users,cn=accounts,dc=xq,dc=foxconn
+dn: cn=groups,cn=accounts,dc=xq,dc=foxconn
+或在任意ipa客户端登录
+[chensen@c8-cilent1 /]$ ldapsearch -h ipa.xq.foxconn -Y GSSAPI -b 'dc=xq,dc=foxconn' -s one
+
 ####### x11 forwarding ########
 ssh -R6000:127.0.0.1:6000 root@10.67.51.7   #可以多次跳转
 export DISPLAY=localhost:0.0
