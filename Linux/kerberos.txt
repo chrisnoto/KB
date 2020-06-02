@@ -1,4 +1,4 @@
-######## kerbros认证######
+######## kerberos认证######
 [chensen@c8-cilent1 /]$ kinit
 [chensen@c8-cilent1 /]$ klist
 Ticket cache: KCM:323200005:98594
