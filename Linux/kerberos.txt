@@ -1,19 +1,28 @@
 ######## kerberos认证######
 [chensen@c8-cilent1 /]$ kinit
+
+#查看此时的principal
 [chensen@c8-cilent1 /]$ klist
 Ticket cache: KCM:323200005:98594
 Default principal: chensen@XQ.FOXCONN
 
 Valid starting       Expires              Service principal
-06/02/2020 14:36:22  06/03/2020 13:26:08  host/ipa.xq.foxconn@XQ.FOXCONN
-06/02/2020 13:26:08  06/03/2020 13:26:08  krbtgt/XQ.FOXCONN@XQ.FOXCONN
-06/02/2020 14:12:08  06/03/2020 13:26:08  ldap/ipa.xq.foxconn@XQ.FOXCONN
-06/02/2020 14:36:46  06/03/2020 13:26:08  host/ipa2.xq.foxconn@XQ.FOXCONN
+06/02/2020 14:57:02  06/03/2020 14:57:02  krbtgt/XQ.FOXCONN@XQ.FOXCONN
 
+
+#查询ipa server
 [chensen@c8-cilent1 /]$ ldapsearch -h ipa.xq.foxconn -Y GSSAPI -b 'dc=xq,dc=foxconn' -s one
 
+#查询 ad domain
+[chensen@c8-cilent1 /]$ ldapsearch -h vSTJTESTAD.tj.foxconn -Y GSSAPI -b 'cn=users,dc=tj,dc=foxconn' -s one |grep dn
+SASL/GSSAPI authentication started
+SASL username: chensen@XQ.FOXCONN
+SASL SSF: 256
+SASL data security layer installed.
+dn: CN=1038290,CN=Users,DC=tj,DC=foxconn
+dn: CN=123456,CN=Users,DC=tj,DC=foxconn
 
-
+#ssh ipa server
 [chensen@c8-cilent1 /]$ ssh -vv ipa2.xq.foxconn
 OpenSSH_7.8p1, OpenSSL 1.1.1c FIPS  28 May 2019
 debug1: Reading configuration data /etc/ssh/ssh_config
@@ -32,3 +41,142 @@ debug1: Requesting no-more-sessions@openssh.com
 debug1: Entering interactive session.
 .....
 [chensen@ipa2 ~]$
+
+#查看此时的principal
+[chensen@c8-cilent1 /]$ klist
+Ticket cache: KCM:323200005:98594
+Default principal: chensen@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/02/2020 14:55:47  06/03/2020 14:51:28  host/ipa2.xq.foxconn@XQ.FOXCONN
+06/02/2020 14:53:22  06/03/2020 00:53:22  krbtgt/TJ.FOXCONN@TJ.FOXCONN
+06/02/2020 14:51:28  06/03/2020 14:51:28  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/02/2020 14:53:23  06/03/2020 00:53:22  ldap/vstjtestad.tj.foxconn@TJ.FOXCONN
+06/02/2020 14:55:58  06/03/2020 14:51:28  ldap/ipa.xq.foxconn@XQ.FOXCONN
+
+############## KRB5CCNAME变量
+设置KRB5CCNAME变量可以实现kswitch的功能
+[root@ipa3 ~]# export KRB5CCNAME=KCM:0
+[root@ipa3 ~]# klist
+Ticket cache: KCM:0
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 16:59:38  06/05/2020 16:46:57  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 16:47:00  06/05/2020 16:46:57  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/04/2020 16:50:58  06/05/2020 16:46:57  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 17:06:56  06/05/2020 16:46:57  ldap/ipa3.xq.foxconn@XQ.FOXCONN
+
+[root@ipa3 ~]# export KRB5CCNAME=KCM:0:39355
+[root@ipa3 ~]# klist
+Ticket cache: KCM:0:39355
+Default principal: 88888@TJ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 15:05:53  06/05/2020 01:05:53  krbtgt/TJ.FOXCONN@TJ.FOXCONN
+        renew until 06/05/2020 15:05:49
+当变量设置为KCM:时, kswitch可以切换到KCM:0  KCM:0:39355  KCM:0:5368
+[root@ipa3 ~]# export KRB5CCNAME=KCM:
+[root@ipa3 ~]# kswitch -p admin@XQ.FOXCONN
+[root@ipa3 ~]# klist
+Ticket cache: KCM:0
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 16:59:38  06/05/2020 16:46:57  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 16:47:00  06/05/2020 16:46:57  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/04/2020 16:50:58  06/05/2020 16:46:57  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 17:06:56  06/05/2020 16:46:57  ldap/ipa3.xq.foxconn@XQ.FOXCONN
+[root@ipa3 ~]# klist -A
+Ticket cache: KCM:0
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 16:59:38  06/05/2020 16:46:57  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 16:47:00  06/05/2020 16:46:57  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/04/2020 16:50:58  06/05/2020 16:46:57  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 17:06:56  06/05/2020 16:46:57  ldap/ipa3.xq.foxconn@XQ.FOXCONN
+
+Ticket cache: KCM:0:5368
+Default principal: 1038290@TJ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 17:10:21  06/05/2020 03:10:21  krbtgt/TJ.FOXCONN@TJ.FOXCONN
+        renew until 06/05/2020 17:10:17
+
+Ticket cache: KCM:0:39355
+Default principal: 88888@TJ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 15:05:53  06/05/2020 01:05:53  krbtgt/TJ.FOXCONN@TJ.FOXCONN
+        renew until 06/05/2020 15:05:49
+Ccache文件里也存储了票证
+[root@ipa3 ~]# klist /tmp/krbcc2j2dncxi/ccache -A
+Ticket cache: FILE:/tmp/krbcc2j2dncxi/ccache
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 16:45:32  06/05/2020 16:45:32  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/04/2020 16:45:32  06/05/2020 16:45:32  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 16:45:33  06/05/2020 16:45:32  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+
+还可以设置变量为ccache文件
+[root@ipa3 ~]# export KRB5CCNAME=/tmp/krbcc2j2dncxi/ccache
+[root@ipa3 ~]# klist -A
+Ticket cache: FILE:/tmp/krbcc2j2dncxi/ccache
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/04/2020 16:45:32  06/05/2020 16:45:32  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/04/2020 16:45:32  06/05/2020 16:45:32  ldap/ipa.xq.foxconn@XQ.FOXCONN
+06/04/2020 16:45:33  06/05/2020 16:45:32  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+
+从keytab文件重新生成票据
+[root@ipa3 etc]# klist -k krb5.keytab
+Keytab name: FILE:krb5.keytab
+KVNO Principal
+---- --------------------------------------------------------------------------
+   1 host/ipa3.xq.foxconn@XQ.FOXCONN
+   1 host/ipa3.xq.foxconn@XQ.FOXCONN
+[root@ipa3 etc]# kinit -kt krb5.keytab host/ipa3.xq.foxconn@XQ.FOXCONN
+[root@ipa3 etc]# klist
+Ticket cache: KCM:0:57850
+Default principal: host/ipa3.xq.foxconn@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/05/2020 09:23:20  06/06/2020 09:23:20  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+
+[root@ipa3 etc]# klist -l
+Principal name                 Cache name
+--------------                 ----------
+host/ipa3.xq.foxconn@XQ.FOXCON KCM:0:57850
+1038290@TJ.FOXCONN             KCM:0:5368 (Expired)
+admin@XQ.FOXCONN               KCM:0
+88888@TJ.FOXCONN               KCM:0:39355 (Expired)
+
+#######使用kadmin.local导出chaofeng.keytab 然后使用该keytab来做kinit #######
+[root@ipa3 ~]# kadmin.local
+Authenticating as principal host/admin@XQ.FOXCONN with password.
+kadmin.local:  xst -k /root/chaofeng.keytab -norandkey chaofeng@XQ.FOXCONN
+Entry for principal chaofeng@XQ.FOXCONN with kvno 2, encryption type aes256-cts-hmac-sha1-96 added to keytab WRFILE:/root/chaofeng.keytab.
+Entry for principal chaofeng@XQ.FOXCONN with kvno 2, encryption type aes128-cts-hmac-sha1-96 added to keytab WRFILE:/root/chaofeng.keytab.
+kadmin.local:  q
+[root@ipa3 ~]# kinit chaofeng@XQ.FOXCONN -kt chaofeng.keytab
+[root@ipa3 ~]# klist
+Ticket cache: KCM:0:90253
+Default principal: chaofeng@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/05/2020 10:08:05  06/06/2020 10:08:05  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+
+#########  KCM  ##########
+[root@ipa ~]# cat /etc/krb5.conf.d/kcm_default_ccache |egrep -v '#|^$'
+[libdefaults]
+    default_ccache_name = KCM:
+Over time, both libkrb5 and SSSD used different credential cache types to store Kerberos credentials 
+- going from a simple file-based storage (FILE:) 
+to a directory (DIR:) and 
+most recently a kernel-keyring based cache (KEYRING:).
+With KCM, the Kerberos caches are not stored in a “passive” store, but managed by a daemon. In this setup, 
+the Kerberos library (typically used through an application, like for example, kinit) is a KCM client and 
+the daemon is being referred to as a KCM server.

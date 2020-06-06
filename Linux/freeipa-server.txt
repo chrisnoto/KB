@@ -1,0 +1,353 @@
+#################   freeIPA   ##################
+#用途和组件介绍
+Benefits of using FreeIPA
+1 Central authentication management
+2 Fine-grained access control
+3 One Time Password
+4 Direct connect to Active Directory
+5 Active Directory Cross-Realm Trust
+6 Integrated Public Key Infrastructure (PKI) Service
+This provides PKI services that sign and publish certificates for hosts and services, Certificate Revocation List (CRL) 
+and OCSP services for software validating the published certificate, and an API to request, show, and find certificates.
+
+Components of FreeIPA Server
+389 Directory Server
+MIT Kerberos KDC
+Dogtag Certificate System
+ISC Bind DNS server
+Web UI/ipa Command line tool
+NTP server
+--------------------------------------------------------------------------------------------
+#部署目标:
+ipa.xq.foxconn 10.67.51.34
+ipa2.xq.foxconn 10.67.51.35
+testad.tj.foxconn 10.67.51.61
+1   ipa2是ipa的replica  
+2   ipa与ad dc做互信任
+3   通过AD的用户和组认证linux服务器
+4   ipa中设置ipa组和外部组以及sudo rule来控制AD中用户的sudo权限
+
+一 安装ipa主server
+#安装包
+dnf module install -y idm:DL1/{server,client,dns,adtrust}
+由于bug, cifs服务会起不来，影响freeipa正常重新启动(强制启动可以)，影响与AD域做互信任
+使用4.9.1的版本替代现有安装版本
+[root@ipa ~]# ll 4.9.1
+total 10400
+-rw-r--r-- 1 root root  142832 May 29 16:40 libsmbclient-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  115056 May 29 16:40 libwbclient-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root 2648136 May 29 16:40 python3-samba-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  724764 May 29 16:40 samba-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root 5262316 May 29 16:40 samba-client-libs-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  212112 May 29 16:40 samba-common-4.9.1-8.el8.noarch.rpm
+-rw-r--r-- 1 root root  173148 May 29 16:40 samba-common-libs-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  472060 May 29 16:40 samba-common-tools-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  181704 May 29 16:40 samba-libs-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  571256 May 29 16:40 samba-winbind-4.9.1-8.el8.x86_64.rpm
+-rw-r--r-- 1 root root  123036 May 29 16:40 samba-winbind-modules-4.9.1-8.el8.x86_64.rpm
+[root@ipa 4.9.1]# rpm --force -U *.rpm
+完了之后根据提示更新/usr/lib/tmpfiles.d里的相关文件
+
+#配置本地解析
+10.67.51.34  ipa.xq.foxconn ipa
+10.67.51.35  ipa2.xq.foxconn ipa2
+
+#配置ipaserver
+[root@ipa ~]# cat ipa.sh
+#!/bin/bash
+ipa-server-install \
+--unattended \
+--hostname ipa.xq.foxconn \
+--realm XQ.FOXCONN \
+--ds-password Foxconn666 \
+--admin-password Foxconn666 \
+--setup-dns \
+--auto-reverse \
+--forwarder 10.67.51.61
+执行脚本
+
+#验证服务
+[root@ipa ~]# ipactl status
+Directory Service: RUNNING
+krb5kdc Service: RUNNING
+kadmin Service: RUNNING
+named Service: RUNNING
+httpd Service: RUNNING
+ipa-custodia Service: RUNNING
+pki-tomcatd Service: RUNNING
+smb Service: RUNNING
+winbind Service: RUNNING
+ipa-otpd Service: RUNNING
+ipa-dnskeysyncd Service: RUNNING
+ipa: INFO: The ipactl command was successful
+
+#验证kerberos
+[root@ipa ~]# kinit admin
+[root@ipa ~]# klist
+
+二 安装ipa2 replica server
+#安装包   同上，并且要修复bug
+dnf module install -y idm:DL1/{server,client,dns,adtrust}
+
+#配置本地解析及dns
+10.67.51.34  ipa.xq.foxconn ipa
+10.67.51.35  ipa2.xq.foxconn ipa2
+nmcli c modify ens192 ipv4.dns 10.67.51.34
+nmcli c up ens192
+
+#配置ipa-client
+在ipa上操作
+ipa host-add --ip-address 10.67.51.35 ipa2.xq.foxconn
+ipa dnsrecord-add xq.foxconn ipa2 --ttl=3600 --a-ip-address=10.67.51.35
+在ipa2上操作
+ipa-client-install --enable-dns-updates --mkhomedir
+
+#验证  同上验证步骤
+dig ipa2.xq.foxconn
+ipactl status
+kinit admin
+
+#配置ipa-replica
+检查连通性
+在ipa2上
+[root@ipa2 ~]# ipa-replica-conncheck --master ipa.xq.foxconn
+在ipa上
+[root@ipa ~]# ipa-replica-conncheck --replica ipa2.xq.foxconn
+检查完后，在ipa2上
+[root@ipa2 ~]# ipa-replica-install --setup-ca --setup-dns --no-forwarders --no-host-dns
+
+#验证
+[root@ipa2 ~]# ipa-replica-manage list
+ipa.xq.foxconn: master
+ipa2.xq.foxconn: master
+用ipa上的账号验证，是否账号已同步到ipa2上
+ipa user-find chensen
+
+三 配置ipa与AD互信任
+#安装adtrust-controller adtrust-agent
+[root@ipa ~]# ipa-adtrust-install --enable-compat
+#添加DNS记录到IPA上
+ipa dnsforwardzone-add tj.foxconn --forwarder=10.67.51.61 --forward-policy=only
+ipa dnszone-mod xq.foxconn --allow-transfer=10.67.51.61
+#在AD里添加DNS secondary zone或者是conditional forwarder
+PS C:\Windows\system32> dnscmd 127.0.0.1 /ZoneAdd xq.foxconn /Secondary 10.67.51.34
+DNS Server 127.0.0.1 created zone xq.foxconn:
+
+Command completed successfully.
+#验证dns srv记录
+PS C:\Windows\system32> nslookup -querytype=SRV _ldap._tcp.xq.foxconn
+Server:  UnKnown
+Address:  10.67.51.61
+
+_ldap._tcp.xq.foxconn   SRV service location:
+          priority       = 0
+          weight         = 100
+          port           = 389
+          svr hostname   = ipa2.xq.foxconn
+_ldap._tcp.xq.foxconn   SRV service location:
+          priority       = 0
+          weight         = 100
+          port           = 389
+          svr hostname   = ipa.xq.foxconn
+ipa2.xq.foxconn internet address = 10.67.51.35
+ipa.xq.foxconn  internet address = 10.67.51.34
+PS C:\Windows\system32> nslookup -querytype=SRV _ldap._tcp.tj.foxconn
+Server:  UnKnown
+Address:  10.67.51.61
+
+_ldap._tcp.tj.foxconn   SRV service location:
+          priority       = 0
+          weight         = 100
+          port           = 389
+          svr hostname   = vSTJTESTAD.tj.foxconn
+vSTJTESTAD.tj.foxconn   internet address = 10.67.51.61
+#验证dns srv记录
+[root@ipa ~]# dig SRV _ldap._tcp.xq.foxconn
+
+;; QUESTION SECTION:
+;_ldap._tcp.xq.foxconn.         IN      SRV
+
+;; ANSWER SECTION:
+_ldap._tcp.xq.foxconn.  86400   IN      SRV     0 100 389 ipa2.xq.foxconn.
+_ldap._tcp.xq.foxconn.  86400   IN      SRV     0 100 389 ipa.xq.foxconn.
+
+;; AUTHORITY SECTION:
+xq.foxconn.             86400   IN      NS      ipa2.xq.foxconn.
+xq.foxconn.             86400   IN      NS      ipa.xq.foxconn.
+
+;; ADDITIONAL SECTION:
+ipa.xq.foxconn.         1200    IN      A       10.67.51.34
+ipa2.xq.foxconn.        1200    IN      A       10.67.51.35
+
+[root@ipa ~]# dig SRV _ldap._tcp.tj.foxconn
+
+;; QUESTION SECTION:
+;_ldap._tcp.tj.foxconn.         IN      SRV
+
+;; ANSWER SECTION:
+_ldap._tcp.tj.foxconn.  600     IN      SRV     0 100 389 vSTJTESTAD.tj.foxconn.
+
+;; ADDITIONAL SECTION:
+vSTJTESTAD.tj.foxconn.  596     IN      A       10.67.51.61
+
+#添加互信
+ipa trust-add --two-way=true --type=ad tj.foxconn --admin 1038290 --password
+#关闭DNS validation
+vi /etc/named.conf
+        dnssec-enable no;
+        dnssec-validation no;
+重启dns服务
+ipactl restart
+[root@ipa ~]# ipa trust-fetch-domains tj.foxconn
+----------------------------------------------------------------------------------------
+List of trust domains successfully refreshed. Use trustdomain-find command to list them.
+----------------------------------------------------------------------------------------
+----------------------------
+Number of entries returned 0
+----------------------------
+[root@ipa ~]# ipa trustdomain-find tj.foxconn
+  Domain name: tj.foxconn
+  Domain NetBIOS name: TJ
+  Domain Security Identifier: S-1-5-21-3960692482-837266120-1264256642
+  Domain enabled: True
+----------------------------
+Number of entries returned 1
+----------------------------
+[root@ipa ~]# ipa trust-show tj.foxconn
+  Realm name: tj.foxconn
+  Domain NetBIOS name: TJ
+  Domain Security Identifier: S-1-5-21-3960692482-837266120-1264256642
+  Trust direction: Two-way trust
+  Trust type: Active Directory domain
+[root@ipa ~]# kinit 1038290@TJ.FOXCONN  ##1038290这个账号取得TGT票据
+Password for 1038290@TJ.FOXCONN:
+[root@ipa ~]# klist
+Ticket cache: KCM:0:27873
+Default principal: 1038290@TJ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/02/2020 15:54:58  06/03/2020 01:54:58  krbtgt/TJ.FOXCONN@TJ.FOXCONN
+        renew until 06/03/2020 15:54:54
+验证AD用户
+[root@ipa ~]# getent passwd 1038290@TJ.FOXCONN
+1038290@tj.foxconn:*:1322401104:1322401104:1038290:/home/tj.foxconn/1038290:
+[root@ipa ~]# getent passwd F1038290@TJ.FOXCONN
+f1038290@tj.foxconn:*:1322401105:1322401105:F1038290:/home/tj.foxconn/f1038290:
+
+#查看两台IPA server的role
+[root@ipa ~]# ipa server-role-find --server ipa.xq.foxconn
+----------------------
+5 server roles matched
+----------------------
+  Server name: ipa.xq.foxconn
+  Role name: AD trust agent
+  Role status: enabled
+
+  Server name: ipa.xq.foxconn
+  Role name: AD trust controller
+  Role status: enabled
+
+  Server name: ipa.xq.foxconn
+  Role name: CA server
+  Role status: enabled
+
+  Server name: ipa.xq.foxconn
+  Role name: DNS server
+  Role status: enabled
+
+  Server name: ipa.xq.foxconn
+  Role name: KRA server
+  Role status: absent
+----------------------------
+Number of entries returned 5
+----------------------------
+[root@ipa ~]# ipa server-role-find --server ipa2.xq.foxconn
+----------------------
+5 server roles matched
+----------------------
+  Server name: ipa2.xq.foxconn
+  Role name: AD trust agent
+  Role status: absent
+
+  Server name: ipa2.xq.foxconn
+  Role name: AD trust controller
+  Role status: absent
+
+  Server name: ipa2.xq.foxconn
+  Role name: CA server
+  Role status: enabled
+
+  Server name: ipa2.xq.foxconn
+  Role name: DNS server
+  Role status: enabled
+
+  Server name: ipa2.xq.foxconn
+  Role name: KRA server
+  Role status: absent
+----------------------------
+Number of entries returned 5
+----------------------------
+##为replica(ipa2)安装trust-controller和trust-agent
+#The utility ipa-adtrust-install adds DNS service records required for AD trusts. These records are created automatically if IdM was installed with an integrated DNS server.
+[root@ipa2 ~]# ipa-adtrust-install
+
+
+
+
+
+
+
+
+
+
+
+
+############检查命令##############
+##You can acquire a list of the required SRV records specific to your system setup
+[root@ipa slapd-XQ-FOXCONN]# ipa dns-update-system-records --dry-run
+  IPA DNS records:
+    _kerberos-master._tcp.xq.foxconn. 86400 IN SRV 0 100 88 ipa.xq.foxconn.
+    _kerberos-master._tcp.xq.foxconn. 86400 IN SRV 0 90 88 ipa2.xq.foxconn.
+    _kerberos-master._udp.xq.foxconn. 86400 IN SRV 0 100 88 ipa.xq.foxconn.
+    _kerberos-master._udp.xq.foxconn. 86400 IN SRV 0 90 88 ipa2.xq.foxconn.
+
+[root@ipa ~]# sssctl domain-status tj.foxconn --active-server
+Active servers:
+AD Global Catalog: vSTJTESTAD.tj.foxconn
+AD Domain Controller: vSTJTESTAD.tj.foxconn
+IPA: ipa.xq.foxconn
+
+[1038290@tj.foxconn@c8-cilent1 ~]$ realm discover -v XQ.FOXCONN
+ * Resolving: _ldap._tcp.xq.foxconn
+ * Performing LDAP DSE lookup on: 10.67.51.35
+ * Performing LDAP DSE lookup on: 10.67.51.34
+ * Successfully discovered: xq.foxconn
+xq.foxconn
+  type: kerberos
+  realm-name: XQ.FOXCONN
+  domain-name: xq.foxconn
+  configured: kerberos-member
+  server-software: ipa
+  client-software: sssd
+  required-package: ipa-client
+  required-package: oddjob
+  required-package: oddjob-mkhomedir
+  required-package: sssd
+  login-formats: %U
+  login-policy: allow-realm-logins
+[1038290@tj.foxconn@c8-cilent1 ~]$ realm discover -v TJ.FOXCONN
+ * Resolving: _ldap._tcp.tj.foxconn
+ * Performing LDAP DSE lookup on: 10.67.51.61
+ * Successfully discovered: tj.foxconn
+tj.foxconn
+  type: kerberos
+  realm-name: TJ.FOXCONN
+  domain-name: tj.foxconn
+  configured: no
+  server-software: active-directory
+  client-software: sssd
+  required-package: oddjob
+  required-package: oddjob-mkhomedir
+  required-package: sssd
+  required-package: adcli
+  required-package: samba-common-tools

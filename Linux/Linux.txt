@@ -1,3 +1,6 @@
+########dns记录
+C:\Users\chensen>nslookup -q=txt hp.com
+C:\Users\chensen>nslookup -q=SRV _ldap._tcp.cesbg.foxconn
 ######### 作为 reposync centos8更新不到新包时的workaround ########
 on repo8 container:
 dnf module install idm:DL1/{server,client,dns,adtrust} --downloadonly
