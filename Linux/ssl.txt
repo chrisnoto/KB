@@ -1,3 +1,67 @@
+############# OpenSSL 颁发证书 ###########
+自签名证书的 Issuer 和 Subject 是一样的
+# 生成自签名CA证书
+openssl genrsa -out ca-key.pem 2048
+openssl req -x509 -new  -nodes -key ca-key.pem -days 10000 -out ca.pem -subj "/CN=kube-ca"
+
+
+#一步生成server CSR 带SAN扩展
+openssl genrsa -out ldap.key 2048
+openssl req -new -sha256 \
+    -key ldap.key \
+    -subj "/C=CN/ST=Tianjin/L=Tianjin/O=Foxconn/OU=IT/CN=ldap1.tj.foxconn" \
+    -reqexts SAN \
+    -config <(cat /etc/pki/tls/openssl.cnf \
+        <(printf "[SAN]\nsubjectAltName=DNS:ldap1.tj.foxconn,DNS:ldap2.tj.foxconn")) \
+    -out ldap.csr
+# 根据ldap.csr签发证书
+openssl ca -in ldap.csr \
+	-extensions SAN \
+	-config <(cat /etc/pki/tls/openssl.cnf \
+        <(printf "[SAN]\nsubjectAltName=DNS:ldap1.tj.foxconn,DNS:ldap2.tj.foxconn")) \ 
+	-out ldap.crt
+	
+	
+# 签发客户端证书
+1 生成私钥
+[root@master1 ~]# openssl genrsa -out client.key 2048
+Generating RSA private key, 2048 bit long modulus
+.....+++
+..+++
+e is 65537 (0x10001)
+2 生成CSR
+[root@master1 ~]# openssl req -new -key client.key -subj "/CN=client/O=system:masters" -out client.csr
+3 根据CSR签发证书
+[root@master1 ~]# openssl x509 -req -in client.csr -CA /etc/kubernetes/ssl/kube-ca.pem -CAkey /etc/kubernetes/ssl/kube-ca-key.pem -CAcreateserial -out client.crt -days 3650
+Signature ok
+subject=/CN=client/O=system:masters
+Getting CA Private Key
+
+查看公钥的内容命令为：openssl rsa -noout -text -in cakey.key
+即可观察秘钥的编码方式，如果为.PEM ,则会以 base 64 明文方式显示。
+
+查看证书的内容命令为：openssl x509 -noout -text -in cacert.crt
+
+.DER 是二进制编码，可包含所有私钥、公钥和证书，是大多数浏览器的缺省格式，常见于 Windows 系统中的证书格式。
+.PEM 是明文格式的, 以 “-----BEGIN CERTIFICATE----- 开头，已 -----END CERTIFICATE----- 结尾”, 中间是经过 base64 编码的内容,
+ Apache 和 NGINX 服务器偏向于使用这种编码格式，也是 openssl 默认采用的信息存放方式。PEM 其实就是把 DER 的内容进行了一次 base64 编码。
+
+ 证书编码格式转换:
+
+PEM 转为 DER：openssl x509 -in cacert.crt -outform der -out cacert.der
+DER 转为 PEM：openssl x509 -in cert.crt -inform der -outform pem -out cacert.pem
+
+
+
+
+
+
+
+
+
+
+
+############ NSS颁发证书 #############
 ############ CSR ###########
 certutil -R -d /etc/dirsrv/slapd-itldap1 -a -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" --extSAN "dns:example.com,dns:*.example.com"    -a ASCII输出    到屏幕
 certutil -R -d /etc/dirsrv/slapd-itldap1 -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" --extSAN "dns:example.com,dns:*.example.com" -o example.com.req   二进制输出到文件
@@ -20,6 +84,25 @@ certutil -A -d ./ -n "external CA certificate" -t "C,," -i cacert.asc
 ######## SSL 调试 ##########
 openssl s_client -connect localhost:636
 openssl s_client -connect localhost:636 -showcerts
+
+
+
+
+
+
+########## certmonger vs ipa cli ########
+When Identity Management (IdM) is installed with an integrated IdM Certificate Authority (CA), it uses the certmonger service to track and renew system and service certificates.
+The certmonger daemon and its command-line clients simplify the process of generating public/private key pairs, creating certificate requests,
+ and submitting requests to the CA for signing. As part of managing certificates, the certmonger daemon monitors certificates for expiration and
+ can renew certificates that are about to expire. 
+ certmonger uses the IdM getcert command to manage all certificates.
+ 
+TLS server authentication
+Certmonger:   写到了NSSDB
+ sudo ipa-getcert request <key/DB location opts> -K HTTP/`hostname` -N CN=`hostname`,O=EXAMPLE.COM
+IPA CLI:   没有写到NSSDB
+ ipa cert-request <key/DB location opts> --autofill --principal=HTTP/`hostname`
+
 
 
 ######## Free IPA 颁发证书 ###########
@@ -52,14 +135,14 @@ Request ID '20200609004729':
 
 certutil -L -d . -n Server-Cert
 
-############
+############ FreeIPA颁发证书给非ipa client #########
 Finally, if you want to get certificates on an un-enrolled system the basic steps are:
 
 Create a host entry and service as above
 Generate a CSR, see https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/linux_domain_identity_authentication_and_policy_guide/certificates#requesting-cert-certutil (or the next section)
 Submit that CSR per the above docs
 If your webserver is not registered in DNS then you can use the –force option to host-add and service-add to force their creation.
-
+# Generate CSR
 certutil -R -d ~/certdb/ -a -g 4096 -s "CN=jwt.example.com,O=EXAMPLE.COM" -8 jwt.example.com,flownet.example.com,sourcemanager.example.com,hr.example.com,munin.example.com >jwt.example.com.csr
 [root@ipa slapd-XQ-FOXCONN]# ipa host-add jwt.example.com --force
 ----------------------------
