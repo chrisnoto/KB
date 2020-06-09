@@ -1,0 +1,133 @@
+############ CSR ###########
+certutil -R -d /etc/dirsrv/slapd-itldap1 -a -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" --extSAN "dns:example.com,dns:*.example.com"    -a ASCII输出    到屏幕
+certutil -R -d /etc/dirsrv/slapd-itldap1 -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" --extSAN "dns:example.com,dns:*.example.com" -o example.com.req   二进制输出到文件
+
+######## self-signed SAN 证书 ##########
+certutil -S -n "example.com" -s "CN=example.com,O=foxconn,OU=IT,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1201 -v 120 --extSAN "dns:flownet.example.com,dns:sourcemanager.example.com,dns:hr.example.com,dns:munin.example.com" -d ./
+pk12util -o example.com.p12 -d /etc/dirsrv/slapd-itldap1 -n example.com        #导出p12格式(含ca.crt,crt,key)
+从ldap1.p12分别生成ldap1.crt .key   ca.crt
+openssl pkcs12 -in ldap1.p12 -out ldap1.key -nocerts -nodes
+openssl pkcs12 -in ldap1.p12 -out ldap1.crt -clcerts -nodes
+openssl pkcs12 -in ldap1.p12 -out ca.crt -cacerts -nodes
+######## self-signed wildchard 证书 ########
+certutil -S -n "example.org" -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1202 -v 120 --extSAN "dns:example.com,dns:*.example.com" -d /etc/dirsrv/slapd-itldap1
+
+######## 导出证书 ########
+certutil -L -d . -n Server-Cert -a > server.crt
+
+######## 导入证书 ########
+certutil -A -d ./ -n "external CA certificate" -t "C,," -i cacert.asc
+######## SSL 调试 ##########
+openssl s_client -connect localhost:636
+openssl s_client -connect localhost:636 -showcerts
+
+
+######## Free IPA 颁发证书 ###########
+mkdir ~/certdb
+certutil -N -d ~/certdb/
+certutil -A -d ~/certdb/ -n 'XQ.FOXCONN IPA CA' -t CT,, -a < /etc/ipa/ca.crt
+ipa service-add HTTP/`hostname`
+[root@c8-cilent1 ~]# ipa-getcert request -d ~/certdb -n Server-Cert -K HTTP/`hostname` -N CN=`hostname`,O=XQ.FOXCONN -g 2048 -p /root/pwdfile.txt
+New signing request "20200609004729" added.
+
+[root@c8-cilent1 ~]# ipa-getcert list -d ~/certdb/ -n Server-Cert
+Number of certificates and requests being tracked: 1.
+Request ID '20200609004729':
+        status: MONITORING
+        stuck: no
+        key pair storage: type=NSSDB,location='/root/certdb',nickname='Server-Cert',token='NSS Certificate DB',pinfile='/root/pwdfile.txt'
+        certificate: type=NSSDB,location='/root/certdb',nickname='Server-Cert',token='NSS Certificate DB'
+        CA: IPA
+        issuer: CN=Certificate Authority,O=XQ.FOXCONN
+        subject: CN=c8-cilent1.xq.foxconn,O=XQ.FOXCONN
+        expires: 2022-06-10 08:47:30 CST
+        dns: c8-cilent1.xq.foxconn
+        principal name: HTTP/c8-cilent1.xq.foxconn@XQ.FOXCONN
+        key usage: digitalSignature,nonRepudiation,keyEncipherment,dataEncipherment
+        eku: id-kp-serverAuth,id-kp-clientAuth
+        pre-save command:
+        post-save command:
+        track: yes
+        auto-renew: yes
+
+certutil -L -d . -n Server-Cert
+
+############
+Finally, if you want to get certificates on an un-enrolled system the basic steps are:
+
+Create a host entry and service as above
+Generate a CSR, see https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/linux_domain_identity_authentication_and_policy_guide/certificates#requesting-cert-certutil (or the next section)
+Submit that CSR per the above docs
+If your webserver is not registered in DNS then you can use the –force option to host-add and service-add to force their creation.
+
+certutil -R -d ~/certdb/ -a -g 4096 -s "CN=jwt.example.com,O=EXAMPLE.COM" -8 jwt.example.com,flownet.example.com,sourcemanager.example.com,hr.example.com,munin.example.com >jwt.example.com.csr
+[root@ipa slapd-XQ-FOXCONN]# ipa host-add jwt.example.com --force
+----------------------------
+Added host "jwt.example.com"
+----------------------------
+  Host name: jwt.example.com
+  Principal name: host/jwt.example.com@XQ.FOXCONN
+  Principal alias: host/jwt.example.com@XQ.FOXCONN
+  Password: False
+  Keytab: False
+  Managed by: jwt.example.com
+[root@ipa slapd-XQ-FOXCONN]# ipa service-add HTTP/jwt.example.com --force
+-----------------------------------------------
+Added service "HTTP/jwt.example.com@XQ.FOXCONN"
+-----------------------------------------------
+  Principal name: HTTP/jwt.example.com@XQ.FOXCONN
+  Principal alias: HTTP/jwt.example.com@XQ.FOXCONN
+  Managed by: jwt.example.com
+[root@ipa slapd-XQ-FOXCONN]# ipa service-add-principal HTTP/jwt.example.com HTTP/flownet.example.com
+----------------------------------------------------------------------------
+Added new aliases to the service principal "HTTP/jwt.example.com@XQ.FOXCONN"
+----------------------------------------------------------------------------
+  Principal name: HTTP/jwt.example.com@XQ.FOXCONN
+  Principal alias: HTTP/jwt.example.com@XQ.FOXCONN, HTTP/flownet.example.com@XQ.FOXCONN
+[root@ipa slapd-XQ-FOXCONN]# ipa service-add-principal HTTP/jwt.example.com HTTP/sourcemanager.example.com
+----------------------------------------------------------------------------
+Added new aliases to the service principal "HTTP/jwt.example.com@XQ.FOXCONN"
+----------------------------------------------------------------------------
+  Principal name: HTTP/jwt.example.com@XQ.FOXCONN
+  Principal alias: HTTP/jwt.example.com@XQ.FOXCONN, HTTP/flownet.example.com@XQ.FOXCONN, HTTP/sourcemanager.example.com@XQ.FOXCONN
+[root@ipa slapd-XQ-FOXCONN]# ipa service-add-principal HTTP/jwt.example.com HTTP/hr.example.com
+----------------------------------------------------------------------------
+Added new aliases to the service principal "HTTP/jwt.example.com@XQ.FOXCONN"
+----------------------------------------------------------------------------
+  Principal name: HTTP/jwt.example.com@XQ.FOXCONN
+  Principal alias: HTTP/jwt.example.com@XQ.FOXCONN, HTTP/flownet.example.com@XQ.FOXCONN, HTTP/sourcemanager.example.com@XQ.FOXCONN,
+                   HTTP/hr.example.com@XQ.FOXCONN
+[root@ipa slapd-XQ-FOXCONN]# ipa service-add-principal HTTP/jwt.example.com HTTP/munin.example.com
+----------------------------------------------------------------------------
+Added new aliases to the service principal "HTTP/jwt.example.com@XQ.FOXCONN"
+----------------------------------------------------------------------------
+  Principal name: HTTP/jwt.example.com@XQ.FOXCONN
+  Principal alias: HTTP/jwt.example.com@XQ.FOXCONN, HTTP/flownet.example.com@XQ.FOXCONN, HTTP/sourcemanager.example.com@XQ.FOXCONN,
+                   HTTP/hr.example.com@XQ.FOXCONN, HTTP/munin.example.com@XQ.FOXCONN
+[root@c8-cilent1 ~]# ipa cert-request jwt.example.com.csr --principal=HTTP/jwt.example.com --certificate-out=jwt.example.com.pem
+  Issuing CA: ipa
+  Certificate: MIIF+DCCBGCgAwIBAgIBFTANBgkqhkiG9w0BAQsFADA1MRMwEQYDVQQKDApYUS5GT1hDT05OMR4wHAYDVQQDDBVDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHhcNMjAw
+  NjA5MDYxNzQzWhcNMjIwNjEwMDYxNzQzWjAvMRMwEQYDVQQKDApYUS5GT1hDT05OMRgwFgYDVQQDDA9qd3QuZXhhbXBsZS5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKA
+  oICAQDxxh1qHfscilah8ROs6twEVUcogFuWi06x0SmZV7X4sbDum4HLH4CHDyKGucoROkKGeyRKsBmEjnmp99wV4cFFKgZP17o+BT/Lo1PXY92V7iXrtOe3MTRSK3+qO/bJWSGHQ4
+  LD1Rc42TPhCc9GYaZUA0C9GfcAlmk+LPYKwUHK4bN+x9XuZdfAi9y8TvDJkdpAXUVSdi53zCEwAgHmtHBdA3rnKetx2znJU6HhIbHAlrMKTRxRax/E6Gt3WgSvemOU04l/PJRuvpO
+  0ElapR5c/BfqmeubVX+WJ/VyedanerZEaF6fBm9Rf66LmuQe664WxA7bJvc9eQdXSYND9ZK59MFqfrkU+1eCkcBCVaPAqAn+W2xCQNFbkCE8A1SpXf9yx2+sDnusgOfZ0F6+OO7/V
+  GqyeizfXUfSwj9DESF4Nea64U4NqWioJxR0gld7UAaPsR7a/iMgSMVV/EaQKltaYiEQfm/dMoeXx/JqUGTUlDyZBOQ+BkbnpCUclksYQT0m7sMrEEqIw8rV5n9zaGwmNXfzvXXcNn
+  FNLBLoKwy+1srWlbUyWYGrVB9xS/ksHATF+znXAA908JugipzyMFnWWlXrSinIi4Q7OezdqqLyXp/bHiOy3loE4F8JhIqWexBAjT6f3CBn0yNBD/PlZVJBtxHr4hKHxEfYIxAbSGv
+  D1IwIDAQABo4IBlzCCAZMwHwYDVR0jBBgwFoAUp380GniwxmyNyjuJWl7cuXnuGeYwPAYIKwYBBQUHAQEEMDAuMCwGCCsGAQUFBzABhiBodHRwOi8vaXBhLWNhLnhxLmZveGNvbm4
+  vY2Evb2NzcDAOBgNVHQ8BAf8EBAMCBPAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMHUGA1UdHwRuMGwwaqAyoDCGLmh0dHA6Ly9pcGEtY2EueHEuZm94Y29ubi9pcGEv
+  Y3JsL01hc3RlckNSTC5iaW6iNKQyMDAxDjAMBgNVBAoMBWlwYWNhMR4wHAYDVQQDDBVDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHQYDVR0OBBYEFORajbhMa/kWKrchYTPX/K2NMkZ2M
+  G0GA1UdEQRmMGSCD2p3dC5leGFtcGxlLmNvbYITZmxvd25ldC5leGFtcGxlLmNvbYIZc291cmNlbWFuYWdlci5leGFtcGxlLmNvbYIOaHIuZXhhbXBsZS5jb22CEW11bmluLmV4YW
+  1wbGUuY29tMA0GCSqGSIb3DQEBCwUAA4IBgQA5e3suLq100YvPK6Qwhs5zmHw/gTD8kbnp7zO5zj7p4B+hgz5vnCEOt7Hw62t8FC+LGpWojdweX/GR3xYWLkfyLHvFflQwEKulVdL
+  OlY1U6XfTgR/4o2QEGOCvXp50esdz5Yb4i7eu66lxi3Zf16uTrjeyh/NgtEuHcOpiWyf5+78t9aqrywvl1K6NZcf3sjE2bWkx8uVEpYJQoCQ4FhBETqyPZIjIiaDmzyhpnqm9+SZw
+  fk71YvC3OxxzlHTKRrMN7MnfRfs3JlHupD9GpvA4BbY6WiiQ63kjEJmNy64j4vFBEyfWL8aqj8nFDhbeoi2A5bvfM9M/axD8ObPg/QJpCKeL3ZhMLeJ2zgxGJXWPhu28y1Ksx7bqb
+  Kt5CwpIP+Lm6BCT8iv09guXFJgTft/aD9ZbWaNcrv2/yQmfrUMtUntBi41IAMeqchbp2bc9dPP1vk/itBXuDNSFWfNUI8SWIdY/ircYQyF8Y4hWU7RlWCUsVS5vrwatJPkeR0/7zLE=
+  Subject: CN=jwt.example.com,O=XQ.FOXCONN
+  Subject DNS name: jwt.example.com, flownet.example.com, sourcemanager.example.com, hr.example.com, munin.example.com
+  Issuer: CN=Certificate Authority,O=XQ.FOXCONN
+  Not Before: Tue Jun 09 06:17:43 2020 UTC
+  Not After: Fri Jun 10 06:17:43 2022 UTC
+  Serial number: 21
+  Serial number (hex): 0x15
+[root@c8-cilent1 ~]# certutil -A -d ~/certdb -n jwt.exmaple.com -i jwt.example.com.pem -t u,u,u
+Notice: Trust flag u is set automatically if the private key is present.
+[root@c8-cilent1 ~]# pk12util -o jwt.example.com.p12 -d ~/certdb/ -n jwt.exmaple.com

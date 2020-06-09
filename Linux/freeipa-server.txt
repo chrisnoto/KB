@@ -295,8 +295,8 @@ Number of entries returned 5
 
 
 
-
-
+##### 切换CA服务 #####
+ipa-cacert-manage renew
 
 
 
