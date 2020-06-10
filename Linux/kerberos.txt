@@ -131,7 +131,8 @@ Valid starting       Expires              Service principal
 06/04/2020 16:45:32  06/05/2020 16:45:32  ldap/ipa.xq.foxconn@XQ.FOXCONN
 06/04/2020 16:45:33  06/05/2020 16:45:32  HTTP/ipa.xq.foxconn@XQ.FOXCONN
 
-从keytab文件重新生成票据
+#############keytab###########
+#从keytab文件重新生成票据 （TGT）
 [root@ipa3 etc]# klist -k krb5.keytab
 Keytab name: FILE:krb5.keytab
 KVNO Principal
@@ -168,6 +169,11 @@ Default principal: chaofeng@XQ.FOXCONN
 
 Valid starting       Expires              Service principal
 06/05/2020 10:08:05  06/06/2020 10:08:05  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+
+### add a host/service principal to a keytab
+A host or service principal can be added to a new or existing keytab using the ktadd command of kadmin:
+
+kadmin -q "ktadd -k /etc/apache2/http.keytab HTTP/www.example.com"
 
 #########  KCM  ##########
 [root@ipa ~]# cat /etc/krb5.conf.d/kcm_default_ccache |egrep -v '#|^$'

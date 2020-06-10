@@ -1,6 +1,6 @@
 ############# OpenSSL 颁发证书 ###########
 自签名证书的 Issuer 和 Subject 是一样的
-# 生成自签名CA证书
+# 生成自签名CA根证书
 openssl genrsa -out ca-key.pem 2048
 openssl req -x509 -new  -nodes -key ca-key.pem -days 10000 -out ca.pem -subj "/CN=kube-ca"
 
@@ -16,6 +16,9 @@ openssl req -new -sha256 \
     -out ldap.csr
 # 根据ldap.csr签发证书
 openssl ca -in ldap.csr \
+    -md sha256 \
+	-keyfile ca.key \
+	-cert ca.crt \
 	-extensions SAN \
 	-config <(cat /etc/pki/tls/openssl.cnf \
         <(printf "[SAN]\nsubjectAltName=DNS:ldap1.tj.foxconn,DNS:ldap2.tj.foxconn")) \ 
@@ -109,7 +112,10 @@ IPA CLI:   没有写到NSSDB
 mkdir ~/certdb
 certutil -N -d ~/certdb/
 certutil -A -d ~/certdb/ -n 'XQ.FOXCONN IPA CA' -t CT,, -a < /etc/ipa/ca.crt
+ipa host-add `hostname`
 ipa service-add HTTP/`hostname`
+ipa service-add-host --hosts=`hostname` HTTP/`hostname`
+#ipa-getcert request可加-D  指定多域名
 [root@c8-cilent1 ~]# ipa-getcert request -d ~/certdb -n Server-Cert -K HTTP/`hostname` -N CN=`hostname`,O=XQ.FOXCONN -g 2048 -p /root/pwdfile.txt
 New signing request "20200609004729" added.
 
