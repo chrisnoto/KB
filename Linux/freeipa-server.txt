@@ -26,6 +26,8 @@ testad.tj.foxconn 10.67.51.61
 2   ipa与ad dc做互信任
 3   通过AD的用户和组认证linux服务器
 4   ipa中设置ipa组和外部组以及sudo rule来控制AD中用户的sudo权限
+FreeIPA版本：4.8.0-13
+
 
 一 安装ipa主server
 #安装包
@@ -351,3 +353,24 @@ tj.foxconn
   required-package: sssd
   required-package: adcli
   required-package: samba-common-tools
+
+  
+  
+###### ENABLING OFFLINE AUTHENTICATION  
+[pam]
+offline_credentials_expiration = 3
+...
+
+[domain/EXAMPLE]
+cache_credentials = true
+account_cache_expiration = 7
+entry_cache_timeout = 14400  
+
+
+###########  IPA  测试  ###########
+sssd offline authentication     -  ok
+
+user change password with passwd on ipa client   -    ok
+
+sssd cache works with old password when ipa service is down and AD user's password is reset
+

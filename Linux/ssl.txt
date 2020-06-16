@@ -53,7 +53,8 @@ Getting CA Private Key
 
 PEM 转为 DER：openssl x509 -in cacert.crt -outform der -out cacert.der
 DER 转为 PEM：openssl x509 -in cert.crt -inform der -outform pem -out cacert.pem
-
+PEM 转为 CRT：openssl x509 -in ssl-cert-snakeoil.pem -out ssl-cert-snakeoil.crt
+PEM 转为 key: openssl rsa -in privkey.pem -out privkey.key
 
 
 
@@ -100,13 +101,17 @@ The certmonger daemon and its command-line clients simplify the process of gener
  can renew certificates that are about to expire. 
  certmonger uses the IdM getcert command to manage all certificates.
  
-TLS server authentication
+#TLS server authentication
 Certmonger:   写到了NSSDB
  sudo ipa-getcert request <key/DB location opts> -K HTTP/`hostname` -N CN=`hostname`,O=EXAMPLE.COM
 IPA CLI:   没有写到NSSDB
  ipa cert-request <key/DB location opts> --autofill --principal=HTTP/`hostname`
 
-
+#TLS client authentication
+Certmonger:
+ sudo ipa-getcert request <key/DB location opts> -K ${USER} -N CN=${USER},O=EXAMPLE.COM -T caIPAUserCert
+IPA CLI:
+ ipa cert-request <key/DB location opts> --autofill --principal=${USER} --profile-id=caIPAUserCert
 
 ######## Free IPA 颁发证书 ###########
 mkdir ~/certdb
