@@ -36,7 +36,7 @@ hdd deadline
 ######swappiness
 vm.swappiness = 1
 
-开启Cache能显着提升顺序io的读写性能，缓存越大性能越好；如果容许一定的数据丢失，建议开启
+开启Cache能显著提升顺序io的读写性能，缓存越大性能越好；如果容许一定的数据丢失，建议开启
 root@node-14:~# ceph tell osd.* injectargs --filestore_queue_max_ops=20000
 root@node-14:~# ceph tell osd.* injectargs --osd_max_write_size 256
 root@node-14:~# ceph tell osd.* injectargs --rbd_cache_size 67108864

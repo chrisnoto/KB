@@ -22,6 +22,63 @@ SASL data security layer installed.
 dn: CN=1038290,CN=Users,DC=tj,DC=foxconn
 dn: CN=123456,CN=Users,DC=tj,DC=foxconn
 
+#ipa server上查询DNS
+[root@ipa etc]# ldapsearch -Y GSSAPI -H ldapi://%2fvar%2frun%2fslapd-XQ-FOXCONN.socket -b "cn=dns, dc=xq,dc=foxconn" |more
+SASL/GSSAPI authentication started
+SASL username: admin@XQ.FOXCONN
+SASL SSF: 256
+SASL data security layer installed.
+# extended LDIF
+#
+# LDAPv3
+# base <cn=dns, dc=xq,dc=foxconn> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# dns, xq.foxconn
+dn: cn=dns,dc=xq,dc=foxconn
+objectClass: idnsConfigObject
+objectClass: nsContainer
+objectClass: ipaConfigObject
+objectClass: ipaDNSContainer
+objectClass: top
+cn: dns
+ipaConfigString: DNSVersion 1
+ipaDNSVersion: 2
+
+#ipa server上查询DNS  用DNS principle
+[root@ipa etc]# kinit -kt named.keytab DNS/ipa.xq.foxconn@XQ.FOXCONN
+[root@ipa etc]# klist
+Ticket cache: KCM:0:33229
+Default principal: DNS/ipa.xq.foxconn@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/16/2020 14:20:27  06/17/2020 14:20:27  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+[root@ipa etc]# ldapsearch -Y GSSAPI -H ldapi://%2fvar%2frun%2fslapd-XQ-FOXCONN.socket -b "cn=dns, dc=xq,dc=foxconn" |more
+SASL/GSSAPI authentication started
+SASL username: DNS/ipa.xq.foxconn@XQ.FOXCONN
+SASL SSF: 256
+SASL data security layer installed.
+# extended LDIF
+#
+# LDAPv3
+# base <cn=dns, dc=xq,dc=foxconn> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# dns, xq.foxconn
+dn: cn=dns,dc=xq,dc=foxconn
+objectClass: idnsConfigObject
+objectClass: nsContainer
+objectClass: ipaConfigObject
+objectClass: ipaDNSContainer
+objectClass: top
+cn: dns
+ipaDNSVersion: 2
+
+
 #ssh ipa server
 [chensen@c8-cilent1 /]$ ssh -vv ipa2.xq.foxconn
 OpenSSH_7.8p1, OpenSSL 1.1.1c FIPS  28 May 2019

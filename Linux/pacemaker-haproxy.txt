@@ -276,7 +276,7 @@ net.ipv4.tcp_fin_timeout=30 # how long to keep sockets in FIN-WAIT-2
 
 Protect against syn flooding 
 # Consider this amount of clients as valid 
-$ sysctl -w net.ipv4.tcp_max_syn_backlog=”4096” 
+$ sysctl -w net.ipv4.tcp_max_syn_backlog=4096
 # Once net.ipv4.tcp_max_syn_backlog is reached, enable syn cookies 
 $ sysctl -w net.ipv4.tcp_syncookies=1 
 # Enable reverse path filtering, is the source routable through the incoming interface? 

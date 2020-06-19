@@ -81,3 +81,10 @@ rewrite  ^ https://$server_name$request_uri? permanent;
 
 Or use new syntax (recommended):
 return         301 https://$server_name$request_uri;
+
+####### buffer 和 cache #########
+在代理过程中，两个连接速度不一致会对客户端的体验带来不良的影响：
+   从客户端到代理服务器的连接
+   从代理服务器到后端服务器的连接
+buffer（缓冲） 帮助减轻后端服务器负担，达到处理更多 request的目的
+Nginx 还提供cache功能来缓存来自后端服务器的内容，减少要连接 upstream 的次数。
