@@ -1,3 +1,8 @@
+$ curl -k -x http://10.67.124.210:808 https://raw.githubusercontent.com/fabric8io/docker-dirsrv-389ds/master/Dockerfile -o /c/Users/chensen/Dockerfile
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  1260  100  1260    0     0    450      0  0:00:02  0:00:02 --:--:--   450
+
 ######## dns记录 ##########
 C:\Users\chensen>nslookup -q=txt hp.com
 C:\Users\chensen>nslookup -q=SRV _ldap._tcp.cesbg.foxconn

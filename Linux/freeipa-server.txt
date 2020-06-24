@@ -374,3 +374,49 @@ user change password with passwd on ipa client   -    ok
 
 sssd cache works with old password when ipa service is down and AD user's password is reset
 
+
+
+#########  允许 使用证书登录 IPA 网页 #########
+# kinit admin
+# ipa-advise config-server-for-smart-card-auth > server_cert_script.sh
+# chmod +x server_cert_script.sh
+[root@ipa ~]# ./server_cert_script.sh /etc/ipa/ca.crt
+Ticket cache: KCM:0
+Default principal: admin@XQ.FOXCONN
+
+Valid starting       Expires              Service principal
+06/20/2020 10:50:35  06/21/2020 10:50:33  krbtgt/XQ.FOXCONN@XQ.FOXCONN
+06/20/2020 10:50:38  06/21/2020 10:50:33  HTTP/ipa.xq.foxconn@XQ.FOXCONN
+--------------------
+1 IPA server matched
+--------------------
+  Server name: ipa.xq.foxconn
+  Min domain level: 1
+  Max domain level: 1
+----------------------------
+Number of entries returned 1
+----------------------------
+The ipa-pkinit-manage command was successful
+PKINIT already enabled
+Installing CA certificate, please wait
+Verified CN=Certificate Authority,O=XQ.FOXCONN
+CA certificate successfully installed
+The ipa-cacert-manage command was successful
+Systemwide CA database updated.
+Systemwide CA database updated.
+The ipa-certupdate command was successful
+###每台ipa server上都要执行
+######### 颁发用户证书 ########
+[root@c8-cilent1 ~]# certutil -R -d ~/certdb/ -a -g 4096 -n liurui  -s "CN=liurui,O=XQ.FOXCONN" > liurui.csr
+[root@c8-cilent1 ~]# ipa cert-request liurui.csr --principal=liurui@XQ.FOXCONN --profile-id=IECUserRoles --certificate-out=/root/liurui.pem
+  Issuing CA: ipa
+  Certificate: MIIFgDCCA+igAwIBAgIBGjANBgkqhkiG9w0BAQsFADA1MRMwEQYDVQQKDApYUS5GT1hDT05OMR4wHAYDVQQDDBVDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHhcNMjAwNjIwMDU1NzE5WhcNMjIwNjIxMDU1NzE5WjAmMRMwEQYDVQQKDApYUS5GT1hDT05OMQ8wDQYDVQQDDAZsaXVydWkwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQDU7kExRQvLFlEfX0rOCsUeXIdNLWYDhb8rAW7Iyi2ze+N7u1m/8BUaGFYReaDenX5/B7iaI6/DVffvd97m3tTFKVg7hco1wtHglUkN5DnRffi7Zy0WEydm0YIkLKyh1DiXOkX1dqbeNqvHR5eRLhr677zgsPOat5pV9Jkc2L9mh05D/p25pWIqysm2V2QYy0kdFgQuto+oZw16kD10R8zD8NK+lBcgSs87SRb3rzoYU75sqyP8ZytQJIhXmwBb+Tp231N/bqFD2992WDhytmThkh3qcu5jpjgHZHg4JKo1cKvmD4fFeZc9Vh/y4jJmK8Si7fq7UY7ZOYCSKQ19q9050tGgfedCsmS+F4ip494DwrO94nFL7oKgsevg535vGugx0E6+q0nkrbrMJdtb7XPc/7c0yiB6SzS7ZfGI+sX789XBrN7049/6gRTIcAFYrd1TkWZEFm2Bw3lGuvknP3dJBCaVevbloFWzJEjHbJopmxfqwzSbIv64VXbw6R7p7GZJmaTSG+9K8dSCugfQgz1Rzor8Qul94eL7G/tKtUckPV+5oS2w8kBgipcG5cSidH8l8RMjKu39L/WeTlsFZrZv+jy/j+OXQ6z3GpHlpO8n+etR62cmVaeGRvxfFroFjz4Bq+6vUj6g5LfTAG5EhUh9dfN8SR0UIrNaQZ9VHGj4dQIDAQABo4IBKDCCASQwHwYDVR0jBBgwFoAUp380GniwxmyNyjuJWl7cuXnuGeYwPAYIKwYBBQUHAQEEMDAuMCwGCCsGAQUFBzABhiBodHRwOi8vaXBhLWNhLnhxLmZveGNvbm4vY2Evb2NzcDAOBgNVHQ8BAf8EBAMCBPAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMHUGA1UdHwRuMGwwaqAyoDCGLmh0dHA6Ly9pcGEtY2EueHEuZm94Y29ubi9pcGEvY3JsL01hc3RlckNSTC5iaW6iNKQyMDAxDjAMBgNVBAoMBWlwYWNhMR4wHAYDVQQDDBVDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHQYDVR0OBBYEFHT2NMOPBU5myD6wC4eO1UhLYnUFMA0GCSqGSIb3DQEBCwUAA4IBgQCfAg95l0qEBAaIQJMCRpbSvrGOjG7De0fu8zGYhhDdx6dt558IQGniFiytJ7U9Vs4lPeRZZ1f4CXaCiKm3jeb+nw6UykFHST7aEslvpgRKzXj7lLAM1L7DBmsI13acjVpj2wbeI69plbUAOKk/7vLkADaTUe3geJvulcmTOT8MoaNRb86InXxQl6OuQgq1aenQy6fGuc1MnOx2V9pAK6Jo/TxFBCEEqH1ov/4vi5Q3GRTh0LQvfV77auY5acwSv71tUTXichA2oEx6rhR7hpGDfKifracg8f838kgnSbONlyXsfVyRkS9KWd6nw3w5Rn1syvn/TmJNJF5OcyFVN73daOsgxJTSFZM7+++crZDHnxG6tPOjE56GvPeBqDQjMeBY1KQkmNRAmDjX3fb1M+Feq4xkV5ubmo/eU6VuHEPjrfXannEFhYkIRPiXIIH2ijGtRIK+6J/amijBJtSPNIAsDGaDf15NE/bDP2T78rZoFe+RLjaZyKVU8evDtrVKMaQ=
+  Subject: CN=liurui,O=XQ.FOXCONN
+  Issuer: CN=Certificate Authority,O=XQ.FOXCONN
+  Not Before: Sat Jun 20 05:57:19 2020 UTC
+  Not After: Tue Jun 21 05:57:19 2022 UTC
+  Serial number: 26
+  Serial number (hex): 0x1A
+[root@c8-cilent1 ~]# certutil -A -d ~/certdb/ -n liurui -t P,, -i /root/liurui.pem
+[root@c8-cilent1 ~]# pk12util -d ~/certdb/ -o /root/liurui.p12 -n liurui
+导入liurui.p12到chrome浏览器   CA证书之前已导入

@@ -58,13 +58,6 @@ PEM 转为 key: openssl rsa -in privkey.pem -out privkey.key
 
 
 
-
-
-
-
-
-
-
 ############ NSS颁发证书 #############
 ############ CSR ###########
 certutil -R -d /etc/dirsrv/slapd-itldap1 -a -s "cn=*.example.com,O=foxconn,OU=HR,ST=TJ,C=CN" --extSAN "dns:example.com,dns:*.example.com"    -a ASCII输出    到屏幕

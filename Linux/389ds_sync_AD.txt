@@ -1,0 +1,25 @@
+Two questions:
+1. For sync, is there a possibility, to sync any main OU and all other sub-OU's (e.g. OU=ISE which contains OUs Guest, Student, Employee, which has uids)?
+So I must create for every OU an additional Windows Sync Agreement.
+
+As to your first question, the OUs will sync if you have created them ahead of time. This is why I have included the section on dumping your AD schema 
+and loading it into the Directory Server. Once the schema is in place the OU will sync normally.
+
+
+Dumping and Import Active Directory OU's
+
+Some people, particularly businesses will have more than just the default OU's. If this is the case you will need to dump your OU's from Active Directory into 
+an ldif file in order to be imported into the 389 server. If this is the case for you, here are some handy commands to run on the AD server
+
+Code:
+ldifde -f example_groups.ldif -d "dc=example,dc=com " -p subtree -r "(&(objectCategory=group)(objectClass=group))" -l "cn,objectclass"
+
+ldifde -f example_users.ldif -d "dc=example,dc=com"  -p subtree -r "(&(objectCategory=person)(objectClass=User)(givenname=*))" -l "cn,givenName,objectclass,samAccountName"
+
+ldifde -f example_ous.ldif -d "dc=example,dc=com" -p subtree -r "(objectCategory=organizationalUnit)" -l "cn,objectclass,ou"
+The most important one is the last one dumping to example_ous.ldif. The others are optional depending on whether or not you wish to allow the 389 server to pull those down 
+from AD or whether you want to do most of the work at once.
+
+After you have this(these) file(s) you can now import then in the 389 server
+
+# 389-ds has same suffix with Active Directory
