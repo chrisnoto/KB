@@ -95,10 +95,11 @@ dnf module install -y idm:DL1/{server,client,dns,adtrust}
 10.67.51.34  ipa.xq.foxconn ipa
 10.67.51.35  ipa2.xq.foxconn ipa2
 nmcli c modify ens192 ipv4.dns 10.67.51.34
+nmcli c modify ens192 +ipv4.dns 10.67.51.36
 nmcli c up ens192
 
 #配置ipa-client
-在ipa上操作
+在ipa上操作  (可不用，会自动添加host和dns A记录)
 ipa host-add --ip-address 10.67.51.35 ipa2.xq.foxconn
 ipa dnsrecord-add xq.foxconn ipa2 --ttl=3600 --a-ip-address=10.67.51.35
 在ipa2上操作
