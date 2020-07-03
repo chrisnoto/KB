@@ -1,0 +1,84 @@
+########Tomcat和apache整合######
+三种方法:
+1 利用apache自带的mod_proxy模块使用代理技术连接Tomcat。在配置之前确保是否使用的是apache的版本是2.2.x。因为apache2.2.x对mod_proxy这个模块进行了重写，
+大大增强了其功能和其稳定性。http_proxy模式是基于HTTP协议的代理。因此要求Tomcat必须提供HTTP服务，换句话说必须是启用Tomcat的HTTP Connector。
+2 利用ajp_proxy 连接方式其实和http_proxy 方式是一样，但是由于mod_proxy所提供的功能，配置也是一样的。但是采用proxy的连接方式。只需要在apache加载所需要的模块，
+mod_proxy相关的模块有mod_proxy.so、mod_proxy_connect.so、mod_proxy_http.so、mod_proxy_ftp.so、mod_proxy_ajp.so,其中mod_proxy_ajp.so 只在apache2.2.x中才有。
+如果是采用http_proxy的方式则需要加载mod_proxy.so 和mod_proxy_http.so;如果是采用ajp_proxy的连接方式则需要加载mod_proxy.so和mod_proxy_ajp.so 这两个模块
+3 利用jk(mod_jk的模块)，该方法是最常见的方式。jk本身用两个版本分别是1和2，其中jk2已经被抛弃了。jk是通过AJP协议与Tomcat服务器进行通讯的,Tomcat默认的AJP Connector的端口是8009。
+jk本身提供一个监控集群管理的页面Jkstatus，通过jkstatus 可以监控jk的工作状态及对到tomcat的连接进行设置。
+
+jk原理：
+apache和tomcat之间通信通过worker进行(由Tomcat使用Server.xml文件中Connector的标签来定义其端口和协议)，
+通过mod_jk的模块和tomcat通信。整个过程其实就是让apache的httpd.conf文件调用mod_jk.conf，mod_jk.conf调用workers.properties，最后配置虚拟主机。
+
+文件说明
+mod_jk.conf：主要定义mod_jk模块的位置以及mod_jk模块的连接日志设置，还有定义worker.properties文件的位置。
+worker.properties：定义worker的参数，主要是连接tomcat主机的地址和端口信息。如果Tomcat与apache不在同一台机器上，或者需要做多台机器上tomcat的负载均衡
+只需要更改workers.properties文件中的相应定义即可。
+
+cat >> /usr/local/apache/conf/httpd.conf <<EOF
+Include conf/extra/httpd-vhosts.conf
+LoadModule jk_module  modules/mod_jk.so
+Include conf/mod_jk.conf
+EOF
+cat > /usr/local/apache/conf/extra/httpd-vhosts.conf <<EOF
+NameVirtualHost *:80
+<VirtualHost *:80>
+    DocumentRoot "/data/xxx"
+    ServerName 192.168.1.110
+    JkMount /sun.shop/blog/* config1
+    #例子2，向Apache请求此文件夹内页面时，系统将转向用Tomcat解析
+    JkMount /*.jsp config1
+    #例子3，向 Apache 请求jsp页面时，用 Tomcat 进行解析
+    JkMount /*.do config1
+    例子4，向 Apache 请求.do 动作时， 用 Tomcat 进行解析
+    JkMount /*.action config1
+    例子5，向 Apache 请求 .action 动作时， 用 Tomcat 进行解析
+    ErrorLog "/usr/local/apache/logs/xxx_error.log"
+    CustomLog "/usr/local/apache/logs/xxx_access.log" common
+<Directory "/data/xxx">
+    Options FollowSymLinks
+    AllowOverride All
+    Order allow,deny
+    Allow from all
+    DirectoryIndex index.jsp
+   </Directory>
+</VirtualHost>
+EOF
+
+JkMount /*.jsp config1 指令代表当客户端向 Apache 发送 *.jsp 页面请求时，把处理指向 Tomcat。
+当使用 Struts时建议使用  *.action、*.do等后缀命名动作，否则若使用无后缀命名时，加入 JkMount /* config1命令，
+Apache 则会把包括 *.html等静态页面所有请求，都转向 Tomcat。
+
+
+cat > /usr/local/apache/conf/mod_jk.conf << EOF
+JkWorkersFile /usr/local/apache/conf/workers.properties
+# Where to put jk logs
+JkLogFile /usr/local/apache/logs/mod_jk.log
+# Set the jk log level [debug/error/info]
+JkLogLevel info
+# Select the log format
+JkLogStampFormat "[%a %b %d %H:%M:%S %Y]"
+# JkOptions indicate to send SSL KEY SIZE,
+JkOptions  +ForwardKeySize +ForwardURICompat -ForwardDirectories
+# JkRequestLogFormat set the request format
+JkRequestLogFormat "%w %V %T"
+EOF
+cat > /usr/local/apache/conf/workers.properties << EOF
+# Defining a worker named worker1 and of type ajp13
+worker.list=worker1
+# Set properties for worker1
+worker.worker1.type=ajp13
+worker.worker1.host=localhost
+worker.worker1.port=8009
+worker.worker1.lbfactor=50
+worker.worker1.cachesize=10
+worker.worker1.cache_timeout=600
+worker.worker1.socket_keepalive=1
+worker.worker1.socket_timeout=300
+EOF
+vi /usr/local/tomcat/conf/server.xml
+<Connector port="8009"
+               enableLookups="false" redirectPort="8443" protocol="AJP/1.3" />
+<Context path="" docBase="/data/xxx" debug="0" reloadable="true" crossContext="true"/>

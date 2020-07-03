@@ -1,3 +1,8 @@
+##### 文件系统使用率大于40% ######
+[root@repo-centos ~]# while read num t;do [ ${num%%%} -gt 40 ] && echo $num $t;done< <(df --output=pcent,target |tail -n +2)
+48% /mrepo
+
+
 $ curl -k -x http://10.67.124.210:808 https://raw.githubusercontent.com/fabric8io/docker-dirsrv-389ds/master/Dockerfile -o /c/Users/chensen/Dockerfile
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
@@ -2604,3 +2609,51 @@ if tty -s 2>/dev/null >/dev/null ; then
 fi
 # END: Secondary logging to maintain individual logs following sudo su - <target id>
 #-------------------- xxEND_IBM_SEC_LOGxx --------------------
+
+
+
+########## add secondary logging function with script ##########
+#!/bin/bash
+grep -q 'secondary log' /root/.bashrc
+if [[ $? != 0 ]]
+then
+(cat <<'EOF'
+##############secondary log################
+# START Secondary Logging
+if [[ `tty` ]]
+then
+        From=`who am i`
+        From=${From%% *}
+        To=`whoami`
+        File="$From:$To"
+
+        export HISTTIMEFORMAT='%x - %H:%M:%S '
+        export HISTSIZE=10000
+
+    # make the history log directory if necessary
+        if [ ! -d /var/log/history/$To ]
+        then
+                /bin/mkdir -p /var/log/history/$To
+        fi
+
+        # make sure the permissions are suitable
+        /bin/chmod 700 /var/log/history/$To
+
+    # create the file and set the atributes to append only so users can't
+    # modify their own logs
+        if [ ! -f /var/log/history/$To/.sh_history.$File ]
+        then
+                /bin/touch /var/log/history/$To/.sh_history.$File
+        if [ $To == root ]
+        then
+                /usr/bin/chattr +a /var/log/history/$To/.sh_history.$File
+        fi
+    fi
+    export HISTFILE=/var/log/history/$To/.sh_history.$File
+fi
+
+# END Secondary Logging
+#################################
+EOF
+) >> /root/.bashrc
+fi

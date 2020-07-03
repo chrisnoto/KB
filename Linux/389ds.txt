@@ -124,13 +124,18 @@ certutil.exe -d . -N
 certutil.exe -d . -A -n "DS CA cert" -t "CT,," -a -i \path\to\dsca.crt
 4 将AD的CA证书导入到389DS的NSS DB里
 5 389DS控制台里配置userroot的同步策略
-single master
+multi master
 同步策略中的bind dn为AD域中有权限的用户
 6 策略配置完毕后，发起同步的初始化或者send and receive updates
 可以看到AD的用户和组同步到389DS里对应的OU中
 7 如要是389DS中的用户和组同步到AD，用户需要配置属性"NT Users"，并勾选create user
 确保取消“POSIX account”，这样带有NT user属性及无POSIX user属性的用户才能由389DS同步到AD域中
-
+##########  同步OU树 ########
+1 从AD导出OU树
+ldifde -f outree.ldif -d "dc=tj,dc=fox" -p subtree -r "(objectCategory=organizationalUnit)" -l "cn,objectclass,ou"
+2 OU树导入到389
+3 建立389和AD之间的sync agreement
+win subtree和389 subtree要一样
 ########### AD签署来自389ds的证书请求 #############
 on itldap1:
 certutil -R -d ./ -o itldap1.tj.com.req -a -g 4096 -v 24 -s "CN=itldap1.tj.com,OU=IT,O=Foxconn,L=Tianjin,ST=Tianjin,C=CN" -8 "itldap1.tj.com,itldap1"

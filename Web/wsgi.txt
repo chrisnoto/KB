@@ -1,0 +1,175 @@
+######## apache with mod_wsgi ####
+LoadModule wsgi_module modules/mod_wsgi.so
+
+基础配置
+Once you've got mod_wsgi installed and activated, edit your Apache server's httpd.conf file and add the following.
+
+WSGIScriptAlias / /path/to/mysite.com/mysite/wsgi.py
+WSGIPythonHome /path/to/venv
+WSGIPythonPath /path/to/mysite.com
+
+<Directory /path/to/mysite.com/mysite>
+<Files wsgi.py>
+Require all granted
+</Files>
+</Directory>
+
+使用 mod_wsgi 后台模式
+WSGIDaemonProcess example.com python-home=/path/to/venv python-path=/path/to/mysite.com
+WSGIProcessGroup example.com
+如果你想在子目录中开放你的项目（本例中 https://example.com/mysite），你可在上述配置中添加 WSGIScriptAlias：
+
+WSGIScriptAlias /mysite /path/to/mysite.com/mysite/wsgi.py process-group=example.com
+
+实例
+LoadModule wsgi_module modules/mod_wsgi.so
+
+WSGISocketPrefix /var/run/wsgi
+
+Listen 80
+<VirtualHost *:80>
+
+    ServerName graphite
+    DocumentRoot "/opt/graphite/webapp"
+    ErrorLog /opt/graphite/storage/log/webapp/error.log
+    CustomLog /opt/graphite/storage/log/webapp/access.log common
+
+    WSGIDaemonProcess graphite-web processes=5 threads=5 display-name='%{GROUP}' inactivity-timeout=120
+    WSGIProcessGroup graphite-web
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIImportScript /opt/graphite/conf/graphite.wsgi process-group=graphite-web application-group=%{GLOBAL}
+
+    WSGIScriptAlias / /opt/graphite/conf/graphite.wsgi
+
+    Alias /static/ /opt/graphite/static/
+####### nginx with uswgi #########
+Create an ini file in /etc/uwsgi.d/ like this:
+
+# /etc/uwsgi.d/myproject.ini
+
+[uwsgi]
+plugins=python3
+chdir=/path/to/myproject
+module=myproject.wsgi:application
+# Settings module, relative to the chdir path
+env='DJANGO_SETTINGS_MODULE=myproject.settings'
+# Python virtual env path
+home=/path/to/venv
+# File used for uwsgi to send signals and start/stop
+pidfile=/run/uwsgi/myproject.pid
+socket=127.0.0.1:8001
+master=True
+processes=5
+harakiri=20
+max-requests=5000
+vacuum=True
+
+Create an nginx configuration entry in /etc/nginx/conf.d/
+
+# /etc/nginx/conf.d/mydjango.conf
+server {
+    listen 0.0.0.0:80;
+    server_name example.com;
+
+    # Serve static files
+    location /static/ {
+        alias /srv/django-static/;
+    }
+
+    # Reverse proxy the uwsgi Django request
+    location / {
+        include uwsgi_params;
+        uwsgi_pass 127.0.0.1:8001;
+    }
+}
+
+######nailgun uwsgi#######
+uwsgi:
+  enable-threads: 1
+  threads: 1
+  workers: 4
+  master: 1
+  socket: :8001
+  plugin: python
+  chown-socket: nginx:nginx
+  pythonpath: /usr/lib/python2.7/site-packages/nailgun
+  touch-reload: /var/lib/nailgun-uwsgi
+  virtualenv: /usr
+  module: nailgun.wsgi
+  buffer-size: 49180
+  listen: 4096
+  pidfile: /var/run/nailgun.pid
+  logto: /var/log/nailgun/app.log
+  mule: 1
+  lazy: true
+  shared-pyimport: /usr/lib/python2.7/site-packages/nailgun/utils/mule.py
+  
+########  Django ##########
+[uwsgi]
+#使用nginx连接时使用，Django程序所在服务器地址
+socket=10.211.55.2:8001
+#直接做web服务器使用，Django程序所在服务器地址
+#http=10.211.55.2:8001
+#项目目录
+chdir=/Users/delron/Desktop/meiduo/meiduo_mall
+#项目中wsgi.py文件的目录，相对于项目目录
+wsgi-file=meiduo_mall/wsgi.py
+# 进程数
+processes=4
+# 线程数
+threads=2
+# uwsgi服务器的角色
+master=True
+# 存放进程编号的文件
+pidfile=uwsgi.pid
+# 日志文件，因为uwsgi可以脱离终端在后台运行，日志看不见。我们以前的runserver是依赖终端的
+daemonize=uwsgi.log
+# 指定依赖的虚拟环境
+virtualenv=/Users/delron/.virtualenv/meiduo
+
+     upstream meiduo {
+         server 10.211.55.2:8001;  # 此处为uwsgi运行的ip地址和端口号
+         # 如果有多台服务器，可以在此处继续添加服务器地址
+     }
+
+     #gzip  on;
+     server {
+         listen  8000;
+         server_name api.meiduo.site;
+
+         location / {
+             include uwsgi_params;
+             uwsgi_pass meiduo;
+         }
+
+     }
+
+     server {
+         listen       80;
+         server_name  www.meiduo.site;
+
+         #charset koi8-r;
+
+         #access_log  logs/host.access.log  main;
+         location /xadmin {
+             include uwsgi_params;
+             uwsgi_pass meiduo;
+         }
+
+         location /ckeditor {
+             include uwsgi_params;
+             uwsgi_pass meiduo;
+         }
+
+         location / {
+             root   /home/python/Desktop/front_end_pc;
+             index  index.html index.htm;
+         }
+
+
+         error_page   500 502 503 504  /50x.html;
+         location = /50x.html {
+             root   html;
+         }
+
+     }  
