@@ -1,3 +1,12 @@
+########nginx 会话保持#######
+1 ip_hash
+IP哈希存在一个比较严重缺陷，即：客户端必须能够直连Nginx服务器，他们之间不能再插入其它层级，否则Nginx就识别不到客户端的IP了
+2 第三方模块 nginx-sticky-module
+2012年之后就没更新了 ，nginx-1.12.1都不支持了
+nginx-sticky-module-1.1.tar.gz	nginx-sticky-module-1.1  Type-Source  Featured	Sep 25, 2012
+3 商业版 nginx plus 的cookie insertion
+4 第三方模块 nginx-sticky-module-ng   生成环境要多测试  网上有不推荐的
+haproxy对会话保持支持非常好
 ######nginx平滑重启######
 [root@localhost conf.d]# ps -ef |grep nginx
 root      2029     1  0 13:15 ?        00:00:00 nginx: master process /usr/sbin/nginx -c /etc/nginx/nginx.conf

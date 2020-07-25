@@ -1,0 +1,31 @@
+############ firewall-cmd ############
+启用masquerade
+[root@kvm-prod ~]# firewall-cmd --zone=public --add-masquerade --permanent
+success
+[root@kvm-prod ~]# firewall-cmd --reload
+success
+You have mail in /var/spool/mail/root
+[root@kvm-prod ~]# firewall-cmd --zone=public --query-masquerade
+yes
+开启端口5930-5933
+[root@KVMSERVER ~]# firewall-cmd --zone=public --add-port=5930-5933/tcp --permanent
+success
+[root@KVMSERVER ~]# firewall-cmd --reload
+success
+
+
+
+########### ufw ###########
+
+
+
+
+
+
+
+
+
+
+
+
+############ iptables #############

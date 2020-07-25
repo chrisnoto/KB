@@ -1,3 +1,9 @@
+######## docker kill 发送信号 reload 配置 #####
+Reloading config
+If you used a bind mount for the config and have edited your haproxy.cfg file, you can use HAProxy's graceful reload feature by sending a SIGHUP to the container:
+
+$ docker kill -s HUP my-running-haproxy
+
 ########### docker images 按大小排序 ##########
 docker images --format '{{.Size}}\t{{.Repository}}:{{.Tag}}\t{{.ID}}' | sort -h -r | column -t
 

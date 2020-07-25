@@ -58,7 +58,7 @@ OK
 故障原因    galear三台节点磁盘100% full
 解决过程:
 1 先扩容
-2 找到能成为primary的db02，   galera_new_cluster
+2 找到能成为primary的db02，  show status like 'wsrep_last_committed'，db02拥有最高的数值， galera_new_cluster
 3  db01的mariadb服务无法启动，原因galera同步800G数据肯定超时
  解决  先删除2,3,4月份的监控数据，然后增加override.conf 
  /etc/systemd/system/mariadb.service.d/override.conf
@@ -112,4 +112,101 @@ May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Unknown/unsupporte
 May 11 13:59:46 vstjzabdb01 sh: 2020-05-11 13:59:46 0 [ERROR] Aborting'
 
 
+#######################Full Cluster Recovery#################
 
+In this scenario, all nodes failed or did not gracefully shutdown. Total loss of quorum occurred and the cluster is not accepting any SQL requests. After a hard crash such as this, 
+even if all the nodes come back online the MariaDB service will be unable to start. This is due to the unclean shutdown and none of the nodes were able to do the last commit. 
+A Galera cluster can crash in various ways resulting in different methods to recover from a full crash.  
+
+Recovery Based On Highest seqno Value
+This method is helpful when there is a slight possibility that at least one node was able to gracefully shutdown during the crash. The node with the latest data will have the highest seqno
+ value among all the crashed nodes. We can find the clue in the content of which/var/lib/mysql/grastate.dat will show the value of seqno. Depending on the nature of crash either all of the
+ nodes will have identical negative seqno value or one of the nodes will have the highest positive seqno value.
+
+Following shows the content of grastate.dat in node 3. This node has negative seqno and no group ID. This the case when a node crashes during Data Definition Language (DDL) processing:
+
+$ cat /var/lib/mysql/grastate.dat
+# GALERA saved state
+version: 2.1
+uuid: 00000000-0000-0000-0000-000000000000
+seqno: -1
+safe_to_bootstrap: 0
+Following shows the content of grastate.dat in node 2. This node crashed during transaction processing resulting in negative seqno but with group ID:
+
+$ cat /var/lib/mysql/grastate.dat
+# GALERA saved state
+version: 2.1
+uuid: 886dd8da-3d07-11e8-a109-8a3c80cebab4
+seqno: -1
+safe_to_bootstrap: 0
+Following is the content of grastate.dat on node 1 with highest seqno value:
+
+$ cat /var/lib/mysql/grastate.dat
+# GALERA saved state
+version: 2.1
+uuid: 886dd8da-3d07-11e8-a109-8a3c80cebab4
+seqno: 31929
+safe_to_bootstrap: 1
+Note that a node will only have positive highest seqno value when the node was able to gracefully shutdown. This is the node need to be recovered first.
+
+If all the nodes contain the value of -1 for seqno and 0 for safe_to_bootstrap, that is an indication that a full cluster crash has occurred. At this point, 
+we could start the cluster using the command galera_new_cluster. But it is not recommended at all since there is no way to know that each node has an identical copy of the database data. 
+
+Before restarting the node 1 we need to make a change in the cluster configuration file /etc/my.cnf.d/server.cnf to remove the mention of IPs of cluster nodes. 
+Following is the content of [galera] section of the configuration before any changes:
+
+[galera]
+# Mandatory settings
+wsrep_on=ON
+wsrep_provider=/usr/lib64/galera/libgalera_smm.so
+wsrep_cluster_address="gcomm://10.0.0.51,10.0.0.52,10.0.0.53"
+wsrep_cluster_name='galeraCluster01'
+wsrep_node_address='10.0.0.51'
+wsrep_node_name='galera-01'
+wsrep_sst_method=rsync
+binlog_format=row
+default_storage_engine=InnoDB
+innodb_autoinc_lock_mode=2
+Note that wsrep_cluster_address shows the IP of all member nodes. We need to remove the addresses as follows:
+
+wsrep_cluster_address="gcomm://"
+We can now restart the mariadb service in this node:
+
+$ systemctl restart mariadb
+ Only after verifying that the service started successfully we can proceed to restart services on the other nodes one at a time. Only after all nodes are successfully running,
+ we need to edit the cluster configuration on node 1 to add the IP addresses of all the member nodes and restart the service:
+
+wsrep_cluster_address="gcomm://10.8.8.53,10.8.8.54,10.8.8.55"
+The Galera cluster should be up and running at this point and all nodes should be syncing with the surviving node.  
+
+Recovery Based On Last Committed
+This is the worst case scenario of a Galera cluster crash where all nodes have completely crashed resulting seqno value of -1. As mentioned earlier, resist the temptation of 
+running the command galera_new_cluster on a node then trying to rejoin rest of the nodes to the cluster before checking which node has the latest commit. When galera_new_cluster command
+ is used, it actually creates a new cluster with a new set of IDs then all other nodes join into it starting clean sync. 
+
+To check which node has the last commit we can check the value of wsrep_last_commit on each node separately. The node with the highest value is the one with the latest commit. 
+We can bootstrap that node to start the cluster then join other member nodes. This process is similar to bootstraping the node with highest seqno as we have seen in the previous section. 
+
+Stop mariadb service:
+
+$ systemctl stop mariadb
+Edit wsrep_cluster_address in [galera] section of /etc/my.cnf.d/server.cnf to remove mention of member nodes:
+
+wsrep_cluster_address="gcomm://"
+Restart mariadb service:
+
+$ systemctl start mariadb
+From database shell check the last committed value:
+
+MariaDB [(none)]> show status like 'wsrep_last_committed';
++----------------------+---------+
+| Variable_name | Value |
++----------------------+---------+
+| wsrep_last_committed | 319589 |
++----------------------+---------+
+1 row in set (0.01 sec)
+Repeat the process on all nodes to retrieve the last committed value. The node with the latest data will have the highest value. Create a new cluster on the node with the highest committed value:
+
+$ galera_new_cluster
+Change the value of wsrep_cluster_address on rest of the nodes to mention IP addresses, then restart mariadb service one node at a time. The cluster should be up and running and data sync 
+should commit all the changes. Check the last committed value on all nodes after a while to ensure nodes are now in sync. 

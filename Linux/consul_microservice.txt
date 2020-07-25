@@ -1,0 +1,57 @@
+consul + registrator + consul-template + nginx  docker环境的服务器自动注册/发现
+
+######### curl测试 consul里注册的haproxy服务 #######
+[root@repo-centos web]# docker run --rm --dns=10.67.51.164 appropriate/curl -O http://repo8.service.tj.consul:8084/centos8-x86_64/AppStream/Packages/CUnit-2.1.3-17.el8.i686.rpm
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 58964  100 58964    0     0  9597k      0 --:--:-- --:--:-- --:--:-- 11.2M
+
+[root@repo-centos web]# docker run --rm --dns=10.67.51.164 appropriate/curl -v http://haproxy.service.tj.consul:8888/sop.html
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 10.67.51.164...
+* TCP_NODELAY set
+* Connected to haproxy.service.tj.consul (10.67.51.164) port 8888 (#0)
+> GET /sop.html HTTP/1.1
+> Host: haproxy.service.tj.consul:8888
+> User-Agent: curl/7.59.0
+> Accept: */*
+>
+< HTTP/1.1 200
+< accept-ranges: bytes
+< etag: W/"851-1591075444095"
+< last-modified: Tue, 02 Jun 2020 05:24:04 GMT
+< content-type: text/html
+< content-length: 851
+< date: Thu, 23 Jul 2020 08:45:14 GMT
+< set-cookie: SRV=server1; path=/
+< cache-control: private
+< connection: close
+<
+{ [851 ﻿<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="renderer" content="webkit|ie-comp|ie-stand">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+<!--[if lt IE 9]>
+<script type="text/javascript" src="lib/html5.js"></script>
+<script type="text/javascript" src="lib/respond.min.js"></script>
+<script type="text/javascript" src="lib/PIE_IE678.js"></script>
+<![endif]-->
+
+
+<![endif]-->
+<title>系統SOP</title>
+</head>
+<body>
+   <div style="width:100%;height:639px">
+   <iframe  src="resources/lib/pdf.js/web/viewer.html?file=FlownetSOPVer1.0.0.pdf" style="width: 100%; height: 100%;"></iframe>
+   </div>
+
+</body>
+bytes data]
+100   851  100   851    0     0  42550      0 --:--:-- --:--:-- --:--:-- 42550
+* Closing connection 0

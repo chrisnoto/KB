@@ -507,6 +507,14 @@ hostPort 容器所在主机需要监听的端口号，默认与containerPort相�
 
 Endpoint= Pod IP + containerPort
 
+######### Pod IP #########
+Pod IP是每个Pod的IP地址，他是Docker Engine根据docker网桥的IP地址段进行分配的，通常是一个虚拟的二层网络
+
+同Service下的pod可以直接根据PodIP相互通信
+不同Service下的pod在集群间pod通信要借助于 cluster ip
+pod和集群外通信，要借助于node ip
+#####################################################################
+
 容易混淆的概念：
 1、NodePort和port
 
