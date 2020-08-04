@@ -1,0 +1,41 @@
+1 pull 5.0.2 image
+docker pull zabbix/zabbix-server-mysql:centos-5.0.2
+docker pull zabbix/zabbix-web-nginx-mysql:centos-5.0.2
+docker pull zabbix/zabbix-agent:centos-5.0.2
+docker pull zabbix/zabbix-java-gateway:centos-5.0.2
+
+1.5 stop zabbix service
+scale replicas to 0
+
+2 alter some tables in zabbix db
+mysql -uroot -pFoxconn123 zabbix < double.sql
+
+3 update k8s yaml files
+3.1 update image version
+3.2 change port    new nginx port is 8080
+
+containers:
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-web-nginx-mysql
+  labels:
+    app: zabbix-web-nginx-mysql
+spec:
+  selector:
+    app: zabbix-web-nginx-mysql
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+	
+4 start zabbix service
+scale replicas to 1
+
+
+

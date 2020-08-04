@@ -1,3 +1,10 @@
+Active Directory Server                    Identity Management Server
+---------------------------    -------------------------------------------------------
+|   AD user -> AD group ->| -> | External Group -> POSIX Group -> sudo/HBAC policies |
+---------------------------    -------------------------------------------|-----------
+      ^                                                                   V
+      |--------------------------------------------------------------------
+
 ####### 定义ipa组和ipa外部组
 前提: 在AD域里创建一个wheel组，wheel组属于domain users组，成员为准备给予 "sudo su -" 权限的域用户
 ## 创建ipa外部组ad_wheel_external
@@ -9,7 +16,7 @@ ipa group-add-member ad_wheel_external --external 'tj.foxconn\wheel'
 ## 添加ad_wheel_external组为ad_wheel组的成员
 ipa group-add-member ad_wheel --groups ad_wheel_external
 
-########下一步 为ad_wheel组定义和套用sudo rule
+######## 下一步 为ad_wheel组定义和套用sudo rule
 
 ##定义sudocmd
 [root@ipa ~]# ipa sudocmd-add /bin/su
