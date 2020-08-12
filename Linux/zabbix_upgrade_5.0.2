@@ -9,6 +9,7 @@ scale replicas to 0
 
 2 alter some tables in zabbix db
 mysql -uroot -pFoxconn123 zabbix < double.sql
+mysql -u'zabbix' -p'yourdbpassword' zabbix -e "show create table history;"    验证表结构已经修改完
 
 3 update k8s yaml files
 3.1 update image version

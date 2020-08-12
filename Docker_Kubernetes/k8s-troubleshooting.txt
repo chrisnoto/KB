@@ -420,3 +420,9 @@ Check the containers running in the node:
 
 Find where the data is stored:
 #docker inspect <IDofContainer> --format='{{.LogPath}}'
+
+########### no resource #######
+Events:
+  Type     Reason            Age   From               Message
+  ----     ------            ----  ----               -------
+  Warning  FailedScheduling  22s   default-scheduler  0/7 nodes are available: 7 Insufficient cpu, 7 Insufficient memory.

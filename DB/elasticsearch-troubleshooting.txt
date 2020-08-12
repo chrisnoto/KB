@@ -220,3 +220,46 @@ k8s-2019.04.03                    2     r      10.67.36.52 _9je         12362   
 k8s-2019.04.03                    2     r      10.67.36.52 _9jf         12363          2            0   20.8kb       11467 true      true       7.4.0   true
 k8s-2019.04.03                    2     r      10.67.36.52 _9jg         12364          1            0   19.4kb       10953 true      true       7.4.0   true
 k8s-2019.04.03                    2     r      10.67.36.52 _9jh         12365          3            0   21.2kb       11467 true      true       7.4.0   true
+
+
+############################## 磁盘满导致 index read-only ########################
+Hi I am getting below error in Logstash again and again.
+[2018-03-29T09:56:20,280][INFO ][logstash.outputs.elasticsearch] retrying failed action with response code: 403 
+({"type"=>"cluster_block_exception", "reason"=>"blocked by: [FORBIDDEN/12/index read-only / allow delete (api)];"})
+解决
+curl -XPUT -H "Content-Type: application/json" http://10.67.51.150:9200/_cluster/settings -d '{ "transient": { "cluster.routing.allocation.disk.threshold_enabled": false } }'
+[root@stjes1 ~]# curl -XPUT -H "Content-Type: application/json" http://10.67.51.150:9200/_all/_settings -d '{"index.blocks.read_only_allow_delete": false}'
+{"acknowledged":true}
+期间发现kafka的consumer group没有member了，reset topic的offset，重启logstash, 于是有member了，但是没有作用，因为403的原因，无法写入elasticsearch
+根本原因还是index read only了
+#kafka reset offset命令
+reset offset命令只能在没有member或者consumer group inactive的情况下执行
+[root@kafka1 ~]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash --members
+Consumer group 'logstash' has no active members.
+
+[root@kafka1 ~]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --group logstash --reset-offsets --topic filebeat --to-earliest --execute                                                    
+TOPIC                          PARTITION  NEW-OFFSET
+filebeat                       9          1406145104
+filebeat                       8          1302473835
+filebeat                       7          1343041792
+filebeat                       11         1275441988
+filebeat                       0          1349368314
+filebeat                       3          1310703548
+filebeat                       2          1311228515
+filebeat                       6          1309955338
+filebeat                       4          1306143927
+filebeat                       10         1422168310
+filebeat                       5          1320760060
+filebeat                       1          1266680804
+
+[root@kafka1 ~]# kafka-consumer-groups --bootstrap-server 10.67.51.144:9092 --describe --group logstash --members
+Warning: Consumer group 'logstash' is rebalancing.
+
+CONSUMER-ID                                     HOST            CLIENT-ID       #PARTITIONS
+logstash-0-5e5216e4-87d5-4a57-b07f-63aaba364986 /10.67.49.246   logstash-0      0
+logstash-0-ee6524b4-c187-4034-9fc9-0b0467ce3825 /10.67.49.247   logstash-0      0
+logstash-0-2918e495-173b-4395-94b3-a8f0307ca086 /10.67.51.2     logstash-0      0
+logstash-0-728a2664-4c0d-45d0-8ff8-543031e16a80 /10.67.49.244   logstash-0      0
+logstash-0-c354eb6c-d846-481f-a323-e97408f75897 /10.67.48.194   logstash-0      0
+logstash-0-62019356-2018-4d9e-a1fa-2a3a326b59de /10.67.49.245   logstash-0      0
+logstash-0-f60dd446-b04d-4580-afa6-2c70e500e153 /10.67.50.200   logstash-0      0

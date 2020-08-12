@@ -117,7 +117,7 @@ kinit admin
 在ipa上
 [root@ipa ~]# ipa-replica-conncheck --replica ipa2.xq.foxconn
 检查完后，在ipa2上
-[root@ipa2 ~]# ipa-replica-install --setup-ca --setup-dns --no-forwarders --no-host-dns
+[root@ipa2 ~]# ipa-replica-install --setup-ca --setup-dns --forwarder 10.67.50.111 --no-dnssec-validation --no-host-dns
 
 #验证
 [root@ipa2 ~]# ipa-replica-manage list
