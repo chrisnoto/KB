@@ -433,12 +433,11 @@ ibase是输入数字的进制，而obase就是输出数字的进制了。很好�
 
 #########linux tcp monitoring#######
 查看系统tcp连接中各个状态的连接数
- 
 netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
  
 输出每个ip的连接数，以及总的各个状态的连接数。
- 
-netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S){printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
+netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S)
+{printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
 
 ###########SFP Module#########
 [root@cobbler ~]# ansible openstack -m shell -a "ethtool -m eno1 |egrep 'Vendor name|Vendor PN'"
@@ -455,13 +454,19 @@ kill -- -$$
 
 Explanation:
 
-$$ gives us the PID of the running shell. So, kill $$ would send a SIGTERM to the shell process. However, if we negate the PID, kill sends a SIGTERM to every process in the process group. We need the -- beforehand so kill knows that -$$ is a process group ID and not a flag.
+$$ gives us the PID of the running shell. So, kill $$ would send a SIGTERM to the shell process. However, if we negate the PID, kill sends a SIGTERM to every process in the process group.
+We need the -- beforehand so kill knows that -$$ is a process group ID and not a flag.
 
-Note that this relies on the running shell being a process group leader! Otherwise, $$ (the PID) will not match the process group ID, and you end up sending a signal to who knows where (well, probably nowhere as there is unlikely to be a process group with a matching ID if we're not a group leader).
+Note that this relies on the running shell being a process group leader! Otherwise, $$ (the PID) will not match the process group ID, and you end up sending a signal to who knows where
+(well, probably nowhere as there is unlikely to be a process group with a matching ID if we're not a group leader).
 ########################################fsck#######################
-fsck must only be run on unmounted filesystems, never on mounted filesystems (with the exception of the read-only root during startup). This is because it accesses the raw disk, and can therefore modify the filesystem without the operating system realizing it. There will be trouble, if the operating system is confused.
-Running fsck on a partition mounted read-write would be silly, even with fsck in read-only mode. The filesystem will change under fsck, and in-memory data that fsck caches from the filesystem will become invalid (and thus fsck will see inconsistency). You can run fsck on a read-only mounted filesystem in read-only mode and get valid results. Running fsck in read/write mode on a read-only mounted filsystem would cause the kernel to see filesystem structures changing unexpectedly underneath it, and that would also be bad.
-Do not run fsck on a mounted filesystem! If you run fsck on a filesystem that is currently mounted, you will (at best) receive an error message, and (at worst) corrupt your filesystem data. If you're going to check your filesystem with fsck, drop into single-user mode and make sure the filesystem is unmounted before you proceed.
+fsck must only be run on unmounted filesystems, never on mounted filesystems (with the exception of the read-only root during startup). This is because it accesses the raw disk,
+ and can therefore modify the filesystem without the operating system realizing it. There will be trouble, if the operating system is confused.
+Running fsck on a partition mounted read-write would be silly, even with fsck in read-only mode. The filesystem will change under fsck, and in-memory data that fsck caches 
+from the filesystem will become invalid (and thus fsck will see inconsistency). You can run fsck on a read-only mounted filesystem in read-only mode and get valid results. 
+Running fsck in read/write mode on a read-only mounted filsystem would cause the kernel to see filesystem structures changing unexpectedly underneath it, and that would also be bad.
+Do not run fsck on a mounted filesystem! If you run fsck on a filesystem that is currently mounted, you will (at best) receive an error message, and (at worst) corrupt your filesystem data.
+If you're going to check your filesystem with fsck, drop into single-user mode and make sure the filesystem is unmounted before you proceed.
 in secure mode: choose SKIP
 lvm pvscan  (in the case of LVM)
 lvm vgscan
@@ -523,10 +528,13 @@ filter: ( port 3306 ) and ((ip || ip6) || (vlan && (ip || ip6)))
 match: select
 
 T 10.67.49.247:42040 -> 10.67.51.118:3306 [AP] #1
-.....select h.hostid,h.host,h.name,t.httptestid,t.name,t.agent,t.authentication,t.http_user,t.http_password,t.http_proxy,t.retries,t.ssl_cert_file,t.ssl_key_file,t.ssl_key_password,t.verify_peer,t.verify_host,t.delay from httptest t,hosts h where t.hostid=h.hostid and t.nextcheck<=1574237897 and mod(t.httptestid,100)=94 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+.....select h.hostid,h.host,h.name,t.httptestid,t.name,t.agent,t.authentication,t.http_user,t.http_password,t.http_proxy,t.retries,
+t.ssl_cert_file,t.ssl_key_file,t.ssl_key_password,t.verify_peer,t.verify_host,t.delay from httptest t,hosts h where t.hostid=h.hostid and t.nextcheck<=1574237897
+ and mod(t.httptestid,100)=94 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
 
 T 10.67.49.247:42814 -> 10.67.51.118:3306 [AP] #4
-.....select min(t.nextcheck) from httptest t,hosts h where t.hostid=h.hostid and mod(t.httptestid,100)=2 and t.status=0 and h.proxy_hostid is null and h.status=0 and (h.maintenance_status=0 or h.maintenance_type=0)
+.....select min(t.nextcheck) from httptest t,hosts h where t.hostid=h.hostid and mod(t.httptestid,100)=2 and t.status=0 and h.proxy_hostid is null and h.status=0 
+and (h.maintenance_status=0 or h.maintenance_type=0)
 
 ###########tcpdump用法############
 root@node-1:~# tcpdump -i bond0 -nn -e vlan
@@ -1114,7 +1122,8 @@ iptables: Saving firewall rules to /etc/sysconfig/iptables:[  OK  ]
     To prevent the use of the nameserver returned by DHCP, add PEERDNS=no to the ifcfg-file
 
 #####################################yum repo and wget rhel5.10 iso######################
-wget -c -t 100 --user=jintaoxu@cn.ibm.com --password=12345678 --no-check-certificate -O rhel-server-5.10-x86_64-dvd.iso "https://access.cdn.redhat.com//content/origin/files/sha256/46/46d49d8565025cb2623c391a82668d760d0549be3727062424956bec8af8cca2/rhel-server-5.10-x86_64-dvd.iso?_auth_=1407732078_9e240dfb42fbd4df6661eafd1c43f1ce"
+wget -c -t 100 --user=jintaoxu@cn.ibm.com --password=12345678 --no-check-certificate -O rhel-server-5.10-x86_64-dvd.iso \
+"https://access.cdn.redhat.com//content/origin/files/sha256/46/46d49d8565025cb2623c391a82668d760d0549be3727062424956bec8af8cca2/rhel-server-5.10-x86_64-dvd.iso?_auth_=1407732078_9e240dfb42fbd4df6661eafd1c43f1ce"
 -----------------------------------
 /etc/yum.conf
 [main]
@@ -1355,7 +1364,10 @@ svctm   = ( %util * 1000ms ) / (   r/s + w/s ) device "busy" time / # of complet
 cat /sys/block/<sdX>/device/queue_depth
 #lsscsi -l
 
-The value of nr_requests determines the amount of I/O requests that get buffered before the I/O scheduler sends / receives data to the block device, if you are using a RAID card / Block Device that can handle a larger queue than what the I/O scheduler is set to, raising the value of nr_requests may help to improve throughout and reduce server load when large amounts of I/O occur on the server. If you are using Deadline or CFQ as the scheduler, it is suggested that you should set the nr_request value to 2 times the value of queue depth.
+The value of nr_requests determines the amount of I/O requests that get buffered before the I/O scheduler sends / receives data to the block device,
+ if you are using a RAID card / Block Device that can handle a larger queue than what the I/O scheduler is set to, raising the value of nr_requests may
+ help to improve throughout and reduce server load when large amounts of I/O occur on the server. If you are using Deadline or CFQ as the scheduler, 
+ it is suggested that you should set the nr_request value to 2 times the value of queue depth.
 
 echo 256 > /sys/block/sda/queue/nr_requests
 
@@ -1585,7 +1597,8 @@ for u in `ls *.manual`;do cat $u|tr '\t' '  '|convert label:@- ${u%%.*}.png;done
 
 cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null 
 
-cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null && echo "above paths needed to be added" || echo "Pass, all the commands have full path"
+cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null \
+&& echo "above paths needed to be added" || echo "Pass, all the commands have full path"
 
 
 ssh ausl-ra-lmcbe01 "cat /etc/passwd|awk -F: '/nologin|false/{if(\$3>499){print}}'|grep -v nfsnobody"
@@ -1649,7 +1662,7 @@ as this is the latest available version in repository , same version will be ins
 
 #!/bin/bash
 # This sed grammar is not working on RHEL3
-sed -i '/^%usrmgt/i\\n\n# IPSOFT sudo access\nUser_Alias     IBM_AE_BAU = %automata\nHost_Alias    IBM_AE_HOSTS = ALL \nCmnd_Alias  IBM_UNIX_AE_BAU_CMDS =/usr/bin/su -, /bin/su -, /usr/bin/su - root, /bin/su - root\nIBM_AE_BAU  IBM_AE_HOSTS =  NOPASSWD:ALL, !IBM_NONE_SA,!IBM_SHELLS_ALL,IBM_UNIX_AE_BAU_CMDS,!IBM_SHELLESCAPE_ALL,!IBM_NONE_EDITOR\n\n' sudoers
+sed -i '/^%usrmgt/i\\n\n# IPSOFT sudo access\nUser_Alias  IBM_AE_BAU = %automata\nHost_Alias    IBM_AE_HOSTS = ALL \nCmnd_Alias  IBM_UNIX_AE_BAU_CMDS =/usr/bin/su -, /bin/su -, /usr/bin/su - root, /bin/su - root\nIBM_AE_BAU  IBM_AE_HOSTS =  NOPASSWD:ALL, !IBM_NONE_SA,!IBM_SHELLS_ALL,IBM_UNIX_AE_BAU_CMDS,!IBM_SHELLESCAPE_ALL,!IBM_NONE_EDITOR\n\n' sudoers
 
 sed -i '/^%desktop_admin_r/r IPSOFT' sudoers   匹配行后插入文本
 
@@ -1853,7 +1866,8 @@ Remove users from wheel on each servers
 for srv in `cat mci_srvlist_valid`;do echo -n "$srv ";ssh $srv "grep 'wheel:' /etc/group|cut -d: -f4-|tr ',' ' '";done >mci_sudousers.orig
 
 ######remove known users from user list 
-cat mci_sudousers.orig |sed -e 's/jintaoxu//g' -e 's/chzhbo//g' -e 's/szliuysz//g' -e 's/wuyssz//g' -e 's/harryz//g' -e 's/xuhying//g' -e 's/heyongsz//g' -e 's/chensen//g' -e 's/fangang//g' -e 's/tanlong//g' -e 's/guiwanc//g' -e 's/dangcz//g' -e 's/root//g' >mci_sudousers     
+cat mci_sudousers.orig |sed -e 's/jintaoxu//g' -e 's/chzhbo//g' -e 's/szliuysz//g' -e 's/wuyssz//g' \
+-e 's/harryz//g' -e 's/xuhying//g' -e 's/heyongsz//g' -e 's/chensen//g' -e 's/fangang//g' -e 's/tanlong//g' -e 's/guiwanc//g' -e 's/dangcz//g' -e 's/root//g' >mci_sudousers     
 ####manually edit file 
 
 ###### regroup and output
@@ -1879,9 +1893,6 @@ cat mail.tmp|cut -d: -f5|cut -d/ -f5|awk '{for(i=1;i<=NF;i++)if($i~/@/){print $i
 
 #####  find /etc/passwd record for $user in $server  do 2 for loops. Too Slow! Never use it.
 #for srv in `cat mci_srvlist_valid`;do for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do ssh $srv "awk '/\<'"$i"'\>/' /etc/passwd";done;done >1.tmp
-
-============================================================================================================================================================================================
-
 
 ######################################### find information#############################
 find SDM
@@ -1950,7 +1961,7 @@ ldapdelete -h a23gsa.ibm.com -x -D "cn=manager,ou=Group,ou=gsa,o=ibm.com"  -W "u
 ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -D "H7108579@cesbg.foxconn" -b "dc=cesbg,dc=foxconn" -W "CN=H7108579"
 
 find hardware
-for srv in `cat 1_hardware`;do echo $srv;ssh -t $srv "sudo /usr/sbin/dmidecode |grep -A5 \"Memory Device\$\"|grep Size";done                 -Memory
+for srv in `cat 1_hardware`;do echo $srv;ssh -t $srv "sudo /usr/sbin/dmidecode |grep -A5 \"Memory Device\$\"|grep Size";done       -Memory
 
 find people
 [chensen@cfibml08 ~]$ cat 1
@@ -2405,31 +2416,6 @@ cat $1.*apar|egrep -v 'DUE|^-'| sed 's/^.*/'$1':  &/g'
 shift
 done
 }
-
-#######################generate mef3 files####################################
-sudo ./iam_extract_global.pl --customer DAVID-JONES-UNIX-SA --owner chensen
-for srv in `cat 11`;do scp -p iam_extract_global.pl chensen@$srv:~;ssh -t $srv "sudo perl /home/chensen/iam_extract_global.pl --noautoldap --nogsa;sudo chown chensen /tmp/*_04JUN2014_$srv.mef3";scp -p chensen@$srv:/tmp/*_04JUN2014_$srv.mef3 mef3/;done
-
-for srv in `cat 11`;do scp -p iam_extract_global.pl fangang@$srv:~;ssh -t $srv "sudo perl /home/fangang/iam_extract_global.pl --noautoldap --nogsa;sudo chown fangang /tmp/*_25MAR2014_$srv.mef3";scp -p fangang@$srv:/tmp/*_25MAR2014_$srv.mef3 mci_mef3/;done
-
-20FEB2014      `date +%d%b%Y |tr '[a-z]' '[A-Z]'` 
-
-for srv in `cat 3.out`;do scp -p iam_extract_global.pl chensen@$srv:~;ssh -t $srv "sudo perl /home/chensen/iam_extract_global.pl --noautoldap --nogsa;sudo chown chensen /tmp/*_`date +%d%b%Y |tr '[a-z]' '[A-Z]'`_*.mef3;sudo mv /tmp/*_`date +%d%b%Y |tr '[a-z]' '[A-Z]'`_*.mef3 /home/chensen;";scp -p chensen@$srv:~/*.mef3 mef3/;done
-
-
-for srv in `cat list`;do echo -e "\t\t$srv";ssh -t $srv "cd littlefix;sudo ./LittleFix-unix.exe-linux-x86-`getconf LONG_BIT` -x MCI_ITCS104v11.1_Linux_20130806.policy;sudo chown -R fangang SHCResults/;tar czvf SHCResults.21MAR2014.$srv.tar.gz SHCResults/";scp -p $srv:~/littlefix/SHC*.tar.gz SHCResults21MAR2014/;done
-
-littlefix.sh
-#!/bin/bash
-for srv in `cat list`
-do
-echo -e "\t\t$srv"
-ssh -t $srv "cd littlefix;sudo ./LittleFix-unix.exe-linux-x86-`getconf LONG_BIT` -x MCI_ITCS104v11.1_Linux_20130806.policy;sudo chown -R fangang SHCResults/;tar czvf SHCResults.21MAR2014.$srv.tar.gz SHCResults/"
-scp -p $srv:~/littlefix/SHC*.tar.gz SHCResults21MAR2014/
-done
-
-nohup sudo ./sudoers_check.v139 -o scan_root_access_commands.OSR.SAMPLE &
-nohup sudo ./scan_root_access_commands.v139 -C1 -o scan_root_access_commands.OSR.SAMPLE &
 
 ###How to download only the rpm package without install####
 pssh -h djs00 -t 0 -x '-t -t -R 1880:b23leilapp01:80' "sudo /usr/bin/yum install -y --downloadonly --downloaddir=/home/chensen/packages openssl-devel gcc make" 
