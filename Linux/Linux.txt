@@ -1,6 +1,6 @@
 =========================================================== 命 令 ===========================================================
 
-###########################user administration####################
+########################### user administration ####################
 gpasswd -d user1 group1      delete user1 from group1 (redhat)
 groupmod -R user1 group1    (SUSE)
 groupmod -A user1 group1    (SUSE)
@@ -236,7 +236,6 @@ root@node-1:~# update-rc.d filebeat defaults
    /etc/rc3.d/S20filebeat -> ../init.d/filebeat
    /etc/rc4.d/S20filebeat -> ../init.d/filebeat
    /etc/rc5.d/S20filebeat -> ../init.d/filebeat
-
 
 aptitude update #更新可用的包列表 
 aptitude upgrade #升级可用的包 
@@ -1483,8 +1482,61 @@ for u in `cat 2`;do echo ${u#*.};done       abc.cn.ibm.com ==> cn.ibm.com
 a=abc.cn.ibm.com;echo ${a/abc/ABC}          abc.cn.ibm.com ==> ABC.cn.ibm.com
 a=abc.cn.ibm.com;echo ${a/.cn/}             abc.cn.ibm.com ==> abc.ibm.com
 
+
+############## sed 命令汇总 #########
+# sed 插入行
 sed -i.20150303 '/^%usrmgt/i #\ LAN\ ID\ Team\n#include\ /etc/sudoers.d/104_MANIAMLinux_GLB_v1.2.3' /etc/sudoers
+# sed 替换
 sed -i.bk 's/^%usrmgt/#%usrmgt/' /etc/sudoers
+ifconfig eth0 | sed -ne "/inet addr/p" | sed -e "s/^.*addr:\([0-9]\{1,3\}.[0-9]\{1,3\}.[0-9]\{1,3\}.[0-9]\{1,3\}\).*$/\1/g"
+# sed 魔幻操作
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+# sed 按行数打印
+vmlist=`virsh list --all|sed -n '1,2!p'|awk '{print $2}'`
+# sed 多个-e 替换操作 
+cat mci_sudousers.orig |sed -e 's/jintaoxu//g' -e 's/chzhbo//g' -e 's/szliuysz//g' -e 's/wuyssz//g' \
+-e 's/harryz//g' -e 's/xuhying//g' -e 's/heyongsz//g' -e 's/chensen//g' -e 's/fangang//g' -e 's/tanlong//g' -e 's/guiwanc//g' -e 's/dangcz//g' -e 's/root//g' >mci_sudousers
+# sed 匹配打印
+s_uptime=`sed -n '/uptime/,/space/p' ${log} |awk '/au04/{print substr($1,1,length($1)-1)}'|sort -u`
+sed '/^ *$/d' file 
+sed -i.18Mar2014 '/^ *$/d' test
+
+[sam@oc1181188062 proc]$ sed -n 's/cpu \+//p' stat
+[sam@oc1181188062 proc]$ a=cpu;sed -n 's/'$a' \+//p' stat
+1424233 1104 129746 3567565 105602 537 567 0 1178159
+
+sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+openssl s_client -connect 10.67.44.66:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
+
+
+############sed add prefix for each line in file##########
+sed -i 's/^.*$/chensen@&/' r6
+
+############sed with variable#########
+cat test.txt |sed "s/$a/ABC/g"
+cat test.txt |sed 's/'$a'/ABC/g'
+
+############## awk 命令汇总 ##############
+# awk if判断
+sudo paste /etc/shadow /etc/passwd| awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+# awk if判断组合
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/ && $5!~/AD\.1\.1\.[13]*\.*2/) print $4,$5,$8,$9,$NF}'|sort -k2,2
+# awk for循环
+cd /etc/cron.d;cat * |awk '{if(NF>6){print}}'|egrep -v '^#|^$'|cut -d" " -f7-|cut -d"#" -f1 |awk '{for(i=1;i<=NF;i++)if($i!~/\//){print $i}}'|grep -v '^-.*'|tr -cs "[a-z][A-Z]-" "\n"|grep -v '^ *$'|xargs which 2>/dev/null
+# ssh 配合awk
+ssh ausl-ra-lmcbe01 "cat /etc/passwd|awk -F: '/nologin|false/{if(\$3>499){print}}'|grep -v nfsnobody"
+# awk END用法
+cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/) print $4,$5}'|cut -d" " -f1,2|awk '{++AD[$NF]}END{for(key in AD)print key,"\t",AD[key]}' |sort -k2nr,2
+# awk 使用外部变量
+for i in `cat mci_sudousers|cut -d" " -f2-|tr ' ' '\n'|grep -v '^$'|sort -u|tr '\n' ' '`;do echo;echo -n "$i ";cat mci_sudousers|awk '/'"$i"'/{printf "%s\t",$1}';done;echo
+# awk BEGIN END
+[sam@oc1181188062 tmp]$ cat 1|awk 'BEGIN{a=0}{a+=$0}END{print a}'
+# awk print new line every 9 line
+dsh -M -f djs_uat -c "sudo /sbin/ip a"|awk '!(NR%9){print $0"\n";next}1'
+# awk printf格式化
+for fs in `df -h|egrep '[0-9]M|[0-9]G|[0-9]T'|awk '{print $NF}'`;do echo `df -h $fs`|awk '{printf("%-50s %-8s %-8s %-8s %-8s %s\n",$8,$9,$10,$11,$12,$NF)}';done
+
 
 ###查询安装 升级 删除的dpkg包### 
 pars for fun: install | remove | rollback
@@ -1586,8 +1638,7 @@ pssh -h djs_1 -x '-t -t' --inline-stdout sudo /usr/sbin/usermod -p "\$1\$SOWUrC9
 =======================================================================================
 sudo paste /etc/shadow /etc/passwd| awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
 sudo pr -mJ -t /etc/shadow /etc/passwd |awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
-sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
-sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+
 while read user day;do [ $day -le 90 ] && grep $user /etc/shadow || cat /etc/shadow /etc/passwd|grep $user;done < <(cat /etc/shadow|egrep -v '\*|\!|90'|awk -F: '{print $1,$5}')
 while read user day;do [ `expr $day + 1` -le `expr 90 + 1` ] && grep $user /etc/shadow || cat /etc/shadow /etc/passwd|grep $user;done < <(cat /etc/shadow|egrep -v '\*|\!|90'|awk -F: '{print $1,$5}')
 
@@ -1676,17 +1727,10 @@ echo |awk -v A=$var '{print A}'
 or
 awk '{print $0 A}' A=$var filename
 
-############sed with variable#########
-cat test.txt |sed "s/$a/ABC/g"
-cat test.txt |sed 's/'$a'/ABC/g'
-
 ##cheat####
 ./useradd_linux -u list2 -r -s racv-l508 -g wasadmin
 ssh racv-l506 "sudo su - --command='find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
 ssh racv-l400 "sudo su - -c 'find / -type f -name "authorized_keys*" -exec ls {} \; -exec ssh-keygen -lf {} \;'"
-
-############sed add prefix for each line in file##########
-sed -i 's/^.*$/chensen@&/' r6
 
 #############eval##############
 #!/bin/bash
@@ -2293,12 +2337,7 @@ web03[192.168.2.102]: mysqld ok httpd ok
 next在多行合并，以及选择性输出方面很方便
 
 ############## sed ###########################################################  
-sed '/^ *$/d' file 
-sed -i.18Mar2014 '/^ *$/d' test
 
-[sam@oc1181188062 proc]$ sed -n 's/cpu \+//p' stat
-[sam@oc1181188062 proc]$ a=cpu;sed -n 's/'$a' \+//p' stat
-1424233 1104 129746 3567565 105602 537 567 0 1178159
 
 [sam@oc1181188062 ~]$ awk '{print $NF}' 1.txt
 2.6.18-371.6.1.el5.x86_64
