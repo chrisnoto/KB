@@ -2,3 +2,24 @@
 select hosts.hostid,hosts.host,hosts_groups.groupid,hstgrp.name from hosts 
 inner join hosts_groups on hosts.hostid=hosts_groups.hostid
 inner join hstgrp on hosts_groups.groupid=hstgrp.groupid
+
+
+###### function ######
+DELIMITER ;;
+CREATE FUNCTION `GetSeason`(riqi date)
+RETURNS VARCHAR(20)
+BEGIN
+  DECLARE RET int;
+  DECLARE SEASON VARCHAR(20);
+  select month(riqi) into RET;
+  IF RET >= 10 THEN
+    SET SEASON = 'Winter';
+  ELSEIF RET >= 7 AND RET < 10 THEN
+    SET SEASON = 'Fall';
+  ELSEIF RET >= 4 AND RET < 7 THEN
+    SET SEASON = 'Summer';
+  ELSE
+    SET SEASON = 'Spring';
+  END IF;
+  RETURN SEASON;
+END ;;

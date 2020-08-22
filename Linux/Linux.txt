@@ -440,7 +440,7 @@ netstat -an | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'
 netstat -n | awk '/^tcp/ {n=split($(NF-1),array,":");if(n<=2)++S[array[(1)]];else++S[array[(4)]];++s[$NF];++N} END {for(a in S)
 {printf("%-20s %s\n", a, S[a]);++I}printf("%-20s %s\n","TOTAL_IP",I);for(a in s) printf("%-20s %s\n",a, s[a]);printf("%-20s %s\n","TOTAL_LINK",N);}'
 
-########### SFP Module #########
+########### 查看SFP Module #########
 [root@cobbler ~]# ansible openstack -m shell -a "ethtool -m eno1 |egrep 'Vendor name|Vendor PN'"
 10.21.0.5 | CHANGED | rc=0 >>
         Vendor name                               : AOI
@@ -598,6 +598,7 @@ mount /dev/mapper/vgsys0-lvusr /media/target/usr
 dsmc rest "/usr/*" /media/target/usr -sub=yes 
 dsmc q backup "/etc/openldap/slapd.conf"
 dsmc rest -pitd=04/16/2015 -pitt=15:08:51 "/etc/openldap/slapd.conf" /home/chensen/slapd.conf
+
 ########## reboot系统时，使用这两个文件强制fsck或者避开fsck ##############
 touch /fastboot
 touch /forcefsck
@@ -613,10 +614,11 @@ root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -ls
 
                                                       * 此列是文件大小
 root@apt-repo:/root# find /var/spool/apt-mirror/mirror -name InRelease -a -size -100c -ls   查找小于100 bytes 的无效InRelease文件
+
 ########### docker error ####################
 $ sudo docker run -i -t centos /bin/bash  
 unable to remount sys readonly: unable to mount sys as readonly max retries reached
-Need to vi /etc/sysconfig/docker
+Need to edit file /etc/sysconfig/docker
 other_args="--exec-driver=lxc --selinux-enabled"
 /etc/init.d/docker restart
 
@@ -1470,6 +1472,23 @@ ELK site:slideshare.net
 
 =========================================================== 脚本 ===========================================================
 
+######## exec ###########
+shell 的内件命令exec执行命令时，不启用新的shell进程。
+
+source 和 . 不启用新的shell，在当前shell中执行，设定的局部变量在执行完命令后仍然有效。
+
+bash 或 sh 或 shell script 执行时，另起一个子shell，其继承父shell的环境变量，其子shelll的变量执行完后不影响父shell。
+
+exec是用被执行的命令行替换掉当前的shell进程，且exec命令后的其他命令将不再执行。
+
+例如在当前shell中执行 exec ls  表示执行ls这条命令来替换当前的shell ，即为执行完后会退出当前shell。
+
+为了避免这个结果的影响，一般将exec命令放到一个shell脚本中，用主脚本调用这个脚本，调用处可以用bash  xx.sh(xx.sh为存放exec命令的脚本)，
+这样会为xx.sh建立一个子shell去执行，当执行exec后该子脚本进程就被替换成相应的exec的命令。
+
+其中有一个例外：当exec命令对文件描述符操作的时候，就不会替换shell，而是操作完成后还会继续执行后面的命令！
+
+
 ############# crontab 每5秒执行一次脚本 ######
 ## For excuting scripts.sh every 3 seconds##on 2014-10-15
 */1 * * * *  /home/somedir/scripts.sh
@@ -1842,9 +1861,9 @@ find . -type d -perm -o=w -print
 find . -type d -perm /o=w -print 
 
 ######################### useful commands ###################################
-pr -mJ -t /etc/shadow /etc/passwd   ####print all files in parallel, one in each column, merge full lines
+pr -mJ -t /etc/shadow /etc/passwd   #### Merge files, joining line by line horizontally.
 
-paste /etc/shadow /etc/passwd      #####Merge files, joining line by line horizontally.
+paste /etc/shadow /etc/passwd      ##### same as above
 
 ssh user@host cat /path/to/remotefile | diff /path/to/localfile -   ####Compare a remote file with a local file
 
