@@ -3,7 +3,32 @@ select hosts.hostid,hosts.host,hosts_groups.groupid,hstgrp.name from hosts
 inner join hosts_groups on hosts.hostid=hosts_groups.hostid
 inner join hstgrp on hosts_groups.groupid=hstgrp.groupid
 
+##### leave statement #######
+Using LEAVE with the LOOP statement:
 
+[label]: LOOP
+    IF condition THEN
+        LEAVE [label];
+    END IF;
+    -- statements
+END LOOP [label];
+Using LEAVE with the REPEAT statement:
+
+[label:] REPEAT
+    IF condition THEN
+        LEAVE [label];
+    END IF;
+    -- statements
+UNTIL search_condition
+END REPEAT [label];
+Using LEAVE with the WHILE statement:
+
+[label:] WHILE search_condition DO
+    IF condition THEN
+        LEAVE [label];
+    END IF;
+    -- statements
+END WHILE [label];
 ###### function ######
 DELIMITER ;;
 CREATE FUNCTION `GetSeason`(riqi date)
@@ -23,3 +48,95 @@ BEGIN
   END IF;
   RETURN SEASON;
 END ;;
+
+#### handler ###
+DROP PROCEDURE IF EXISTS TestProc;
+
+DELIMITER $$
+
+CREATE PROCEDURE TestProc()
+BEGIN
+    DECLARE TableNotFound CONDITION for 1146 ; 
+
+    DECLARE EXIT HANDLER FOR TableNotFound 
+	SELECT 'Please create table abc first' Message; 
+    SELECT * FROM abc;
+END$$
+
+DELIMITER ;
+
+#### procedure with cursor ####
+root@node-1:~# cat GetImage.sql
+drop procedure if exists GetImage;
+delimiter //
+create procedure GetImage()
+begin
+  declare image_name varchar(50);
+  declare image_count int;
+  declare Linux_total int default 0;
+  declare Windows_total int default 0;
+  declare Unknown_total int default 0;
+  declare done int default false;
+  declare cur1 cursor for
+  select glance.images.name,count(glance.images.id) as image_count from nova.instances join glance.images
+  where nova.instances.vm_state='active' and nova.instances.image_ref=glance.images.id
+  group by glance.images.name
+  order by image_count
+  DESC;
+  declare continue handler for not found set done = true;
+  set Linux_total =0;
+  set Windows_total = 0;
+  set Unknown_total = 0;
+  open cur1;
+  read_loop:loop
+  fetch cur1 into image_name,image_count;
+  if done then
+      leave read_loop;
+  end if;
+  if image_name like 'CentOS%' or image_name like 'centos%' or image_name like 'Ubuntu%' then
+      set Linux_total = Linux_total + image_count;
+  elseif image_name like 'w2k%' then
+      set Windows_total = Windows_total + image_count;
+  else
+      set Unknown_total = Unknown_total + image_count;
+  end if;
+  end loop read_loop;
+  close cur1;
+  select Linux_total,Windows_total,Unknown_total;
+end; //
+delimiter ;
+
+##### temporary table #####
+mysql> create temporary table image_counts 
+      select glance.images.name,count(glance.images.id) as image_count from nova.instances
+      join glance.images where nova.instances.vm_state='active' and nova.instances.image_ref=glance.images.id 
+	  group by glance.images.name 
+	  order by image_count DESC;
+mysql> select * from image_counts;
++-----------------------------+-------------+
+| name                        | image_count |
++-----------------------------+-------------+
+| CentOS7.6-LVM               |          18 |
+| w2k16-Template2.qcow2       |          14 |
+| w2k16-Template.qcow2        |          10 |
+| CentOS7                     |           9 |
+| w2k12r2-Template-2.0        |           9 |
+| centos7-ryan                |           6 |
+| Ubuntu1604                  |           5 |
+| CentOS6                     |           4 |
+| w2k12r2_en_template         |           4 |
+| Python001                   |           3 |
+| CentOS6_LVM_Template        |           2 |
+| w2k08r2-Template-1.0        |           2 |
+| oSTJNEWMESDB01-20190525     |           1 |
+| oSTJefoxNCap01-190527       |           1 |
+| python_dev-1-20190529       |           1 |
+| oSTJgatekeeper_sit-20190530 |           1 |
+| 3783_snapshot0805           |           1 |
+| Ubuntu1604_LVM_template     |           1 |
+| zabbix_openstack-20200619   |           1 |
+| chiwen_10.67.44.125         |           1 |
+| 10.67.44.135                |           1 |
++-----------------------------+-------------+
+21 rows in set (0.00 sec)
+

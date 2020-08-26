@@ -28,3 +28,65 @@ mysql> select glance.images.name,count(glance.images.id) as image_count from nov
 | Ubuntu1604_LVM_template     |           1 |
 +-----------------------------+-------------+
 21 rows in set (0.00 sec)
+
+#### procedure ####
+root@node-1:~# cat GetImage.sql
+drop procedure if exists GetImage;
+delimiter //
+create procedure GetImage()
+begin
+  select glance.images.name,count(glance.images.id) as image_count from nova.instances join glance.images 
+  where nova.instances.vm_state='active' and nova.instances.image_ref=glance.images.id 
+  group by glance.images.name 
+  order by image_count 
+  DESC;
+end; //
+delimiter ;
+
+#### procedure with cursor ####
+root@node-1:~# cat GetImage.sql
+drop procedure if exists GetImage;
+delimiter //
+create procedure GetImage()
+begin
+  declare image_name varchar(50);
+  declare image_count int;
+  declare Linux_total int default 0;
+  declare Windows_total int default 0;
+  declare Unknown_total int default 0;
+  declare done int default false;
+  declare cur1 cursor for
+  select glance.images.name,count(glance.images.id) as image_count from nova.instances join glance.images
+  where nova.instances.vm_state='active' and nova.instances.image_ref=glance.images.id
+  group by glance.images.name
+  order by image_count
+  DESC;
+  declare continue handler for not found set done = true;
+  set Linux_total =0;
+  set Windows_total = 0;
+  set Unknown_total = 0;
+  open cur1;
+  read_loop:loop
+  fetch cur1 into image_name,image_count;
+  if done then
+      leave read_loop;
+  end if;
+  if image_name like 'CentOS%' or image_name like 'centos%' or image_name like 'Ubuntu%' then
+      set Linux_total = Linux_total + image_count;
+  elseif image_name like 'w2k%' then
+      set Windows_total = Windows_total + image_count;
+  else
+      set Unknown_total = Unknown_total + image_count;
+  end if;
+  end loop read_loop;
+  close cur1;
+  select Linux_total,Windows_total,Unknown_total;
+end; //
+delimiter ;
+
+mysql> call GetImage();
++-------------+---------------+---------------+
+| Linux_total | Windows_total | Unknown_total |
++-------------+---------------+---------------+
+|          45 |            39 |            11 |
++-------------+---------------+---------------+
