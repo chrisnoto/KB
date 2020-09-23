@@ -830,7 +830,7 @@ mysql -h 127.0.0.1 -P 7001 -u chensen
 ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 ssh -CNfL 8443:10.20.0.2:8443 root@10.67.50.156
 # -D参数 socks代理
-ssh -D 7071 chensen@cfibml10
+ssh -D 7071 chensen@cfibml10     
 
 ######### bond ################
 cat/proc/net/bonding/bond0 
@@ -1674,8 +1674,11 @@ sed '/^ *$/d' file
 sed -i.18Mar2014 '/^ *$/d' test
 
 [sam@oc1181188062 proc]$ sed -n 's/cpu \+//p' stat
+
+# sed 使用变量
 [sam@oc1181188062 proc]$ a=cpu;sed -n 's/'$a' \+//p' stat
 1424233 1104 129746 3567565 105602 537 567 0 1178159
+[root@ora ~]# a=ora;sed -i 's/hhh/'$a'/' sample           # hhh 为文件sample里的一行
 
 sudo cat /etc/shadow /etc/passwd|sort -t: -k1,1|sed '$!N;s/\n/\t/'|grep -v ':90:' |egrep -v ':!!:|:\*:' |grep -v ':!:'
 openssl s_client -connect 10.67.44.66:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
@@ -1690,6 +1693,11 @@ cat test.txt |sed 's/'$a'/ABC/g'
 ############## awk 命令汇总 ##############
 # awk if判断
 sudo paste /etc/shadow /etc/passwd| awk -F: '{if($5!=90) print}' |egrep -v ':!!:|:\*:' |grep -v ':!:'
+
+# awk 数字比较
+[root@repo-centos ~]# df -hP |awk '{if(substr($5,1,length($5)-1) * 1 > 30)print}'
+/dev/sda1                473M  177M  297M   38% /boot
+/dev/mapper/data-repo    1.2T  598G  602G   50% /mrepo
 
 # awk if判断组合
 cat SHC_Violations |awk -F "\t" '{if($NF~/^ *$/ && $5!~/AD\.1\.1\.[13]*\.*2/) print $4,$5,$8,$9,$NF}'|sort -k2,2
@@ -1932,6 +1940,9 @@ $ curl -k -x http://10.67.124.210:808 https://raw.githubusercontent.com/fabric8i
 100  1260  100  1260    0     0    450      0  0:00:02  0:00:02 --:--:--   450
 
 ################ extract ip addr #######################
+[root@ora6 ~]# ip a|awk '/global/{print substr($2,1,length($2)-3)}'
+10.67.36.32
+
 [sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oE "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
 [sam@oc1181188062 ~]$ ip a|egrep -o "inet [^ ]*"|grep -oP "[0-9]+.[0-9]+.[0-9]+.[0-9]+"
 [sam@oc1181188062 ~]$ ifconfig wlan0|grep -oP "inet addr:\S+"|grep -oP "\d+.\d+.\d+.\d+"

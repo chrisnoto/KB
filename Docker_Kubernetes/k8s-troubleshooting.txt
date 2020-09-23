@@ -426,3 +426,6 @@ Events:
   Type     Reason            Age   From               Message
   ----     ------            ----  ----               -------
   Warning  FailedScheduling  22s   default-scheduler  0/7 nodes are available: 7 Insufficient cpu, 7 Insufficient memory.
+  
+  
+#############  Pod sandbox changed, it will be killed and re-created ########

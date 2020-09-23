@@ -1,0 +1,9 @@
+Oracle启动过程
+
+启动模式
+1 startup nomount
+不mount数据库,可以做control file重建操作，建立数据库等操作
+2 startup mount
+不open数据库，可以做的维护操作包括 启用/禁用redo log archiving  执行数据库恢复操作
+3 startup restrict
+限制模式下打开数据库。可以做的操作包括 数据import/export,  data load(with SQL*Loader),暂时禁用用户访问数据，执行迁移、升级操作

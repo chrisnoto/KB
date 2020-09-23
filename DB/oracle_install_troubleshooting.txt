@@ -1,0 +1,9 @@
+Oracle
+
+#### local_listenr丢失, 远程无法连接oracle ####
+如果LOCAL_LISTENER丢失，会导致自动实例注册失败，数据库实例不会识别Listener,当Listener连接
+数据库实例的时候，由于Listener没有注册，导致了 ORA-27101: shared memory realm does not exist.
+
+解决办法：
+SQL> alter system set local_listener='(ADDRESS =(PROTOCOL=TCP)(HOST=10.67.36.31)(PORT=1600)(SID=chensen))';
+SQL> alter system register;
