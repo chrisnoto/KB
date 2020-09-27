@@ -1,0 +1,295 @@
+## 查看用户状态
+CHENSEN@poc1> select username,account_status from dba_users;
+
+USERNAME                       ACCOUNT_STATUS
+------------------------------ --------------------------------
+SYS                            OPEN
+SYSTEM                         OPEN
+CHENSEN                        OPEN
+OUTLN                          EXPIRED & LOCKED
+MGMT_VIEW                      EXPIRED & LOCKED
+
+
+## 查看所有用户默认表空间
+CHENSEN@poc1> select username,default_tablespace from dba_users;
+
+USERNAME                       DEFAULT_TABLESPACE
+------------------------------ ------------------------------
+SYS                            SYSTEM
+SYSTEM                         SYSTEM
+CHENSEN                        USERS
+OUTLN                          SYSTEM
+
+## 更改用户默认表空间
+CHENSEN@poc1> alter user chensen default tablespace school;
+
+User altered.
+
+CHENSEN@poc1> select username,default_tablespace from dba_users;
+
+USERNAME                       DEFAULT_TABLESPACE
+------------------------------ ------------------------------
+SYS                            SYSTEM
+SYSTEM                         SYSTEM
+CHENSEN                        SCHOOL
+
+## 查看数据库用户信息
+
+SQL> select * from all_users;  ---查看所有用户
+SQL> select * from V$PWFILE_USERS; ---查看哪些用户有sysdba或sysoper系统权限
+
+## 查指定用户下的表
+CHENSEN@poc1> select owner,table_name,tablespace_name,num_rows from all_tables where owner='CHENSEN';
+
+OWNER                          TABLE_NAME                     TABLESPACE_NAME                  NUM_ROWS
+------------------------------ ------------------------------ ------------------------------ ----------
+CHENSEN                        STU_INFO                       SCHOOL
+## 查当前登录用户下的表
+CHENSEN@poc1> select table_name from user_tables;
+
+TABLE_NAME
+------------------------------
+STU_INFO
+
+## 查看表属于哪个表空间
+CHENSEN@poc1> select tablespace_name from all_tables where table_name='STU_INFO';
+
+TABLESPACE_NAME
+------------------------------
+SCHOOL
+
+## 查当前登录用户下的表和试图
+CHENSEN@poc1> select * from tab;
+
+TNAME                          TABTYPE  CLUSTERID
+------------------------------ ------- ----------
+STU_INFO                       TABLE
+
+
+## 查表空间使用情况
+SELECT a.tablespace_name, round(a.s, 2) AS "CURRENT_TOTAL(MB)"
+    , round(a.s - f.s, 2) AS "USED(MB)"
+    , f.s AS "FREE(MB)"
+    , round(f.s / a.s * 100, 2) AS "FREE%"
+    , g.autoextensible, round(a.ms, 2) AS "MAX_TOTAL(MB)"
+FROM (
+    SELECT d.tablespace_name, SUM(bytes / 1024 / 1024) AS s
+        , SUM(decode(maxbytes, 0, bytes, maxbytes) / 1024 / 1024) AS ms
+    FROM dba_data_files d
+    GROUP BY d.tablespace_name
+) a, (
+    SELECT f.tablespace_name, SUM(f.bytes / 1024 / 1024) AS s
+    FROM dba_free_space f
+    GROUP BY f.tablespace_name
+) f, (
+    SELECT DISTINCT tablespace_name, autoextensible
+    FROM DBA_DATA_FILES
+    WHERE autoextensible = 'YES'
+    UNION
+    SELECT DISTINCT tablespace_name, autoextensible
+    FROM DBA_DATA_FILES
+    WHERE autoextensible = 'NO'
+        AND tablespace_name NOT IN (
+            SELECT DISTINCT tablespace_name
+            FROM DBA_DATA_FILES
+            WHERE autoextensible = 'YES'
+        )
+) g
+WHERE a.tablespace_name = f.tablespace_name
+    AND g.tablespace_name = f.tablespace_name
+ORDER BY "FREE%";
+
+TABLESPACE_NAME                CURRENT_TOTAL(MB)   USED(MB)   FREE(MB)      FREE% AUT MAX_TOTAL(MB)
+------------------------------ ----------------- ---------- ---------- ---------- --- -------------
+SYSTEM                                       750     741.31     8.6875       1.16 YES      32767.98
+SYSAUX                                       570     539.25      30.75       5.39 YES      32767.98
+USERS                                          5       1.31     3.6875      73.75 YES      32767.98
+UNDOTBS1                                      70      16.88     53.125      75.89 YES      32767.98
+SCHOOL                                        50          1         49         98 YES      32767.98
+
+## oracle常用查询
+
+select * from dba_tables; --表视图信息
+
+select * from dba_users;  --数据库用户信息
+
+select * from dba_roles;  --角色信息
+
+select * from dba_segments; --表段信息
+
+select * from dba_extents;  --数据区信息
+
+select * from dba_objects;  --数据库对象信息
+
+select * from dba_lobs;    --lob数据信息
+
+select * from dba_tablespace;  --数据库表空间信息
+
+select * from dba_data_files;  --数据文件设置信息
+
+select * from dba_temp_files;  --临时数据文件
+
+select * from dba_rollback_segs;  --回滚段信息
+
+select * from dba_ts_quotas;    --用户表空间配额信息
+
+select * from dba_free_space  --数据库空闲空间信息
+
+select * from dba_profiles;    --数据库用户资源限制信息
+
+select * form dba_sys_privs;  --用户的系统权限信息
+
+select * from dba_tab_privs;  --用户具有的对象权限信息
+
+select * from dba_col_privs    --用户具有的列对象权限信息
+
+select * from dba_role_privs;  --用户具有的角色信息
+
+select * from dba_audit_trail;  --审计跟踪记录信息
+
+select * from dba_stmt_audit_opts;  --审计设置信息
+
+select * from dba_audit_object;  --对象审计结果信息
+
+select * from dba_audit_session;  --会话审计结果信息
+
+select * from dba_indexes;  --用户模式的索引信息
+
+select * from dba_views;  --数据库视图
+
+--------------------------常用all开头的视图------------------------
+
+select * from all_users; --数据库所有用户的信息
+
+select * from all_objects; --数据库所有的对象的信息
+
+select * from all_def_audit_opts; --所有默认的审计设置信息
+
+select * from all_tables; --所有的表对象信息
+
+select * from all_indexes; --所有的数据库对象索引的信息
+
+select * from all_tab_comments; --查询所有用户的表,视图等
+
+select * from all_col_comments; --查询所有用户的表的列名和注释.
+
+select * from all_tab_columns; --查询所有用户的表的列名等信息(详细但是没有备注)
+
+-------------------------常用user开头的视图------------------------
+
+select * from user_objects; --用户对象信息
+
+select * from user_source; --数据库用户的所有资源对象信息
+
+select * from user_segments; --用户的表段信息
+
+select * from user_tables; --用户的表对象信息
+
+select * from user_tab_columns; --用户的表列信息
+
+select * from user_constraints; --用户的对象约束信息
+
+select * from user_sys_privs; --当前用户的系统权限信息
+
+select * from user_tab_privs; --当前用户的对象权限信息
+
+select * from user_col_privs; --当前用户的表列权限信息
+
+select * from user_col_comments; -- 查询本用户的表的列名和注释
+
+select * from user_role_privs; --当前用户的角色权限信息
+
+select * from user_indexes; --用户的索引信息
+
+select * from user_ind_columns; --用户的索引对应的表列信息
+
+select * from user_cons_columns; --用户的约束对应的表列信息
+
+select * from user_clusters; --用户的所有簇信息
+
+select * from user_clu_columns; --用户的簇所包含的内容信息
+
+select * from user_cluster_hash_expressions; --散列簇的信息
+
+-------------------------常用V$开头的视图------------------------
+
+select * from v$database; --数据库信息
+
+select * from v$datafile; --数据文件信息
+
+select * from v$controlfile; --控制文件信息
+
+select * from v$logfile; --重做日志信息
+
+select * from v$instance; --数据库实例信息
+
+select * from v$log; --日志组信息
+
+select * from v$loghist; --日志历史信息
+
+select * from v$sga; --数据库SGA信息
+
+select * from v$parameter; --初始化参数信息
+
+select * from v$process; --数据库服务器进程信息
+
+select * from v$bgprocess; --数据库后台进程信息
+
+select * from v$controlfile_record_section; --控制文件记载的各部分信息
+
+select * from v$thread; --线程信息
+
+select * from v$datafile_header; --数据文件头所记载的信息
+
+select * from v$archived_log; --归档日志信息
+
+select * from v$archive_dest; --归档日志的设置信息
+
+select * from v$logmnr_contents; --归档日志分析的DML DDL结果信息
+
+select * from v$logmnr_dictionary; --日志分析的字典文件信息
+
+select * from v$logmnr_logs; --日志分析的日志列表信息
+
+select * from v$tablespace; --表空间信息
+
+select * from v$tempfile; --临时文件信息
+
+select * from v$filestat; --数据文件的I/O统计信息
+
+select * from v$undostat; --Undo数据信息
+
+select * from v$rollname; --在线回滚段信息
+
+select * from v$session; --会话信息
+
+select * from v$transaction; --事务信息
+
+select * from v$rollstat; --回滚段统计信息
+
+select * from v$pwfile_users; --特权用户信息
+
+select * from v$sqlarea; --当前查询过的sql语句访问过的资源及相关的信息
+
+select * from v$sql; --与v$sqlarea基本相同的相关信息
+
+select * from v$sysstat; --数据库系统状态信息
+
+-------------------------常用session开头的视图------------------------
+
+select * from session_roles; --会话的角色信息
+
+select * from session_privs; --会话的权限信息
+
+-------------------------常用index开头的视图------------------------
+
+select * from index_stats; --索引的设置和存储信息
+
+-------------------------伪表------------------------
+
+select * from dual; --系统伪列表信息
+
+作者：一木超暖
+链接：https://www.jianshu.com/p/387f85bd093e
+来源：简书
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。

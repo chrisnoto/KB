@@ -1,9 +1,210 @@
-Oracle启动过程
+########### Oracle启动/关闭过程 ###############
 
 启动模式
 1 startup nomount
-不mount数据库,可以做control file重建操作，建立数据库等操作
-2 startup mount
-不open数据库，可以做的维护操作包括 启用/禁用redo log archiving  执行数据库恢复操作
-3 startup restrict
+启动实例 shutdown --> nomount
+总体来说，启动数据库实例包括以下操作：
+读取参数文件 SPFILE
+分配 SGA
+启动后台进程
+打开告警文件和跟踪文件
+
+*nomount 状态不打开任何的控制文件及数据文件，所以我们可以在此阶段进行数据库创建、控制文件重建、特定的备份恢复等操作。
+*nomount 状态下可以通过参数文件获得控制文件的位置，因为此时参数文件已经打开：
+SQL> show parameter control_files;
+
+2 alter database mount/startup mount
+装载数据库 nomunt --> mount
+3.3.1 装载数据库概述
+装载数据库就是把数据库文件和实例关联起来，包括以下三个步骤：
+Oracle根据参数文件 SPFILE 中的参数找到控制文件
+打开控制文件
+从控制文件获得数据字典和重做日志文件的名字及位置
+完成以上三步，没有任何错误的情况下，Oracle 就已经把实例和数据库关联起来了。
+装载数据库有两种方式：
+一是直接启动数据库到 mount 状态：startup mount
+二是如果数据库已经启动到 nomount 状态，使用 alter database mount 把数据库切换到mount 状态
+
+我们就可以查询控制文件、数据文件和重做日志文件
+SQL> select status from v$instance;
+
+SQL> select name from v$controlfile;
+
+SQL> select name from v$datafile;
+
+SQL> select member from v$logfile;
+但此时还不能查询数据库文件，如表和视图。所以对于普通用户而言，这个时候数据库还是不可用的。只有等到经历了最后一步 打开数据库 之后，才能使用数据库
+*在mount阶段我们可以：
+*重命名数据文件，移动数据文件位置等
+*启用或关闭重做日志文件的归档及非归档模式
+*实现数据库的完全恢复
+
+3 alter database open或startup
+打开数据库 mount --> open
+打开数据库时，实例将打开所有处于联机状态的数据文件和重做日志文件。
+
+在此期间，Oracle 服务器将校验所有的数据文件和联机日志文件能否打开，并对数据库作一致性检查。
+
+如果出现一致性错误，SMON 进程将启动实例恢复
+如果任一数据文件或联机日志文件丢失，Oracle 服务器将报错
+只有将数据库设置为打开状态后，数据库才处于正常状态，这时普通用户才能够访问数据库。
+
+4 startup restrict
 限制模式下打开数据库。可以做的操作包括 数据import/export,  data load(with SQL*Loader),暂时禁用用户访问数据，执行迁移、升级操作
+
+关闭数据库
+与启动数据库顺序相反，也分三个步骤：
+CLOSE 关闭数据库（关闭数据文件）
+DISMOUNT 卸载数据库（关闭控制文件）
+SHUTDOWN 关闭 Oracle 实例
+关闭模式
+1）shutdown NORMAL
+//缺省值，与shutdown效果相同，等所有用户写入完毕后，退出数据库并关闭
+2）shutdown IMMEDIATE
+//回滚未提交所有事务操作，退出数据库并关闭；较常用
+3）shutdown TRANSCACTION
+//等待所有用户操作完毕后，再退出据库并关闭；一般用于定期关闭数据库
+4）shutdown ABORT
+//强制断开所有用户，数据全部不保存，会造成数据丢失，一般不建议使用
+
+
+SYS@poc1> shutdown immediate;
+Database closed.
+Database dismounted.
+ORACLE instance shut down.
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+select a.thread#,b.open_mode,a.status,
+*
+ERROR at line 1:
+ORA-01034: ORACLE not available                            # 状态
+Process ID: 2899
+Session ID: 923 Serial number: 2899
+
+
+SYS@poc1> startup nomount;
+ORACLE instance started.
+
+Total System Global Area 4275781632 bytes
+Fixed Size                  2260088 bytes
+Variable Size            1107297160 bytes
+Database Buffers         3154116608 bytes
+Redo Buffers               12107776 bytes
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+FROM v$thread a,
+     *
+ERROR at line 8:
+ORA-01507: database not mounted                              # 状态
+
+
+SYS@poc1> startup mount;
+ORA-01081: cannot start already-running ORACLE - shut it down first
+SYS@poc1> alter database mount;
+
+Database altered.
+
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+
+   THREAD# OPEN_MODE            STATUS STATUS
+---------- -------------------- ------ ----------------------
+         1 MOUNTED              CLOSED NO Crash Recovery req.             # 状态
+
+SYS@poc1> alter database open;
+
+Database altered.
+
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+
+   THREAD# OPEN_MODE            STATUS STATUS
+---------- -------------------- ------ ----------------------
+         1 READ WRITE           OPEN   Instance already open.              # 状态
+SYS@poc1> startup restrict;
+ORACLE instance started.
+
+Total System Global Area 4275781632 bytes
+Fixed Size                  2260088 bytes
+Variable Size            1107297160 bytes
+Database Buffers         3154116608 bytes
+Redo Buffers               12107776 bytes
+Database mounted.
+Database opened.
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+
+   THREAD# OPEN_MODE            STATUS STATUS
+---------- -------------------- ------ ----------------------
+         1 READ WRITE           OPEN   Instance already open.                # 状态
+
+SYS@poc1> shutdown abort;
+ORACLE instance shut down.
+SYS@poc1> startup mount;
+ORACLE instance started.
+
+Total System Global Area 4275781632 bytes
+Fixed Size                  2260088 bytes
+Variable Size            1107297160 bytes
+Database Buffers         3154116608 bytes
+Redo Buffers               12107776 bytes
+Database mounted.
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+
+   THREAD# OPEN_MODE            STATUS STATUS
+---------- -------------------- ------ ----------------------
+         1 MOUNTED              OPEN   Crash Recovery req.
+SYS@poc1> alter database open;
+
+Database altered.
+
+SYS@poc1> @$ORACLE_HOME/mode.sql;
+
+   THREAD# OPEN_MODE            STATUS STATUS
+---------- -------------------- ------ ----------------------
+         1 READ WRITE           OPEN   Instance already open.
+
+[oracle@ora6 dbhome_1]$ cat -n mode.sql
+     1  select a.thread#,b.open_mode,a.status,
+     2  CASE
+     3  WHEN((b.open_mode='MOUNTED') AND (a.status='OPEN')) THEN 'Crash Recovery req.'
+     4  WHEN((b.open_mode='MOUNTED') AND (a.status='CLOSED')) THEN 'NO Crash Recovery req.'
+     5  WHEN((b.open_mode='READ WRITE') AND (a.status='OPEN')) THEN 'Instance already open.'
+     6  ELSE 'hub?'
+     7  END STATUS
+     8  FROM v$thread a,
+     9  v$database b,
+    10  v$instance c
+    11  where a.thread#=c.thread#;
+
+
+
+
+
+
+
+
+
+######### redo log and undo log ############
+重做日志文件（redo log file）对数据库来说至关重要，他们是数据库的事务日志；
+
+Oracle数据库维护着两类重做日志文件：在线重做日志文件（redo）和 归档重做日志文件（archive log），（归档重做日志文件实际上就是已填满的“旧”在线重做日志文件的副本）
+
+这两类重做日志文件都是用于恢复的：
+
+①：如果数据库所在主机掉电，导致实例失败，Oracle会使用在线重做日志将系统恢复到恰好在掉电之前的那个提交点；
+
+②：如果磁盘驱动器出现故障（这是介质失败），Oracle会使用归档重做日志以及在线重做日志，以及之前的一个备份，将原在此驱动器上的数据恢复到某个时间点；
+
+Redo log的日志状态分为4种：
+
+current:指的是当前日志文件，该日志文件是活动的，当前正在被使用的，进行崩溃恢复时，Current日志文件是必须的；
+
+ACTIVE：是活动的非当前日志，可以已经完成归档也可能没有归档，在Crash恢复时会被用到；
+
+inactive：非活动日志，在实例恢复时不再需要，但是在介质恢复时可能会用到，此状态的日志也可能没有被归档。
+
+unused：该日志从未被写入，这类日志可能是刚被添加到数据库或者在resetlogs之后被重置。 
+
+Crash recovery has two pahses : rollforward and rollback
+
+The system monitor will first roll forward and apply to the datafiles any transactions in the online redo files that occured after the most recent checkpoint.
+ Crash Recovery uses redo information found in the online redo log files onlu . After rolling forward, Oracle will rollback any of those transactions that were never committed.
+ Oracle uses information stored in the undo segments to rollback (undo) any uncommitted transactions.
+ 
+
