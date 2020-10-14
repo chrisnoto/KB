@@ -4,22 +4,18 @@
 ##                                                                          ##
 ##                   Oracle 11g silent install script                       ##
 ##                   --------------------------------                       ##
-##                                             Author: 陳森 蔡臘梅          ##
+##                                             Author: 陳森 蔡洛洛          ##
 ##                                             Date:  2020/9/25             ##
 ##                                                                          ##
-## The scope of this installation script:                                   ##
-##   OS version: CentOS6/7                                                  ##
-##   Oracle version: Oracle version: 11.                                    ##
+## The scope of this install script:                                        ##
+##   OS version: CentOS6 / 7                                                ##
+##   Oracle version: 11g / 11gR2                                            ##
 ##                                                                          ##
 ## The function of this install script:                                     ##
-##   1.                                                                     ##
-##   2.                                                                     ##
-##   3.                                                                     ##
-##   4.                                                                     ##
-##                                                                          ##
-##                                                                          ##
-##                                                                          ##
-##                                                                          ##
+##   1. silent install database, single/multiple instance, listener         ##
+##   2. adjust the path of datafile, redo logfile, archive logfile          ##
+##      and control file                                                    ##
+##   3. add the startup/shutdown script for Oralce                          ##
 ##                                                                          ##
 ##                                                                          ##
 ##############################################################################
@@ -66,7 +62,7 @@ sed -i '/^proxy/s/^proxy/#proxy/' /etc/yum.conf
 
 # yum install prerequisite packages
 function inst_pkgs(){
-green "starting install prerequisite packages for Oracle..."
+green "starting install these prerequisite packages for Oracle..."
 
 rpm -ivh http://10.67.50.92/Tools/pdksh-5.2.14-37.el5.x86_64.rpm
 
@@ -85,11 +81,11 @@ green "checking if there are missing packages..."
 }
 
 
-#check and config service like ntp,firewall/iptables/Selinux/timezone
+# Common OS configuration
 
-#--------------stop & disable firewall service and setup timezone---------------
+#--------------stop & disable firewall service and set timezone to Asia/Shanghai ---------------
+
 function common_setup(){
-
 if [ $OS_VER == "CentOS7" ];then
 timedatectl set-timezone 'Asia/Shanghai'
 systemctl stop firewalld
@@ -133,13 +129,15 @@ sed -i '/restrict ::1/a\server 10.67.50.111\nserver 10.191.131.131' /etc/ntp.con
 systemctl start ntpd
 
 else
-   red "None of the condition met"
+   red "None of the above conditions is met"
 fi
 
 # configure sysctl.conf
 mem_shmmax=`free -b|awk '/Mem/{print $2}'`
 mem_shmall=`expr $mem_shmmax / 4096`
 
+sed -i '/^kernel.shmall/s/kernel.shmall/#kernel.shmall/' /etc/sysctl.conf
+sed -i '/^kernel.shmmax/s/kernel.shmmax/#kernel.shmmax/' /etc/sysctl.conf
 cat >> /etc/sysctl.conf <<EOF
 fs.aio-max-nr = 1048576
 fs.file-max = 6815744
@@ -179,7 +177,7 @@ function add_ora_grp(){
 green "starting add groups for Oracle..."
 for u in oinstall dba oper
 do
-grep -q $u /etc/group
+grep -q '^'$u':' /etc/group
 [ $? -gt 0 ] && groupadd $u
 done
 }
@@ -187,14 +185,12 @@ done
 
 # add Oracle user
 function add_ora_user(){
-green "starting add Oracle user..."
+green "starting add user oracle..."
 useradd oracle -g oinstall -G dba,oper
 echo "oracle:Foxconn123" | chpasswd
 green "checking the group of user oracle..."
 groups oracle
 }
-
-
 
 
 #  Download Oracle installation packages
@@ -233,16 +229,10 @@ do
   esac
 done
 
-#D_URL=http://10.67.50.92/Oracle/Oracle11G%20R2
-#PCK1=p13390677_112040_Linux-x86-64_1of7.zip
-#PCK2=p13390677_112040_Linux-x86-64_2of7.zip
-#wget -O /home/oracle/$PCK1 ${D_URL}/$PCK1
-#wget -O /home/oracle/$PCK2 ${D_URL}/$PCK2
 (cd /home/oracle/software;ls *.zip |xargs -n1 unzip )
 chown -R oracle:oinstall /home/oracle/software/database
 mkdir -p /data
 chown -R oracle:dba /data
-#ver=`echo 11.2.${PCK1:14:1}`
 mkdir -p /home/oracle/product/${ver}/dbhome_1
 mkdir -p /home/oracle/oraInventory
 chown -R oracle:dba /home/oracle
@@ -250,17 +240,21 @@ chmod -R 755 /home/oracle
 }
 
 
-
 # configure Oracle SID
 function inputsid(){
-green "Please input the Oracle SID: "
-read sid
-echo ${sid} |grep -qP '\W'
-if [ $? -eq 0 ]; then
-red "Don't input special character!!" && exit 1
-fi
-}
 
+while :
+do
+  green "Please input the Oracle SID: "
+  read sid
+  echo ${sid} |grep -qP '\W'
+  if [ $? -eq 0 ]; then
+    red "Don't input special character!! Please input SID again "
+  else 
+  break
+  fi
+done
+}
 
 
 # configure .bash_profile under root account
@@ -285,27 +279,26 @@ EOF
 }
 
 
-
 # customize db_install.rsp
-function db_silient_install(){
+function db_silent_install(){
 source /home/oracle/.bash_profile
-green "The next step will install Oracle software only, please key in 'y'  or 'n'"
+green "The next step will install Oracle software only, please key in 'y|yes'  or 'n|no'"
 
 while :
 do
   read db_sw_install
   case $db_sw_install in
-  y)
+  y|yes)
     green "continue install Oracle software..."
     break
       ;;
-  n)
+  n|no)
     green "the script will be quit now."
       exit 0
 
       ;;
   *)
-      red "input string is invaild, please key in y or n"
+      red "input string is invaild, please input y|yes or n|no"
       ;;
   esac
 done
@@ -315,7 +308,6 @@ sed -i 's/^oracle.install.option=/oracle.install.option=INSTALL_DB_SWONLY/' /hom
 host_name=`uname -n`; sed -i 's/^ORACLE_HOSTNAME=/ORACLE_HOSTNAME='${host_name}'/' /home/oracle/software/database/response/db_install.rsp
 sed -i 's/^UNIX_GROUP_NAME=/UNIX_GROUP_NAME=oinstall/' /home/oracle/software/database/response/db_install.rsp
 sed -i 's#^INVENTORY_LOCATION=#INVENTORY_LOCATION=/home/oracle/oraInventory#' /home/oracle/software/database/response/db_install.rsp
-#sed -i 's/^SELECTED_LANGUAGES=/SELECTED_LANGUAGES=en/' /home/oracle/software/database/response/db_install.rsp
 sed -i 's#^ORACLE_HOME=#ORACLE_HOME='${ORACLE_HOME}'#' /home/oracle/software/database/response/db_install.rsp
 sed -i 's#^ORACLE_BASE=#ORACLE_BASE='${ORACLE_BASE}'#' /home/oracle/software/database/response/db_install.rsp
 sed -i 's/^oracle.install.db.InstallEdition=/oracle.install.db.InstallEdition=EE/' /home/oracle/software/database/response/db_install.rsp
@@ -327,22 +319,8 @@ su - oracle -c "cd /home/oracle/software/database/;./runInstaller -silent -force
 sh /home/oracle/oraInventory/orainstRoot.sh
 sh /home/oracle/product/11.2.4/dbhome_1/root.sh
 
-green "Cheers, guys, Oracle is installed successfully"
+green "Cheers guys, Oracle is installed successfully"
 }
-
-
-
-#while :
-#do
-#sleep 10
-#if test -f /home/oracle/oraInventory/orainstRoot.sh;then
-#  sh /home/oracle/oraInventory/orainstRoot.sh
-#fi
-#if test -f /home/oracle/product/11.2.4/dbhome_1/root.sh;then
-#  sh /home/oracle/product/11.2.4/dbhome_1/root.sh
-#  break
-#fi
-#done
 
 
 function inputpwd(){
@@ -372,7 +350,7 @@ do
   green "For instance: 4096 8192 16384 "
   green "The default pga memory is 1024MB."
   read sga_target1
-  green "Please retype the value of sga_target again: "
+  green "Please type the value of sga_target again: "
   read sga_target2
 
   if test ${sga_target1} != ${sga_target2};then
@@ -417,12 +395,12 @@ chown oracle:dba /home/oracle/${sid}-dbca.rsp
 
 function dbca_silent(){
 su - oracle -c "~/product/11.2.4/dbhome_1/bin/dbca -silent -responseFile /home/oracle/${sid}-dbca.rsp"
-green "Cheers, guys, Oracle instance is installed successfully"
+green "Cheers guys, Oracle instance is installed successfully"
 }
 
 
 function post_install(){
-green "Starting to do post installation..."
+green "Starting post installation..."
 mkdir -p /data/{arch_log,expdata}
 chown -R oracle:dba /data/
 
@@ -467,7 +445,6 @@ EOF
 green "Post installation is completed."
 }
 
-
 # create static listener
 function new_listener(){
 green "starting to create static listener.."
@@ -493,6 +470,7 @@ ADR_BASE_LISTENER = /home/oracle
 INBOUND_CONNECT_TIMEOUT_LISTENER=0
 DIAG_ADR_ENABLED_LISTENER=OFF
 EOF
+
 chown oracle:dba $ORACLE_HOME/network/admin/listener.ora
 su - oracle -c "lsnrctl start"
 green "Listener is created successfully! "
@@ -502,6 +480,73 @@ green "Listener is created successfully! "
 function apd_sid(){
 sed -i '/(SID_LIST/a \(SID_DESC =\n \(GLOBAL_DBNAME = '${sid}'\)\n \(ORACLE_HOME = '${ORACLE_HOME}'\)\n \(SID_NAME = '${sid}'\)\n \)' $ORACLE_HOME/network/admin/listener.ora
 su - oracle -c "lsnrctl reload"
+}
+
+
+function add_db_script(){
+mkdir -p /home/oracle/run
+chown -R oracle:oinstall /home/oracle/run
+cat >/home/oracle/run/DB_startup.sh<< EEE
+
+export ORACLE_BASE=/home/oracle
+export ORACLE_HOME=/home/oracle/product/${ver}/dbhome_1
+export PATH=$ORACLE_HOME/bin:$PATH
+export ORACLE_SID=${sid}
+
+sqlplus /nolog <<EOF
+connect / as sysdba;
+startup;
+exit;
+EOF
+
+lsnrctl <<EOF
+start
+exit
+EOF
+EEE
+cat >/home/oracle/run/DB_shutdown.sh<< EEE
+export ORACLE_BASE=/home/oracle
+export ORACLE_HOME=/home/oracle/product/${ver}/dbhome_1
+export PATH=$ORACLE_HOME/bin:$PATH
+export ORACLE_SID=${sid}
+
+sqlplus /nolog <<EOF
+shutdown immediate;
+exit;
+EOF
+EEE
+
+cat >> /etc/rc.local <<EOF
+su - oracle -c 'sh /home/oracle/run/DB_startup.sh' 1>/home/oracle/run/DB_startup.log 2>/home/oracle/run/DB_startup.err
+EOF
+chmod +x /etc/rc.local
+chown -R oracle:oinstall /home/oracle/run
+echo set sqlprompt '"'_user"'"@"'"_connect_identifier"'"\> "'"'"' >>/home/oracle/product/${ver}/dbhome_1/sqlplus/admin/glogin.sql
+}
+
+function apd_db_script(){
+#sed -i '/EOF/a export ORACLE_SID=${sid}\nsqlplus /nolog <<EOF \nconnect / as sysdba;\nstartup;\nexit;\nEOF' /home/oracle/run/DB_startup.sh
+#sed -i '/EOF/a export ORACLE_SID=${sid}\nsqlplus /nolog <<EOF \nconnect / as sysdba;\nshutdown immediate;\nexit;\nEOF' /home/oracle/run/DB_shutdown.sh
+
+cat >> /home/oracle/run/DB_startup.sh<< EEE
+export ORACLE_SID=${sid}
+
+sqlplus /nolog <<EOF
+connect / as sysdba;
+startup;
+exit;
+EOF
+EEE
+
+cat >> /home/oracle/run/DB_shutdown.sh<< EEE
+export ORACLE_SID=${sid}
+
+sqlplus /nolog <<EOF
+shutdown immediate;
+exit;
+EOF
+EEE
+
 }
 
 # create the 1st Oracle instance
@@ -524,10 +569,11 @@ inputsid
 
 oraenv
 
-db_silient_install
+db_silent_install
 
 # run dbca silent install
 green "starting install Oracle instance now..."
+
 
 inputpwd
 
@@ -541,6 +587,7 @@ post_install
 
 new_listener
 
+add_db_script
 # ask if create the 2nd Oracle instance
 
 while :
@@ -572,6 +619,9 @@ read answ
 
     # append another SID into listner.ora and reload listener
     apd_sid
+	
+	# append another SID into db script
+	apd_db_script
       ;;
   n|no)
     green "the script will be quit now."

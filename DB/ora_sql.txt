@@ -1,3 +1,24 @@
+
+## 判断Oracle启动时使用spfile还是pfile？
+1 通过v$spparameter视图
+使用spfile启动数据库，我们可以看到查询出来的结果是spfile
+SQL> select decode(count(*),1,'spfile','pfile') from v$spparameter where rownum=1 and isspecified ='TRUE';
+DECODE
+------
+spfile
+2、 通过查看spfile、pfile参数
+系统当前为从spfile启动，在查看show parameter pfile和show parameter spfile 都能看到spfile参数文件的路径。
+关闭数据库，从pfile启动，startup pfile='/data/app/oracle/product/12.1.0/dbhome_1/dbs/initorcl.ora';  再次执行上述的两个语句
+我们在这里可以很明显的发现，使用pfile启动的数据库，我们无论是查看show parameter pfile还是show parameter spfile 都无法看到spfile参数文件的路径
+
+## 查看实例是否是RAC的一部分
+select parallevel from v$instance;
+单实例讲返回NO
+
+## 查看数据是否通过备用数据库的保护来防止数据丢失
+select protection_level from v$database;
+如果数据库未受保护，将返回UNPROCTECTED
+
 ## 查看用户状态
 CHENSEN@poc1> select username,account_status from dba_users;
 
@@ -289,7 +310,3 @@ select * from index_stats; --索引的设置和存储信息
 
 select * from dual; --系统伪列表信息
 
-作者：一木超暖
-链接：https://www.jianshu.com/p/387f85bd093e
-来源：简书
-著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
