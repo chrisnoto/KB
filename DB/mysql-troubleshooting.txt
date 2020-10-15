@@ -1,0 +1,3 @@
+# mariadb super user can wirte to backup db when read_only is set to true
+# need to revoke super privileges
+revoke SUPER on *.* from 'user'@'%';

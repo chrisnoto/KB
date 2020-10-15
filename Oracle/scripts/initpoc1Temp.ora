@@ -1,0 +1,77 @@
+##############################################################################
+# Copyright (c) 1991, 2001, 2002 by Oracle Corporation
+##############################################################################
+ 
+###########################################
+# Archive
+###########################################
+log_archive_dest_1='LOCATION=/data/oradata/poc1/archive'
+log_archive_dest_2='LOCATION=/data/fast_recovery_area/poc1/archive'
+log_archive_format=%t_%s_%r.dbf
+ 
+###########################################
+# Cache and I/O
+###########################################
+db_block_size=8192
+ 
+###########################################
+# Cursors and Library Cache
+###########################################
+open_cursors=300
+ 
+###########################################
+# Database Identification
+###########################################
+db_domain=""
+db_name="poc1"
+ 
+###########################################
+# File Configuration
+###########################################
+db_create_file_dest="/data/oradata"
+db_recovery_file_dest="/data/fast_recovery_area"
+db_recovery_file_dest_size=4385144832
+ 
+###########################################
+# Miscellaneous
+###########################################
+compatible=11.2.0.4.0
+diagnostic_dest=/home/oracle
+ 
+###########################################
+# Processes and Sessions
+###########################################
+processes=150
+sessions=170
+ 
+###########################################
+# SGA Memory
+###########################################
+sga_target=2493513728
+ 
+###########################################
+# Security and Auditing
+###########################################
+audit_file_dest="/home/oracle/admin/poc1/adump"
+audit_trail=db
+remote_login_passwordfile=EXCLUSIVE
+ 
+###########################################
+# Shared Server
+###########################################
+dispatchers="(PROTOCOL=TCP) (SERVICE=poc1XDB)"
+ 
+###########################################
+# Sort, Hash Joins, Bitmap Indexes
+###########################################
+pga_aggregate_target=830472192
+ 
+###########################################
+# System Managed Undo and Rollback Segments
+###########################################
+undo_tablespace=UNDOTBS1
+ 
+_no_recovery_through_resetlogs=true
+_enable_automatic_maintenance=0
+_diag_hm_rc_enabled=false
+ 
