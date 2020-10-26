@@ -1,0 +1,328 @@
+Oracle 12c 搭建rac
+
+
+   
+IP规划
+10.67.36.35 rac1  
+10.67.36.36 rac2  
+10.67.36.39 rac-scan   
+10.67.36.37 rac1-vip   
+10.67.36.38 rac2-vip   
+192.168.1.35 rac1-pri    第二块网卡
+192.168.1.36  rac2-pri   第二块网卡
+
+只需要配置public和private网络的IP,  SCAN和VIP不需要配置
+##命令              **** 两台机都做
+#rac1         
+
+nmcli conn add con-name ens256 type ethernet ifname ens256 autoconnect yes ipv4.addr 192.168.1.35/24 ipv4.method manual
+
+nmcli c up ens256
+#rac2          
+
+nmcli conn add con-name ens256 type ethernet ifname ens256 autoconnect yes ipv4.addr 192.168.1.36/24 ipv4.method manual
+
+nmcli c up ens256
+磁盘规划
+/u01 50G作为软件安装目录
+
+/dev/sdc  30G  ocr1 
+/dev/sdd  30G  ocr2 
+/dev/sde  30G  ocr3 
+
+/dev/sdf  200G  fra1
+
+/dev/sdg  100G   db1
+/dev/sdh  100G   db2
+
+##/etc/sdb磁盘分区并挂载u01   **** 两台机都做
+parted /dev/sdb mklabel gpt mkpart primary "1 -1"
+kpartx -a /dev/sdb         #视情况重启机器
+mkfs.xfs /dev/sdb1
+mkdir /u01
+mount /dev/sdb1 /u01
+cat >> /etc/fstab <<EOF
+/dev/sdb1               /u01                  xfs             defaults  0 0
+EOF
+
+## 共享磁盘分区并配置udev规则   **** rac1上做
+for u in c d e f g h
+do
+parted /dev/sd$u mklabel gpt mkpart primary "1 -1" 
+kpartx -a /dev/sd${u}1
+done
+此处最好重启机器
+
+#configure udev Rules        **** 两台机都做
+/usr/lib/udev/scsi_id -g -u -d /dev/sdc
+vi /etc/udev/rules.d/99-oracle-asmdevices.rules     
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="3688860300000002404f9d2f611850357", SYMLINK+="asmdisk/OCRDISK01", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch" 
+
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="3688860300000002204f9d2f611850357", SYMLINK+="asmdisk/OCRDISK02", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+
+# 是udev规则生效    **** 两台机都做
+/sbin/udevadm control --reload-rules
+/sbin/udevadm trigger --type=devices --action=change
+
+# 检查ASM磁盘是否生效    **** 两台机都做
+ll /dev/asmdisk/ 
+
+#设置NOZEROCONF避免169.254.0.0/16添加到本地路由表        **** 两台机都做
+cat >> /etc/sysconfig/network <<EOF
+NOZEROCONF=yes
+EOF
+
+#关闭avahi-daemon服务      （此次实验无该服务）          **** 两台机都做
+systemctl stop avahi-dnsconfd
+systemctl stop avahi-daemon
+systemctl disable avahi-dnsconfd
+systemctl disable avahi-daemon
+
+#关闭THP                  **** 两台机都做
+检查当前THP开关状态。
+执行如下命令检查。
+[root@dbn01~]# cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+修改grub.conf配置文件，增加transparent_hugepage字段。
+在/etc/default/grub文件中“GRUB_CMDLINE_LINUX...”行的最后添加“transparent_hugepage=never”
+当节点使用传统BIOS安装和启动时，使用如下命令：
+grub2-mkconfig -o /boot/grub2/grub.cfg
+重启节点生效，检查是否修改成功  never为THP关闭状态
+
+# 安装必要的rpm包         **** 两台机都做
+yum install -y ksh net-tools smartmontools compat-libcap1 libXtst tree bc ntp wget xorg-x11-xauth unzip ftp gcc libaio libaio-devel compat-libstdc++-33 \
+   glibc-devel glibc-headers gcc-c++ sysstat \
+   elfutils-libelf-devel \
+   xorg-x11-server-utils xorg-x11-utils \
+   rlwrap
+
+# 配置sysctl             **** 两台机都做
+kernel.sem参数：如果客户单个数据库需要支持的process数超过800，请按照实际情况配置
+cat >> /etc/sysctl.conf <<EOF
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2936012
+kernel.shmmax = 12025908429
+kernel.shmmni = 4096
+kernel.sem = 800 102400 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 1048576
+net.core.rmem_max = 4194304
+net.core.wmem_default = 1048576
+net.core.wmem_max =  2621440
+net.ipv4.tcp_wmem = 262144 262144 262144
+net.ipv4.tcp_rmem = 4194304 4194304 4194304
+EOF
+
+# 配置HugePage                **** 两台机都做
+vi /etc/sysctl.conf
+vm.nr_hugepages=大页的页数
+
+页数的计算方法：
+检查并确认当前环境中内存的大页尺寸是否为2048 kB 即2MB。
+[root@dbn01~]# cat /proc/meminfo |grep Hugepagesize 
+Hugepagesize:       2048 kB     
+计算vm.nr_hugepages的大小。
+vm.nr_hugepages = （节点物理内存大小 * 0.65 * 0.75 + 2） * 1024 / 内存大页尺寸
+
+若节点物理内存为512 GB，内存大页尺寸单位为MB，则计算方法为：
+
+vm.nr_hugepages =（512 GB * 0.65 * 0.75 + 2）* 1024 / 2 MB = 128819.2（页）
+
+   
+# 手动创建oracle和grid用户            **** 两台机都做
+/usr/sbin/groupadd -g 1003 oinstall 
+/usr/sbin/groupadd -g 1001 dba 
+/usr/sbin/groupadd -g 1002 oper 
+/usr/sbin/groupadd -g 1010 asmadmin 
+/usr/sbin/groupadd -g 1011 asmdba 
+/usr/sbin/groupadd -g 1012 asmoper 
+/usr/sbin/useradd -u 1003 -g oinstall -G dba,asmdba,oper -m -d /home/oracle oracle 
+/usr/sbin/useradd -u 1001 -g oinstall -G asmadmin,asmdba,asmoper,oper,dba -m -d /home/grid grid   
+echo "grid:luoluo2020" | chpasswd
+echo "oracle:luoluo2020" | chpasswd
+# 设置pam                             **** 两台机都做
+cat >>/etc/pam.d/login <<EOF
+session required pam_limits.so 
+EOF
+
+# 设置ulimit                           **** 两台机都做
+cat >>/etc/security/limits.conf <<EOF
+#ORACLE SETTING 
+grid                 soft    nproc   65536 
+grid                 hard    nproc   65536 
+grid                 soft    nofile  65536 
+grid                 hard    nofile  65536 
+grid                 soft    stack  65536
+grid                 hard    stack  65536
+oracle               soft    nproc   65536 
+oracle               hard    nproc   65536 
+oracle               soft    nofile  65536 
+oracle               hard    nofile  65536
+oracle               soft    stack  65536 
+oracle               hard    stack  65536 
+*                    soft    memlock unlimited
+*                    hard    memlock unlimited
+EOF
+
+# 配置用户环境变量                      **** 两台机都做
+cluster name: rac
+scan name: rac-scan
+scan port: 1521
+dbn01：ORACLE_SID=dbn01 
+dbn02：ORACLE_SID=dbn02  
+
+[root@dbn01~]# su - oracle
+cat >>.bash_profile <<EOF
+# Oracle Settings 
+export TMPDIR=/tmp
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/12c/db
+export ORACLE_UNQNAME=dbn
+export ORACLE_SID=dbn01
+export ORACLE_TERM=xterm
+export BASE_PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib 
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib 
+export NLS_DATE_FORMAT="yyyy-mm-dd HH24:MI:SS"
+export NLS_LANG=AMERICAN_AMERICA.ZHS16GBK  
+EOF
+
+[root@dbn01~]# su - grid 
+cat >>.bash_profile <<EOF 
+export TMPDIR=/tmp
+export ORACLE_BASE=/u01/app/grid
+export ORACLE_HOME=/u01/app/12c/grid
+export ORACLE_SID=+ASM1
+NLS_DATE_FORMAT="yyyy-mm-dd HH24:MI:SS"
+export THREADS_FLAG=native
+export PATH=$ORACLE_HOME/bin:$PATH   
+EOF
+
+# 创建grid和oracle安装目录                 **** 两台机都做
+mkdir -p /u01/app/12c/grid  
+mkdir -p /u01/app/grid  
+mkdir -p /u01/app/oracle/product/12c/db 
+chown -R grid:oinstall /u01/app  
+chown -R oracle:oinstall  /u01/app/oracle  
+chmod -R 775 /u01/
+
+
+# 安装grid
+上传解压软件包      **** rac1上做
+unzip /root/linuxx64_12201_grid_home.zip -d /u01/app/12c/grid/
+unzip /root/linuxx64_12201_database.zip -d /u01/app/oracle/product/12c/db
+chown -R grid:oinstall /u01/app  
+chown -R oracle:oinstall  /u01/app/oracle
+安装cvuqdisk rpm包        **** 两台机都做
+rpm -ivh /u01/app/12c/grid/cv/rpm/cvuqdisk-1.0.10-1.rpm
+scp /u01/app/12c/grid/cv/rpm/cvuqdisk-1.0.10-1.rpm rac2:~
+rpm -ivh cvuqdisk-1.0.10-1.rpm             *** rac2上做
+ssh key配置 从rac1使用grid用户免密登录rac1,rac2
+su - grid
+ssh-keygen -q -f '/home/grid/.ssh/id_rsa' -N ''  <<< y       **** 两台机都做 
+ssh-copy-id grid@rac1
+ssh-copy-id grid@rac2
+
+用grid用户登录rac1,并设置ssh转发。本PC要开xming
+ssh -R 6000:127.0.0.1:6000 grid@10.67.36.35
+export DISPLAY=localhost:0.0
+cd /u01/app/12c/grid
+./gridSetup.sh
+
+# 安装db software only
+# 配置ASM DG  asmca
+
+# 安装database  dbca   -pdb/cdb
+
+
+
+######## grid & asm 常用操作 #######
+1 sqlplus
+[grid@oradb-node1 ~]$ sqlplus / as sysasm
+--查看磁盘组信息
+SQL> select name,state,type,total_mb ,free_mb from v$asm_diskgroup;
+NAME                           STATE       TYPE     TOTAL_MB    FREE_MB
+------------------------------ ----------- ------ ---------- ----------
+OCR                            MOUNTED     NORMAL      92160      23788
+--查看磁盘信息
+SQL> select group_number,path,state,total_mb,free_mb from v$asm_disk;
+
+GROUP_NUMBER PATH                           STATE      TOTAL_MB    FREE_MB
+------------ ------------------------------ -------- ---------- ----------
+           0 /dev/asmdisk/DBDISK01          NORMAL            0          0
+           0 /dev/asmdisk/FRADISK01         NORMAL            0          0
+           0 /dev/asmdisk/DBDISK02          NORMAL            0          0
+           1 /dev/asmdisk/OCRDISK02         NORMAL        30720       7924
+           1 /dev/asmdisk/OCRDISK03         NORMAL        30720       7916
+           1 /dev/asmdisk/OCRDISK01         NORMAL        30720       7948
+2 asmcmd
+[grid@rac1 grid]$ bin/asmcmd
+ASMCMD> pwd       ASM根目录为+
++
+ASMCMD> ls -l
+State    Type    Rebal  Name
+MOUNTED  NORMAL  N      OCR/
+ASMCMD> du
+Used_MB      Mirror_used_MB
+  33906               67844
+ASMCMD> lsct
+DB_Name  Status     Software_Version  Compatible_version  Instance_Name  Disk_Group
++ASM     CONNECTED        12.2.0.1.0          12.2.0.1.0  +ASM1          OCR
+_mgmtdb  CONNECTED        12.2.0.1.0          12.2.0.0.0  -MGMTDB        OCR
+_OCR     CONNECTED                 -                   -  rac1           OCR
+ASMCMD> lsdg
+State    Type    Rebal  Sector  Logical_Sector  Block       AU  Total_MB  Free_MB  Req_mir_free_MB  Usable_file_MB  Offline_disks  Voting_files  Name
+MOUNTED  NORMAL  N         512             512   4096  4194304     92160    23788            30720           -3466              0             Y  OCR/
+ASMCMD> lsdsk   列出ASM实例可见的所有磁盘
+Path
+/dev/asmdisk/OCRDISK01
+/dev/asmdisk/OCRDISK02
+/dev/asmdisk/OCRDISK03
+3 监听
+[grid@rac1 grid]$ bin/lsnrctl status LISTENER
+
+LSNRCTL for Linux: Version 12.2.0.1.0 - Production on 26-OCT-2020 09:48:11
+
+Copyright (c) 1991, 2016, Oracle.  All rights reserved.
+
+Connecting to (DESCRIPTION=(ADDRESS=(PROTOCOL=IPC)(KEY=LISTENER)))
+STATUS of the LISTENER
+------------------------
+Alias                     LISTENER
+Version                   TNSLSNR for Linux: Version 12.2.0.1.0 - Production
+Start Date                25-OCT-2020 16:21:06
+Uptime                    0 days 17 hr. 27 min. 4 sec
+Trace Level               off
+Security                  ON: Local OS Authentication
+SNMP                      OFF
+Listener Parameter File   /u01/app/12c/grid/network/admin/listener.ora
+Listener Log File         /u01/app/grid/diag/tnslsnr/rac1/listener/alert/log.xml
+Listening Endpoints Summary...
+  (DESCRIPTION=(ADDRESS=(PROTOCOL=ipc)(KEY=LISTENER)))
+  (DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=10.67.36.35)(PORT=1521)))
+  (DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=10.67.36.37)(PORT=1521)))
+Services Summary...
+Service "+ASM" has 1 instance(s).
+  Instance "+ASM1", status READY, has 1 handler(s) for this service...
+Service "+ASM_OCR" has 1 instance(s).
+  Instance "+ASM1", status READY, has 1 handler(s) for this service...
+The command completed successfully
+
+4 srvctl
+[grid@rac1 grid]$ bin/srvctl status listener
+Listener LISTENER is enabled
+Listener LISTENER is running on node(s): rac1,rac2
+[grid@rac1 grid]$ bin/srvctl status diskgroup -g OCR
+Disk Group OCR is running on rac1,rac2
+
+5 crsctl
+[grid@rac1 grid]$ bin/crsctl check has
+CRS-4638: Oracle High Availability Services is online
+[grid@rac1 grid]$ bin/crsctl status res
+NAME=ora.ASMNET1LSNR_ASM.lsnr
+TYPE=ora.asm_listener.type
+TARGET=ONLINE        , ONLINE
+STATE=ONLINE on rac1, ONLINE on rac2
+

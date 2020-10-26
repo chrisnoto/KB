@@ -1,3 +1,58 @@
+######## sqlplus设定#####
+修改glogin.sql，追加sqlplus默认设置
+[oracle@myora2 admin]$ tail -2 $ORACLE_HOME/sqlplus/admin/glogin.sql
+set linesize 800
+set pagesize 800
+以上为永久生效。否则只在当前session生效。
+设置数字列宽度
+col next_change# for 999999999999999999
+设置字符列宽度
+col name for a40
+设置sqlprompt
+set sqlprompt "_user'@'_connect_identifier > "
+使用脚本切换并显示container name
+col global_name new_value gname
+set termout off
+select upper(sys_context ('userenv', 'session_user') || '@' || sys_context ('userenv', 'cdb_name') || ':' || sys_context('userenv', 'con_name')) global_name from dual;
+set termout on;
+set sqlprompt '&gname> '
+
+[oracle@myora2 admin]$ cat switch.sql
+set termout off
+alter session set container=&1;
+@glogin
+set termout on
+执行效果
+[oracle@myora2 admin]$ sqlplus / as sysdba
+SYS@POC1:CDB$ROOT> @switch pdb1;
+SYS@POC1:PDB1>
+
+########## sqlplus远程连接
+sqlplus SYS/Foxconn123$%^@10.67.51.95/poc1 as sysdba
+
+###
+create user chensen identified by password;
+create tablespace game datafile '/data/oradata/POC1/B1B0F2E3DB513D4AE0535F33430A2EC9/datafile/o1_mf_users_game.dbf' size 100M autoextend on next 10M;
+alter user chensen default tablespace game;
+######## oracle 健康检查 ##########
+1 Checking the Database Instance Status
+select INSTANCE_NAME, STATUS from v$instance;
+
+2 Checking the Database Status and Tablespace Status
+select open_mode from v$database;
+select TABLESPACE_NAME,STATUS from dba_tablespaces;
+
+3 Checking the Tablespace Usage
+select ef.tablespace_name, round(ef.used_space/(1024*1024)) used_space, round(fs.total_space/(1024*1024)) total_space, 
+round(ef.used_space/fs.total_space*100,2) used_rate, round((fs.total_space-ef.used_space)/fs.total_space*100,2) free_rate 
+from (select cf.tablespace_name,sum(df.bytes - cf.free_bytes) used_space from(select tablespace_name, file_id, sum(bytes) 
+free_bytes from dba_free_space group by tablespace_name, file_id ) cf,dba_data_files df where cf.tablespace_name = df.tablespace_name 
+and cf.file_id = df.file_id group by cf.tablespace_name) ef,( select tablespace_name, sum(case when autoextensible='YES' 
+then maxbytes else bytes end) total_space from dba_data_files group by tablespace_name) fs where ef.tablespace_name = fs.tablespace_name;
+
+4 Viewing Archive Logs
+archive log list;
+ 
 
 ## 判断Oracle启动时使用spfile还是pfile？
 1 通过v$spparameter视图

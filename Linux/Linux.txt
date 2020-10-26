@@ -813,9 +813,15 @@ lrwxrwxrwx 1 root root 36 Oct  2  2009 /etc/localtime -> /usr/share/zoneinfo/Aus
 ln -sf /usr/share/zoneinfo/Asia/Singapore /etc/localtime
 
 ################### ssh tunnel ######################
+####### x11 forwarding and dbca########
+ssh -R 6000:127.0.0.1:6000 root@10.67.51.7   #可以多次跳转
+export DISPLAY=localhost:0.0
+windows客户机要安装xming
+
 ssh tunnel + squid               反向tunnel +squid代理突破防火墙限制使用yum
 ssh -R 1880:9.190.26.244:80 racv-l402             转发yum repo地址
 ssh -R 1880:10.62.32.27:33128 10.134.236.86       转发proxy
+
 本机：
 1   install squid
 2   #ssh -Nf -R 7001:localhost:3128 master  本地运行

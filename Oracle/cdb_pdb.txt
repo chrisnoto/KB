@@ -1,0 +1,78 @@
+######connect to pdb ####
+
+[oracle@myora2 admin]$ sqlplus /nolog
+SQL> conn sys/Foxconn123$%^@127.0.0.1:1521/pdb1 as sysdba
+Connected.
+SQL> show con_name
+
+CON_NAME
+------------------------------
+PDB1
+
+SYS@poc1 > alter session set container=pdb1;
+
+Session altered.
+
+SYS@poc1 > show con_name
+
+CON_NAME
+------------------------------
+PDB1
+
+#####查看pdb open mode
+select name,open_mode from v$containers;
+select con_id,name,open_mode from v$pdbs;
+
+#打开pdb1
+alter pluggable database pdb1 open;
+
+#关闭pdb1
+alter pluggable database pdb1 close immediate;
+
+#使用PDB$SEED创建新的PDB
+create pluggable database pdb2 admin user pdb2_admin identified by oracle;
+
+#从pdb1克隆出pdb3
+SYS@POC1:CDB$ROOT> alter pluggable database pdb1 close immediate;
+
+Pluggable database altered.
+
+SYS@POC1:CDB$ROOT> alter pluggable database pdb1 open read only;
+
+Pluggable database altered.
+
+SYS@POC1:CDB$ROOT> create pluggable database pdb3 from pdb1;
+
+Pluggable database created.
+SYS@POC1:CDB$ROOT> col name for a20;
+SYS@POC1:CDB$ROOT> select con_id,name,open_mode from v$containers;
+
+    CON_ID NAME                 OPEN_MODE
+---------- -------------------- ----------
+         1 CDB$ROOT             READ WRITE
+         2 PDB$SEED             READ ONLY
+         3 PDB1                 READ ONLY
+         4 PDB2                 READ WRITE
+         5 PDB3                 MOUNTED
+SYS@POC1:CDB$ROOT> alter pluggable database pdb3 open;
+
+Pluggable database altered.
+
+SYS@POC1:CDB$ROOT> alter pluggable database pdb1 close immediate;
+
+Pluggable database altered.
+
+SYS@POC1:CDB$ROOT> alter pluggable database pdb1 open;
+
+Pluggable database altered.
+
+SYS@POC1:CDB$ROOT> select con_id,name,open_mode from v$containers;
+
+    CON_ID NAME                 OPEN_MODE
+---------- -------------------- ----------
+         1 CDB$ROOT             READ WRITE
+         2 PDB$SEED             READ ONLY
+         3 PDB1                 READ WRITE
+         4 PDB2                 READ WRITE
+         5 PDB3                 READ WRITE
+
