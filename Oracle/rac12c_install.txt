@@ -6,8 +6,8 @@
 10.67.36.39 rac-scan   
 10.67.36.37 rac1-vip   
 10.67.36.38 rac2-vip   
-192.168.1.35 rac1-pri    第二块网卡
-192.168.1.36  rac2-pri   第二块网卡
+192.168.1.35 rac1-pri    第二块网卡 (vmware环境为 host-only网卡)
+192.168.1.36  rac2-pri   第二块网卡 (vmware环境为 host-only网卡)
 
 ***** 只需要配置public和private网络的IP,  SCAN和VIP不需要配置
 ##命令              **** 两台机都做
@@ -30,6 +30,15 @@ nmcli c up ens256
 
 /dev/sdg  100G   db1
 /dev/sdh  100G   db2
+
+## vmware环境配置共享磁盘
+逐块添加三块OCR，一块FRA，两块DB磁盘
+添加ocr1磁盘过程如下：
+在rac1上添加ocr1磁盘时，使用新磁盘，30GB，使用新SCSI总线，“虚拟设备节点”设置为SCSI(1:0) 设置磁盘为厚置备置零，“模式”为独立、持久。
+添加完之后，此时出现SCSI控制器1. 更改 SCSI控制1的 "SCSI总线共享" 为虚拟
+在rac2上添加ocr1磁盘时，使用已存在的磁盘，在datastore3里rac1目录里选择rac1_3.vmdk磁盘文件，“虚拟设备节点”设置为SCSI(1:0) “模式”为独立、持久。添加完成。
+
+待所有磁盘添加完毕后，开机验证，两台机执行 lsblk 都能看到磁盘就OK了
 
 #### 配置/u01目录
 ##/etc/sdb磁盘分区并挂载u01   **** 两台机都做
