@@ -1,8 +1,6 @@
-Oracle 12c 搭建rac
-
-
-   
-IP规划
+********* Oracle 12c 搭建rac *********
+  
+#### IP规划
 10.67.36.35 rac1  
 10.67.36.36 rac2  
 10.67.36.39 rac-scan   
@@ -11,19 +9,17 @@ IP规划
 192.168.1.35 rac1-pri    第二块网卡
 192.168.1.36  rac2-pri   第二块网卡
 
-只需要配置public和private网络的IP,  SCAN和VIP不需要配置
+***** 只需要配置public和private网络的IP,  SCAN和VIP不需要配置
 ##命令              **** 两台机都做
 #rac1         
-
 nmcli conn add con-name ens256 type ethernet ifname ens256 autoconnect yes ipv4.addr 192.168.1.35/24 ipv4.method manual
-
 nmcli c up ens256
+
 #rac2          
-
 nmcli conn add con-name ens256 type ethernet ifname ens256 autoconnect yes ipv4.addr 192.168.1.36/24 ipv4.method manual
-
 nmcli c up ens256
-磁盘规划
+
+#### 磁盘规划
 /u01 50G作为软件安装目录
 
 /dev/sdc  30G  ocr1 
@@ -35,6 +31,7 @@ nmcli c up ens256
 /dev/sdg  100G   db1
 /dev/sdh  100G   db2
 
+#### 配置/u01目录
 ##/etc/sdb磁盘分区并挂载u01   **** 两台机都做
 parted /dev/sdb mklabel gpt mkpart primary "1 -1"
 kpartx -a /dev/sdb         #视情况重启机器
@@ -45,40 +42,20 @@ cat >> /etc/fstab <<EOF
 /dev/sdb1               /u01                  xfs             defaults  0 0
 EOF
 
-## 共享磁盘分区并配置udev规则   **** rac1上做
-for u in c d e f g h
-do
-parted /dev/sd$u mklabel gpt mkpart primary "1 -1" 
-kpartx -a /dev/sd${u}1
-done
-此处最好重启机器
 
-#configure udev Rules        **** 两台机都做
-/usr/lib/udev/scsi_id -g -u -d /dev/sdc
-vi /etc/udev/rules.d/99-oracle-asmdevices.rules     
-KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="3688860300000002404f9d2f611850357", SYMLINK+="asmdisk/OCRDISK01", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch" 
 
-KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="3688860300000002204f9d2f611850357", SYMLINK+="asmdisk/OCRDISK02", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
-
-# 是udev规则生效    **** 两台机都做
-/sbin/udevadm control --reload-rules
-/sbin/udevadm trigger --type=devices --action=change
-
-# 检查ASM磁盘是否生效    **** 两台机都做
-ll /dev/asmdisk/ 
-
-#设置NOZEROCONF避免169.254.0.0/16添加到本地路由表        **** 两台机都做
+#### 设置NOZEROCONF避免169.254.0.0/16添加到本地路由表        **** 两台机都做
 cat >> /etc/sysconfig/network <<EOF
 NOZEROCONF=yes
 EOF
 
-#关闭avahi-daemon服务      （此次实验无该服务）          **** 两台机都做
+#### 关闭avahi-daemon服务      （此次实验无该服务）          **** 两台机都做
 systemctl stop avahi-dnsconfd
 systemctl stop avahi-daemon
 systemctl disable avahi-dnsconfd
 systemctl disable avahi-daemon
 
-#关闭THP                  **** 两台机都做
+#### 关闭THP                  **** 两台机都做
 检查当前THP开关状态。
 执行如下命令检查。
 [root@dbn01~]# cat /sys/kernel/mm/transparent_hugepage/enabled
@@ -89,14 +66,14 @@ systemctl disable avahi-daemon
 grub2-mkconfig -o /boot/grub2/grub.cfg
 重启节点生效，检查是否修改成功  never为THP关闭状态
 
-# 安装必要的rpm包         **** 两台机都做
+##### 安装必要的rpm包         **** 两台机都做
 yum install -y ksh net-tools smartmontools compat-libcap1 libXtst tree bc ntp wget xorg-x11-xauth unzip ftp gcc libaio libaio-devel compat-libstdc++-33 \
    glibc-devel glibc-headers gcc-c++ sysstat \
    elfutils-libelf-devel \
    xorg-x11-server-utils xorg-x11-utils \
    rlwrap
 
-# 配置sysctl             **** 两台机都做
+#### 配置sysctl             **** 两台机都做
 kernel.sem参数：如果客户单个数据库需要支持的process数超过800，请按照实际情况配置
 cat >> /etc/sysctl.conf <<EOF
 fs.aio-max-nr = 1048576
@@ -114,9 +91,9 @@ net.ipv4.tcp_wmem = 262144 262144 262144
 net.ipv4.tcp_rmem = 4194304 4194304 4194304
 EOF
 
-# 配置HugePage                **** 两台机都做
+#### 配置HugePage                **** 两台机都做
 vi /etc/sysctl.conf
-vm.nr_hugepages=大页的页数
+vm.nr_hugepages=5017    **大页的页数
 
 页数的计算方法：
 检查并确认当前环境中内存的大页尺寸是否为2048 kB 即2MB。
@@ -130,7 +107,7 @@ vm.nr_hugepages = （节点物理内存大小 * 0.65 * 0.75 + 2） * 1024 / 内�
 vm.nr_hugepages =（512 GB * 0.65 * 0.75 + 2）* 1024 / 2 MB = 128819.2（页）
 
    
-# 手动创建oracle和grid用户            **** 两台机都做
+#### 手动创建oracle和grid用户            **** 两台机都做
 /usr/sbin/groupadd -g 1003 oinstall 
 /usr/sbin/groupadd -g 1001 dba 
 /usr/sbin/groupadd -g 1002 oper 
@@ -141,12 +118,13 @@ vm.nr_hugepages =（512 GB * 0.65 * 0.75 + 2）* 1024 / 2 MB = 128819.2（页）
 /usr/sbin/useradd -u 1001 -g oinstall -G asmadmin,asmdba,asmoper,oper,dba -m -d /home/grid grid   
 echo "grid:luoluo2020" | chpasswd
 echo "oracle:luoluo2020" | chpasswd
-# 设置pam                             **** 两台机都做
+
+#### 设置pam                             **** 两台机都做
 cat >>/etc/pam.d/login <<EOF
 session required pam_limits.so 
 EOF
 
-# 设置ulimit                           **** 两台机都做
+#### 设置ulimit                           **** 两台机都做
 cat >>/etc/security/limits.conf <<EOF
 #ORACLE SETTING 
 grid                 soft    nproc   65536 
@@ -165,7 +143,7 @@ oracle               hard    stack  65536
 *                    hard    memlock unlimited
 EOF
 
-# 配置用户环境变量                      **** 两台机都做
+#### 配置用户环境变量                      **** 两台机都做
 cluster name: rac
 scan name: rac-scan
 scan port: 1521
@@ -200,7 +178,7 @@ export THREADS_FLAG=native
 export PATH=$ORACLE_HOME/bin:$PATH   
 EOF
 
-# 创建grid和oracle安装目录                 **** 两台机都做
+#### 创建grid和oracle安装目录                 **** 两台机都做
 mkdir -p /u01/app/12c/grid  
 mkdir -p /u01/app/grid  
 mkdir -p /u01/app/oracle/product/12c/db 
@@ -208,33 +186,63 @@ chown -R grid:oinstall /u01/app
 chown -R oracle:oinstall  /u01/app/oracle  
 chmod -R 775 /u01/
 
+#### ASM配置
+## ASM共享磁盘分区并配置udev规则   **** rac1上做
+for u in c d e f g h
+do
+parted /dev/sd$u mklabel gpt mkpart primary "1 -1" 
+kpartx -a /dev/sd${u}1
+done
+此处最好重启机器
 
-# 安装grid
+#configure udev Rules        **** 两台机都做
+/usr/lib/udev/scsi_id -g -u -d /dev/sdc
+vi /etc/udev/rules.d/99-oracle-asmdevices.rules     
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c29ba8d005f97fab8805ec0ab368", SYMLINK+="asmdisk/OCRDISK01", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c29f9422521651b40b92aec0effa", SYMLINK+="asmdisk/OCRDISK02", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c29b80656c8062cca999bb7a72f7", SYMLINK+="asmdisk/OCRDISK03", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c29b4dd42a22052c3d5878e38470", SYMLINK+="asmdisk/FRADISK01", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c29a09bde08d6ae8fdcad99699d8", SYMLINK+="asmdisk/DBDISK01", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev/scsi_id --whitelisted --replace-whitespace --device=/dev/$name", RESULT=="36000c2945e74dc612c54d351a9d4c272", SYMLINK+="asmdisk/DBDISK02", OWNER="grid", GROUP="asmadmin", MODE="0660", OPTIONS="nowatch"
+
+# 使udev规则生效    **** 两台机都做
+/sbin/udevadm control --reload-rules
+/sbin/udevadm trigger --type=devices --action=change
+
+# 检查ASM磁盘是否生效    **** 两台机都做
+ll /dev/asmdisk/ 
+
+#### 安装grid
 上传解压软件包      **** rac1上做
 unzip /root/linuxx64_12201_grid_home.zip -d /u01/app/12c/grid/
 unzip /root/linuxx64_12201_database.zip -d /u01/app/oracle/product/12c/db
 chown -R grid:oinstall /u01/app  
 chown -R oracle:oinstall  /u01/app/oracle
+
 安装cvuqdisk rpm包        **** 两台机都做
 rpm -ivh /u01/app/12c/grid/cv/rpm/cvuqdisk-1.0.10-1.rpm
 scp /u01/app/12c/grid/cv/rpm/cvuqdisk-1.0.10-1.rpm rac2:~
 rpm -ivh cvuqdisk-1.0.10-1.rpm             *** rac2上做
-ssh key配置 从rac1使用grid用户免密登录rac1,rac2
+
+ssh key配置 使用grid,oracle用户ssh登录双机互信认 (可免，grid安装过程可以点setup按钮自动设置)
 su - grid
 ssh-keygen -q -f '/home/grid/.ssh/id_rsa' -N ''  <<< y       **** 两台机都做 
 ssh-copy-id grid@rac1
 ssh-copy-id grid@rac2
 
+# X11转发设置    这里ssh只能转发6000端口
 用grid用户登录rac1,并设置ssh转发。本PC要开xming
 ssh -R 6000:127.0.0.1:6000 grid@10.67.36.35
 export DISPLAY=localhost:0.0
 cd /u01/app/12c/grid
 ./gridSetup.sh
 
-# 安装db software only
-# 配置ASM DG  asmca
+#### 安装db software only
 
-# 安装database  dbca   -pdb/cdb
+
+#### 配置ASM DG  asmca
+
+#### 安装database  dbca   -pdb/cdb
 
 
 
