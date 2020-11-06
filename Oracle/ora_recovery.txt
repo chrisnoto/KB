@@ -1,0 +1,182 @@
+Oracle数据库恢复
+
+恢复分两种：
+
+（1） Crash recovery
+
+（2） Media recovery
+（1） Crash Recovery 是在启动时DB 自动完成，而MediaRecovery 需要DBA 手工的完成。
+
+（2） Crash Recovery 使用online redo log，Media Recovery 使用archived log 和 online redo log。
+
+（3） Media Recovery 可能还需要从备份中Restore datafile。
+
+Oracle内部主要存在以下四种SCN
+SCN与CHECKPOINT
+CKPT进程在checkpoint发生时，将当时的SCN号写入数据文件头和控制文件，同时通知DBWR进程将数据块写到数据文件。
+与checkpoint相关的SCN号有四个，其中三个存在控制文件中，一个存放在数据文件头中。
+
+1.System Checkpoint SCN
+当checkpoint完成后，ORACLE将System Checkpoint SCN号存放在控制文件中。我们可以通过下面SQL语句查询：
+select checkpoint_change# from v$database;
+
+2.Datafile Checkpoint SCN
+当checkpoint完成后，ORACLE将Datafile Checkpoint SCN号存放在控制文件中。我们可以通过下面SQL语句查询所有数据文件的Datafile Checkpoinnt SCN号。
+select name,checkpoint_change# from v$datafile;
+
+3.Start SCN号
+ORACLE将Start SCN号存放在数据文件头中。
+这个SCN用于检查数据库启动过程是否需要做Media Recovery.
+我们可以通过以下SQL语句查询：
+select name,checkpoint_change# from v$datafile_header;
+
+4.End SCN (Stop SCN)号
+ORACLE将End SCN号存放在控制文件中。
+这个SCN号用于检查数据库启动过程是否需要做Instance Recovery.        db open in read-write mode 该SCN号为NULL
+
+Oracle根据以下规则判断某个数据文件是否需要恢复及恢复类型
+if (数据文件检查点SCN <数据文件头SCN)
+  then "控制文件来自备份，需要进行不完全恢复，恢复之后得用resetlog方式打开”
+else if (数据文件检查点SCN > 数据文件头SCN)
+  then "数据文件来自备份，需要log进行完全或不完全恢复"
+else if (数据文件检查点SCN = 数据文件头SCN) 
+   then "数据库能正常open，还需要判断是否需要实例恢复"
+   if (数据文件终止SCN = 数据文件检查点SCN)
+       then "数据库打开时不需要实例恢复“
+   else if (数据文件终止SCN = NULL)
+       then "数据库需要实例恢复"
+
+实验：
+-----------------------------------------------------------------------------------------------------
+冷备份数据文件，用备份文件cp回数据文件目录后
+startup mount状态	 查询SCN：
+SQL> select file#,change# from v$recover_file;        (需要恢复的数据文件，及数据文件头中的Start SCN号)
+     FILE#    CHANGE#
+---------- ----------
+         1    1281696
+         2    1281696
+         3    1281696
+         4    1281696
+         5    1281696
+SQL> select name,checkpoint_change# from v$datafile_header;   数据文件头中的Start SCN号
+NAME                                                        CHECKPOINT_CHANGE# 
+/data/oradata/CHENSEN/datafile/o1_mf_system_hocv1ymr_.dbf   1281696
+
+SQL> select checkpoint_change# from v$database;       控制文件中的System Checkpoint SCN
+
+CHECKPOINT_CHANGE#
+------------------
+           1282151
+		   
+SQL> select name,checkpoint_change# from v$datafile;              控制文件中的Datafile Checkpoint SCN
+NAME                                                        CHECKPOINT_CHANGE# 
+/data/oradata/CHENSEN/datafile/o1_mf_system_hocv1ymr_.dbf	1282151   
+这时 数据文件检查点SCN > 数据文件头SCN  需要log进行完全或不完全恢复
+-----------------------------------------------------------------------------------------------------	   
+1 RMAN
+1.1 database level 
+DBPITR  database point-in-time recovery  (incomplete recovery)
+restore a whole database backup and apply redo logs 
+
+# example
+RUN
+{ 
+  SET UNTIL SCN 1000;    
+  RESTORE DATABASE;
+  RECOVER DATABASE;
+}
+
+# To perform DBPITR to a noncurrent incarnation:
+-----------------------------------------------------
+*  LIST INCARNATION OF DATABASE trgt;
+
+List of Database Incarnations
+DB Key  Inc Key   DB Name   DB ID       STATUS     Reset SCN    Reset Time
+------- -------   -------   ------      -------    ----------   ----------
+1       2         TRGT      1224038686  PARENT     1            02-OCT-13
+1       582       TRGT      1224038686  CURRENT    59727        10-OCT-13
+
+*  Ensure that the database is started but not mounted.
+STARTUP FORCE NOMOUNT;
+
+*  Reset the target database to the incarnation obtained in Step 2.
+In this example, specify the incarnation current at the time of the backup of 2 October. Use the value from the Inc Key column to identify the incarnation.
+
+RESET DATABASE TO INCARNATION 2;
+
+* Restore and recover the database, performing the following actions in the RUN command:
+  Set the end time for recovery to the time just before the loss of the data.
+  Allocate any channels required that are not configured.
+  Restore the control file from the October 2 backup and mount it.
+  Restore the data files and recover the database. Use the RECOVER DATABASE ... UNTIL command to perform DBPITR, bringing the database to the target time of 7:55 a.m. on October 8, just before the data was lost.
+  The following example shows all of the steps required in this case:
+
+RUN
+{
+  SET UNTIL TIME 'Oct 8 2013 07:55:00'; 
+  RESTORE CONTROLFILE;
+  # without recovery catalog, use RESTORE CONTROLFILE FROM AUTOBACKUP
+  ALTER DATABASE MOUNT; 
+  RESTORE DATABASE;
+  RECOVER DATABASE;
+}
+ALTER DATABASE OPEN RESETLOGS;
+
+When your database is running in ARCHIVELOG mode, then DBPITR is an option in nearly all circumstances
+RMAN DBPITR has the following disadvantages:
+* You cannot return selected objects to their earlier state, only the entire database.
+* Your entire database is unavailable during the DBPITR.
+* DBPITR can be time-consuming because RMAN must restore all data files. Also, RMAN may need to restore redo logs and incremental backups to recover the data files.
+ If backups are on tape, then this process can take even longer.
+
+1.2 tablespace level 
+TSPITR  tablespace point-in-tiem recovery
+retrun these tablespaces to an earlier SCN
+
+1.3 table or table partition level
+recovring tables or table partitions to a specific point in time
+
+2 Flashback
+supports viewing past states of data, and winding and rewinding data back and forth in time, 
+WITHOUT requiring the restore of the database from backup
+
+2.1 Rewinding a Database with Flashback Database    - Physical
+Unlike the other flashback features, it operates at a physical level and reverts the current data files to their contents at a past time.
+
+2.2 Rewinding a Table with Flashback Table          - Logical
+All logical flashback features except Flashback Drop rely on undo data
+Flashback Table uses information in the undo tablespace rather than restored backups to retrieve the table.
+The logical-level flashback features of Oracle do not depend on RMAN and are available whether or not RMAN is part of your backup strategy.
+
+2.3 Oracle Flashback Query
+
+2.4 Oracle Flashback Version Query
+
+2.5 Oracle Flashback Transaction Query
+
+2.6 Oracle Flashback Transaction
+
+2.7 Rewinding a DROP TABLE Operation with Flashback Drop
+Flashback Drop relies on a mechanism called the recycle bin
+
+
+RMAN备份
+obsolete 指的就是超过备份策略的备份集
+expired 指的是rman里面有，但是磁盘上没有的备份集，需要crosscheck一下
+
+RMAN>
+
+run{
+allocate channel c1 device type disk;
+allocate channel c2 device type disk;
+backup as compressed backupset database format '/data/rmanbak/chensen_full_backup_%d_%T_%U.bak';
+sql 'alter system switch logfile';
+backup archivelog from time='sysdate-1' until time 'sysdate' format = '/data/rmanbak/chensen_%n_arch_%T_%U.bak';
+crosscheck backup;
+#crosscheck archivelog all;
+delete noprompt obsolete;
+#delete noprompt expired archivelog all;
+delete noprompt expired backup;
+release channel c1;
+release channel c2;
+}

@@ -1,0 +1,87 @@
+### 使用oracle sql developer
+# Connection Type TNS:
+   Network Alias - no additional software needed - just tnsnames.ora
+   Connection Identified - needs 'OCI' i.e. Oracle Client
+
+### tnsnames.ora
+[oracle@ora-test admin]$ cat tnsnames.ora
+*** 连接CDB   SID=poc1
+poc1 =
+ (DESCRIPTION =
+  (ADDRESS_LIST =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.51.95)(PORT = 1521))
+   )
+  (CONNECT_DATA =
+   (SERVICE_NAME = poc1))
+)
+*** 直接连接到pdb
+pdb1 =
+ (DESCRIPTION =
+  (ADDRESS_LIST =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.51.95)(PORT = 1521))
+   )
+  (CONNECT_DATA =
+   (SERVICE_NAME = pdb1))
+)
+*** ADG配置主备数据库
+sty_clm =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = 10.67.39.42)(PORT = 1521))
+    )
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = clm)
+    )
+  )
+prd_clm =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = 10.67.38.173)(PORT = 1521))
+    )
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = clm)
+    )
+  )
+
+
+*** 通过scan ip连接rac  db_unique_name=dbn
+dbn =
+ (DESCRIPTION =
+  (ADDRESS_LIST =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.36.39)(PORT = 1521))
+   )
+  (CONNECT_DATA =
+   (SERVICE_NAME = dbn))
+)
+*** 连接rac asm实例    db_unique_name=+ASM SID=+ASM1
+rac1 =
+ (DESCRIPTION =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.36.35)(PORT = 1521))
+   (CONNECT_DATA =
+    (SERVER = DEDICATED)
+    (SERVICE_NAME = +ASM)
+    (INSTANCE_NAME = +ASM1)
+   )
+)
+*** 连接rac asm实例    db_unique_name=+ASM SID=+ASM2
+rac2 =
+ (DESCRIPTION =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.36.36)(PORT = 1521))
+   (CONNECT_DATA =
+    (SERVER = DEDICATED)
+    (SERVICE_NAME = +ASM)
+    (INSTANCE_NAME = +ASM2)
+   )
+)
+*** 连接rac1上的mgmtdb
+rac1 =
+ (DESCRIPTION =
+   (ADDRESS = (PROTOCOL =TCP)(HOST = 10.67.36.35)(PORT = 1521))
+   (CONNECT_DATA =
+    (SERVER = DEDICATED)
+    (SERVICE_NAME = +ASM)
+    (INSTANCE_NAME = +ASM1)
+   )
+)

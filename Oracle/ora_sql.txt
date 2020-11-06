@@ -52,7 +52,13 @@ then maxbytes else bytes end) total_space from dba_data_files group by tablespac
 
 4 Viewing Archive Logs
 archive log list;
- 
+
+## 统计Oracle的日归档量
+select trunc(completion_time) "Date", count(*) cnt, round(sum(block_size * blocks / 1024 / 1024), 1) "MB"
+from v$archived_log
+where dest_id = 1  /* 限制条件 dest_id = 1 */
+group by trunc(completion_time) 
+order by 1; 
 
 ## 判断Oracle启动时使用spfile还是pfile？
 1 通过v$spparameter视图
@@ -113,6 +119,7 @@ CHENSEN                        SCHOOL
 
 SQL> select * from all_users;  ---查看所有用户
 SQL> select * from V$PWFILE_USERS; ---查看哪些用户有sysdba或sysoper系统权限
+SQL> select * from dba_role_privs where granted_role='DBA';      ---查看哪些用户有dba权限
 
 ## 查指定用户下的表
 CHENSEN@poc1> select owner,table_name,tablespace_name,num_rows from all_tables where owner='CHENSEN';

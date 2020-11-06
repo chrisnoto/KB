@@ -1,0 +1,160 @@
+CREATE CONTROLFILE
+   SET DATABASE chensen
+   LOGFILE GROUP 1 ('/data/oradata/CHENSEN/onlinelog/redo01.log', 
+                    '/data/oradata/CHENSEN/onlinelog/redo01_1.log'),
+           GROUP 2 ('/data/oradata/CHENSEN/onlinelog/redo02.log', 
+                    '/data/oradata/CHENSEN/onlinelog/redo02_1.log'),
+           GROUP 3 ('/data/oradata/CHENSEN/onlinelog/redo03_1.log', 
+                    '/data/oradata/CHENSEN/onlinelog/redo03_2.log') 
+   RESETLOGS
+   DATAFILE '/data/oradata/CHENSEN/datafile/o1_mf_system_hocv1ymr_.dbf' SIZE 786440192,
+            '/data/oradata/CHENSEN/datafile/HOK_DATA01.DBF' SIZE 10493952,
+            '/data/oradata/CHENSEN/datafile/o1_mf_sysaux_hocv1yoq_.dbf' SIZE 587210752,
+			'/data/oradata/CHENSEN/datafile/o1_mf_undotbs1_hocv1yps_.dbf' SIZE 73408512,
+			'/data/oradata/CHENSEN/datafile/o1_mf_users_hocv1yr1_.dbf' SIZE 5251072,
+            '/data/oradata/CHENSEN/datafile/o1_mf_temp_hocv4lyj_.tmp' SIZE 35M
+   MAXLOGFILES 50
+   MAXLOGMEMBERS 3
+   MAXLOGHISTORY 400
+   MAXDATAFILES 200
+   MAXINSTANCES 6
+   ARCHIVELOG;
+   
+-- Below are two sets of SQL statements, each of which creates a new
+-- control file and uses it to open the database. The first set opens
+-- the database with the NORESETLOGS option and should be used only if
+-- the current versions of all online logs are available. The second
+-- set opens the database with the RESETLOGS option and should be used
+-- if online logs are unavailable.
+-- The appropriate set of statements can be copied from the trace into
+-- a script file, edited as necessary, and executed when there is a
+-- need to re-create the control file.
+--
+--     Set #1. NORESETLOGS case
+--
+-- The following commands will create a new control file and use it
+-- to open the database.
+-- Data used by Recovery Manager will be lost.
+-- Additional logs may be required for media recovery of offline
+-- Use this only if the current versions of all online logs are
+-- available.
+-- After mounting the created controlfile, the following SQL
+-- statement will place the database in the appropriate
+-- protection mode:
+--  ALTER DATABASE SET STANDBY DATABASE TO MAXIMIZE PERFORMANCE
+STARTUP NOMOUNT
+CREATE CONTROLFILE REUSE DATABASE "CHENSEN" NORESETLOGS  ARCHIVELOG
+    MAXLOGFILES 16
+    MAXLOGMEMBERS 3
+    MAXDATAFILES 100
+    MAXINSTANCES 8
+    MAXLOGHISTORY 292
+LOGFILE
+  GROUP 1 (
+    '/data/oradata/CHENSEN/onlinelog/redo01.log',
+    '/data/oradata/CHENSEN/onlinelog/redo01_1.log'
+  ) SIZE 200M BLOCKSIZE 512,
+  GROUP 2 (
+    '/data/oradata/CHENSEN/onlinelog/redo02.log',
+    '/data/oradata/CHENSEN/onlinelog/redo02_1.log'
+  ) SIZE 200M BLOCKSIZE 512,
+  GROUP 3 (
+    '/data/oradata/CHENSEN/onlinelog/redo03_1.log',
+    '/data/oradata/CHENSEN/onlinelog/redo03_2.log'
+  ) SIZE 200M BLOCKSIZE 512
+-- STANDBY LOGFILE
+DATAFILE
+  '/data/oradata/CHENSEN/datafile/o1_mf_system_hocv1ymr_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_sysaux_hocv1yoq_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_undotbs1_hocv1yps_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_users_hocv1yr1_.dbf',
+  '/data/oradata/CHENSEN/datafile/HOK_DATA01.DBF'
+CHARACTER SET AL32UTF8
+;
+-- Commands to re-create incarnation table
+-- Below log names MUST be changed to existing filenames on
+-- disk. Any one log file from each branch can be used to
+-- re-create incarnation records.
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_824297850.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1050509836.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055433691.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055434265.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055435780.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055515722.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055522256.dbf';
+-- Recovery is required if any of the datafiles are restored backups,
+-- or if the last shutdown was not normal or immediate.
+RECOVER DATABASE
+-- All logs need archiving and a log switch is needed.
+ALTER SYSTEM ARCHIVE LOG ALL;
+-- Database can now be opened normally.
+ALTER DATABASE OPEN;
+-- Commands to add tempfiles to temporary tablespaces.
+-- Online tempfiles have complete space information.
+-- Other tempfiles may require adjustment.
+ALTER TABLESPACE TEMP ADD TEMPFILE '/data/oradata/CHENSEN/datafile/o1_mf_temp_hocv4lyj_.tmp'
+     SIZE 30408704  REUSE AUTOEXTEND ON NEXT 655360  MAXSIZE 32767M;
+-- End of tempfile additions.
+--
+--     Set #2. RESETLOGS case
+--
+-- The following commands will create a new control file and use it
+-- to open the database.
+-- Data used by Recovery Manager will be lost.
+-- The contents of online logs will be lost and all backups will
+-- be invalidated. Use this only if online logs are damaged.
+-- After mounting the created controlfile, the following SQL
+-- statement will place the database in the appropriate
+-- protection mode:
+--  ALTER DATABASE SET STANDBY DATABASE TO MAXIMIZE PERFORMANCE
+STARTUP NOMOUNT
+CREATE CONTROLFILE REUSE DATABASE "CHENSEN" RESETLOGS  ARCHIVELOG
+    MAXLOGFILES 16
+    MAXLOGMEMBERS 3
+    MAXDATAFILES 100
+    MAXINSTANCES 8
+    MAXLOGHISTORY 292
+LOGFILE
+  GROUP 1 (
+    '/data/oradata/CHENSEN/onlinelog/redo01.log',
+    '/data/oradata/CHENSEN/onlinelog/redo01_1.log'
+  ) SIZE 200M BLOCKSIZE 512,
+  GROUP 2 (
+    '/data/oradata/CHENSEN/onlinelog/redo02.log',
+    '/data/oradata/CHENSEN/onlinelog/redo02_1.log'
+  ) SIZE 200M BLOCKSIZE 512,
+  GROUP 3 (
+    '/data/oradata/CHENSEN/onlinelog/redo03_1.log',
+    '/data/oradata/CHENSEN/onlinelog/redo03_2.log'
+  ) SIZE 200M BLOCKSIZE 512
+-- STANDBY LOGFILE
+DATAFILE
+  '/data/oradata/CHENSEN/datafile/o1_mf_system_hocv1ymr_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_sysaux_hocv1yoq_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_undotbs1_hocv1yps_.dbf',
+  '/data/oradata/CHENSEN/datafile/o1_mf_users_hocv1yr1_.dbf',
+  '/data/oradata/CHENSEN/datafile/HOK_DATA01.DBF'
+CHARACTER SET AL32UTF8
+;
+-- Commands to re-create incarnation table
+-- Below log names MUST be changed to existing filenames on
+-- disk. Any one log file from each branch can be used to
+-- re-create incarnation records.
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_824297850.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1050509836.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055433691.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055434265.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055435780.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055515722.dbf';
+-- ALTER DATABASE REGISTER LOGFILE '/data/arch/1_1_1055522256.dbf';
+-- Recovery is required if any of the datafiles are restored backups,
+-- or if the last shutdown was not normal or immediate.
+RECOVER DATABASE USING BACKUP CONTROLFILE
+-- Database can now be opened zeroing the online logs.
+ALTER DATABASE OPEN RESETLOGS;
+-- Commands to add tempfiles to temporary tablespaces.
+-- Online tempfiles have complete space information.
+-- Other tempfiles may require adjustment.
+ALTER TABLESPACE TEMP ADD TEMPFILE '/data/oradata/CHENSEN/datafile/o1_mf_temp_hocv4lyj_.tmp'
+     SIZE 30408704  REUSE AUTOEXTEND ON NEXT 655360  MAXSIZE 32767M;
+-- End of tempfile additions.

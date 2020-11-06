@@ -1,0 +1,20 @@
+
+
+#物理备库启动
+startup mount;
+* redo apply模式
+alter database recover managed standby database
+disconnect from session;
+* real-time apply模式
+alter database recover managed standby database
+using current logfile;
+
+# 主库查看 recovery_mode 
+displays the standby database's operation as MANAGED_RECOVERY for Redo Apply and
+ MANAGED REAL TIME APPLY for real-time apply.
+SYS@clm> select recovery_mode from v$archive_dest_status;
+
+RECOVERY_MODE
+-----------------------
+IDLE
+MANAGED REAL TIME APPLY
