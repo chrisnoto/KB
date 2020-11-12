@@ -1,4 +1,16 @@
+在 12cR2 （ 12.2.0.1 ）之前创建物理备库的方法有：
+1 、使用 RMAN 备份恢复方法；
+2 、在 11g 时可以选择 duplicate 方式创建物理备库；通过这种方式直接在线从主库搭建物理备库。
 
+到 12cR2 （ 12.2.0.1 ）后，Oracle 又提供更简单的方式来创建物理备库，即使用 DBCA 方式直接建立物理备库。这个功能再次简化了创建备库的复杂度。
+虽然通过 DBCA 能非常简单的创建一个物理备库，但是要使用这个功能，必须满足以下条件：
+①　 主库必须是单机环境，非 RAC 数据库；
+②　 主库必须是非 CDB 环境；
+如果不满足以上条件， 那么 在使用 DBCA 创建备库的时候，会提示错误：
+也就说通过 DBCA 搭建出来的备库也是一个单机非 CDB 的备库。
+
+需要注意的是，在 12cR2 （ 12.2.0.1 ）中，通过 DBCA 创建物理需要保证主库是单机非 CDB 的库，但是从 Oracle 18c （ 12.2.0.2 ）开始，这些限制条件已经取消了，
+即主库是 CDB 或 rac 环境都可以通过 dbca 来创建物理备库。
 
 #物理备库启动
 startup mount;
@@ -9,6 +21,9 @@ disconnect from session;
 alter database recover managed standby database
 using current logfile;
 
+需要注意的是，若在Oracle 10g中采用LGWR传输日志的时候，则进程表现为LNSn，
+但在Oracle 11g中，若采用LGWR ASYNC（异步方式）来传输日志的时候，则进程表现为nsa，若采用LGWR SYNC（同步方式）来传输日志的时候，则进程表现为nss
+
 # 主库查看 recovery_mode 
 displays the standby database's operation as MANAGED_RECOVERY for Redo Apply and
  MANAGED REAL TIME APPLY for real-time apply.
@@ -18,3 +33,91 @@ RECOVERY_MODE
 -----------------------
 IDLE
 MANAGED REAL TIME APPLY
+
+# 备库查看 recovery_mode
+SYS@test> select thread#,sequence#,creator,registrar,applied,status from v$archived_log;
+
+   THREAD#  SEQUENCE# CREATOR REGISTR APPLIED   S
+---------- ---------- ------- ------- --------- -
+         1         47 ARCH    RFS     YES       A
+         1         48 ARCH    RFS     YES       A
+         1         49 ARCH    RFS     YES       A
+         1         50 ARCH    RFS     YES       A
+         1         51 ARCH    RFS     YES       A
+         1         52 ARCH    RFS     YES       A
+         1         53 ARCH    RFS     YES       A
+         1         54 ARCH    RFS     IN-MEMORY A
+
+
+6 rows selected.
+
+SYS@test> select recovery_mode from v$archive_dest_status;
+
+RECOVERY_MODE
+-----------------------
+MANAGED REAL TIME APPLY
+
+# 查看进程的活动状态
+SYS@test> select process,client_process,sequence#,status from v$managed_standby;
+
+PROCESS   CLIENT_P  SEQUENCE# STATUS
+--------- -------- ---------- ------------
+ARCH      ARCH             53 CLOSING
+ARCH      ARCH              0 CONNECTED
+ARCH      ARCH             52 CLOSING
+ARCH      ARCH             54 CLOSING
+RFS       ARCH              0 IDLE
+RFS       LGWR             55 IDLE
+RFS       UNKNOWN           0 IDLE
+MRP0      N/A              55 APPLYING_LOG
+
+8 rows selected.
+
+# 检查redo应用进度
+SYS@test> select dest_name,archived_thread#,applied_thread#,applied_seq#,db_unique_name from v$archive_dest_status where status='VALID';
+
+DEST_NAME
+--------------------------------------------------------------------------------
+ARCHIVED_THREAD# APPLIED_THREAD# APPLIED_SEQ# DB_UNIQUE_NAME
+---------------- --------------- ------------ ------------------------------
+LOG_ARCHIVE_DEST_1
+               1               0            0 NONE
+
+LOG_ARCHIVE_DEST_2
+               0               0            0 test
+
+STANDBY_ARCHIVE_DEST
+               1               1           54 NONE
+
+# 检查归档文件路径和创建信息 
+SYS@test> select name,creator,sequence#,applied,completion_time from v$archived_log;
+
+NAME                                     CREATOR  SEQUENCE# APPLIED   COMPLETIO
+---------------------------------------- ------- ---------- --------- ---------
+/data/arch_log/1_47_1055677122.dbf       ARCH            47 YES       09-NOV-20
+/data/arch_log/1_48_1055677122.dbf       ARCH            48 YES       09-NOV-20
+/data/arch_log/1_49_1055677122.dbf       ARCH            49 YES       10-NOV-20
+/data/arch_log/1_50_1055677122.dbf       ARCH            50 YES       10-NOV-20
+/data/arch_log/1_51_1055677122.dbf       ARCH            51 YES       10-NOV-20
+/data/arch_log/1_52_1055677122.dbf       ARCH            52 YES       11-NOV-20
+/data/arch_log/1_53_1055677122.dbf       ARCH            53 YES       11-NOV-20
+/data/arch_log/1_54_1055677122.dbf       ARCH            54 IN-MEMORY 11-NOV-20
+
+# 查询归档历史
+SYS@test> select first_time,first_change#,next_change#,sequence# from v$log_history;
+FIRST_TIM FIRST_CHANGE# NEXT_CHANGE#  SEQUENCE#
+--------- ------------- ------------ ----------
+05-NOV-20        925702       925947          1
+05-NOV-20        925947       929175          2
+05-NOV-20        929175       948204          3
+。。。。
+11-NOV-20       1521649      1547597         53
+11-NOV-20       1547597      1547615         54
+
+SYS@test> select thread#,max(sequence#) as "LAST_APPLIED_LOG" from v$log_history group by thread#;
+
+   THREAD# LAST_APPLIED_LOG
+---------- ----------------
+         1               54
+# 查看data guard事件
+SYS@test> select message from v$dataguard_status;
