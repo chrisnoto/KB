@@ -85,3 +85,37 @@ rac1 =
     (INSTANCE_NAME = +ASM1)
    )
 )
+
+
+####### db link and synonym ########
+# dblink用sys用户连接
+SQL> select * from v$log "@DBNLINK as sysdba";
+
+    GROUP#    THREAD#  SEQUENCE#      BYTES  BLOCKSIZE    MEMBERS ARC STATUS           FIRST_CHANGE# FIRST_TIM NEXT_CHANGE# NEXT_TIME
+---------- ---------- ---------- ---------- ---------- ---------- --- ---------------- ------------- --------- ------------ ---------
+         1          1          7  209715200        512          2 NO  CURRENT                1679826 15-NOV-20   2.8147E+14
+         2          1          5  209715200        512          2 YES INACTIVE               1525697 11-NOV-20      1614155 13-NOV-20
+         3          1          6  209715200        512          2 YES INACTIVE               1614155 13-NOV-20      1679826 15-NOV-20
+
+SQL> create database link dbnlink_chensen connect to C##CHENSEN identified by chensen using 'dbn';
+
+Database link created.
+SQL> select * from v$log@dbnlink_chensen;
+
+    GROUP#    THREAD#  SEQUENCE#      BYTES  BLOCKSIZE    MEMBERS ARC STATUS           FIRST_CHANGE# FIRST_TIM NEXT_CHANGE# NEXT_TIME     CON_ID
+---------- ---------- ---------- ---------- ---------- ---------- --- ---------------- ------------- --------- ------------ --------- ----------
+         1          1         57  209715200        512          2 YES INACTIVE               9326157 15-NOV-20      9537168 16-NOV-20          0
+         2          1         58  209715200        512          2 NO  CURRENT                9537168 16-NOV-20   1.8447E+19                    0
+         3          2         61  209715200        512          2 YES INACTIVE               9510153 16-NOV-20      9599160 16-NOV-20          0
+         4          2         62  209715200        512          2 NO  CURRENT                9599160 16-NOV-20   1.8447E+19                    0
+SQL> create synonym log_dbn for v$log@dbnlink_chensen;
+
+Synonym created.
+SQL> select * from log_dbn;
+
+    GROUP#    THREAD#  SEQUENCE#      BYTES  BLOCKSIZE    MEMBERS ARC STATUS           FIRST_CHANGE# FIRST_TIM NEXT_CHANGE# NEXT_TIME     CON_ID
+---------- ---------- ---------- ---------- ---------- ---------- --- ---------------- ------------- --------- ------------ --------- ----------
+         1          1         57  209715200        512          2 YES INACTIVE               9326157 15-NOV-20      9537168 16-NOV-20          0
+         2          1         58  209715200        512          2 NO  CURRENT                9537168 16-NOV-20   1.8447E+19                    0
+         3          2         61  209715200        512          2 YES INACTIVE               9510153 16-NOV-20      9599160 16-NOV-20          0
+         4          2         62  209715200        512          2 NO  CURRENT                9599160 16-NOV-20   1.8447E+19                    0

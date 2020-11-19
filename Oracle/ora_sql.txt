@@ -31,8 +31,10 @@ SYS@POC1:PDB1>
 sqlplus SYS/Foxconn123$%^@10.67.51.95/poc1 as sysdba
 
 ###
-create user chensen identified by password;
+create user chensen identified by password default tablespace game temporary tablespace temp;
 create tablespace game datafile '/data/oradata/POC1/B1B0F2E3DB513D4AE0535F33430A2EC9/datafile/o1_mf_users_game.dbf' size 100M autoextend on next 10M;
+create tablespace price datafile '+DATA/DBN/DATAFILE/price.dbf' size 20M autoextend on next 10M;
+create user c##chensen identified by chensen default tablespace price temporary tablespace temp;    CDB里创建user
 alter user chensen default tablespace game;
 ######## oracle 健康检查 ##########
 1 Checking the Database Instance Status
