@@ -1,0 +1,21 @@
+kubernetes面試題
+
+1 pod的QOS有哪些等級，分別使用什麼場景
+
+2 怎麼去評估POD需要的requests, limits是合適的
+
+3 kube-proxy如何工作
+
+4 POD驅逐在什麼情況下會被觸發
+
+5 節點node not ready, OS正常，如何處理
+
+6 Orphaned Pod如何處理
+
+7 經常有POD被驅逐如何處理
+
+8 臨時卷使用量過高如何處理
+
+9 k8s節點kernel升級的步驟
+
+10 k8s如何做版本升級，版本升級遇到故障如何處理
