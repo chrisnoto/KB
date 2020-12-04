@@ -1,0 +1,318 @@
+How to Recover Data (Without a Backup!)
+
+Luckily Oracle can help you recover from many mistakes quickly - without needing a backup! 
+In this post we'll look at how to undo the damage in the following cases:
+
+Restore a Whole Table
+Recover a Few Rows
+Recover a Few Rows++
+Restore Dropped Tables
+Revert the Whole Database!
+
+Ready? Let's begin!
+
+How to Restore a Whole Table
+It's a classic rookie mistake: running a delete without a where clause. And then committing it!
+
+Here you need to recover all the data. Using Flashback Table, you can return a whole table to an earlier state. All you need to do is run:
+
+flashback table <table> to timestamp <when it was good>;
+For example, execute:
+
+flashback table orders to timestamp systimestamp - interval '1' hour;
+And Oracle restores the table its state one hour ago. Handy if you’ve just deleted all the rows!
+
+To use this, you must enable row movement:
+
+alter table <table> enable row movement;
+If you haven’t done this, you’ll get the following error:
+
+ORA-08189: cannot flashback the table because row movement is not enabled
+This is great if you’ve accidentally deleted or updated the whole table. But if there are only a handful of rows you need to recover it’s excessive. You’ve used stick of 
+dynamite to kill an ant.
+
+Even if you need to recover a large section of a table, flashing it back loses any changes made after the time you’re restoring it to. In most production systems there will 
+be new rows you want to keep!
+
+So this is handy for worst-case scenarios. It’s also useful for returning a table to a known state after testing. But for small finger trouble issues, it’s more likely you
+ need to recover a handful of rows.
+
+How to Recover a Few Rows
+
+Ryan McGuire / Gratisography
+So what do you do if there are a small number of rows you need to restore? Clearly Flashback Table is overkill. You need something more nuanced.
+
+Enter Flashback Query. This enables you see the contents of table at a point in time in the past. To do this you just add the “as of” clause after your table.
+
+To see it at a given time, use "as of timestamp". For example, to see how it looked one hour ago, use:
+
+select * from <table> as of timestamp systimestamp - interval '1' hour;
+Or you can use a database SCN with:
+
+select * from <table> as of scn 1234567;
+Salvaging the Deleted Rows
+If you know which rows were removed, add the appropriate where clause to your SQL. Then pass the result of this to an insert. For example:
+
+insert into table
+  select * from <table> as of timestamp sysdate – interval '1' hour
+  where <conditions to find the rows>;
+And you’ll have your missing data back!
+
+If you’re not sure which rows are gone, you can find the deleted ones using minus. This enables you to compare the current state of the table how it looked before 
+the time of the disaster. The SQL find rows which were in the table an hour ago, but not anymore is:
+
+select * from <table> as of timestamp sysdate – interval '1' hour
+minus 
+select * from <table>;
+To recover these, insert the result of this query!
+
+insert into <table> 
+  select * from <table> as of timestamp sysdate – interval '1' hour
+  minus 
+  select * from <table>;
+Note this will include all rows deleted in the past hour. If there are genuine deletions, you’ll need to remove them again.
+
+Recover Overwritten Values
+What if the rows weren’t deleted, just updated? And you need to restore the original values, but don’t know what they are?
+
+Then you can use Flashback Query in an update too:
+
+update <table> cur
+set (col1, col2, col3) = (
+  select col1, col2, col3 from <table> 
+    as of timestamp systimestamp – interval '1' hour old
+  where cur.primary_key = old.primary_key
+)
+where <rows to update>;
+This is fantastic. But Flashback Query has a couple of limitations:
+
+Oracle only ensures you can query as far back as the value of your “undo_retention” parameter.
+Oracle is unable to query across many forms of DDL. So if you change a table's structure there's a good chance Flashback Query will fail.
+By default the undo retention is 900 seconds. That’s just 15 minutes. Unless you’re quick there’s a good chance you’ll miss this window in busy production systems.
+
+You can overcome this by increasing the retention time. For example, to increase it to one day, run:
+
+alter system set undo_retention = 86400 scope = both;
+Take care before doing this. Oracle uses the undo tablespace to run flashback queries. So increasing the retention means you’ll need to make this larger to support flashback.
+ This could lead to a big jump in storage requirements.
+
+The second problem normally rears its head after releases. If you’ve run DDL against a table, there's a good chance you’ll get:
+
+ORA-01466: unable to read data - table definition has changed
+This is frustrating. It’s useful to be able to compare a table before and after a release. Particularly when something’s gone wrong! If you can compare the before and 
+after states of the table it can make diagnosis simple.
+
+Also note that truncate is DDL in Oracle. So if you’ve used this method to wipe a table, there’s no way back!
+
+Fortunately, you can overcome both of these issues.
+
+How to Recover a Few Rows++
+Flashback Data Archive powers up Flashback Query. It does this by storing the changes in tables. This means you have a permanent store instead of relying on undo.
+
+To use this, first you need to create an archive. You can do this with the following SQL:
+
+create flashback archive <archive> tablespace <tablespace> retention 1 year;
+The retention clause states how long you want to keep your history. You can specify this as a number of days, months or years.
+
+Once you have the archive in place, simply alter your tables to use it:
+
+alter table <table> flashback archive <archive>;
+And you’re done!
+
+You can then recover data using the same method described above. But with the bonuses of:
+
+Being able to query across DDL
+Having a larger window of time to recover data
+Best of all, as of 11.2.0.4, Flashback Data Archive is free*!
+
+One word of caution: when you enable it, Oracle creates history tables. It does this in a background process. So this setup can fail without giving you an error. 
+Be sure to check this is working before you rely on it!
+
+So far we’ve looked at recovering rows. But what happens if you drop a table?! Can flashback help here?
+
+How to Restore Dropped Tables
+In 10g, Oracle introduced the recyclebin. Just like the recyclebin in your “favourite” OS, you can recover objects placed in here.
+
+To do so, simply run:
+
+flashback table <table> to before drop;
+And you’ll have your table back!
+
+You can view the contents of the recyclebin with this SQL:
+
+select * from recyclebin;
+To see the names of tables you’ve dropped, check original_name.
+
+This only contains objects your user owned. If you have the appropriate permissions, you can query dba_recyclebin. This enables you to see dropped objects for all users.
+
+
+
+By Users Cbuckley, Jpowell on en.wikipedia [Public domain], via Wikimedia Commons
+Tables in the recyclebin still consume space. If you’re sure you want to permanently drop a table, use the purge option:
+
+drop table <table> purge;
+And the table is gone for good. Or you if you want a safety net, drop it normally. Then remove it from the recyclebin with:
+
+purge table <table>;
+If you want to recover all the space the recyclebin is using, clear it out with:
+
+purge recyclebin;
+And it’s empty!
+
+Note that the recyclebin only applies when you use drop table. If you take other actions that remove tables, e.g. drop user or drop tablespace, they are gone for good.
+
+These solutions are all great if you’re dealing with a single table. But what if something more serious has happened? What if someone managed to run a truncate cascade 
+wiping out your whole database?
+
+Individually recovering tables could take some time.
+
+How to Revert the Whole Database
+If someone has accidentally or maliciously has trashed your data, figuring out what to restore could be a long process. With Flashback Database, you can restore a whole 
+database back to an earlier time.
+
+Oracle enables this with flashback logs. It stores these in the fast recovery area.
+
+To use Flashback Database you need to do some initial setup. There are two ways to enable this:
+
+Enable Flashback Database
+Create a restore point
+Enable Flashback Database
+Firstly, your database must be running in archivelog mode. Assuming this is the case, the process for enabling it is:
+
+Configure the fast recovery area
+Set the DB_flashback_retention_target parameter (optional)
+Enable Flashback Database
+For step one, you need to set a couple of parameters. These are DB_RECOVERY_FILE_DEST_SIZE and DB_RECOVERY_FILE_DEST. These control how much space there is available
+ for the logs and where they go respectively. For example:
+
+alter system set DB_RECOVERY_FILE_DEST = '/u01/oradata/recovery_area' scope=both;
+alter system set DB_RECOVERY_FILE_DEST_SIZE = 10G scope=both;
+Set DB_flashback_retention_target to give the upper limit for how far back you can flashback the database. This is specified in minutes. So to set a maximum duration of one week, run:
+
+alter system set DB_flashback_retention_target = 10080 scope=both;
+Just ensure that you set the DB_RECOVERY_FILE_DEST_SIZE large enough to support this! For further discussion about this, check the docs.
+
+The final step is simple. Just run:
+
+alter database flashback on;
+And you're done!
+
+Note that enabling this adds some overhead. Oracle must log all changes you make to the data. So the more inserts, updates and deletes you have the greater the overhead.
+
+Create a Restore Point
+Doing this is easy. Simply run:
+
+create restore point <restore_point> guarantee flashback database;
+The guarantee clause is optional.
+
+Without this, Oracle will age out old restore points. So you may be unable to go back to the time of a particular restore point.
+
+With it, Oracle ensures you can always recover back to the time you created it. As with Flashback Database, Oracle stores the logs to support this in the fast recovery area.
+
+To recover the space you must drop the restore point manually.
+
+If you forget to do this then you can run out of space. And your database may grind to a halt!
+
+This seems risky. So why would you want to create a guaranteed restore point?
+
+Two key use cases for this are:
+
+An extra safety net for database releases
+Reverting test databases to a known state
+Database releases are notoriously difficult to undo. Especially if you’ve dropped columns or other breaking schema changes. Flashing back is quicker and easier than
+ unpicking the errors if you have unexpected failures.
+
+Using a guaranteed restore point ensures you have this fall back. With a normal restore point, you may find it was aged out in the release process. Just ensure you have 
+monitoring on your Fast Recovery Area.
+
+Reverting a database after running tests another great use case. As with releases, undoing the changes can be time consuming and tricky.
+
+Restore points make it easy to reset after test runs. Instead of worrying about how to get back to the original state, just flashback once they’re complete!
+
+This is super handy when it comes to preparing and testing release scripts. Writing the scripts for complex upgrades can take a few tries to get right. Being able to
+ flashback the database after each try is a huge time saver.
+
+Flashback Database could also form part of your Continuous Integration and DevOps strategies. Just build a script to flash the database back after each test run.
+
+In any case, ensure you have a process for removing guaranteed restore points. Without this you may find your job finishes as quickly as your database does!
+
+Flashing Back a Database
+With a restore point in place or flashback enabled you’re all set! If disaster strikes, you can return to a point in the past by:
+
+Shutting down the database:
+
+startup mount
+Starting it up in mount mode
+
+shutdown immediate
+Running flashback:
+
+To an SCN
+flashback database to scn 12345;
+To a point in time
+flashback database to time
+  "to_date('01/01/2016', 'dd/mm/yyyy')";
+To a restore point
+
+flashback database to restore point <restore_point>
+Reopen the database with resetlogs
+
+alter database open resetlogs;
+And you’re done!
+
+
+benluna12 / Pixabay
+If you want to take extra care, you can open the database in read only mode. Do this between steps three and four above. If you do, you must restart the database in mount mode
+ before opening it with resetlogs.
+
+Summary
+The term Flashback in Oracle covers a number of technologies. All these serve the goal of enabling you to return to a previous state quickly and easily. If you want more details 
+on these, check out the following sections of the docs:
+
+Using Oracle Flashback Technology
+Using Flashback Database and Restore Points
+Performing Flashback and Database Point-in-Time Recovery
+For examples of Flashback Table, Query and Drop in action, check this script in LiveSQL.
+
+Flashback in its various forms has saved me many times in my career. The situations ranged from restoring rows mistakenly deleted by users to recovering tables dropped 
+by accidentally running test scripts against production!
+
+Flashback is great for overcoming these accidental mishaps. But there are some things it can’t recover from. For example, people deleting database files in the OS. 
+There’s no substitute for full protection.
+
+Remember, always have a backup!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Recent Content
+BIG DATA SQL
+Reflections on Collaborate 15
+Last week I was in Las Vegas for Collaborate 15. Here's a summary of my experiences from a week in Sin City. I gave two talks at the event -...
+
+QUERY OPTIMIZATION
+Tuning Application SQL: DBA Masterclass Week 3
+Last week nearly 700 DBAs joined me to learn about application-level tuning techniques to make SQL faster. The recordings for the...
+
+QUERY OPTIMIZATION
+Learn SQL Performance Tuning in this Free Online Course
+SQL is awesome. You tell the database the result you want. And it figures out how to execute it. But! If the optimizer decides how to run your...
+
+Oracle
+Site Map Legal Notices Terms of Use Privacy 
+Cookie Preferences
+ Ad Choices Oracle Content Marketing Login

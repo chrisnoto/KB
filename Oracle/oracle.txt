@@ -67,6 +67,18 @@ SHUTDOWN 关闭 Oracle 实例
 4）shutdown ABORT
 //强制断开所有用户，数据全部不保存，会造成数据丢失，一般不建议使用
 
+数据库关闭阶段做的工作：
+终止所有会话
+PMON进程回滚活动的事务
+通过DBWn进程将已完成的失误转储至磁盘
+LGWR进程将内存中的所有变更向量转储只redo log文件
+同时关闭数据文件和重做日志文件(更新文件头，关闭文件句柄)
+在数据库卸载阶段关闭控制文件
+随后，通过解除分配SGA和终止后台进程，停止实例
+
+数据库出现损坏的定义：
+可能丢失了已提交的事务
+也可能存储了未提交的事务
 
 SYS@poc1> shutdown immediate;
 Database closed.
@@ -330,3 +342,28 @@ The system monitor will first roll forward and apply to the datafiles any transa
  Oracle uses information stored in the undo segments to rollback (undo) any uncommitted transactions.
  
 
+########### oracle进程 ####################
+一、 DBWn
+DBWn按极懒算法执行写入：尽可能少，但出现(完全)检查点的情况例外，将所有脏缓冲区尽快写入磁盘。
+以下几种情况执行写操作
+增量检查点：  将有限数量的脏缓冲区写入数据文件
+1 没有任何可用缓冲区
+2 脏缓冲区数量过多
+3 遇到三秒超时
+4 请求的检查点（完全检查点）  将所有的脏缓冲区写入数据文件   - 可能影响性能
+局部检查点，强制DBWn写入仅包含一个或多个数据文件的块的所有脏缓冲区
+如：
+数据文件或表空间脱机时，
+在将表空间置入备份模式时
+在将表空间设置为只读时
+二、 LGWR
+以下几种情况执行写操作
+1.用户进程提交一个事务（Commit）
+2.日志缓冲区达到1/3范围，或者包含了1MB的缓存重做日志数据
+3.要求LGWR切换日志文件
+4.出现超时（3秒钟内未活动，则进行一次写操作。）
+5.DBWR需要写入的数据的SCN号大于LGWR 记录的SCN号，DBWR 触发LGWR写入
+
+RBA （redo block address）onlin redo log的重做块地址
+ckpt进程还会在控制文件当中记录RBA，这个地址用来标志实例恢复的时候需要从日志中的那个位置开始，也就是一个checkpoint对应一个rba，
+当instance recovery（实例恢复）的时候oracle就会知道从那个检查点开始在redo的那个rba开始介质恢复！

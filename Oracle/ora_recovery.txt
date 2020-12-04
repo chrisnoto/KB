@@ -2,9 +2,10 @@ Oracle数据库恢复
 
 恢复分两种：
 
-（1） Crash recovery
-
+（1） Crash recovery/Instance recovery
+    rac中crash是多個instance都故障了，instance recovery是單個instance故障
 （2） Media recovery
+
 （1） Crash Recovery 是在启动时DB 自动完成，而MediaRecovery 需要DBA 手工的完成。
 
 （2） Crash Recovery 使用online redo log，Media Recovery 使用archived log 和 online redo log。

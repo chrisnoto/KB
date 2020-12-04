@@ -3,7 +3,23 @@
    Network Alias - no additional software needed - just tnsnames.ora
    Connection Identified - needs 'OCI' i.e. Oracle Client
 
-### tnsnames.ora
+### 动态注册和静态注册
+-----动态注册是在实例启动的时候，或使用命令Alter system register，或每隔一分钟，PMON进程会向监听进行动态注册，
+PMON进程根据init.ora中的instance_name，service_names两个参数将实例和服务动态注册到listener中。
+ 如果init.ora中的instance_name，service_names两个参数没有指定值，那么系统将取默认值，注册到监听器中的实例名将取init.ora文件中的db_name值，
+ 服务名将取init.ora文件中的db_name+db_domain值。可以在service_names参数中指定多个服务值，值之间用逗号隔开，这对于共享服务器配置很有用。
+动态注册默认只注册到默认的监听器上（名称为LISTENER，端口为1521，协议为TCP），因为PMON只会动态注册端口为1521的监听，否则不能动态注册，
+如果使用非默认端口注册，则需要配置local_listener参数。
+SQL> alter system set LOCAL_LISTENER='(ADDRESS = (PROTOCOL = TCP)(HOST = strong.oracle.com)(PORT = 1522))';
+SQL> alter system register;
+采用动态注册时，不需要有listener.ora。 
+
+-----静态注册是实例启动时读取linstener.ora文件的配置，将实例和服务注册到监听程序，默认读取数据库服务器对应的实例名和服务名。
+ 静态注册时，listener.ora中的GLOBAL_DBNAME向外提供服务名，SID_NAME提供注册的实例名。   
+GLOBAL_DBNAME对应的是Oracle对外的服务名，即初始化参数里的service_names，SID_NAME对应的是初始化参数里的instance_name
+
+ ### tnsnames.ora
+tnsnames.ora里的service_name 等于 db listener.ora里的global_dbname
 [oracle@ora-test admin]$ cat tnsnames.ora
 *** 连接CDB   SID=poc1
 poc1 =

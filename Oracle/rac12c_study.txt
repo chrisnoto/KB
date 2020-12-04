@@ -6,6 +6,7 @@
 
 2.MGMTDB数据库的用途
 MGMTDB是12c中用来存储cluster health monitor(chm/os、ora.crf)数据和其它数据。
+[grid@rac1 ~]$ oclumon dumpnodeview -allnodes
 
 3.MGMTDB数据文件存放位置
 在12.1中，MGMTDB数据库数据文件默认和OCR/Voting disks文件放在相同的存储。
@@ -44,6 +45,29 @@ INSTANCE_NAME    STATUS
 ---------------- ------------
 +ASM1            STARTED
 
+#### oclumon命令查看监控数据
+[grid@rac1 ~]$ oclumon dumpnodeview -allnodes
+
+----------------------------------------
+Node: rac1 Clock: '2020-11-26 08.24.45+0800' SerialNo:547281
+----------------------------------------
+
+SYSTEM:
+#pcpus: 2 #cores: 8 #vcpus: 8 cpuht: N chipname: Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz cpuusage: 23.20 cpusystem: 7.67 cpuuser: 15.53 cpunice: 0.00 cpuiowa                              it: 0.15 cpusteal: 0.00 cpuq: 0 physmemfree: 862912 physmemtotal: 16266764 mcache: 1885136 swapfree: 6291708 swaptotal: 8388604 hugepagetotal: 5017 hugepagefr                              ee: 639 hugepagesize: 2048 ior: 253 iow: 197 ios: 49 swpin: 0 swpout: 0 pgin: 253 pgout: 195 netr: 106.725 netw: 74.652 procs: 415 procsoncpu: 1 #procs_blocke                              d: 0 rtprocs: 28 rtprocsoncpu: N/A #fds: 28736 #sysfdlimit: 6815744 #disks: 10 #nics: 3 loadavg1: 0.69 loadavg5: 0.76 loadavg15: 0.84 nicErrors: 0
+
+TOP CONSUMERS:
+topcpu: 'java(15716) 173.51' topprivmem: 'java(13899) 292352' topshm: 'ocssd.bin(27947) 118840' topfd: 'ocssd.bin(27947) 361' topthread: 'crsd.bin(28556) 52'
+
+----------------------------------------
+Node: rac2 Clock: '2020-11-26 08.24.45+0800' SerialNo:547179
+----------------------------------------
+
+SYSTEM:
+#pcpus: 2 #cores: 8 #vcpus: 8 cpuht: N chipname: Intel(R) Xeon(R) CPU E5-2620 0 @ 2.00GHz cpuusage: 4.18 cpusystem: 1.58 cpuuser: 2.60 cpunice: 0.00 cpuiowait                              : 0.17 cpusteal: 0.00 cpuq: 0 physmemfree: 905980 physmemtotal: 16266764 mcache: 1981760 swapfree: 7112700 swaptotal: 8388604 hugepagetotal: 5017 hugepagefree                              : 1152 hugepagesize: 2048 ior: 57 iow: 44 ios: 19 swpin: 0 swpout: 0 pgin: 57 pgout: 41 netr: 31.681 netw: 63.426 procs: 392 procsoncpu: 1 #procs_blocked: 0 r                              tprocs: 26 rtprocsoncpu: N/A #fds: 27712 #sysfdlimit: 6815744 #disks: 10 #nics: 4 loadavg1: 0.27 loadavg5: 0.36 loadavg15: 0.44 nicErrors: 0
+
+TOP CONSUMERS:
+topcpu: 'osysmond.bin(779) 3.40' topprivmem: 'java(31993) 369720' topshm: 'ocssd.bin(301) 118840' topfd: 'ocssd.bin(301) 337' topthread: 'crsd.bin(793) 49'
+
 
 ######## grid & asm 常用操作 #######
 1 sqlplus
@@ -64,7 +88,32 @@ GROUP_NUMBER PATH                           STATE      TOTAL_MB    FREE_MB
            1 /dev/asmdisk/OCRDISK02         NORMAL        30720       7924
            1 /dev/asmdisk/OCRDISK03         NORMAL        30720       7916
            1 /dev/asmdisk/OCRDISK01         NORMAL        30720       7948
+--查看	ASM connections	   
+SQL> select INST_ID,GROUP_NUMBER, INSTANCE_NAME, DB_NAME, INSTANCE_NAME||':'||DB_NAME client_id, STATUS from gv$asm_client;
+
+   INST_ID GROUP_NUMBER INSTANCE_NAME   DB_NAME  CLIENT_ID                                                                 STATUS
+---------- ------------ --------------- -------- ------------------------------------------------------------------------- ------------
+         1            1 +ASM1           +ASM     +ASM1:+ASM                                                                CONNECTED
+         1            1 -MGMTDB         _mgmtdb  -MGMTDB:_mgmtdb                                                           CONNECTED
+         1            1 rac1            _OCR     rac1:_OCR                                                                 CONNECTED
+         1            2 +ASM1           +ASM     +ASM1:+ASM                                                                CONNECTED
+         1            2 dbn01           dbn      dbn01:dbn                                                                 CONNECTED
+         1            3 dbn01           dbn      dbn01:dbn                                                                 CONNECTED
+         2            1 +ASM2           +ASM     +ASM2:+ASM                                                                CONNECTED
+         2            1 rac2            _OCR     rac2:_OCR                                                                 CONNECTED
+         2            2 +ASM2           +ASM     +ASM2:+ASM                                                                CONNECTED
+         2            2 dbn02           dbn      dbn02:dbn                                                                 CONNECTED
+         2            3 dbn02           dbn      dbn02:dbn                                                                 CONNECTED
+--创建spfile
+SQL> create pfile='/home/grid/spfileasm.ora' from spfile;
+
+
+
+		 
 2 asmcmd
+[grid@rac1 ~]$ asmcmd spget             查看spfile location
++OCR/rac/ASMPARAMETERFILE/registry.253.1054743231
+
 [grid@rac1 grid]$ bin/asmcmd
 ASMCMD> pwd       ASM根目录为+
 +
@@ -364,3 +413,101 @@ ora.rac2.vip
 ora.scan1.vip
       1        ONLINE  ONLINE       rac1                     STABLE
 --------------------------------------------------------------------------------
+6 其他命令
+[grid@rac1 ~]$ asmcmd showclustermode
+ASM cluster : Flex mode enabled
+
+[grid@rac1 ~]$ asmcmd showclusterstate
+Normal
+
+[grid@rac1 ~]$ oifcfg getif
+ens192  10.67.36.0  global  public
+ens256  192.168.1.0  global  cluster_interconnect,asm
+
+[grid@rac1 ~]$ olsnodes  -n -s -a
+rac1    1       Active  Hub
+rac2    2       Active  Hub
+
+[grid@rac1 ~]$ srvctl status asm -detail
+ASM is running on rac1,rac2
+ASM is enabled.
+ASM instance +ASM1 is running on node rac1
+Number of connected clients: 3
+Client names: -MGMTDB:_mgmtdb:rac dbn01:dbn:rac rac1:_OCR:rac
+ASM instance +ASM2 is running on node rac2
+Number of connected clients: 2
+Client names: dbn02:dbn:rac rac2:_OCR:rac
+
+[grid@rac1 ~]$ srvctl  config asm -a
+ASM home: <CRS home>
+Password file: +OCR/orapwASM
+Backup of Password file:
+ASM listener: LISTENER
+ASM is enabled.
+ASM is individually enabled on nodes:
+ASM is individually disabled on nodes:
+ASM instance count: 3
+Cluster ASM listener: ASMNET1LSNR_ASM
+
+# ASM listener details
+[grid@rac1 ~]$ lsnrctl services ASMNET1LSNR_ASM
+
+LSNRCTL for Linux: Version 12.2.0.1.0 - Production on 26-NOV-2020 08:38:34
+
+Copyright (c) 1991, 2016, Oracle.  All rights reserved.
+
+Connecting to (DESCRIPTION=(ADDRESS=(PROTOCOL=IPC)(KEY=ASMNET1LSNR_ASM)))
+Services Summary...
+Service "+ASM" has 2 instance(s).
+  Instance "+ASM1", status READY, has 2 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:1 refused:0 state:ready
+         LOCAL SERVER
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.35)(PORT=1526)))
+  Instance "+ASM2", status READY, has 1 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.36)(PORT=1526)))
+Service "+ASM_DATA" has 2 instance(s).
+  Instance "+ASM1", status READY, has 2 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:1 refused:0 state:ready
+         LOCAL SERVER
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.35)(PORT=1526)))
+  Instance "+ASM2", status READY, has 1 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.36)(PORT=1526)))
+Service "+ASM_FRA" has 2 instance(s).
+  Instance "+ASM1", status READY, has 2 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:1 refused:0 state:ready
+         LOCAL SERVER
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.35)(PORT=1526)))
+  Instance "+ASM2", status READY, has 1 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.36)(PORT=1526)))
+Service "+ASM_OCR" has 2 instance(s).
+  Instance "+ASM1", status READY, has 2 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:1 refused:0 state:ready
+         LOCAL SERVER
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.35)(PORT=1526)))
+  Instance "+ASM2", status READY, has 1 handler(s) for this service...
+    Handler(s):
+      "DEDICATED" established:0 refused:0 state:ready
+         REMOTE SERVER
+         (DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.36)(PORT=1526)))
+The command completed successfully
