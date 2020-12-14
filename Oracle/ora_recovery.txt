@@ -217,6 +217,30 @@ RMAN> SQL 'ALTER DATABASE DATAFILE 7 OFFLINE';
 RMAN> BLOCKRECOVER CORRUPTION LIST;
 or
 RMAN> BLOCKRECOVER DATAFILE 7 BLOCK 233, 235 DATAFILE 4 BLOCK 101;
+
+
+## 查看RMAN备份
+set pages 1000
+set lines 222
+col STATUS format a9
+col Duration_hrs format 999.99
+alter  session SET NLS_DATE_FORMAT = 'dd-mm-yyyy hh:mi:ss';
+
+select  SESSION_KEY, INPUT_TYPE, STATUS,START_TIME,
+ end_time, elapsed_seconds/3600 Duration_hrs
+from  V$RMAN_BACKUP_JOB_DETAILS
+order by session_key;
+
+SESSION_KEY INPUT_TYPE    STATUS                  START_TIME          END_TIME            DURATION_HRS
+----------- ------------- ----------------------- ------------------- ------------------- ------------
+          4 DB FULL       COMPLETED               22-10-2020 01:50:34 22-10-2020 01:54:51   .071388889
+         48 DB FULL       FAILED                  25-10-2020 09:35:35 25-10-2020 09:42:36   .116944444
+         53 DB FULL       COMPLETED               27-10-2020 11:00:27 27-10-2020 11:01:25   .016111111
+         65 DB FULL       FAILED                  08-11-2020 11:31:03 08-11-2020 11:31:05   .000555556
+         67 ARCHIVELOG    FAILED                  08-11-2020 01:38:06 08-11-2020 01:39:03   .015833333
+         75 DB FULL       COMPLETED WITH WARNINGS 08-11-2020 01:43:37 08-11-2020 01:49:24   .096388889
+        117 ARCHIVELOG    COMPLETED               04-12-2020 10:28:59 04-12-2020 10:29:10   .003055556
+
 ------------备份控制文件----------
 ## rman备份控制文件
 rman备份控制文件分为两种情况。
@@ -437,4 +461,7 @@ IMAGE COPY                               0                         0            
 FLASHBACK LOG                        22.46                         0               9          0
 FOREIGN ARCHIVED LOG                     0                         0               0          0
 AUXILIARY DATAFILE COPY                  0                         0               0          0
+
+
+
 
