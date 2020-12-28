@@ -1,0 +1,103 @@
+ceil(x)
+【功能】返回大于等于x的最小整数值
+【参数】x，数字型表达式
+【返回】数字
+select ceil(4.49),ceil(-4.49) from dual;
+
+floor(x)
+【功能】返回小于等于x的最大整数值
+【参数】x，数字型表达式
+【返回】数字
+select floor(4.49),floor(-4.49) from dual;
+
+round(x[,y])
+【功能】返回四舍五入后的值
+【参数】x,y，数字型表达式,如果y不为整数则截取y整数部分，如果y>0则四舍五入为y位小数，如果y小于0则四舍五入到小数点向左第y位。
+【返回】数字
+select round(4.4449,2.5),round(4.4449) from dual;
+
+trunc(x[,y])
+【功能】返回x按精度y截取后的值
+【参数】x,y，数字型表达式,如果y不为整数则截取y整数部分，如果y>0则截取到y位小数，如果y小于0则截取到小数点向左第y位，小数前其它数据用0表示。
+【返回】数字
+select trunc(4.4649,2.1),trunc(4.4649,3.1) from dual;
+
+trunc(d1[,c1])
+【功能】：返回日期d1所在期间(参数c1)的第一天日期
+【参数】：d1日期型,c1为字符型(参数)，c1默认为j（即当前日期)
+【参数表】：c1对应的参数表:
+最近0点日期: 取消参数c1或j
+最近的星期日：day或dy或d (每周顺序：日，一，二，三，四，五，六）
+最近月初日期：month或mon或mm或rm
+最近季日期：q
+最近年初日期：syear或year或yyyy或yyy或yy或y(多个y表示精度)
+最近世纪初日期：cc或scc
+【返回】：日期
+【示例】
+select sysdate 当时日期,
+trunc(sysdate) 今天日期,
+trunc(sysdate,'day') 本周星期日,
+trunc(sysdate,'month') 本月初,
+trunc(sysdate,'q') 本季初日期,
+trunc(sysdate,'year') 本年初日期 from dual;
+
+add_months(d1,n1)
+【功能】：返回在日期d1基础上再加n1个月后新的日期。
+【参数】：d1，日期型，n1数字型
+【返回】：日期
+select sysdate,add_months(sysdate,9) from dual;
+
+months_between(d1,d2)
+【功能】：返回日期d1到日期d2之间的月数。
+【参数】：d1，d2 日期型
+
+【返回】：数字
+如果d1 大于 d2，则返回正数
+如果d1 小于 d2，则返回负数
+select floor(months_between(sysdate,to_date('2016-06-22','YYYY-MM-DD'))) from dual;
+
+NTERVAL c1 set1
+【功能】：变动日期时间数值
+【参数】：c1为数字字符串或日期时间字符串，set1为日期参数
+【参数表】：set1具体参照示例
+【返回】：日期时间格式的数值,前面多个+号
+以天或天更小单位时可用数值表达式借用，如1表示1天，1/24表示1小时，1/24/60表示1分钟
+select sysdate+(interval '8' hour) from dual;
+
+extract(c1 from d1)
+【功能】：日期/时间d1中，参数(c1)的值
+【参数】：d1日期型(date)/日期时间型(timestamp),c1为字符型(参数)
+【参数表】：c1对应的参数表详见示例
+【返回】：字符
+【示例】
+select
+extract(hour from timestamp '2001-2-16 2:38:40 ' ) 小时,
+extract(minute from timestamp '2001-2-16 2:38:40 ' ) 分钟,
+extract(second from timestamp '2001-2-16 2:38:40 ' ) 秒,
+extract(DAY from timestamp '2001-2-16 2:38:40 ' ) 日,
+extract(MONTH from timestamp '2001-2-16 2:38:40 ' ) 月,
+extract(YEAR from timestamp '2001-2-16 2:38:40 ' ) 年
+ from dual;
+
+【语法】NVL (expr1, expr2)
+【功能】若expr1为NULL，返回expr2；expr1不为NULL，返回expr1。
+注意两者的类型要一致
+select nvl('有值','无效未定义'),nvl(null,'无效未定义') from dual;
+
+
+decode(条件,值1,翻译值1,值2,翻译值2,...值n,翻译值n,缺省值)
+【功能】根据条件返回相应值
+【参数】c1, c2, ...,cn,字符型/数值型/日期型，必须类型相同或null
+注：值1……n 不能为条件表达式,这种情况只能用case when then end解决
+使用方法：　　
+　　1、比较大小　　
+　　select decode(sign(变量1-变量2),-1,变量1,变量2) from dual; --取较小值
+　　sign()函数根据某个值是0、正数还是负数，分别返回0、1、-1　　
+　　例如：
+　　变量1=10，变量2=20
+　　则sign(变量1-变量2)返回-1，decode解码结果为“变量1”，达到了取较小值的目的。
+select decode(sign(a-b),1,'a>b',0,'equal',-1,'a<b') from (select 50 a,50 b from dual);
+
+【语法】NULLIF (expr1, expr2)
+【功能】expr1和expr2相等返回NULL，不相等返回expr1
+select nullif(2,2),nullif(2,1) from dual;

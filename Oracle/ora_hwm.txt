@@ -1,0 +1,88 @@
+Oracle数据库通过跟踪段中的块状态来管理空间。高水位标记（High Warter Mark，HWM）是段中的一个点，超过该点的数据块是未格式化和未使用过的。
+HWM的信息储存在段头（Segment Header，第一个区的第一个块就称为段头），在段空间是手动管理方式时（MSSM），Oracle是通过Freelist（一个单向链表）来管理段内的空间分配，
+此时只有HWM的说法；在段空间是自动管理方式（ASSM）时，Oracle是通过BITMAP来管理段内的空间分配，此时Oracle引入了LHWM（Low HWM，低高水位）的概念。
+在MSSM中，当数据插入以后，如果是插入到新的数据块中，那么数据块就会被自动格式化等待数据访问；而在ASSM中，数据插入到新的数据块以后，数据块并没有被格式化，
+而是在第一次访问这个数据块的时候才格式化这个块。所以此时又需要一条水位线，用来标示已经被格式化的块，这条水位线就叫做LHWM。LHWM之下的所有块都是已格式化的，
+要么包含数据，或以前曾包含数据。一般来说，LHWM肯定是低于等于HWM的。在一个ASSM段中的每个数据块处于以下状态之一：
+
+①　在HWM之上，这些块是未分配、未格式化的，且从未使用过。
+
+②　在HWM之下，这些块处于以下状态之一：
+
+l 已分配，但当前未格式化且未使用；
+
+l 已分配、已格式化且包含数据；
+
+l 已分配、已格式化且为空，因为数据已被删除。
+
+LHWM在全表扫描中非常重要。因为HWM之下的块只在被使用时才格式化，所以可能还有一些块是未被格式化的。因此，数据库读取位图块，以获取LHWM的位置。
+数据库读取LHWM之下的所有块，因为它们是已格式化的，然后仅仔细读取位于LHWM和HWM之间的已格式化块，避开未格式化的块。所以，Oracle对表进行全表扫描时是
+扫描了HWM下的所有格式化了的块。当HWM与LHWM之间的块填满时，HWM向右推进，而LHWM相应推进到旧的HWM的位置。数据库不断插入数据，随着时间的推移，HWM继续向右推进，
+而LHWM总尾随其后。除非DBA手动重建、截断、或缩小该对象，否则HWM从不倒退。
+
+当使用DELETE删除表记录时，HWM并不会下降，随之导致的是全表扫描的实际开销并没有任何减少。例如，首先新建一张空表，大小占用64K，然后插入数据直到表大小变为50G，
+此时使用DELETE删除所有的数据并且提交，这个时候查询表的大小的时候依然是50G，这就是因为表的高水位没有释放的缘故，而在这时如果使用“SELECT * FROM TABLE_NAME;”
+语句来查询数据的话，那么查询过程就会很慢，因为Oracle要执行全表扫描，从HWM下所有的格式化了的块都得去扫描，直到50G的所有块全部扫描完毕。曾遇到一个同事使用
+DELETE删除了一个很大的分区表，然后执行SELECT查询很久都没有结果，以为是数据库HANG住了，其实这个问题是由于高水位的缘故。所以，表执行了TRUNCATE操作，
+再次SELECT的时候就可以很快返回结果了。
+
+当用直接路径插入行时（例如，通过直接加载插入（用APPEND提示插入）或通过SQL*Loader直接路径），数据块直接置于HWM之上，HWM下面的空间就浪费掉了。
+
+释放表的高水位通常有如下几种办法：
+
+（1）对表进行MOVE操作：ALTER TABLE TABLE_NAME MOVE;。若表上存在索引，则记得重建索引。
+
+（2）对表进行SHRINK SPACE操作：ALTER TABLE TABLE_NAME SHRINK SPACE;，注意，在执行该指令之前必须开启行移动：ALTER TABLE TABLE_NAME ENABLE ROW MOVEMENT;。
+该方法的优点是：在碎片整理结束后，表上相关的索引仍然有效，缺点是会产生大量的Undo和Redo。
+
+（3）复制要保留的数据到临时表T，DROP原表，然后RENAME临时表T为原表。
+
+（4）exp/imp或expdp/impdp重构表。
+
+（5）若表中没有数据则直接使用TRUNCATE来释放高水位。
+
+如何找出系统中哪些表拥有高水位呢？这里给出两种办法，①比较表的行数和表的大小关系。如果行数为0，而表的当前占用大小减去初始化时的大小（INITIAL_EXTENT）后依然很大，
+那么说明该表有高水位。②行数和块数的比率，即查看一个块可以存储多少行数据。如果一个块存储的行数少于5行甚至更少，那么说明有高水位。注意，这两种方法都不是十分准确，
+需要再对查询结果进行筛选。另外，在查询表的高水位时，首先需要分析表，以得到最准确的统计信息。
+
+下面给出用于查询高水位的几个SQL语句：
+
+SELECT D.OWNER,
+       ROUND(D.NUM_ROWS / D.BLOCKS, 2),
+       D.NUM_ROWS,
+       D.BLOCKS,
+       D.TABLE_NAME,
+       ROUND((d.BLOCKS*8-D.INITIAL_EXTENT/1024)/1024)  t_size
+  FROM DBA_TABLES D
+ WHERE D.BLOCKS > 10
+   AND ROUND(D.NUM_ROWS / D.BLOCKS, 2) < 5
+   AND d.OWNER NOT LIKE '%SYS%' ;
+或：
+
+SELECT OWNER,
+       SEGMENT_NAME TABLE_NAME,
+       SEGMENT_TYPE,
+       GREATEST(ROUND(100 * (NVL(HWM - AVG_USED_BLOCKS, 0) /GREATEST(NVL(HWM, 1), 1)),2),0) WASTE_PER
+  FROM (SELECT A.OWNER OWNER,
+               A.SEGMENT_NAME,
+               A.SEGMENT_TYPE,
+               B.LAST_ANALYZED,
+               A.BYTES,
+               B.NUM_ROWS,
+               A.BLOCKS BLOCKS,
+               B.EMPTY_BLOCKS EMPTY_BLOCKS,
+               A.BLOCKS - B.EMPTY_BLOCKS - 1 HWM,
+               DECODE(ROUND((B.AVG_ROW_LEN * NUM_ROWS *(1 + (PCT_FREE / 100))) / C.BLOCKSIZE,0),0,1,
+                      ROUND((B.AVG_ROW_LEN * NUM_ROWS *(1 + (PCT_FREE / 100))) / C.BLOCKSIZE,0)) + 2 AVG_USED_BLOCKS,
+               ROUND(100 *(NVL(B.CHAIN_CNT, 0) / GREATEST(NVL(B.NUM_ROWS, 1), 1)),2) CHAIN_PER,
+               B.TABLESPACE_NAME O_TABLESPACE_NAME
+          FROM SYS.DBA_SEGMENTS A, SYS.DBA_TABLES B, SYS.TS$ C
+         WHERE A.OWNER = B.OWNER
+           AND SEGMENT_NAME = TABLE_NAME
+           AND SEGMENT_TYPE = 'TABLE'
+           AND B.TABLESPACE_NAME = C.NAME)
+ WHERE GREATEST(ROUND(100 * (NVL(HWM - AVG_USED_BLOCKS, 0) /GREATEST(NVL(HWM, 1), 1)),2),0) > 50
+   AND OWNER NOT LIKE '%SYS%'
+   AND BLOCKS > 100
+ ORDER BY WASTE_PER DESC;
+最后再次提醒各位读者，若表执行了大量的DELETE操作后，则最好回收一下表的高水位。

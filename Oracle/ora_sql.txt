@@ -192,6 +192,43 @@ USERS                                          5       1.31     3.6875      73.7
 UNDOTBS1                                      70      16.88     53.125      75.89 YES      32767.98
 SCHOOL                                        50          1         49         98 YES      32767.98
 
+#### 执行计划
+Oracle 8： hint
+Oracle 8i&9i: stored outline
+Oracle 10g: sql profile
+Oracle 11g: sql plan manangement 、adaptive cursor sharing
+Oracle 12c: sql plan manangement 、adaptive cursor sharing、Adaptive Execution Plans
+## stored outline
+
+
+## sql profile
+To create the profile, use the syntax:
+ declare
+   v_hints sys.sqlprof_attr;
+   begin
+  v_hints := sys.sqlprof_attr('FULL(@"SEL$1" "TB_CAILAMEI"@"SEL$1")');
+   dbms_sqltune.import_sql_profile(q'^select * from TB_CAILAMEI where object_NAME='TB_CAILAMEI'^',v_hints,'TB_CALLAMEI_PROFILE2',force_match=>true);
+  end;
+  /
+  
+To disable the profile, use the syntax:
+
+begin
+dbms_sqltune.alter_sql_profile(
+name=>’SQL_PROFILE_PERF’,
+attribute_name=>’STATUS’,
+value=>ENABLED);
+end;
+/
+  
+To drop the SQL profile, this is the syntax:
+
+begin
+dbms_sqltune.drop_sql_profile(
+name=>’SQL_PROFILE_PERF’,
+ignore=>true);
+end;
+/  
 ## oracle常用查询
 
 select * from dba_tables; --表视图信息

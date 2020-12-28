@@ -367,3 +367,37 @@ DBWn按极懒算法执行写入：尽可能少，但出现(完全)检查点的�
 RBA （redo block address）onlin redo log的重做块地址
 ckpt进程还会在控制文件当中记录RBA，这个地址用来标志实例恢复的时候需要从日志中的那个位置开始，也就是一个checkpoint对应一个rba，
 当instance recovery（实例恢复）的时候oracle就会知道从那个检查点开始在redo的那个rba开始介质恢复！
+
+
+######### oracle 表空间  ########
+表空间的分类
+永久表空间                存放永久性数据，如表，索引等。
+临时表空间                不能存放永久性对象，用于保存数据库排序，分组时产生的临时数据。
+UNDO表空间             保存数据修改前的镜象。
+
+表空间的管理方式：
+字典管理：全库所有的空间分配都放在数据字典中。容易引起字典争用，而导致性能问题。
+使用数据字典管理存储空间的分配, 当表空间分配新的区, 或者回收已分配的区时, ORACLE会对数据字典对应的表进行查询、更新, 且使用单线程, 速度慢, 并且产生回退和重做信息。
+本地管理：空间分配不放在数据字典，而在每个数据文件头部的第3到第8个块的位图块，来管理空间分配。
+优点:  a) 提高存储管理的速度和并发性。 b) 不产生磁盘碎片。 c) 不产生递归管理。 d) 没有系统回滚段。
+
+表空间状态有下面几种状态：online、offline、read only、read write。
+
+表空间改名
+在ORACLE 10g 之前，表空间的名称是不能被修改的。在ORACLE 11G中，通过ALTER TABLESPACE 语句中使用RENAME子句，数据库管理员可以修改表空间的名称。
+
+######### oracle 段空间  ########
+区间（Extent）是Oracle的最小空间分配单元，而Block是Oracle的最小IO操作单元，也就是说，
+Oracle以区间为单位将空间分配给对象段，而段内则是以Block为单位进行空间使用和管理的。
+管理方式
+手动管理方式时（MSSM），Oracle是通过Freelist（一个单向链表）来管理段内的空间分配，此时只有HWM的说法；
+自动管理方式（ASSM）时，Oracle是通过BITMAP来管理段内的空间分配，此时Oracle引入了LHWM（Low HWM，低高水位）的概念。
+
+#########  oracle区    #######
+由于区(extent)是ORACLE创建对象时的最小分配单元, 所以表空间的管理实际上就是针对于区间的管理。 
+分配方式： 自动分配、统一尺寸
+  create tablespace Think 
+  datafile '/u01/app/oracle/oradata/orcl/think.dbf' size 100M
+  autoextend on next 10M maxsize 4096M
+  extent management local uniform size 256K
+  segment space management auto;
