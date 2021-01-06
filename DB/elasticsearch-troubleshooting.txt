@@ -263,3 +263,9 @@ logstash-0-728a2664-4c0d-45d0-8ff8-543031e16a80 /10.67.49.244   logstash-0      
 logstash-0-c354eb6c-d846-481f-a323-e97408f75897 /10.67.48.194   logstash-0      0
 logstash-0-62019356-2018-4d9e-a1fa-2a3a326b59de /10.67.49.245   logstash-0      0
 logstash-0-f60dd446-b04d-4580-afa6-2c70e500e153 /10.67.50.200   logstash-0      0
+
+
+
+########很多index unassigned##########
+找出unassigned的index将其删除
+[root@stjes1 log]# curl http://10.67.51.150:9200/_cluster/allocation/explain |grep index

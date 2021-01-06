@@ -69,7 +69,7 @@ innodb_purge_threads      1 清理undo页    2 清理page里 mark deleted的行
 | Com_commit                                                   | 106                                                   |
 | Com_commit                                                   | 28                                                    |
 | Com_commit                                                   | 29                                                    |
-
+0
 监控工具  innotop
 
 (1)interactive_timeout: 服务器关闭交互式连接前等待活动的秒数
