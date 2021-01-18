@@ -83,7 +83,9 @@ extract(YEAR from timestamp '2001-2-16 2:38:40 ' ) 年
 【功能】若expr1为NULL，返回expr2；expr1不为NULL，返回expr1。
 注意两者的类型要一致
 select nvl('有值','无效未定义'),nvl(null,'无效未定义') from dual;
-
+nvl()函数比较常用的是这样的nvl(E1,0)，意思是E1参数查询到为null的情况，就返回0，不为null就返回E1，常用于非空校验。
+例子
+SELECT sal*13+nvl(comm, 0)*13 "年薪" , ename, comm FROM emp;      
 
 decode(条件,值1,翻译值1,值2,翻译值2,...值n,翻译值n,缺省值)
 【功能】根据条件返回相应值
@@ -101,3 +103,261 @@ select decode(sign(a-b),1,'a>b',0,'equal',-1,'a<b') from (select 50 a,50 b from 
 【语法】NULLIF (expr1, expr2)
 【功能】expr1和expr2相等返回NULL，不相等返回expr1
 select nullif(2,2),nullif(2,1) from dual;
+
+
+
+
+
+
+
+
+
+
+
+
+=======================================================================================================================================================================
+
+
+
+#分页查询
+SQL> select empno,ename,sal from emp where rownum < 13 minus select empno,ename,sal from emp where rownum <11;
+
+     EMPNO ENAME             SAL
+---------- ---------- ----------
+      7876 ADAMS            1100
+      7900 JAMES             950
+SQL> select * from(
+    select empno,ename,sal,rownum as rn from emp where rownum < 13) where rn >10;
+
+     EMPNO ENAME             SAL
+---------- ---------- ----------
+      7876 ADAMS            1100
+      7900 JAMES             950
+
+
+SQL> with T as
+    (select empno,ename,sal,rownum as rn from emp where rownum < 13)
+   select empno,ename,sal from T where rn >10;
+
+     EMPNO ENAME             SAL
+---------- ---------- ----------
+      7876 ADAMS            1100
+      7900 JAMES             950
+
+	  
+
+#CASE
+简单case函数
+select EMPNO,ENAME,
+case sign(sal-2000)
+when  -1 then 'below 2000'
+when  1 then 'above 2000'
+END as salary
+from EMP;
+
+case搜索函数
+select EMPNO,ENAME,
+case
+when SAL < 1500 then 'band 1'
+when SAL >=1500 and SAL < 2500  then 'band 2'
+when SAL >=1500 and SAL < 6000 then 'band 3'
+END as salary
+from EMP order by salary;
+
+decode函数
+select empno,ename,decode(sign(sal-2000),1,'above 2000',-1,'below 2000') from emp;
+
+select empno,ename,decode(sign(sal-2500),1,'band 3',-1,
+decode(sign(sal-1500),1,'band 2',0,'band 2',-1,'band 1')) as salary 
+from emp order by salary;
+
+分析函数
+1 sum over
+select distinct deptno,sum(sal)over(partition by deptno) sum_sal from emp;
+=
+select deptno,sum(sal) as sum_sal from emp group by deptno;
+
+2 rank over
+SQL> select deptno,empno,ename,sal,row_number()over(partition by deptno order by sal desc) sal_rank from emp;
+
+    DEPTNO      EMPNO ENAME             SAL   SAL_RANK
+---------- ---------- ---------- ---------- ----------
+        10       7839 KING             5000          1
+        10       7782 CLARK            2450          2
+        10       7934 MILLER           1300          3
+        20       7788 SCOTT            3000          1
+        20       7902 FORD             3000          2
+        20       7566 JONES            2975          3
+        20       7876 ADAMS            1100          4
+        20       7369 SMITH             800          5
+        30       7698 BLAKE            2850          1
+        30       7499 ALLEN            1600          2
+        30       7844 TURNER           1500          3
+        30       7654 MARTIN           1250          4
+        30       7521 WARD             1250          5
+        30       7900 JAMES             950          6
+
+14 rows selected.
+
+SQL> select deptno,empno,ename,sal,rank()over(partition by deptno order by sal desc) sal_rank from emp;
+
+    DEPTNO      EMPNO ENAME             SAL   SAL_RANK
+---------- ---------- ---------- ---------- ----------
+        10       7839 KING             5000          1
+        10       7782 CLARK            2450          2
+        10       7934 MILLER           1300          3
+        20       7788 SCOTT            3000          1
+        20       7902 FORD             3000          1
+        20       7566 JONES            2975          3
+        20       7876 ADAMS            1100          4
+        20       7369 SMITH             800          5
+        30       7698 BLAKE            2850          1
+        30       7499 ALLEN            1600          2
+        30       7844 TURNER           1500          3
+        30       7654 MARTIN           1250          4
+        30       7521 WARD             1250          4
+        30       7900 JAMES             950          6
+
+14 rows selected.
+
+SQL> select deptno,empno,ename,sal,dense_rank()over(partition by deptno order by sal desc) sal_rank from emp;
+
+    DEPTNO      EMPNO ENAME             SAL   SAL_RANK
+---------- ---------- ---------- ---------- ----------
+        10       7839 KING             5000          1
+        10       7782 CLARK            2450          2
+        10       7934 MILLER           1300          3
+        20       7788 SCOTT            3000          1
+        20       7902 FORD             3000          1
+        20       7566 JONES            2975          2
+        20       7876 ADAMS            1100          3
+        20       7369 SMITH             800          4
+        30       7698 BLAKE            2850          1
+        30       7499 ALLEN            1600          2
+        30       7844 TURNER           1500          3
+        30       7654 MARTIN           1250          4
+        30       7521 WARD             1250          4
+        30       7900 JAMES             950          5
+
+14 rows selected.
+
+WITH T AS
+(SELECT 1 ID ,'A' NAME FROM DUAL
+ UNION
+ SELECT 2 ID ,'B' NAME FROM DUAL
+ UNION
+ SELECT 3 ID ,'C' NAME FROM DUAL
+ UNION
+ SELECT 4 ID ,'D' NAME FROM DUAL
+ UNION
+ SELECT 5 ID ,'E' NAME FROM DUAL
+)
+ SELECT NAME,ID,LAG(ID,1,'') OVER(ORDER BY NAME) AS LAG_ID FROM T;
+
+不用建表了 
+WITH T AS
+(SELECT 10 DEPTNO ,7839 EMPNO,'KING' ENAME,5000 SAL FROM DUAL
+ UNION
+ SELECT 10 DEPTNO ,7782 EMPNO,'CLARK' ENAME,2450 SAL FROM DUAL
+ UNION
+ SELECT 20 DEPTNO ,7788 EMPNO,'SCOTT' ENAME,3000 SAL FROM DUAL
+ UNION
+ SELECT 20 DEPTNO ,7876 EMPNO,'ADAMS' ENAME,1100 SAL FROM DUAL
+ UNION
+ SELECT 20 DEPTNO ,7369 EMPNO,'SMITH' ENAME,800 SAL FROM DUAL
+) 
+select * from T order by SAL;
+ 
+# rollup函数
+select a.dname,sum(b.sal) from scott.dept a,scott.emp b where a.deptno=b.deptno group by a.dname union all
+select 'Total salary:',sum(b.sal) from scott.dept a,scott.emp b where a.deptno=b.deptno; 
+=
+SQL> select a.dname,sum(b.sal) from dept a,emp b where a.deptno=b.deptno group by rollup(a.dname);
+
+DNAME          SUM(B.SAL)
+-------------- ----------
+ACCOUNTING           8750
+RESEARCH            10875
+SALES                9400
+                    29025
+
+# MODEL
+SQL> select * from scott.emp model
+  2  dimension by (empno) measures (ename,job,mgr,hiredate,sal,comm,0 as income) rules(income[any]=sal[cv()]+comm[cv()]);
+
+     EMPNO ENAME      JOB              MGR HIREDATE         SAL       COMM     INCOME
+---------- ---------- --------- ---------- --------- ---------- ---------- ----------
+      7369 SMITH      CLERK           7902 17-DEC-80        800
+      7499 ALLEN      SALESMAN        7698 20-FEB-81       1600        300       1900
+      7521 WARD       SALESMAN        7698 22-FEB-81       1250        500       1750
+      7566 JONES      MANAGER         7839 02-APR-81       2975
+      7654 MARTIN     SALESMAN        7698 28-SEP-81       1250       1400       2650
+      7698 BLAKE      MANAGER         7839 01-MAY-81       2850
+      7782 CLARK      MANAGER         7839 09-JUN-81       2450
+      7788 SCOTT      ANALYST         7566 19-APR-87       3000
+      7839 KING       PRESIDENT            17-NOV-81       5000
+      7844 TURNER     SALESMAN        7698 08-SEP-81       1500          0       1500
+      7876 ADAMS      CLERK           7788 23-MAY-87       1100
+      7900 JAMES      CLERK           7698 03-DEC-81        950
+      7902 FORD       ANALYST         7566 03-DEC-81       3000
+      7934 MILLER     CLERK           7782 23-JAN-82       1300
+
+# connect by  用于父子之间的连线关系
+其中用piror表示上一条记录，比如 connect by prior org_id = parent_id就是说上一条记录的Org_id 是本条记录的parent_id，即本记录的父亲是上一条记录
+select level,empno,ename,job,mgr
+  from scott.emp e
+ start with e.ename = 'KING'
+ connect by prior e.empno = e.mgr;          #本条记录的mgr是上条记录的empno
+
+     LEVEL      EMPNO ENAME      JOB              MGR
+---------- ---------- ---------- --------- ----------
+         1       7839 KING       PRESIDENT
+         2       7566 JONES      MANAGER         7839
+         3       7788 SCOTT      ANALYST         7566
+         4       7876 ADAMS      CLERK           7788
+         3       7902 FORD       ANALYST         7566
+         4       7369 SMITH      CLERK           7902
+         2       7698 BLAKE      MANAGER         7839
+         3       7499 ALLEN      SALESMAN        7698
+         3       7521 WARD       SALESMAN        7698
+         3       7654 MARTIN     SALESMAN        7698
+         3       7844 TURNER     SALESMAN        7698
+         3       7900 JAMES      CLERK           7698
+         2       7782 CLARK      MANAGER         7839
+         3       7934 MILLER     CLERK           7782
+
+#指定level<3 ，控制深度    level < 3    level in (1,2)   level =2
+SQL> select level,empno,ename,job,mgr from scott.emp e where level < 3 start with e.ename='KING' connect by prior e.empno = e.mgr;
+
+     LEVEL      EMPNO ENAME      JOB              MGR
+---------- ---------- ---------- --------- ----------
+         1       7839 KING       PRESIDENT
+         2       7566 JONES      MANAGER         7839
+         2       7698 BLAKE      MANAGER         7839
+         2       7782 CLARK      MANAGER         7839
+
+SQL> select level,empno,ename,job,mgr from scott.emp e start with e.ename='SMITH' connect by e.empno = prior e.mgr;
+
+     LEVEL      EMPNO ENAME      JOB              MGR
+---------- ---------- ---------- --------- ----------
+         1       7369 SMITH      CLERK           7902
+         2       7902 FORD       ANALYST         7566
+         3       7566 JONES      MANAGER         7839
+         4       7839 KING       PRESIDENT
+通过connect by生成序列
+SELECT ROWNUM FROM DUAL  CONNECT BY ROWNUM  <= 10;
+
+    ROWNUM
+----------
+         1
+         2
+         3
+         4
+         5
+         6
+         7
+         8
+         9
+        10
+
+	  

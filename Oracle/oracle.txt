@@ -401,3 +401,8 @@ Oracle以区间为单位将空间分配给对象段，而段内则是以Block为
   autoextend on next 10M maxsize 4096M
   extent management local uniform size 256K
   segment space management auto;
+  
+  
+对于任何DML操作来说，必须同时处理数据块和撤销块，并且还会生成重做数据。
+ACID的A,C,I要求生成撤销数据，D则要求生成重做数据。  
+  

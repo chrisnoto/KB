@@ -1,0 +1,533 @@
+https://kb.vmware.com/s/article/2145116?lang=zh_CN 
+
+ISO版本
+VSAN ESXI安装ISO版本：         VMware-ESXi-6.5U2-RollupISO
+VSAN vCenter安装ISO版本：      VMware-VIM-all-6.5.0-4602587.iso
+
+vsan license
+vsan:         VMware vSAN Standard (CPUs)
+esxi:        VMware vSphere 6 Enterprise Plus 
+
+VPXA-It is the agent of Vcenter server. 
+also known as mini vcenter server which is installed on the each esx server which is managed by Vcenter server. 
+What are the management action we are performing on top of the vcenter server. (Like:- Increasing/Decreasing RAM & HDD, Making any type of changes in cluster, doing vmotion.
+ This agent collects all information from the vcenter server and pass this information to the kernal of the esx server.
+
+HOSTD- This is the agent of ESX server, 
+here VPXA pass the information to the HOSTD and hostd pass the information to ESX serve
+
+vmkernel - hostd(agent of ESXI server) - esxi hosts 
+             |
+			  - vpxa(vCenter agent) - vCenter Server
+			 
+网络
+==========================================
+A21 VSAN
+vSwitch0     3个VLAN
+management network  --- vlan_48
+vlan id 577  ---  vlan_50
+vlan id 576  ---  vlan_48
+vlan id 584  ---  vlan_36
+vSwitch1  VSAN网络    192.168.3.0/24
+
+B22  VSAN
+vSwitch0     3个VLAN
+management network  --- vlan_48
+vlan id 577  ---  vlan_50
+vlan id 576  ---  vlan_48
+vlan id 584  ---  vlan_36
+vSwitch1  VSAN网络    192.168.1.0/24
+============================================
+NTP servers
+10.67.50.111    10.67.50.88
+
+VSAN observer打开
+/localhost/A21VSANDatacenter/computers> vsan.observer 0 --run-webserver --force --no-https
+访问 http://10.67.50.135:8010
+
+vCenter (10.67.50.135) SQL Server备份
+D:\SQL_BAK
+每周三、周天全备    db和log
+
+关机顺序：
+1.登录Web Client；
+2.关闭所有虚拟机；
+3.所有vSAN节点（ESXi）置于维护模式，并选择No Data Migration
+4.关闭所有vSAN节点。
+
+开机顺序：
+1.所有节点开机加电；
+2.登录Web Client；
+3.所有vSAN节点退出维护模式；
+4.检查vSAN状态；
+5.开启虚拟机；
+6.检查虚拟机运行状态。
+
+VMware vSAN提供的超融合架构中不配备传统共享存储，而采用服务器本地硬盘组成“磁盘组”。在vSAN架构中以“磁盘组”的方式提供存储数据。
+磁盘组有混合架构和全闪存架构。
+在混合架构中，磁盘组的数据以RAID-0的方式组成，冗余数据跨主机以RAID-1的方式组成，整体相当于RAID-10的效果，数据的实际使用率小于并接近50%。
+在全闪存架构中，冗余数据以RAID-5或RAID-6的方式组成，数据的实际使用率小于并接近于76.9%（RAID-5）、66.7%（RAID-6）。
+
+在混合架构中，任何一个虚拟机的数据至少是2.1的关系，这里面的2，表示虚拟机硬盘文件VMDK至少有一个完整的备份（2倍冗余）；这里面的1表示有1个“见证”文件，类似于校验文件。
+2个备份文件及1个见证文件保存在不同的主机中。所以vSAN架构至少需要3台主机（每台主机都要提供磁盘组）。
+根据数据冗余度，最多可以有4个备份及3个见证文件，可以用4.3来表示，这时候需要至少7台主机。
+可以用2n+1的方式来计算需要的最小主机数，这里面的n表示数据冗余度，最小可以为0（数据不安全），默认值为1，最大为3。
+在实际的规划中，建议的主机数为2n+1+1，最后一个1为冗余。例如在规划一个最小的vSAN标准群集时，规划主机数最小为4，这样当其中1台主机出现故障时，仍然有足够的冗余。
+
+在全闪存架构中，最小主机数为4（相当于4台主机组成RAID-5），此时有一个数据冗余（任意一台主机出现故障时数据安全不受影响）。
+如果需要两个数据数据冗余最少需要6台主机（相当于6台主机组成RAID-6，任意两台主机出现故障数据不受影响）。同理，为了具有更高的安全性，
+要达到RAID-5效果时建议最少5台主机；要达到RAID-6效果时建议最少7台主机。
+
+VMWARE内存管理机制
+(1) 在内存没有过量配置(Memory Overcommitment)的情况下，不需要Reclaim内存    
+(2) 什么时候开始Reclaim内存？当突破6%的警戒线，内存状态从High变成了Soft的时候    
+(3) Reclaim优先用Ballooning，只有Ballooning不够用的时候，才会用Swapping    
+(4) 什么时候开始swapping? 当主机可用内存跌破4%警戒线，内存状态变成Hard的时候    
+(5) Host无法知道VM内的哪些内存块已经处于空闲(idle)状态。必须用Ballooning才能收回空闲内存。    
+(6) 尽量避免资源争用，否则造成的Chasing-the-tail效应，会导致更严重的性能负面影响。
+
+ESXI设置log转发
+[root@STJVSAN01:~] esxcli system syslog config set --loghost='tcp://10.67.50.200:1514'
+[root@STJVSAN01:~] esxcli system syslog reload
+[root@STJVSAN01:~] esxcli network firewall ruleset set -r syslog -e true
+[root@STJVSAN01:~] esxcli network firewall refresh
+或者打开ESXI的防火墙允许syslog outgoing  1514
+
+
+执行RVC管理VSAN
+D:\Program Files\VMware\vCenter Server\rvc\rvc.bat
+输入密码后
+ls
+cd 1
+vsan.命令
+如：  
+/localhost/A21VSANDatacenter/computers> vsan.health.health_summary  0
+Overall health: red (Physical disk issue)
++------------------------------------------------------+---------+
+| Health check                                         | Result  |
++------------------------------------------------------+---------+
+| Data                                                 | Error   |
+|   vSAN object health                                 | Error   |
++------------------------------------------------------+---------+
+| Physical disk                                        | Warning |
+|   Operation health                                   | Passed  |
+|   Disk capacity                                      | Warning |
+|   Congestion                                         | Passed  |
+|   Component limit health                             | Passed  |
+|   Component metadata health                          | Passed  |
+|   Memory pools (heaps)                               | Passed  |
+|   Memory pools (slabs)                               | Passed  |
+
+点检磁盘
+[root@A21VSAN8:/vmfs/volumes/vsan:52b63f21373e3a8b-7161cf08fa938379] esxcli vsan debug disk summary get
+   Overall Health: yellow
+   Component Metadata Health: green
+   Memory Pools (heaps): green
+   Memory Pools (slabs): green
+
+查找状态为yellow的磁盘   
+esxcli vsan debug disk list |less   
+UUID: 522e6579-83f2-0235-d204-4f7947e8883c
+   Name: naa.5000c5007e416803
+   Owner: A21VSAN19
+   Version: 5
+   Disk Group: 52564d9c-a1cb-e56b-ecc9-fa6b70427bbe
+   Disk Tier: Capacity
+   SSD: false
+   In Cmmds: true
+   In Vsi: true
+   Model: ST1200MM0088
+   Encryption: false
+   Deduplication: false
+   Dedup Ratio: N/A
+   Overall Health: yellow
+   Metadata Health: green
+   Operational Health: green
+   Congestion Health:
+         State: green
+         Congestion Value: 0
+         Congestion Area: none
+         All Congestion Fields:
+   Space Health:
+         State: yellow
+         Capacity: 1117.80 GB
+         Used: 962.06 GB
+         Reserved: 34.05 GB
+ 显示磁盘容量不足，这是VSAN数据分布不均衡的表现  
+   
+[root@A21VSAN8:/vmfs/volumes/vsan:52b63f21373e3a8b-7161cf08fa938379] esxcli vsan debug disk overview
+UUID                                  Name                                  Owner      Ver  Disk Group                            Disk Tier    SSD  Metadata  Ops    Congestion  CMMDS   VSI  Capacity    Used       Reserved
+------------------------------------  ------------------------------------  ---------  ---  ------------------------------------  ---------  -----  --------  -----  ----------  -----  ----  ----------  ---------  ---------
+524a97ad-0c1d-679e-7400-a272906b39ed  naa.518f292099673132394b373531303432  A21VSAN80    5  524a97ad-0c1d-679e-7400-a272906b39ed  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+522378a2-cde6-be7b-d68b-ff113d0d2f87  naa.5000c5007e422c03                  A21VSAN80    5  524a97ad-0c1d-679e-7400-a272906b39ed  Capacity   false  green     green  No           true  true  1117.80 GB  966.00 GB  50.26 GB
+521129e6-86f3-4e4d-c5a1-9f0fcde5db20  naa.5000c5007e416f0f                  A21VSAN80    5  524a97ad-0c1d-679e-7400-a272906b39ed  Capacity   false  green     green  No           true  true  1117.80 GB  891.91 GB  42.15 GB
+52cda7fd-9c1f-5849-fd7c-4ad1e71d5008  naa.5000c5007e42303b                  A21VSAN80    5  524a97ad-0c1d-679e-7400-a272906b39ed  Capacity   false  green     green  No           true  true  1117.80 GB  830.45 GB  34.04 GB
+52cc6de0-9088-011e-4c3f-a88a67e9a3d4  naa.518f2920534610350d4b373405323400  A21VSAN8     5  52cc6de0-9088-011e-4c3f-a88a67e9a3d4  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+522d4f3b-73ef-7bef-3f72-897cb7931f76  naa.5000c5007e416703                  A21VSAN8     5  52cc6de0-9088-011e-4c3f-a88a67e9a3d4  Capacity   false  green     green  No           true  true  1117.80 GB  875.59 GB  30.03 GB
+52337808-6f2c-517c-993b-3c0943189b7e  naa.5000c5007e417777                  A21VSAN8     5  52cc6de0-9088-011e-4c3f-a88a67e9a3d4  Capacity   false  green     green  No           true  true  1117.80 GB  876.14 GB  13.85 GB
+52853519-bf0b-5a79-8d54-53941624366b  naa.5000c5007e417e0b                  A21VSAN8     5  52cc6de0-9088-011e-4c3f-a88a67e9a3d4  Capacity   false  green     green  No           true  true  1117.80 GB  806.06 GB  1.79 GB
+523ab2f0-5ee5-1e15-707b-5d9d6b1c0826  naa.5001b44e243b2cd9                  A21VSAN19    5  523ab2f0-5ee5-1e15-707b-5d9d6b1c0826  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+5288b78a-ee5f-a717-160c-ded6695f278a  naa.5000c5007e421c73                  A21VSAN19    5  523ab2f0-5ee5-1e15-707b-5d9d6b1c0826  Capacity   false  green     green  No           true  true  1117.80 GB  830.94 GB  94.48 GB
+528c2cbd-caab-9975-8ae9-12d181bc7ab4  naa.5000c5007e423133                  A21VSAN19    5  523ab2f0-5ee5-1e15-707b-5d9d6b1c0826  Capacity   false  green     green  No           true  true  1117.80 GB  810.34 GB  1.75 GB
+520ef209-deab-3e62-134b-880f368f3e9c  naa.5000c5007e417ba7                  A21VSAN19    5  523ab2f0-5ee5-1e15-707b-5d9d6b1c0826  Capacity   false  green     green  No           true  true  1117.80 GB  848.63 GB  23.95 GB
+52a1b1d3-b5c7-367d-e7b5-6087c940c2e0  naa.5001b44e20986758                  A21VSAN79    5  52a1b1d3-b5c7-367d-e7b5-6087c940c2e0  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+523149e1-8b6e-91a2-d37f-11b779e3447e  naa.5000c5007e422c5b                  A21VSAN79    5  52a1b1d3-b5c7-367d-e7b5-6087c940c2e0  Capacity   false  green     green  No           true  true  1117.80 GB  782.71 GB  82.29 GB
+529c2368-a17f-020a-79ef-9a29eceaca94  naa.5000c5007e424f87                  A21VSAN79    5  52a1b1d3-b5c7-367d-e7b5-6087c940c2e0  Capacity   false  green     green  No           true  true  1117.80 GB  748.55 GB  149.25 GB
+52b3093b-6f0c-c51c-1526-f0b4e4aed1ab  naa.5000c5007e421ba7                  A21VSAN79    5  52a1b1d3-b5c7-367d-e7b5-6087c940c2e0  Capacity   false  green     green  No           true  true  1117.80 GB  786.27 GB  70.47 GB
+52883cf7-d4dc-ee01-7330-2e9450654c8b  naa.55cd2e414de4a7c4                  A21VSAN1     5  52883cf7-d4dc-ee01-7330-2e9450654c8b  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+5239e402-49c0-26f2-7c11-fb898394ba17  naa.5000c5007e422cbf                  A21VSAN1     5  52883cf7-d4dc-ee01-7330-2e9450654c8b  Capacity   false  green     green  No           true  true  1117.80 GB  808.80 GB  45.96 GB
+525281a6-1005-0200-76a9-49e39b788153  naa.5000c5007e416497                  A21VSAN1     5  52883cf7-d4dc-ee01-7330-2e9450654c8b  Capacity   false  green     green  No           true  true  1117.80 GB  837.40 GB  122.92 GB
+520fac7e-8979-1076-6eca-7dd1d9022c47  naa.5000c5007e415fb3                  A21VSAN1     5  52883cf7-d4dc-ee01-7330-2e9450654c8b  Capacity   false  green     green  No           true  true  1117.80 GB  790.07 GB  37.99 GB
+52871c70-92e3-be7a-2fb9-296b49cd16fc  naa.55cd2e414de49761                  A21VSAN8     5  52871c70-92e3-be7a-2fb9-296b49cd16fc  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+52adb93d-b5b7-b1a2-3873-31e5c43ff180  naa.5000c5007e424453                  A21VSAN8     5  52871c70-92e3-be7a-2fb9-296b49cd16fc  Capacity   false  green     green  No           true  true  1117.80 GB  826.04 GB  94.44 GB
+52b1cad0-e0d3-236a-1f56-63778c4168a4  naa.5000c5007e424faf                  A21VSAN8     5  52871c70-92e3-be7a-2fb9-296b49cd16fc  Capacity   false  green     green  No           true  true  1117.80 GB  805.73 GB  34.11 GB
+525fd8d2-3566-43b0-15aa-8bdd2656f0da  naa.5000c5007e422f5b                  A21VSAN8     5  52871c70-92e3-be7a-2fb9-296b49cd16fc  Capacity   false  green     green  No           true  true  1117.80 GB  807.70 GB  66.37 GB
+520a51d8-3825-a60c-c193-b07b46f883c9  naa.55cd2e414de4693d                  A21VSAN80    5  520a51d8-3825-a60c-c193-b07b46f883c9  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+52c69b14-6a27-cbda-fe2b-ecbf3a80bfa1  naa.5000c5007e416c53                  A21VSAN80    5  520a51d8-3825-a60c-c193-b07b46f883c9  Capacity   false  green     green  No           true  true  1117.80 GB  806.96 GB  66.40 GB
+52b6fde4-7286-a224-0aea-818f7fa2c1ea  naa.5000c5007e4231ab                  A21VSAN80    5  520a51d8-3825-a60c-c193-b07b46f883c9  Capacity   false  green     green  No           true  true  1117.80 GB  860.11 GB  38.13 GB
+52a3c237-f872-bba4-6f6c-103d34f9ba94  naa.5000c5007e4240f3                  A21VSAN80    5  520a51d8-3825-a60c-c193-b07b46f883c9  Capacity   false  green     green  No           true  true  1117.80 GB  801.21 GB  22.38 GB
+5200fe98-7381-e610-7636-7ccb85a923c7  naa.55cd2e414ddf366a                  A21VSAN8     5  5200fe98-7381-e610-7636-7ccb85a923c7  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+528e4286-ba37-59fb-5451-baf2e01b928c  naa.5000c5007e4234b7                  A21VSAN8     5  5200fe98-7381-e610-7636-7ccb85a923c7  Capacity   false  green     green  No           true  true  1117.80 GB  786.92 GB  94.51 GB
+5257af7a-1e7b-4104-81b5-2e756de7b83a  naa.5000c5007e42494f                  A21VSAN8     5  5200fe98-7381-e610-7636-7ccb85a923c7  Capacity   false  green     green  No           true  true  1117.80 GB  696.14 GB  170.85 GB
+52811ade-cae3-ad46-b739-a73dfb86e137  naa.5000c5007e422f33                  A21VSAN8     5  5200fe98-7381-e610-7636-7ccb85a923c7  Capacity   false  green     green  No           true  true  1117.80 GB  712.14 GB  150.92 GB
+523b7ce2-fc61-95c7-3d0a-66edde90aec6  naa.518f292099673132394b373531313630  A21VSAN18    5  523b7ce2-fc61-95c7-3d0a-66edde90aec6  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+52a1db4f-568e-41c9-c69b-547765b982b6  naa.5000c5007e416833                  A21VSAN18    5  523b7ce2-fc61-95c7-3d0a-66edde90aec6  Capacity   false  green     green  No           true  true  1117.80 GB  800.67 GB  5.78 GB
+52b7d5a6-8cff-09b0-1224-faa1a7663a8f  naa.5000c5007e421c57                  A21VSAN18    5  523b7ce2-fc61-95c7-3d0a-66edde90aec6  Capacity   false  green     green  No           true  true  1117.80 GB  834.08 GB  21.93 GB
+529e8876-aefa-67ef-4785-92d33f4519f1  naa.5000c5007e416893                  A21VSAN18    5  523b7ce2-fc61-95c7-3d0a-66edde90aec6  Capacity   false  green     green  No           true  true  1117.80 GB  855.01 GB  42.16 GB
+52ce13f3-773f-5215-949b-e18accf128af  naa.518f2920534610350d4b373408363700  A21VSAN1     5  52ce13f3-773f-5215-949b-e18accf128af  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+5204226d-6e7a-0600-8c88-f895bdcab28b  naa.5000c5007e424ca3                  A21VSAN1     5  52ce13f3-773f-5215-949b-e18accf128af  Capacity   false  green     green  No           true  true  1117.80 GB  855.55 GB  78.51 GB
+52c2ee00-3391-27dc-5f5d-289f4561e4ef  naa.5000c5007e417c57                  A21VSAN1     5  52ce13f3-773f-5215-949b-e18accf128af  Capacity   false  green     green  No           true  true  1117.80 GB  855.16 GB  25.96 GB
+5297df46-d5b3-2cc8-c389-246016f00889  naa.5000c5007e422d17                  A21VSAN1     5  52ce13f3-773f-5215-949b-e18accf128af  Capacity   false  green     green  No           true  true  1117.80 GB  838.46 GB  46.18 GB
+52471473-098c-d188-4d4d-22e93c93c74c  naa.5001b44e22fabda0                  A21VSAN18    5  52471473-098c-d188-4d4d-22e93c93c74c  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+529f069b-80e6-5936-2ff0-a9e26a59ab2a  naa.5000c5007e422fb7                  A21VSAN18    5  52471473-098c-d188-4d4d-22e93c93c74c  Capacity   false  green     green  No           true  true  1117.80 GB  783.64 GB  59.34 GB
+5257766a-9509-9032-d2d0-b49e58193b3f  naa.5000c5007e423593                  A21VSAN18    5  52471473-098c-d188-4d4d-22e93c93c74c  Capacity   false  green     green  No           true  true  1117.80 GB  864.45 GB  9.80 GB
+52113698-af71-f0f0-e162-62867307f000  naa.5000c5007e422c2b                  A21VSAN18    5  52471473-098c-d188-4d4d-22e93c93c74c  Capacity   false  green     green  No           true  true  1117.80 GB  826.25 GB  15.91 GB
+528ddf4d-8b6e-846c-180c-bc73d105ccaf  naa.5001b44e243b2ce0                  A21VSAN79    5  528ddf4d-8b6e-846c-180c-bc73d105ccaf  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+5211dfc2-6a5d-797c-b621-71248c1d1fdb  naa.5000c5007e42316b                  A21VSAN79    5  528ddf4d-8b6e-846c-180c-bc73d105ccaf  Capacity   false  green     green  No           true  true  1117.80 GB  743.33 GB  44.24 GB
+521390f5-e5b2-3051-d175-7211ef032a28  naa.5000c5007e42519f                  A21VSAN79    5  528ddf4d-8b6e-846c-180c-bc73d105ccaf  Capacity   false  green     green  No           true  true  1117.80 GB  763.39 GB  52.68 GB
+5290b4a4-c73e-3bc6-3c3a-86190ca2e163  naa.5000c5007e4233e7                  A21VSAN79    5  528ddf4d-8b6e-846c-180c-bc73d105ccaf  Capacity   false  green     green  No           true  true  1117.80 GB  771.46 GB  43.42 GB
+52df013f-df01-4119-d89f-a912f2e764eb  naa.518f292099673132394b373531313231  A21VSAN5     5  52df013f-df01-4119-d89f-a912f2e764eb  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+52434441-3ca4-3c04-1d12-21dc2d869547  naa.5000c5007e41769b                  A21VSAN5     5  52df013f-df01-4119-d89f-a912f2e764eb  Capacity   false  green     green  No           true  true  1117.80 GB  877.41 GB  34.05 GB
+52ef16d5-5f8a-a074-3d4f-bc293d3b8620  naa.5000c5007e4167e3                  A21VSAN5     5  52df013f-df01-4119-d89f-a912f2e764eb  Capacity   false  green     green  No           true  true  1117.80 GB  856.95 GB  58.39 GB
+521f256d-2ad9-7cb6-360b-12e0defbe733  naa.5000c5007e4171c7                  A21VSAN5     5  52df013f-df01-4119-d89f-a912f2e764eb  Capacity   false  green     green  No           true  true  1117.80 GB  825.40 GB  41.91 GB
+528955df-6ec4-379d-85c6-3b940b74e20a  naa.55cd2e414de4a7b1                  A21VSAN5     5  528955df-6ec4-379d-85c6-3b940b74e20a  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+524e5969-8b43-0593-b007-4f8faabb20e3  naa.5000c5007e42492f                  A21VSAN5     5  528955df-6ec4-379d-85c6-3b940b74e20a  Capacity   false  green     green  No           true  true  1117.80 GB  844.71 GB  13.85 GB
+528c7f28-c0d3-11aa-634c-b0291b1aea32  naa.5000c5007e42459f                  A21VSAN5     5  528955df-6ec4-379d-85c6-3b940b74e20a  Capacity   false  green     green  No           true  true  1117.80 GB  837.48 GB  46.17 GB
+52289dd5-ac6e-6795-0607-42f7ba6beb44  naa.5000c5007e417dd3                  A21VSAN5     5  528955df-6ec4-379d-85c6-3b940b74e20a  Capacity   false  green     green  No           true  true  1117.80 GB  876.57 GB  74.36 GB
+52564d9c-a1cb-e56b-ecc9-fa6b70427bbe  naa.55cd2e414de40622                  A21VSAN19    5  52564d9c-a1cb-e56b-ecc9-fa6b70427bbe  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+52b147ce-04a7-78cf-19f0-e3f21c5cc625  naa.5000c5007e416857                  A21VSAN19    5  52564d9c-a1cb-e56b-ecc9-fa6b70427bbe  Capacity   false  green     green  No           true  true  1117.80 GB  826.13 GB  9.79 GB
+52f5a1ea-cd79-80c8-3876-703243062575  naa.5000c5007e4176af                  A21VSAN19    5  52564d9c-a1cb-e56b-ecc9-fa6b70427bbe  Capacity   false  green     green  No           true  true  1117.80 GB  827.26 GB  76.37 GB
+522e6579-83f2-0235-d204-4f7947e8883c  naa.5000c5007e416803                  A21VSAN19    5  52564d9c-a1cb-e56b-ecc9-fa6b70427bbe  Capacity   false  green     green  No           true  true  1117.80 GB  962.06 GB  34.05 GB
+5267c343-289d-3cc1-6e5a-9a5d39aaf92f  naa.5001b44e244a6f3e                  A21VSAN8     5  5267c343-289d-3cc1-6e5a-9a5d39aaf92f  Cache       true  green     green  No           true  true  N/A         N/A        N/A
+5213b481-07c6-514e-d80f-970e2f3ad66b  naa.5000c5007e417e1f                  A21VSAN8     5  5267c343-289d-3cc1-6e5a-9a5d39aaf92f  Capacity   false  green     green  No           true  true  1117.80 GB  540.16 GB  167.61 GB
+5227be46-38f6-f47b-a56e-009021765280  naa.5000c5007e416b27                  A21VSAN8     5  5267c343-289d-3cc1-6e5a-9a5d39aaf92f  Capacity   false  green     green  No           true  true  1117.80 GB  664.58 GB  41.86 GB
+52efd4d6-bd73-5b94-34ac-9e49e06f5f4e  naa.5000c5007e421aff                  A21VSAN8     5  5267c343-289d-3cc1-6e5a-9a5d39aaf92f  Capacity   false  green     green  No           true  true  1117.80 GB  643.12 GB  110.61 GB
+
+点检object
+[root@A21VSAN8:/vmfs/volumes/vsan:52b63f21373e3a8b-7161cf08fa938379] esxcli vsan debug object health summary get
+Health Status                                     Number Of Objects
+------------------------------------------------  -----------------
+nonavailability-related-incompliance                              0
+reduced-availability-with-no-rebuild-delay-timer                  0
+inaccessible                                                      0
+healthy                                                         574
+reduced-availability-with-active-rebuild                          0
+nonavailability-related-reconfig                                  0
+reduced-availability-with-no-rebuild                              0
+data-move                                                         0
+
+[root@A21VSAN8:/vmfs/volumes/vsan:52b63f21373e3a8b-7161cf08fa938379] esxcli vsan debug object overview
+观察最后一列Healthy Components，是否副本数是到达期望的数量
+
+## Monitor reactive rebalance
+#Verifies whether the disk space use is balanced in the cluster.
+/localhost/A21VSANDatacenter/computers> vsan.check_limits 0
+2021-01-04 13:50:25 +0800: Querying limit stats from all hosts ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.79 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.80 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.82 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.16 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.19 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.18 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.8 (may take a moment) ...
+2021-01-04 13:50:30 +0800: Fetching vSAN disk info from 10.67.51.81 (may take a moment) ...
+2021-01-04 13:50:37 +0800: Done fetching vSAN disk infos
++-------------+--------------------+----------------------------------------------------------+
+| Host        | RDT                | Disks                                                    |
++-------------+--------------------+----------------------------------------------------------+
+| 10.67.51.80 | Assocs: 740/55080  | Components: 275/9000                                     |
+|             | Sockets: 192/10000 | naa.518f292099673132394b373531303432: 0% Components: 0/0 |
+|             | Clients: 75        | naa.5000c5007e42303b: 73% Components: 44/47661           |
+|             | Owners: 81         | naa.5000c5007e4240f3: 78% Components: 49/47661           |
+|             |                    | naa.5000c5007e416f0f: 73% Components: 42/47661           |
+|             |                    | naa.5000c5007e4231ab: 79% Components: 51/47661           |
+|             |                    | naa.5000c5007e416c53: 66% Components: 44/47661           |
+|             |                    | naa.5000c5007e422c03: 86% Components: 45/47661           |
+|             |                    | naa.55cd2e414de4693d: 0% Components: 0/0                 |
+
+分析挂掉一台主机后，每台主机的容量变化
+/localhost/A21VSANDatacenter/computers> vsan.whatif_host_failures  0
+Simulating 1 host failures:
+
++-----------------+------------------------------+-----------------------------------+
+| Resource        | Usage right now              | Usage after failure/re-protection |
++-----------------+------------------------------+-----------------------------------+
+| HDD capacity    |  73% used (14433.76 GB free) |  84% used (7726.93 GB free)       |
+| Components      |   3% used (69762 available)  |   4% used (60762 available)       |
+| RC reservations |   0% used (33775.87 GB free) |   0% used (27806.80 GB free)      |
++-----------------+------------------------------+-----------------------------------+
+
+######## troubleshooting #########
+1 有一台ESXI主机里的虚机都不受vsphere ha保护
+处理办法： 在VSAN Cluster层面取消再启用 vsphere HA
+configure -> vsphere availability -> turn on vsphere HA
+
+2 VSAN Health Data 健康检查
+data: failed
+vSAN object health: failed      reduced-availability-with-no-rebuild
+object uuid aacb695e-53c0-19c7-36bb-4cd98f6983fe
+如何查找uuid对应的对象
+命令: esxcli vsan debug object list | less
+搜索uuid
+后续处理，发现这台虚机只有磁盘文件存在datastore，虚机本身已经 unregistered了
+Object UUID: aacb695e-53c0-19c7-36bb-4cd98f6983fe
+   Version: 5
+   Health: reduced-availability-with-no-rebuild
+   Owner: A21VSAN8
+   Size: 130.00 GB
+   Used: 45.79 GB
+   Policy:
+      hostFailuresToTolerate: 1
+      SCSN: 13229
+      CSN: 22334
+
+   Configuration:
+
+      RAID_1
+         Component: 2c0d885f-3c69-9a29-a2de-4cd98f6b7bed
+           Component State: ABSENT,  CSN: STALE (208!=22334),  Address Space(B): 139586437120 (130.00GB),  Disk UUID: 5227be46-38f6-f47b-a56e-009021765280,  Disk Name: naa.5000c5007e416b27:2,  Transient
+: 1
+           Votes: 1,  Capacity Used(B): 19235078144 (17.91GB),  Physical Capacity Used(B): 19042140160 (17.73GB),  Host Name: A21VSAN8
+         Component: 660d885f-323a-631f-2d65-4cd98f6b7bed
+           Component State: ACTIVE,  Address Space(B): 139586437120 (130.00GB),  Disk UUID: 52b147ce-04a7-78cf-19f0-e3f21c5cc625,  Disk Name: naa.5000c5007e416857:2,  Transient: 1
+           Votes: 1,  Capacity Used(B): 19235078144 (17.91GB),  Physical Capacity Used(B): 19042140160 (17.73GB),  Host Name: A21VSAN19
+         Component: 63d2ce5f-9228-1146-a1a3-4cd98f6b7bed
+           Component State: ABSENT,  Bytes To Sync: 1073741824 (1.00GB),  Address Space(B): 139586437120 (130.00GB),  Disk UUID: 5213b481-07c6-514e-d80f-970e2f3ad66b,  Disk Name: naa.5000c5007e417e1f:2
+           Votes: 3,  Capacity Used(B): 19948109824 (18.58GB),  Physical Capacity Used(B): 5540675584 (5.16GB),  Host Name: A21VSAN8
+         Concatenation
+            Component: 65efcd5f-e398-1d12-3d0d-4cd98f6b7bed
+              Component State: ACTIVE,  Address Space(B): 69793218560 (65.00GB),  Disk UUID: 52b7d5a6-8cff-09b0-1224-faa1a7663a8f,  Disk Name: naa.5000c5007e421c57:2
+              Votes: 3,  Capacity Used(B): 9978249216 (9.29GB),  Physical Capacity Used(B): 633339904 (0.59GB),  Host Name: A21VSAN18
+            Component: 65efcd5f-f593-2712-04fd-4cd98f6b7bed
+              Component State: RECONFIGURING,  Bytes To Sync: 22715957248 (21.16GB),  Address Space(B): 69793218560 (65.00GB),  Disk UUID: 5211dfc2-6a5d-797c-b621-71248c1d1fdb,  Disk Name: naa.5000c5007e42316b:2
+              Votes: 3,  Capacity Used(B): 9978249216 (9.29GB),  Physical Capacity Used(B): 4911529984 (4.57GB),  Host Name: A21VSAN79
+
+   Type: vdisk
+   Path: /vmfs/volumes/vsan:52b63f21373e3a8b-7161cf08fa938379/a6cb695e-3dc2-6074-f435-4cd98f6983fe/zabbix-network.vmdk (Exists)
+   Group UUID: a6cb695e-3dc2-6074-f435-4cd98f6983fe
+   Directory Name: N/A
+
+3 VSAN两个磁盘数据使用率过高，数据分布不均衡
+   /localhost/A21VSANDatacenter/computers> vsan.proactive_rebalance -s -t 604800 0
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.80 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.18 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.16 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.82 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.79 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.19 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.8 ...
+2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.81 ...
+
+Proactive rebalance has been started!
+
+/localhost/B22VSANDatacenter/computers> vsan.proactive_rebalance_info 0
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.206 ...
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.211 ...
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.208 ...
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.207 ...
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.209 ...
+2020-12-30 15:41:48 +0800: Retrieving proactive rebalance information from host 10.67.49.210 ...
+
+Proactive rebalance start: 2020-12-30 07:39:40 UTC
+Proactive rebalance stop: 2021-01-06 07:39:40 UTC
+Max usage difference triggering rebalancing: 30.00%
+Average disk usage: 49.00%
+Maximum disk usage: 77.00% (76.00% above minimum disk usage)
+Imbalance index: 48.00%
+Disks to be rebalanced:
+也可以
+/localhost/A21VSANDatacenter/computers/VSAN-A21Cluster> vsan.proactive_rebalance_info .
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.80 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.82 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.16 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.8 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.79 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.18 ...
+2020-12-24 16:17:00 +0800: Retrieving proactive rebalance information from host 10.67.51.19 ...
+2020-12-24 16:17:01 +0800: Retrieving proactive rebalance information from host 10.67.51.81 ...
+
+Proactive rebalance start: 2020-12-24 08:07:21 UTC
+Proactive rebalance stop: 2020-12-25 08:08:41 UTC
+Max usage difference triggering rebalancing: 30.00%
+Average disk usage: 73.00%
+Maximum disk usage: 86.00% (37.00% above minimum disk usage)
+Imbalance index: 24.00%
+Disks to be rebalanced:
++----------------------+-------------+----------------------------+--------------+
+| DisplayName          | Host        | Disk usage above threshold | Data to move |
++----------------------+-------------+----------------------------+--------------+
+| naa.5000c5007e416803 | 10.67.51.19 | 7.00%                      | 78.2463 GB   |
++----------------------+-------------+----------------------------+--------------+
+| naa.5000c5007e422c03 | 10.67.51.80 | 7.00%                      | 78.2463 GB   |
++----------------------+-------------+----------------------------+--------------+
+
+4 清理ESXI IPMI SEL报警和错误
+
+
+
+5 VSAN congestion     reduced availability 48 now  11:29       ->       reduced availability 20 now  13:04
+disk group拥塞情况，在每台ESXI上执行
+for ssd in $(localcli vsan storage list|grep "Group UUID"|awk '{print $5}'|sort -u);do \
+echo $ssd;vsish -e get /vmkModules/lsom/disks/$ssd/info|grep Congestion; \
+done
+
+diskgroup自动同步数据后，congestion慢慢消失
+
+6  vmkping
+[root@A21VSAN1:~] vmkping -I vmk0 10.67.51.82
+PING 10.67.51.82 (10.67.51.82): 56 data bytes
+64 bytes from 10.67.51.82: icmp_seq=0 ttl=64 time=0.612 ms
+64 bytes from 10.67.51.82: icmp_seq=1 ttl=64 time=0.250 ms
+
+--- 10.67.51.82 ping statistics ---
+3 packets transmitted, 2 packets received, 33% packet loss
+round-trip min/avg/max = 0.250/0.431/0.612 ms
+[root@A21VSAN1:~] vmkping -I vmk1 192.168.3.13
+PING 192.168.3.13 (192.168.3.13): 56 data bytes
+64 bytes from 192.168.3.13: icmp_seq=0 ttl=64 time=0.202 ms
+64 bytes from 192.168.3.13: icmp_seq=1 ttl=64 time=0.182 ms
+
+7  vsish命令    esxcli命令
+
+esxcli esxcli command list |grep network  #获得esxcli命令帮助
+esxcli network nic list
+esxcli network ip interface list
+esxcli network ip interface ipv4 get
+esxcli network vm list     #可以列出VM的子网段
+esxcli network vswitch standard list
+esxcli storage core device list     #硬盘信息
+esxcli vm process list
+esxcli vm process kill -w 75498 -t soft   发送信号让VM正确的关机
+esxcli vm process kill -w 75498 -t hard  直接关闭VM
+esxcli vm process kill -w 75498 -t force  给VM拔电关机
+vmkload_mod --list        # Show loaded vmkernel drivers
+esxcfg-nics -l
+esxcfg-scsidevs -a     SCSI控制器
+esxcli storage core adapter list
+esxcli storage core path list
+esxcfg-vswitch -l
+esxcfg-route -l        路由
+esxcfg-vmknic -l
+vmkerrcode -l
+
+[root@STJVSAN01:~] esxcli storage core device physical get -d naa.5000c5007f7a216f
+   Physical Location: enclosure 2, slot 7
+
+vim-cmd  vmsvc/getallvms
+vim-cmd  vmsvc/get.summary  224
+8  for循环快速获取信息
+[root@repo-centos ~]# for u in 16 18 19 79 8 80 81 82;do sshpass -f avsan ssh 10.67.51.$u esxcli network ip interface ipv4 get;done
+[root@repo-centos ~]# for u in 206 207 208 210 211;do echo "===============10.67.49.$u==========";sshpass -f bvsan ssh 10.67.49.$u vsish -e get /hardware/cpu/cpuModelName;done
+===============10.67.49.206==========
+Intel(R) Xeon(R) CPU E5-2682 v4 @ 2.50GHz
+===============10.67.49.207==========
+Intel(R) Xeon(R) CPU E5-2682 v4 @ 2.50GHz
+===============10.67.49.208==========
+Intel(R) Xeon(R) CPU E5-2682 v4 @ 2.50GHz
+===============10.67.49.210==========
+Intel(R) Xeon(R) CPU E5-2682 v4 @ 2.50GHz
+===============10.67.49.211==========
+Intel(R) Xeon(R) CPU E5-2682 v4 @ 2.50GHz
+[root@repo-centos ~]# for u in 16 18 19 79 8 80 81 82;do echo "===============10.67.51.$u==========";sshpass -f avsan ssh 10.67.51.$u vsish -e get /hardware/cpu/cpuModelName;done
+===============10.67.51.16==========
+Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz
+===============10.67.51.18==========
+Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz
+===============10.67.51.19==========
+Intel(R) Xeon(R) CPU E5-2683 v3 @ 2.00GHz
+===============10.67.51.79==========
+Intel(R) Xeon(R) CPU E5-2652 v3 @ 2.30GHz
+===============10.67.51.8==========
+Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz
+===============10.67.51.80==========
+Intel(R) Xeon(R) CPU E5-2652 v3 @ 2.30GHz
+===============10.67.51.81==========
+Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz
+===============10.67.51.82==========
+Intel(R) Xeon(R) CPU E5-2667 v3 @ 3.20GHz
+
+9 VSAN HCL DB up-to-date
+离线下载并通过vsphere web client上传all.json
+
+
+查询vcenter数据库SQL语句
+1 VM统计
+SELECT TOP 1000 [VMID]
+       ,[NAME]
+       ,[MEM_SIZE_MB]
+       ,[NUM_VCPU]
+       ,[POWER_STATE]
+       ,[GUEST_OS]
+       ,[DNS_NAME]
+       ,[IP_ADDRESS]
+ FROM [vCenter_Server].[dbo].[VPXV_VMS] order by [MEM_SIZE_MB]
+2 HOST统计
+SELECT TOP 1000 [HOSTID]
+      ,[NAME]
+      ,[FARMID]
+      ,[HOST_VENDOR]
+      ,[HOST_MODEL]
+      ,[CPU_MODEL]
+      ,[CPU_COUNT]
+      ,[CPU_CORE_COUNT]
+      ,[CPU_HZ]
+      ,[CPU_THREAD_COUNT]
+      ,[MEM_SIZE]
+      ,[PRODUCT_FULLNAME]
+      ,[IP_ADDRESS]
+      ,[NIC_COUNT]
+      ,[HBA_COUNT]
+      ,[POWER_STATE]
+      ,[LOCAL_IP_ADDRESS]
+      ,[MMODE]
+  FROM [vCenter_Server].[dbo].[VPXV_HOSTS] where [DATACENTER_ID] in (17,516)
+  
+ 3 查询哪些VM被转成Template
+SELECT TOP 1000 [EVENT_ID]
+      ,[CHAIN_ID]
+      ,[EVENT_TYPE]
+      ,[EXTENDED_CLASS]
+      ,[CREATE_TIME]
+      ,[USERNAME]
+      ,[CATEGORY]
+      ,[VM_ID]
+      ,[VM_NAME]
+      ,[HOST_ID]
+      ,[HOST_NAME]
+      ,[COMPUTERESOURCE_ID]
+      ,[COMPUTERESOURCE_TYPE]
+      ,[COMPUTERESOURCE_NAME]
+      ,[DATACENTER_ID]
+      ,[DATACENTER_NAME]
+      ,[DATASTORE_ID]
+      ,[DATASTORE_NAME]
+      ,[NETWORK_ID]
+      ,[NETWORK_NAME]
+      ,[NETWORK_TYPE]
+      ,[DVS_ID]
+      ,[DVS_NAME]
+      ,[STORAGEPOD_ID]
+      ,[STORAGEPOD_NAME]
+      ,[CHANGE_TAG_ID]
+      ,[PARTITION_INDEX]
+  FROM [vCenter_Server].[dbo].[VPXV_EVENT_ALL] where [EVENT_TYPE] LIKE '%VmConvertedToTemplate%' 
