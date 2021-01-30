@@ -278,6 +278,9 @@ Simulating 1 host failures:
 +-----------------+------------------------------+-----------------------------------+
 
 ######## troubleshooting #########
+Failed to sync with the vCenter Agent on the host
+
+
 1 有一台ESXI主机里的虚机都不受vsphere ha保护
 处理办法： 在VSAN Cluster层面取消再启用 vsphere HA
 configure -> vsphere availability -> turn on vsphere HA

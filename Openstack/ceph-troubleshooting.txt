@@ -152,3 +152,14 @@ ID WEIGHT  TYPE NAME        UP/DOWN REWEIGHT PRIMARY-AFFINITY
 12 0.26999         osd.12        up  1.00000          1.00000
 13 0.26999         osd.13        up  1.00000          1.00000
 14 0.26999         osd.14        up  1.00000          1.00000
+
+#查看osd状态
+root@node-14:~# ceph osd dump |grep -e 'up\ *out'
+osd.23 up   out weight 0 up_from 79853 up_thru 75394 down_at 79852 last_clean_interval [79475,79850) 192.168.1.8:6836/12382 192.168.1.8:6837/12382 192.168.1.8:6838/12382 192.168.1.8:6839/12382 exists,up da3f37ae-bc30-45e9-92c7-b0cc429470d5
+
+root@node-14:~# ceph osd dump |grep -e 'down\ *out'
+osd.15 down out weight 0 up_from 79887 up_thru 79909 down_at 79927 last_clean_interval [79855,79886) 192.168.1.8:6844/12634 192.168.1.8:6855/1012634 192.168.1.8:6862/1012634 192.168.1.8:6869/1012634 autoout,exists ef694785-e63c-42ae-a781-763d101d7b38
+osd.17 down out weight 0 up_from 80350 up_thru 80350 down_at 80352 last_clean_interval [80347,80348) 192.168.1.8:6814/982964 192.168.1.8:6818/982964 192.168.1.8:6819/982964 192.168.1.8:6821/982964 autoout,exists e4f5d694-d957-42eb-a801-1bd9abfd6788
+osd.49 down out weight 0 up_from 48682 up_thru 73555 down_at 74308 last_clean_interval [48513,48653) 192.168.1.13:6820/1147772 192.168.1.13:6821/1147772 192.168.1.13:6822/1147772 192.168.1.13:6823/1147772 autoout,exists 4d9888d3-7341-4fe4-8b76-dab49631a929
+osd.55 down out weight 0 up_from 48682 up_thru 60032 down_at 60035 last_clean_interval [48513,48653) 192.168.1.13:6808/1147458 192.168.1.13:6809/1147458 192.168.1.13:6810/1147458 192.168.1.13:6811/1147458 autoout,exists 89ca16b3-cf70-457b-860f-dad522bbcb07
+

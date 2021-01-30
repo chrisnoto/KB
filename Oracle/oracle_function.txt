@@ -104,9 +104,23 @@ select decode(sign(a-b),1,'a>b',0,'equal',-1,'a<b') from (select 50 a,50 b from 
 【功能】expr1和expr2相等返回NULL，不相等返回expr1
 select nullif(2,2),nullif(2,1) from dual;
 
+NULLIF函数和COALESCE函数被定义为"CASE缩写词"，两个函数都被视为CASE表达式的变种
+NULLIF函数，不能把字面值NULL赋给exp1
+NULLIF等价于
+CASE
+  WHEN exp1 = exp2 THEN NULL
+  ELSE exp1
+END
 
-
-
+COALESCE两个以上表达式时等价于
+CASE 
+  WHEN exp1 IS NOT NULL THEN exp1
+  WHEN exp2 IS NOT NULL THEN exp2
+  ...
+  ELSE expN
+END
+又等价于
+NUL(exp1,NVL(exp2,NVL(exp3,...)))
 
 
 
@@ -146,8 +160,8 @@ SQL> with T as
 
 	  
 
-#CASE
-简单case函数
+#CASE语句
+简单case函数   (when后面接的表达式的值与selector的值匹配)  匹配时数据类型要一样，不一样会出错
 select EMPNO,ENAME,
 case sign(sal-2000)
 when  -1 then 'below 2000'
@@ -155,7 +169,23 @@ when  1 then 'above 2000'
 END as salary
 from EMP;
 
-case搜索函数
+v_num_flag 这里是布尔值   如果它没有被赋值，则为null, null与第一个表达式产生的true比较会得到false
+当输入数字4的时候，并不会得到when后面的输出，而是else后面的输出
+declare
+v_num  number :=&sv_num;
+v_num_flag Boolean :=true;          
+begin
+  case v_num_flag 
+    when mod(v_num,2)=0 then  
+	  dbms_output.put_line (v_num||' is even number');
+	else
+      dbms_output.put_line (v_num||' is odd number');
+  end case;
+  dbms_output.put_line ('Done');
+END;  
+/
+
+case搜索函数   (when后面有能产生布尔值true,false,null的搜索条件)
 select EMPNO,ENAME,
 case
 when SAL < 1500 then 'band 1'
@@ -164,6 +194,37 @@ when SAL >=1500 and SAL < 6000 then 'band 3'
 END as salary
 from EMP order by salary;
 
+#CASE表达式
+几乎等同于CASE语句结构，它也有两种形式，简单和搜索式
+第一种情况：表达式的值会被赋给一个变量
+CASE表达式中，WHEN和ELSE子句包含的表达式结尾处不是分号，
+分号出现在END的后面
+v_result :=
+  CASE v_num_flag
+    WHEN 0 THEN v_num||' is even number'
+	ELSE v_num||' is odd number'
+  END;
+  DBMS_OUTPUT.PUT_LINE (v_result);
+
+第二种情况：表达式的值被用作select into的某个列
+END后不接分号，接列名
+DECLARE
+  v_course_no    NUMBER;
+  v_description  VARCHAR2(50);
+  v_prereq       VARCHAR2(35);
+begin 
+  select course_no,description,
+    CASE  
+      WHEN prerequisite IS NOT NULL THEN
+        'No prerequisite course required'
+      ELSE TO_CHAR(prerequisite)
+     END prerequisite
+   INTO v_couse_no,v_description,v_prereq 
+   FROM course
+   where course_no = 20;   
+
+
+   
 decode函数
 select empno,ename,decode(sign(sal-2000),1,'above 2000',-1,'below 2000') from emp;
 

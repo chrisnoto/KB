@@ -1,0 +1,21 @@
+# 使用密文密码创建用户
+mysql> create user 'test'@'%' identified with mysql_native_password AS '*354A2C82FFA72984AE659BF47BBA109EF0D89CA5';
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> select Host,User,plugin,authentication_string from mysql.user;
++-----------+------------------+-----------------------+------------------------------------------------------------------------+
+| Host      | User             | plugin                | authentication_string                                                  |
++-----------+------------------+-----------------------+------------------------------------------------------------------------+
+| %         | test             | mysql_native_password | *354A2C82FFA72984AE659BF47BBA109EF0D89CA5                              |
+| localhost | mysql.infoschema | caching_sha2_password | $A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED |
+| localhost | mysql.session    | caching_sha2_password | $A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED |
+| localhost | mysql.sys        | caching_sha2_password | $A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED |
+| localhost | root             | mysql_native_password |                                                                        |
++-----------+------------------+-----------------------+------------------------------------------------------------------------+
+5 rows in set (0.00 sec)
+
+create user 'test3'@'%' identified with caching_sha2_password AS '$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED';
+
+使用明文密码
+mysql> create user 'test1'@'%' identified with mysql_native_password BY 'Foxconn123';
+create user 'test2'@'%' identified with caching_sha2_password BY 'Foxconn123';

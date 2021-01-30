@@ -1,0 +1,240 @@
+1 输入员工号，输出员工姓名和工资
+declare
+  v_empno NUMBER := &sv_emp_id;
+  v_ename VARCHAR2(30);
+  v_sal NUMBER;
+BEGIN
+  SELECT empno,ename,sal
+    INTO v_empno,v_ename,v_sal FROM scott.emp
+	WHERE empno = v_empno;
+	
+	DBMS_OUTPUT.PUT_LINE ('Employee '||v_ename||' has salary '||v_sal);
+	EXCEPTION
+	  WHEN NO_DATA_FOUND THEN
+	    DBMS_OUTPUT.PUT_LINE ('There is no such employee');
+END;
+/
+
+2 输入任意日期，得到星期
+declare
+ v_date varchar2(50) := & i_date;
+ v_day varchar2(10);
+ v_week number;
+ v_year number;
+ m_birth number;
+ 
+ begin
+   select to_char(to_date(v_date,'yyyy-mm-dd'),'DAY') into v_day from dual;
+   select to_char(to_date(v_date,'yyyy-mm-dd'),'WW') into v_week from dual;
+   select to_char(to_date(v_date,'yyyy-mm-dd'),'YYYY') into v_year from dual;
+   select to_date(v_date,'yyyy-mm-dd') - to_date('1981-06-01','yyyy-mm-dd') into m_birth from dual;
+   DBMS_OUTPUT.PUT_LINE ('The day is '||rtrim(v_day)||', the '||v_week||' week'||' in '||v_year);
+   DBMS_OUTPUT.PUT_LINE ('On that day, Im '||m_birth||' days old');
+END;
+/
+
+3 sequence
+declare
+ v_seq number(10);
+  begin
+  select test_seq.nextval into v_seq from dual;
+  DBMS_OUTPUT.PUT_LINE ('Current number is '||v_seq);
+ end;
+  /
+
+4 loop if then exit
+ declare
+ v_i number :=0;
+ v_num number :=&sv_num;
+ begin
+loop
+dbms_output.put_line ('Enemy is down ...');
+v_i :=v_i+1;
+if v_i > v_num then
+exit;
+end if;
+end loop;
+dbms_output.put_line ('Done');
+END;
+/
+
+5 loop exit when
+ declare
+ v_i number :=0;
+ v_num number :=&sv_num;
+ begin
+loop
+dbms_output.put_line ('Enemy is down ...');
+v_i :=v_i+1;
+exit when v_i >v_num;
+end loop;
+dbms_output.put_line ('Done');
+END;
+/
+
+6 while loop
+while condition loop
+ stat1;
+ stat2;
+ exit when exit_condition;
+ statN;
+ END LOOP;
+ 
+ 7 for loop
+ begin
+  for v_i in 1..30 loop
+    dbms_output.put_line('Enemy is down...');
+  end loop;
+end;
+/  
+
+8 异常
+预定义错误
+异常情况大约有24个。对这种异常情况的处理，无需在程式中定义，由oracle自动将其引发
+EXCEPTION
+   WHEN NO_DATA_FOUND THEN  
+      DBMS_OUTPUT.PUT_LINE('資料庫中沒有編碼為'||v_empno||'的員工');
+   WHEN TOO_MANY_ROWS THEN
+      DBMS_OUTPUT.PUT_LINE('程式執行錯誤!請使用遊標');
+   WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE(SQLCODE||'---'||SQLERRM);
+END; 
+
+非预定义错误
+即其他标准的oracle错误，对。。。的处理，需要在程式中定义，由oracle自动将其引发
+使用exception_init语句关联异常情况和oracle错误码
+exception_init 编译指令  不需要使用raise
+可以把某oracle错误编号和某用户定义错误的名称简历关联。
+建立关联后，就可以应用这个错误，并为它编写处理程序，更详细的描述错误原因
+
+declare
+  e_constraint_violation EXCEPTION;
+  PRAGMA EXCEPTION_INIT(e_constraint_violation,-1400);
+BEGIN
+  ....................  
+EXCEPTION
+ WHEN e_constraint_violation THEN
+   DBMS_OUTPUT.PUT_LINE ('INSERT statement is '||
+   'violating a constraint'); 
+ WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE(SQLCODE||'---'||SQLERRM); 
+END;
+	
+用户自定义异常
+程式执行过程中，出现程式设计人员认为的非正常情况。对。。。的处理，需要用户再程式中定义，然后显示的在程式中将其引发
+EXCEPTION
+   WHEN first_exception THEN  <code to handle first exception >
+   WHEN second_exception THEN  <code to handle second exception >
+   WHEN OTHERS THEN  <code to handle others exception >
+END;
+
+例子
+declare
+ v_student_id student.student_id%type := &sv_student_id;
+ v_total_courses NUMBER;
+ e_invalid_id  EXCEPTION;
+BEGIN
+ IF v_student_id < 0 THEN
+   RAISE e_invalid_id;
+ ELSE
+  SELECT COUNT(*)
+    INTO v_total_courses
+	FROM enrollment
+	WHERE student_id =v_student_id;
+	
+	DBMS_OUTPUT.PUT_LINE ('The student is registered for '||
+	   v_total_courses||' courses');
+  END IF;
+  DBMS_OUTPUT.PUT_LINE ('No exception has been raised');
+  EXCEPTION
+   WHEN e_invalid_id THEN
+     DBMS_OUTPUT.PUT_LINE ('And id cannot be negative');
+END;
+
+内部语句块可以传播异常到外部语句块
+---outer block
+declare
+begin
+--inner block
+declare
+begin
+exception
+  when value_error then
+   raise;         # raise后不接异常
+end;
+exception
+ when value_error then
+   dbms_output.put_line('error in the outer block'); 
+end;   
+
+内部语句块的错误发生在声明部分，异常会传播到外部语句块;
+内部语句块的错误发生在执行部分，内部异常处理部分会处理异常，如果有的话
+
+Raise_application_error  遵循与oracle错误一致的方式返回错误消息，但是需要
+自定义错误号与错误信息的关联
+Raise_application_error(-20000,'An id cannot be negative')
+
+
+   
+SQLCODE和sqlerrm函数
+sqlerrm函数返回指定错误代码的错误信息
+sqlcode:数据库操作的返回码，其中0--成功；-1--失败；100--没有检索到数据
+EXCEPTION
+   WHEN NO_DATA_FOUND THEN  
+      DBMS_OUTPUT.PUT_LINE('資料庫中沒有編碼為'||v_empno||'的員工');
+   WHEN TOO_MANY_ROWS THEN
+      DBMS_OUTPUT.PUT_LINE('程式執行錯誤!請使用遊標');
+   WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE(SQLCODE||'---'||SQLERRM);
+END; 
+
+记录 -- 由单行多列的标量构成的复合结构。可以看做是一种用户自定义数据类型
+基于表的记录  单行
+declare
+  vr_emp scott.emp%ROWTYPE;
+begin
+  select * into vr_emp from scott.emp
+    where ename='SMITH';
+	DBMS_OUTPUT.PUT_line(vr_emp.empno||' '||vr_emp.ename||' '||vr_emp.sal);
+
+EXCEPTION
+  WHEN no_data_found
+    THEN  
+      RAISE_APPLICATION_ERROR(-2001,'dept is not in the db');
+END;
+/	  
+
+基于游标的记录	 多行
+declare
+  cursor c_money IS
+    select sal,comm from scott.emp
+	 where deptno= 30;
+  vr_money c_money%ROWTYPE;
+begin
+  open c_money;
+  LOOP
+    fetch c_money into vr_money;
+    exit when c_money%NOTFOUND;
+    DBMS_OUTPUT.PUT_line(vr_money.sal||'  '||nvl(vr_money.comm,0));
+  END LOOP;
+  CLOSE c_money;
+END;
+/  
+
+用户自定义的记录	
+declare
+  type emp_info IS RECORD
+   (empno scott.emp.empno%TYPE,
+    ename  scott.emp.ename%TYPE,
+	sal    scott.emp.sal%TYPE);
+   rv_emp emp_info;
+begin
+  select empno,ename,sal into rv_emp
+  from scott.emp
+  where empno=7902;
+  DBMS_OUTPUT.PUT_LINE(rv_emp.empno||' '||rv_emp.ename||' '||rv_emp.sal);
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    DBMS_OUTPUT.PUT_LINE('no such employee');
+END;
+/	

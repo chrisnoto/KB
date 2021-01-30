@@ -431,3 +431,51 @@ interactive_timeout给交互模式的客户端使用的，比如mysql client
 
 #########查看binlog详细输出#############
  mysqlbinlog --no-defaults --base64-output=DECODE-ROWS --verbose mysql-bin.000314 > /root/mysqlbin2.log
+ 
+ ############### mysqlbinlog闪回功能
+ binlog日志格式必须是ROW格式：binlog_format = row ;
+一个事务中的DML语句不仅会逆向转换，并且语句顺序也会发生颠倒；
+只支持 insert、update、delete ， 不支持drop 、truncate、alter等DDL语句
+1 查看binlog事件
+MariaDB [(none)]> show binlog events in 'mysql-bin.000001'; 
+ | mysql-bin.000001 |  7889 | Annotate_rows     |         1 |        7937 | update test2 set user='1'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| mysql-bin.000001 |  7937 | Table_map         |         1 |        8119 | table_id: 29 (TEST1.test2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| mysql-bin.000001 |  8119 | Update_rows_v1    |         1 |        9489 | table_id: 29 flags: STMT_END_F                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| mysql-bin.000001 |  9489 | Xid               |         1 |        9520 | COMMIT /* xid=19 */  
+2 使用mysqlbinlog -B实现闪回功能
+[root@ostjoracle-test-adg mysql]# mysqlbinlog -B --start-position=7889 --stop-position=9520 mysql-bin.000001 |mysql
+3 验证结果
+[root@ostjoracle-test-adg mysql]# mysql
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 29
+Server version: 10.3.27-MariaDB-log MariaDB Server
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]> select Host,User from TEST1.test2\G;
+*************************** 1. row ***************************
+Host: localhost
+User: root
+*************************** 2. row ***************************
+Host: ostjoracle-test-adg.novalocal
+User: root
+*************************** 3. row ***************************
+Host: 127.0.0.1
+User: root
+*************************** 4. row ***************************
+Host: ::1
+User: root
+*************************** 5. row ***************************
+Host: localhost
+User:
+*************************** 6. row ***************************
+Host: ostjoracle-test-adg.novalocal
+User:
+*************************** 7. row ***************************
+Host: %
+User: dbadmin
+7 rows in set (0.001 sec)
+
+ERROR: No query specified

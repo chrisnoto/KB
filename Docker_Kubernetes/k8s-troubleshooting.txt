@@ -436,3 +436,6 @@ W0907 17:35:19.222358 7 controller.go:916] Service "default/my-service" does not
 If this line is after the previous GET output, it means there is something wrong with the pod.
 Did the pod was restarted? or not started? (these two things produces the not have any active Endpoint until the pod is working)
 第一步： 应该kubectl get ep
+
+
+############ Job has reached the specified backoff limit #########
