@@ -150,6 +150,62 @@ TNAME                          TABTYPE  CLUSTERID
 ------------------------------ ------- ----------
 STU_INFO                       TABLE
 
+##  权限
+DBA: 擁有全部特權，是系統最高權限，只有DBA才可以創建數據庫結構。
+RESOURCE:擁有Resource權限的用戶只可以創建實體，不可以創建數據庫結構。
+CONNECT:擁有Connect權限的用戶只可以登錄Oracle，不可以創建實體，不可以創建數據庫結構。
+
+對於普通用戶：授予connect, resource權限。
+對於DBA管理用戶：授予connect，resource, dba權限。
+#查看当前登录用户拥有的所有角色和系统权限
+SQL> select * from session_privs;
+
+SQL> select * from session_roles;
+
+ROLE
+------------------------------
+DBA
+SELECT_CATALOG_ROLE
+HS_ADMIN_SELECT_ROLE
+EXECUTE_CATALOG_ROLE
+HS_ADMIN_EXECUTE_ROLE
+DELETE_CATALOG_ROLE
+EXP_FULL_DATABASE
+IMP_FULL_DATABASE
+DATAPUMP_EXP_FULL_DATABASE
+DATAPUMP_IMP_FULL_DATABASE
+GATHER_SYSTEM_STATISTICS
+SCHEDULER_ADMIN
+WM_ADMIN_ROLE
+JAVA_ADMIN
+JAVA_DEPLOY
+XDBADMIN
+XDB_SET_INVOKER
+OLAP_XS_ADMIN
+OLAP_DBA
+
+SQL> select * from role_sys_privs;
+
+# 查看某一用户拥有的角色
+SQL> select * from dba_role_privs where grantee='CHENSEN';
+
+GRANTEE                        GRANTED_ROLE                   ADM DEF
+------------------------------ ------------------------------ --- ---
+CHENSEN                        DBA                            NO  YES
+
+# 查看某一用户拥有的系统权限
+SQL> select * from dba_sys_privs where grantee='CHENSEN';
+
+GRANTEE                        PRIVILEGE                                ADM
+------------------------------ ---------------------------------------- ---
+CHENSEN                        UNLIMITED TABLESPACE                     NO
+
+# 查看某一用户拥有的对象权限
+SQL> select * from dba_tab_privs where grantee='CHENSEN';
+
+no rows selected
+
+
 
 ## 查表空间使用情况
 SELECT a.tablespace_name, round(a.s, 2) AS "CURRENT_TOTAL(MB)"
@@ -410,4 +466,158 @@ select * from index_stats; --索引的设置和存储信息
 -------------------------伪表------------------------
 
 select * from dual; --系统伪列表信息
+
+
+SQL> select dbms_metadata.get_ddl('TABLE','T1','CHENSEN') from dual;
+
+DBMS_METADATA.GET_DDL('TABLE','T1','CHENSEN')
+--------------------------------------------------------------------------------
+
+  CREATE TABLE "CHENSEN"."T1"
+   (    "EMPNO" NUMBER(4,0),
+        "ENAME" VARCHAR2(10),
+        "JOB" VARCHAR2(9),
+        "MGR" NUMBER(4,0),
+        "HIREDATE" DATE,
+        "SAL" NUMBER(7,2),
+        "COMM" NUMBER(7,2),
+        "DEPTNO" NUMBER(3,0)
+   ) SEGMENT CREATION IMMEDIATE
+  PCTFREE 10 PCTUSED 40 INITRANS 1 MAXTRANS 255
+ NOCOMPRESS LOGGING
+  STORAGE(INITIAL 65536 NEXT 1048576 MINEXTENTS 1 MAXEXTENTS 2147483645
+  PCTINCREASE 0 FREELISTS 1 FREELIST GROUPS 1
+  BUFFER_POOL DEFAULT FLASH_CACHE DEFAULT CELL_FLASH_CACHE DEFAULT)
+  TABLESPACE "HOK"
+----------------------------------查看定义 ------------------------------------------
+1、查看数据库表的定义写法：
+
+select dbms_metadata.get_ddl('TABLE','TABLENAME','USERNAME') from dual;
+
+2、查看索引的SQL
+
+select dbms_metadata.get_ddl('INDEX','INDEXNAME','USERNAME') from dual;
+
+3、查看创建主键的SQL
+
+SELECT DBMS_METADATA.GET_DDL('CONSTRAINT','CONSTRAINTNAME','USERNAME') FROM DUAL;
+
+4、查看创建外键的SQL
+
+SELECT DBMS_METADATA.GET_DDL('REF_CONSTRAINT','REF_CONSTRAINTNAME','USERNAME') FROM DUAL;
+
+5、查看创建视图的SQL
+
+SELECT DBMS_METADATA.GET_DDL('VIEW','VIEWNAME','USERNAME') FROM DUAL;
+
+6、查看用户的SQL
+
+SELECT DBMS_METADATA.GET_DDL('USER','USERNAME') FROM DUAL;
+
+7、查看角色的SQL
+
+SELECT DBMS_METADATA.GET_DDL('ROLE','ROLENAME') FROM DUAL;
+
+8、查看表空间的SQL
+
+SELECT DBMS_METADATA.GET_DDL('TABLESPACE','TABLESPACENAME') FROM DUAL;
+
+9、获取物化视图SQL
+
+select dbms_metadata.get_ddl('MATERIALIZED VIEW','MVNAME') FROM DUAL;
+
+10、获取远程连接定义SQL
+
+SELECT dbms_metadata.get_ddl('DB_LINK','DBLINKNAME','USERNAME') stmt FROM dual
+
+11、获取用户下的触发器SQL
+
+select DBMS_METADATA.GET_DDL('TRIGGER','TRIGGERNAME','USERNAME) FROM DUAL;
+
+12、获取用户下的序列
+
+select DBMS_METADATA.GET_DDL('SEQUENCE','SEQUENCENAME') from DUAL;
+
+13、获取用户下的函数
+
+select DBMS_METADATA.GET_DDL('FUNCTION','FUNCTIONNAME','USERNAME') from DUAL
+
+14、获取包的定义
+
+select DBMS_METADATA.GET_DDL('PACKAGE','PACKAGENAME','USERNAME') from dual
+
+15、获取存储过程
+
+select DBMS_METADATA.GET_DDL('PROCEDURE','PROCEDURENAME','USERNAME') from dual
+
+16、获取包体定义
+
+select DBMS_METADATA.GET_DDL('PACKAGE BODY','PACKAGEBODYNAME','USERNAME') from dual
+
+17、获取远程数据库对象的定义
+
+SELECT DBMS_LOB.SUBSTR@dblinkname(DBMS_METADATA.GET_DDL@dblinkname('TABLE', 'TABLENAME', 'USERNAME')) FROM DUAL@dblinkname
+
+18、获取多个对象的定义
+
+SELECT DBMS_METADATA.GET_DDL(O.OBJECT_TYPE, O.object_name,O.OWNER)
+FROM DBA_OBJECTS O
+where O.OBJECT_TYPE IN ('TABLE','INDEX','PROCEDURE','FUNCTION') and ONWER = 'ONWERNAME';
+
+
+# 建立角色
+CREATE ROLE role_name [NOT IDENTIFIED | IDENTIFIED {BY password | EXTERNALLY | GLOBALLY | USING package}]
+# 修改角色
+ALTER ROLE role {NOT IDENTIFIED | IDENTIFIED {BY password | USING package | EXTERNALLY | GLOBALLY}}
+# 賦予角色許可權
+GRANT 許可權|角色 TO 角色名
+# 賦予使用者角色
+GRANT role [,role] …… TO {user | role | public} | {, {user | role | public}}……[WITH ADMIN OPTION]
+# 預設角色
+Oracle允許使用ALTER USER指令修改預設角色
+alter user clerk default role all;
+
+
+时间
+CURRENT_TIMESTAMP           returns the current date and time in the session time zone, in a value of datatype TIMESTAMP WITH TIME ZONE
+LOCALTIMESTAMP              returns the current date and time in the session time zone in a value of datatype TIMESTAMP.
+SYSTIMESTAMP                returns the system date, including fractional seconds and time zone.
+
+CURRENT_DATE                returns the current date in the session time zone, in a value in the Gregorian calendar of datatype DATE.
+SYSDATE                     returns the current date and time set for the operating system on which the database resides. The datatype of the returned value is DATE
+
+SQL> alter session set time_zone='+14:00';
+
+Session altered.
+#############################################################################################################################
+SQL> select current_timestamp from dual;         #取决于session timezone
+CURRENT_TIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 09.45.01.866459 PM +14:00
+
+SQL> select localtimestamp from dual;           #取决于session timezone
+LOCALTIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 09.45.27.329293 PM
+
+SQL> select systimestamp from dual;
+SYSTIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 03.43.08.988187 PM +08:00
+#############################################################################################################################
+SQL> select to_char(current_date,'DD-MON-RR HH24:MI:SS') from dual;     #取决于session timezone
+TO_CHAR(CURRENT_DATE,'DD-MO
+---------------------------
+27-FEB-21 21:39:38
+
+SQL> select to_char(sysdate,'DD-MON-RR HH24:MI:SS') from dual;
+TO_CHAR(SYSDATE,'DD-MON-RRH
+---------------------------
+27-FEB-21 15:39:29
+#############################################################################################################################
+
+
+
+
+
 

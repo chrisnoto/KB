@@ -405,4 +405,254 @@ Oracle以区间为单位将空间分配给对象段，而段内则是以Block为
   
 对于任何DML操作来说，必须同时处理数据块和撤销块，并且还会生成重做数据。
 ACID的A,C,I要求生成撤销数据，D则要求生成重做数据。  
-  
+
+############# 表分区  ##########
+最简单的range分区
+CREATE TABLE TEST_RANGE_PARTITION
+      (    "EMPNO" NUMBER(4,0),
+           "ENAME" VARCHAR2(10),
+           "JOB" VARCHAR2(9),
+           "MGR" NUMBER(4,0),
+           "HIREDATE" DATE,
+           "SAL" NUMBER(7,2),
+           "COMM" NUMBER(7,2),
+           "DEPTNO" NUMBER(2,0)
+      )
+     PARTITION BY RANGE ("SAL")
+      (PARTITION "TEST_RANGE_SAL_01" VALUES LESS THAN (1000),
+       PARTITION "TEST_RANGE_SAL_02" VALUES LESS THAN (2000),
+       PARTITION "TEST_RANGE_SAL_03" VALUES LESS THAN (3000),
+       PARTITION "TEST_RANGE_SAL_MAX" VALUES LESS THAN (MAXVALUE)  
+      );
+SQL> insert into TEST_RANGE_PARTITION select * from emp;
+SQL> select a.TABLE_NAME,PARTITIONING_TYPE,PARTITION_NAME,PARTITION_POSITION,HIGH_VALUE,NUM_ROWS from user_part_tables a,user_tab_partitions b where a.TABLE_NAME=b.TABLE_NAME and a.table_                                      name='TEST_RANGE_PARTITION';
+
+TABLE_NAME                     PARTITION PARTITION_NAME                 PARTITION_POSITION HIGH_VALUE                                                                         NUM_ROWS
+------------------------------ --------- ------------------------------ ------------------ -------------------------------------------------------------------------------- ----------
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_01                               1 1000
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_02                               2 2000
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_03                               3 3000
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_MAX                              4 MAXVALUE
+
+SQL> analyze table TEST_RANGE_PARTITION compute statistics;
+
+Table analyzed.
+
+SQL> select a.TABLE_NAME,PARTITIONING_TYPE,PARTITION_NAME,PARTITION_POSITION,HIGH_VALUE,NUM_ROWS from user_part_tables a,user_tab_partitions b where a.TABLE_NAME=b.TABLE_NAME and a.table_                                      name='TEST_RANGE_PARTITION';
+
+TABLE_NAME                     PARTITION PARTITION_NAME                 PARTITION_POSITION HIGH_VALUE                                                                         NUM_ROWS
+------------------------------ --------- ------------------------------ ------------------ -------------------------------------------------------------------------------- ----------
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_01                               1 1000                                                                                      2
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_02                               2 2000                                                                                      6
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_03                               3 3000                                                                                      3
+TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_MAX                              4 MAXVALUE                                                                                  3
+
+
+# 未使用的列
+SQL> alter table CAILAMEI set unused column CREATED;
+
+Table altered.
+
+Elapsed: 00:00:00.13
+SQL> select object_name,object_id from dba_objects where
+  2  object_name='CAILAMEI';
+
+OBJECT_NAME                                                                                                                       OBJECT_ID
+-------------------------------------------------------------------------------------------------------------------------------- ----------
+CAILAMEI                                                                                                                              87440
+
+Elapsed: 00:00:00.04
+SQL> select obj#,col#,name from sys.col$ where obj#='87440';
+
+      OBJ#       COL# NAME
+---------- ---------- ------------------------------
+     87440          1 OWNER
+     87440          2 OBJECT_NAME
+     87440          3 SUBOBJECT_NAME
+     87440          4 OBJECT_ID
+     87440          5 DATA_OBJECT_ID
+     87440          6 OBJECT_TYPE
+     87440          0 SYS_C00007_21021810:44:24$
+     87440          7 LAST_DDL_TIME
+     87440          8 TIMESTAMP
+     87440          9 STATUS
+     87440         10 GENERATED
+     87440         11 NAMESPACE
+     87440          0 SYS_C00013_21021809:53:42$
+
+13 rows selected.
+
+Elapsed: 00:00:00.02
+SQL> alter table CAILAMEI drop unused columns checkpoint 1000;
+
+Table altered.
+
+Elapsed: 00:00:03.29
+SQL> select obj#,col#,name from sys.col$ where obj#='87440';
+
+      OBJ#       COL# NAME
+---------- ---------- ------------------------------
+     87440          1 OWNER
+     87440          2 OBJECT_NAME
+     87440          3 SUBOBJECT_NAME
+     87440          4 OBJECT_ID
+     87440          5 DATA_OBJECT_ID
+     87440          6 OBJECT_TYPE
+     87440          7 LAST_DDL_TIME
+     87440          8 TIMESTAMP
+     87440          9 STATUS
+     87440         10 GENERATED
+     87440         11 NAMESPACE
+
+# 全局临时表
+临时表的定义对所有会话都是可见的，但表中的资料支队当前的会话或事务可见。
+默认基于事务
+基于会话的临时表
+create global temporary table emp_tmp1 on commit preserve rows as select * from scott.emp;	 
+基于事务的临时表
+create global temporary table emp_tmp2 on commit delete rows as select * from scott.emp;	
+
+#  子查询
+什麼是非關聯子查詢
+而子查詢也可以分成關聯子查詢和非關聯子查詢,  上面那條sql 語句就是非關聯子查詢.
+
+所謂非關聯子查詢就是指子查詢可以脫離主查詢獨立執行.
+
+再舉個例子:
+
+我想找出每個部門中最高工資的人.
+
+sql語句可以寫成如下:
+
+select a.deptno,a.* from emp a
+where (a.deptno, a.sal) in (select deptno, max(sal) from emp group by deptno)
+
+其中的 子查詢
+select deptno, max(sal) from emp group by deptno
+是可以獨立執行的.
+
+而且對於整個查詢來講, 是執行一次子查詢先, 再執行主查詢.
+
+3. 什麼是關聯子查詢
+所謂關聯子查詢就是指子查詢與主查詢之間有條件關聯,  不能獨自執行.
+
+看回上面的需求, 我們換一種寫法:
+
+select a.deptno, a.* from emp a
+where a.sal = (select max(b.sal) from emp b where b.deptno =  a.deptno)
+上面的例子就是用到關聯子查詢了,  其中的子查詢因為條件關聯了主查詢的表. 所以子查詢不能單獨執行.
+
+對於關聯子查詢來講,  是自外到內的, 先執行外查詢,.
+
+例如上面的例子,   對於主表a來間,  對於每1個deptno,  都要執行一次子查詢.
+
+關聯子查詢還有1個限制, 就是子查詢不能返回多於1行的資料.
+
+-- 集合運算注意事項
+/*
+   1.列的數量要一致
+   2.列的型別要保持一致
+   3.列的順序要一致
+
+   如果不足,可以用null補齊
+*/
+
+在oracle中：
+
+1）where/group by/having子句中只能直接使用栏位或者常量，而不能使用栏位的别名，除非这个别名来自子查询之中，如：select .... from (select col1 ccc from table) where ccc > 1 
+2）而order by 则可以直接使用别名，如select col1 ccc from table order by ccc 
+
+这和sql 的执行顺序是有关的，where中的部分先执行 －> 如果有group by，接着执行group by －> select中的函数计算、别名指定再运行－> 最后order by 
+因此，字段、表达式的别名在where子句和group by子句都是不能使用的，而在order by中不仅可以使用别名，甚至可以直接使用栏位的下标来进行排序，如：order by 1 desc,2 asc
+
+# 同义词
+
+object_name: 要创建同义词的对象，它可以是以下几种类型：
+
+TABLE
+VIEW
+SEQUENCE
+STORED PROCEDURE
+FUNCTION
+PACKAGE
+MATERIALIZED VIEW
+JAVA CLASS SCHEMA OBJECT
+USER-DEFINED OBJECT
+SYNONYM
+
+# where 1=1
+用于防止SQL语句出错，并且简化语句(不用做那么多判断)
+# where 1<>1
+用于使用另一张表的定义建表
+
+###   read only模式
+In read-only mode, the following operations are permitted on the table:
+
+ Select
+ Management indexes, constraints, supplemental log
+ Dropping and deallocation of unused columns
+ Renaming and moving of the table
+ Altering the table for physical property changes, row movement, and shrinking the segment
+ Drop table
+The following operations are disabled on a table in read-only mode:
+
+ DML on table or any table partitions
+ Truncation of table
+ Select for update
+ Adding, removing, renaming, dropping, or setting a column to unused
+ Dropping a partition or sub partition belonging to the table
+ Online redefinition
+ Flashback on the table
+ 
+ 
+###   约束 
+ A CONSTRAINT can be one of the following:
+a column-level constraint
+Column-level constraints refer to a single column in the table and do not specify a column name (except check constraints). They refer to the column that they follow.
+
+a table-level constraint
+Table-level constraints refer to one or more columns in the table. Table-level constraints specify the names of the columns to which they apply. Table-level CHECK constraints can refer to 0 or more columns in the table.
+
+Column constraints include:
+NOT NULL
+Specifies that this column cannot hold NULL values (constraints of this type are not nameable).
+
+PRIMARY KEY
+Specifies the column that uniquely identifies a row in the table. The identified columns must be defined as NOT NULL.
+
+Note: If you attempt to add a primary key using ALTER TABLE and any of the columns included in the primary key contain null values, an error will be generated and the primary key will not be added. See ALTER TABLE statement for more information.
+UNIQUE
+Specifies that values in the column must be unique.
+
+FOREIGN KEY
+Specifies that the values in the column must correspond to values in a referenced primary key or unique key column or that they are NULL.
+
+CHECK
+Specifies rules for values in the column.
+
+Table constraints include:
+PRIMARY KEY
+Specifies the column or columns that uniquely identify a row in the table. NULL values are not allowed.
+
+UNIQUE
+Specifies that values in the columns must be unique.
+
+FOREIGN KEY
+Specifies that the values in the columns must correspond to values in referenced primary key or unique columns or that they are NULL.
+
+Note: If the foreign key consists of multiple columns, and any column is NULL, the whole key is considered NULL. The insert is permitted no matter what is on the non-null columns.
+CHECK
+Specifies a wide range of rules for values in the table.
+
+Column constraints and table constraints have the same function; the difference is in where you specify them. Table constraints allow you to specify more than one column in a PRIMARY KEY,
+ UNIQUE, CHECK, or FOREIGN KEY constraint definition. Column-level constraints (except for check constraints) refer to only one column.
+ 
+
+######## Restrictions on the FOR UPDATE Clause 
+This clause is subject to the following restrictions:
+
+You cannot specify this clause with the following other constructs: the DISTINCT operator, CURSOR expression, set operators, group_by_clause, or aggregate functions.
+The tables locked by this clause must all be located on the same database and on the same database as any LONG columns and sequences referenced in the same statement. 
+
+######  self join
+A self join uses other joins such as inner join and left join.

@@ -565,3 +565,34 @@ sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 beats_stats.beat.type   
     }
 }
 	  
+# 去重查询beat.hostname
+分别查询
+filebeat-*-2021.02.*
+winlogbeat-*-2021.02.*
+
+[root@stjes1 ~]# curl -X POST "10.67.51.147:9200/filebeat-6.8.1-2021.03.*/_search" -H 'Content-Type: application/json' -d'
+ {"size":"500",
+ "query":{
+   "wildcard":{
+     "beat.version":"6.*"
+     }
+   },
+   "collapse":{
+     "field":"beat.hostname"
+   }
+ }
+ ' | jq -r '.hits.hits[]._source.beat.hostname'
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  8497  100  8372  100   125   4315     64  0:00:01  0:00:01 --:--:--  4315
+vSTJA2A01
+node-3.domain.tld
+node-1.domain.tld
+node-2.domain.tld
+stjes2
+stjes3
+node-10.domain.tld
+stjes1
+node-41.domain.tld
+k8s-node1
+[root@stjes1 ~]#

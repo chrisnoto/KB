@@ -534,3 +534,16 @@ SELECT TOP 1000 [EVENT_ID]
       ,[CHANGE_TAG_ID]
       ,[PARTITION_INDEX]
   FROM [vCenter_Server].[dbo].[VPXV_EVENT_ALL] where [EVENT_TYPE] LIKE '%VmConvertedToTemplate%' 
+  
+  
+--------------------------------------- troubeleshooting ---------------------------------------------------
+# Physical disk health retrieval issues: red  
+[root@A21VSAN5:~] /etc/init.d/vsanmgmtd restart
+watchdog-vsanperfsvc: Terminating watchdog process with PID 68285
+vsanperfsvc started
+查看/var/log/vsanmgmtd.log
+最后解决的办法是迁走了一台虚机，主机内存降了3%
+
+
+# 虚拟机开机 operating system not found 错误，但是虚拟硬盘没有问题
+解决办法：重新注册虚机

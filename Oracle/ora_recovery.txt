@@ -464,4 +464,79 @@ AUXILIARY DATAFILE COPY                  0                         0            
 
 
 
+##################  归档日志填满硬盘 ###############
+解决方案1    先物理删除一些归档日志，然后RMAN里执行 delete force archivelog all completed before 'sysdate-1';
+解决方案2    先物理删除一些归档日志，然后RMAN里更改retention policy
+RMAN> configure archivelog deletion policy clear;
 
+using target database control file instead of recovery catalog
+old RMAN configuration parameters:
+CONFIGURE ARCHIVELOG DELETION POLICY TO BACKED UP 2 TIMES TO DISK;
+RMAN configuration parameters are successfully reset to default value
+
+RMAN> delete archivelog all completed before 'sysdate-1';
+最后再物理删除还在磁盘里的归档日志
+
+############### RMAN删除归档日志不释放  #############
+RMAN清除方式會自動清除磁碟上的歸檔日誌檔案，同時會釋放控制檔案中對應的歸檔日誌的歸檔資訊，但最近在使用中就遇到了一個問題，
+下面這篇文章主要給大家介紹了關於解決Oracle RMAN刪除歸檔日誌不釋放問題的方法，需要的朋友可以參考下。
+
+前言
+
+當Oracle 歸檔日誌滿了後，將無法正常登入oracle，需要刪除一部分歸檔日誌才能正常登入ORACLE。
+
+最近同事在工作中遇到一個問題，他那邊的一套Oracle 11g資料庫使用RMAN沒辦法刪除舊的歸檔，導致磁碟使用率很高。
+解決過程
+
+於是在網上找到一篇文章，大體意思是MAN刪除歸檔日誌的依據是controlfile中記錄的歸檔日誌，而不是你磁碟上實際存在的歸檔日誌，如果你的歸檔日誌已經不在controlfile中就無法被RMAN識別到，
+也就無法被刪除。而致於歸檔資訊何時在控制檔案中被覆蓋，這由一個引數control_file_record_keep_time來控制。
+檢視資料庫中的引數是預設的7天
+
+SYS@db> show parameter CONTROL_FILE_RECORD_KEEP_TIME
+NAME        TYPE       VALUE
+------------------------------------ -------------------------------- ------------------------------
+control_file_record_keep_time  integer       7
+難道是在控制檔案中歸檔日誌的記錄條數只能保留7天的麼？於是到MOS去找相關文件找到一篇Why Are Controlfile Entries For Archived Logs Not Overwritten After CONTROL_FILE_RECORD_KEEP_TIME? 
+(文件 ID 1056085.1)，文件介紹CONTROL_FILE_RECORD_KEEP_TIME引數並不是強制在控制檔案中保留多少天的歸檔日誌條目，而是由V$CONTROLFILE_RECORD_SECTION檢視中的ARCHIVED LOG條目去控制的，
+當RECORDS_TOTAL=RECORDS_USED時舊的歸檔日誌就會被覆蓋掉。
+於是查資料庫中的V$CONTROLFILE_RECORD_SECTION檢視，看到ARCHIVED LOG行的records_total=224意味著控制檔案中只能保留224條歸檔日誌檔案資訊。
+
+SYS@dbs> select * from v$controlfile_record_section where type='ARCHIVED LOG';
+TYPE      RECORD_SIZE RECORDS_TOTAL RECORDS_USED FIRST_INDEX LAST_INDEX LAST_RECID
+---------------------------- ----------- ------------- ------------ ----------- ---------- ----------
+ARCHIVED LOG      584   224   224   88  87  1235
+查詢v$archived_log檢視，總數為224條
+
+SYS@dbs> select count(*) from v$archived_log;
+COUNT(*)
+----------
+224
+這時應該可以推斷出由於控制檔案中只能保留224條歸檔日誌資料，所以以前的歸檔資訊已經被控制檔案刷出，RMAN無法識別到這些歸檔檔案，所以就無法刪除這些歸檔日誌。
+那麼現在如果使用RMAN刪除這些舊的歸檔日誌呢？我想到使用catalog start with 命令重新註冊這些檔案到控制檔案中
+
+RMAN> catalog start with '/opt/oracle/archive/db';
+......
+File Name: /opt/oracle/archive/db/1_1005_91233774.dbf
+File Name: /opt/oracle/archive/db/1_1006_91233774.dbf
+File Name: /opt/oracle/archive/db/1_1007_91233774.dbf
+Do you really want to catalog the above files (enter YES or NO)? yes
+cataloging files...
+cataloging done
+......
+RMAN> list archivelog all;
+.....
+1236 1 301 A 22-OCT-16
+Name: /opt/oracle/archive/db/1_301_91233774.dbf
+1237 1 302 A 22-OCT-16
+Name: /opt/oracle/archive/db/1_302_91233774.dbf
+......
+舊的歸檔日誌檔案已經註冊到控制檔案中了，再使用RMAN進行刪除就可以了
+
+delete archivelog until logseq 1007;
+再次查詢v$controlfile_record_section檢視，records_total也被“撐”大了
+
+SYS@db> select * from v$controlfile_record_section where type='ARCHIVED LOG';
+TYPE      RECORD_SIZE RECORDS_TOTAL RECORDS_USED FIRST_INDEX LAST_INDEX LAST_RECID
+---------------------------- ----------- ------------- ------------ ----------- ---------- ----------
+ARCHIVED LOG      584   896   742  807  652  1800
+至此問題結束。

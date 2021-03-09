@@ -16,3 +16,7 @@ docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
 
 ###########redis aof文件重写############
 Redis将生成一个新的AOF文件， 这个文件包含重建当前数据集所需的最少命令
+
+############  Redis 集群 ##################
+使用redis主從 + 哨兵（sentinel）+ 漂移VIP的方案搭建了一個redis高可用系統，但這個系統保證的是單個redis例項的高可用，所以適合業務比較小的應用。
+如果業務比較大，併發量比較高，建議搭建redis叢集，比如官方redis cluster，還有開源的codings叢集

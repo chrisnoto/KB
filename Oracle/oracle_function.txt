@@ -122,12 +122,22 @@ END
 又等价于
 NUL(exp1,NVL(exp2,NVL(exp3,...)))
 
+listagg函数  行列转换
+SQL> select deptno,listagg(ename,',') within group(order by ename) as employee_list from scott.emp group by deptno;
+
+    DEPTNO EMPLOYEE_LIST
+---------- --------------------------------------------------
+        10 CLARK,KING,MILLER
+        20 ADAMS,FORD,JONES,SCOTT,SMITH
+        30 ALLEN,BLAKE,JAMES,MARTIN,TURNER,WARD
 
 
 
-
-
-
+# ANY /ALL
+> any (1500,2000,2500)        > 1500    大于最小
+< any (1500,2000,2500)        < 2500    小于最大
+> all (1500,2000,2500)        > 2500    大于最大
+< all (1500,2000,2500)        < 1500    小于最小
 
 =======================================================================================================================================================================
 
@@ -158,6 +168,41 @@ SQL> with T as
       7876 ADAMS            1100
       7900 JAMES             950
 
+
+取回前 n 笔资料
+-- 在 Oracle 12c 以前, 利用 subquery 与 rownum 实现
+select b.*
+  from (select a.*
+          from emp a
+         order by a.name
+       ) b
+ where rownum <= n;
+ 
+-- 在 Oracle 12c 以后, 利用 fetch 即可
+select a.*
+  from emp a
+ order by a.name
+ fetch first n rows only;  
+
+ 取回第 n ~ m 笔资料
+-- 在 Oracle 12c 以前, 利用 subquery 与 rownum 实现
+select *
+  from (select rownum bRn
+             , b.*
+          from (select rownum aRn
+                     , a.*
+                  from emp a
+                 order by a.name
+               ) b
+       )
+ where bRn between n and m;
+ 
+-- 在 Oracle 12c 以后, 利用 fetch 与 offset 即可
+select a.*
+  from emp a
+ order by a.name
+offset (n-1) rows  -- 略過 n-1 笔, 也就是從第 n 笔開始
+ fetch next (m - n + 1) rows only;  -- 取几笔資料, n ~ m 共有 (m - n + 1) 笔
 	  
 
 #CASE语句

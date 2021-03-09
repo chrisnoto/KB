@@ -54,6 +54,11 @@ osd.4: filestore_max_sync_interval = '15' filestore_min_sync_interval = '10'
 root@node-13:~# ceph daemon osd.41 config show |grep osd_journal_size
     "osd_journal_size": "10240",
 
+# 更改ceph对象的最大size	
+root@node-13:~# ceph daemon osd.41 config show | grep max_object_size
+    "osd_max_object_size": "107374182400",
+root@node-13:~# ceph tell osd.* injectargs --osd_max_object_size=118111600640
+	
 ###SSD 分区对齐
 root@node-13:~# ceph-disk list |grep 'ceph journal'
  /dev/sdb3 ceph journal, for /dev/sde3
@@ -169,6 +174,8 @@ ceph pg dump
 ceph mon dump --format json-pretty
 rados lspools
 rados -p compute ls
+rados put monitor.sh /root/monitor.sh -p backups          # 上传文件到pool
+rados get monitor.sh /tmp/1.sh -p backups                 # 下载文件到pool
 rbd ls compute
 rbd info compute/318b7f59-30d7-4b00-9fbd-fb6b02b62fa7_disk
  glance image-list

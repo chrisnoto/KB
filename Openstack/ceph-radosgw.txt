@@ -1,4 +1,4 @@
-目前ceph中的配置缺少支持 subdomain s3 calls
+ 目前ceph中的配置缺少支持 subdomain s3 calls
 ######s3#######
 #创建s3用户
 radosgw-admin user create --uid=tjadmin --display-name="tjadmin" --email=tjadmin@foxconn.com
@@ -34,6 +34,17 @@ download: 's3://snaphost/kibana-6.4.0-x86_64.rpm' -> 'kibana-6.4.0-x86_64.rpm'  
  190239715 of 190239715   100% in    4s    40.82 MB/s  done
  
 root@node-1:/var/log/radosgw# rados -p .rgw.buckets ls
+
+root@node-1:/tmp# radosgw-admin bucket list
+[
+    "files",
+    "book",
+    "test",
+    "backups",
+    "docker-images",
+    "packages"
+]
+
 #########swift api###########
 [root@cobbler ~]# cat upload.sh
 #!/bin/bash
