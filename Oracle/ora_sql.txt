@@ -578,46 +578,129 @@ Oracle允許使用ALTER USER指令修改預設角色
 alter user clerk default role all;
 
 
-时间
-CURRENT_TIMESTAMP           returns the current date and time in the session time zone, in a value of datatype TIMESTAMP WITH TIME ZONE
-LOCALTIMESTAMP              returns the current date and time in the session time zone in a value of datatype TIMESTAMP.
-SYSTIMESTAMP                returns the system date, including fractional seconds and time zone.
+##################################################内连接、外连接、子查詢################################
+# 内连接
+笛卡爾積 和內连接 外连接
+實際上是兩張表的乘積,查詢結果沒有實際意義
+select * from emp,dept;
 
-CURRENT_DATE                returns the current date in the session time zone, in a value in the Gregorian calendar of datatype DATE.
-SYSDATE                     returns the current date and time set for the operating system on which the database resides. The datatype of the returned value is DATE
+內连接-等值內连接(隱式)
 
-SQL> alter session set time_zone='+14:00';
+select * from emp,dept where emp.deptno = dept.deptno;
 
-Session altered.
-#############################################################################################################################
-SQL> select current_timestamp from dual;         #取决于session timezone
-CURRENT_TIMESTAMP
----------------------------------------------------------------------------
-27-FEB-21 09.45.01.866459 PM +14:00
+內连接-不等值內连接
+select * from emp,dept where emp.deptno <> dept.deptno;
 
-SQL> select localtimestamp from dual;           #取决于session timezone
-LOCALTIMESTAMP
----------------------------------------------------------------------------
-27-FEB-21 09.45.27.329293 PM
+內连接-顯式內连接 
+select * from emp inner join dept on emp.deptno = dept.deptno;
 
-SQL> select systimestamp from dual;
-SYSTIMESTAMP
----------------------------------------------------------------------------
-27-FEB-21 03.43.08.988187 PM +08:00
-#############################################################################################################################
-SQL> select to_char(current_date,'DD-MON-RR HH24:MI:SS') from dual;     #取决于session timezone
-TO_CHAR(CURRENT_DATE,'DD-MO
----------------------------
-27-FEB-21 21:39:38
+多表查詢時,習慣性的去取別名，資料庫在後臺進行多表操作的時候也會自動起別名進行查詢。
+select * from emp e,dept d where e.deptno = d.deptno;
 
-SQL> select to_char(sysdate,'DD-MON-RR HH24:MI:SS') from dual;
-TO_CHAR(SYSDATE,'DD-MON-RRH
----------------------------
-27-FEB-21 15:39:29
-#############################################################################################################################
+自连接：自己连接自己
+select * from emp e1,emp m1 where e1.mgr = m1.empno;
+# 外连接
+左外连接: 查詢左表中所有的記錄,如果右表沒有對應的記錄,則顯示null
+left outer join .. on
+select * from emp e left outer join dept d on e.deptno = d.deptno;
 
+右外连接: 查詢右表中所有的記錄,如果左表沒有對應的記錄,則顯示null
+right outer join .. on
+select * from emp e right join dept d on e.deptno = d.deptno;
 
+Oracle外连接特有寫法: (+) : 沒有對應的記錄, + null 值
+左外连接
+select * from emp e, dept d where e.deptno = d.deptno(+);
 
+右外连接
+select * from emp e,dept d where e.deptno(+) = d.deptno;
 
+–擴充套件: oracle特有, 全外连接 – full join
+select * from emp e full join dept d on e.deptno = d.deptno;
 
+下面三种写法都可以
+SQL> select * from emp e
+  2  join dept d
+  3  on e.deptno=d.deptno
+  4  where d.deptno=20;
+SQL> select * from emp e
+  2  join dept d
+  3  on e.deptno=d.deptno
+  4  and d.deptno=20;
+SQL> select * from emp e
+  2  join dept d
+  3  on d.deptno=20
+  4  where e.deptno=d.deptno;
+下面写法错误
+SQL> select * from emp e
+  2  join dept d
+  3  where e.deptno=d.deptno
+  4  and d.deptno=90;
 
+#### Merge into语法
+MERGE INTO target_table 
+USING source_table 
+ON search_condition
+    WHEN MATCHED THEN
+        UPDATE SET col1 = value1, col2 = value2,...
+        WHERE <update_condition>
+        [DELETE WHERE <delete_condition>]
+    WHEN NOT MATCHED THEN
+        INSERT (col1,col2,...)
+        values(value1,value2,...)
+        WHERE <insert_condition>;
+
+#### insert all语法
+Unconditional 
+INSERT ALL
+    INTO table_name1(col1,col2,col3) VALUES(val1,val2, val3)
+    INTO table_name1(col1,col2,col3) VALUES(val4,val5, val6)
+    INTO table_name1(col1,col2,col3) VALUES(val7,val8, val9)
+Subquery;
+In this statement, each value expression val1, val2, or val3 must refer to a column returned by the select list of the subquery.
+If you want to use literal values instead of the values returned by the subquery, you use the following subquery:
+SQL> insert all
+    into bonus_2v(sal,comm)
+    values (8000,4000)
+    into bonus_2v(sal,comm)
+    values (6000,2000)
+    into bonus_2v(sal,comm)
+    values (7000,3000)
+    select 1 from dual;
+Insert multiple rows into multiple tables
+INSERT ALL
+    INTO table_name1(col1,col2,col3) VALUES(val1,val2, val3)
+    INTO table_name2(col1,col2,col3) VALUES(val4,val5, val6)
+    INTO table_name3(col1,col2,col3) VALUES(val7,val8, val9)
+Subquery;
+
+Conditional 
+INSERT [ ALL | FIRST ]
+    WHEN condition1 THEN
+        INTO table_1 (column_list ) VALUES (value_list)
+    WHEN condition2 THEN 
+        INTO table_2(column_list ) VALUES (value_list)
+    ELSE
+        INTO table_3(column_list ) VALUES (value_list)
+Subquery
+
+Oracle INSERT ALL restrictions
+The Oracle multitable insert statement is subject to the following main restrictions:
+
+It can be used to insert data into tables only, not views or materialized view.
+It cannot be used to insert data into remote tables.
+The number of columns in all the INSERT INTO clauses must not exceed 999.
+A table collection expression cannot be used in a multitable insert statement.
+The subquery of the multitable insert statement cannot use a sequence.
+
+############ 测试 char和varchar2 空白填充 ###########		
+declare
+fname char(10 char);
+lname varchar2(10 char);
+begin
+fname :='1234 ';
+lname :='12345 ';
+dbms_output.put_line('#' || fname || '#');
+dbms_output.put_line('#' || lname || '#');
+end;
+/		

@@ -81,11 +81,42 @@ extract(YEAR from timestamp '2001-2-16 2:38:40 ' ) 年
 
 【语法】NVL (expr1, expr2)
 【功能】若expr1为NULL，返回expr2；expr1不为NULL，返回expr1。
-注意两者的类型要一致
+注意两者的类型需要一致  ***这是错的***
+官方解释：
+The arguments expr1 and expr2 can have any datatype. If their datatypes are different, then Oracle Database implicitly converts one to the other. If they are cannot be converted implicitly,
+ the database returns an error. The implicit conversion is implemented as follows:
+If expr1 is character data, then Oracle Database converts expr2 to the datatype of expr1 before comparing them and returns VARCHAR2 in the character set of expr1.
+If expr1 is numeric, then Oracle determines which argument has the highest numeric precedence, implicitly converts the other argument to that datatype, and returns that datatype.
+
 select nvl('有值','无效未定义'),nvl(null,'无效未定义') from dual;
 nvl()函数比较常用的是这样的nvl(E1,0)，意思是E1参数查询到为null的情况，就返回0，不为null就返回E1，常用于非空校验。
 例子
 SELECT sal*13+nvl(comm, 0)*13 "年薪" , ename, comm FROM emp;      
+
+oracle隐式转换     字符串与数值对比时，字符串转换成数值
+SQL> select nvl(1,'64') from dual;
+
+NVL(1,'64')
+-----------
+          1
+
+SQL> select nvl('64',1) from dual;
+
+NV
+--
+64
+SQL> select nvl(1,'A') from dual;
+select nvl(1,'A') from dual
+             *
+ERROR at line 1:
+ORA-01722: invalid number
+SQL> select nvl('A',1) from dual;
+
+N
+-
+A
+
+
 
 decode(条件,值1,翻译值1,值2,翻译值2,...值n,翻译值n,缺省值)
 【功能】根据条件返回相应值
@@ -387,6 +418,24 @@ RESEARCH            10875
 SALES                9400
                     29025
 
+# rollup和cube區別：
+
+如果是ROLLUP(A,B, C)的話，GROUP BY順序
+(A、B、C)
+(A、B)
+(A)
+最後對全表進行GROUPBY操作。
+
+如果是GROUP BY CUBE(A, B, C)，GROUP BY順序
+(A、B、C)
+(A、B)
+(A、C)
+(A)，
+(B、C)
+(B)
+(C)，
+最後對全表進行GROUPBY操作					
+					
 # MODEL
 SQL> select * from scott.emp model
   2  dimension by (empno) measures (ename,job,mgr,hiredate,sal,comm,0 as income) rules(income[any]=sal[cv()]+comm[cv()]);
@@ -465,5 +514,105 @@ SELECT ROWNUM FROM DUAL  CONNECT BY ROWNUM  <= 10;
          8
          9
         10
+#  dual显示多行多列
+select decode(rownum, 1, 111, 2, 3, 3, 56) as col1,
+       decode(rownum, 1, 322, 2, 14, 3, 676) as col2
+       from dual
+       connect by level <= 3;
+      COL1       COL2
+---------- ----------
+       111        322
+         3         14
+        56        676
+	   
+	   
+#  TO_YMINTERVAL函数
+SQL> select hiredate,hiredate+ to_yminterval('01-01') from emp;
 
+HIREDATE  HIREDATE+
+--------- ---------
+17-DEC-80 17-JAN-82
+20-FEB-81 20-MAR-82
+22-FEB-81 22-MAR-82
 	  
+# ANSI LITERAL
+1 DATE Literals
+SQL> select date '2019-04-04' from dual;
+
+DATE'2019
+---------
+04-APR-19
+
+2 TIMESTAMP Literals
+SQL> select timestamp '2007-06-15 14:30:00.1234' from dual;
+
+TIMESTAMP'2007-06-1514:30:00.1234'
+---------------------------------------------------------------------------
+15-JUN-07 02.30.00.123400000 PM
+
+
+3 TIMESTAMP WITH TIME ZONE Literals
+SQL> select TIMESTAMP '2007-06-15 14:30:00 +00:00' from dual;
+
+TIMESTAMP'2007-06-1514:30:00+00:00'
+---------------------------------------------------------------------------
+15-JUN-07 02.30.00.000000000 PM +00:00
+
+
+时间
+CURRENT_TIMESTAMP           returns the current date and time in the session time zone, in a value of datatype TIMESTAMP WITH TIME ZONE
+LOCALTIMESTAMP              returns the current date and time in the session time zone in a value of datatype TIMESTAMP.
+SYSTIMESTAMP                returns the system date, including fractional seconds and time zone.
+
+CURRENT_DATE                returns the current date in the session time zone, in a value in the Gregorian calendar of datatype DATE.
+SYSDATE                     returns the current date and time set for the operating system on which the database resides. The datatype of the returned value is DATE
+
+SQL> alter session set time_zone='+14:00';
+
+Session altered.
+#############################################################################################################################
+SQL> select current_timestamp from dual;         #取决于session timezone
+CURRENT_TIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 09.45.01.866459 PM +14:00
+
+SQL> select localtimestamp from dual;           #取决于session timezone
+LOCALTIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 09.45.27.329293 PM
+
+SQL> select systimestamp from dual;
+SYSTIMESTAMP
+---------------------------------------------------------------------------
+27-FEB-21 03.43.08.988187 PM +08:00
+#############################################################################################################################
+SQL> select to_char(current_date,'DD-MON-RR HH24:MI:SS') from dual;     #取决于session timezone
+TO_CHAR(CURRENT_DATE,'DD-MO
+---------------------------
+27-FEB-21 21:39:38
+
+SQL> select to_char(sysdate,'DD-MON-RR HH24:MI:SS') from dual;
+TO_CHAR(SYSDATE,'DD-MON-RRH
+---------------------------
+27-FEB-21 15:39:29
+#############################################################################################################################
+使用nvl测试数据类型
+SQL> select nvl(systimestamp,to_yminterval('01-01')) from dual;
+select nvl(systimestamp,to_yminterval('01-01')) from dual
+                        *
+ERROR at line 1:
+ORA-00932: inconsistent datatypes: expected TIMESTAMP WITH TIME ZONE got INTERVAL YEAR TO MONTH
+
+
+SQL> select nvl(localtimestamp,to_yminterval('01-01')) from dual;
+select nvl(localtimestamp,to_yminterval('01-01')) from dual
+                          *
+ERROR at line 1:
+ORA-00932: inconsistent datatypes: expected TIMESTAMP got INTERVAL YEAR TO MONTH
+
+
+SQL> select nvl(current_timestamp,to_yminterval('01-01')) from dual;
+select nvl(current_timestamp,to_yminterval('01-01')) from dual
+                             *
+ERROR at line 1:
+ORA-00932: inconsistent datatypes: expected TIMESTAMP WITH TIME ZONE got INTERVAL YEAR TO MONTH

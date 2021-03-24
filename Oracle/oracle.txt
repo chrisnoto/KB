@@ -447,6 +447,49 @@ TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_02                      
 TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_03                               3 3000                                                                                      3
 TEST_RANGE_PARTITION           RANGE     TEST_RANGE_SAL_MAX                              4 MAXVALUE                                                                                  3
 
+# alter table disable table lock
+可以add 没有默认值的列，不可以modify, drop列及add有默认值的列
+不可以drop table, rename table
+-------------------------------------------------------
+SQL> alter table PP disable table lock;
+
+Table altered.
+
+SQL> alter table PP add PNUMBER3 NUMBER(4);
+
+Table altered.
+
+SQL> alter table PP add PNUMBER5 NUMBER(5) default 1;
+alter table PP add PNUMBER5 NUMBER(5) default 1
+*
+ERROR at line 1:
+ORA-00069: cannot acquire lock -- table locks disabled for PP
+
+SQL> alter table PP drop column PNUMBER4;
+alter table PP drop column PNUMBER4
+*
+ERROR at line 1:
+ORA-00069: cannot acquire lock -- table locks disabled for PP
+SQL> rename PP to PPP;
+rename PP to PPP
+*
+ERROR at line 1:
+ORA-00069: cannot acquire lock -- table locks disabled for PP
+
+
+SQL> drop table PP;
+drop table PP
+           *
+ERROR at line 1:
+ORA-00069: cannot acquire lock -- table locks disabled for PP
+
+SQL> alter table PP modify PNUMBER4 NUMBER(5);
+alter table PP modify PNUMBER4 NUMBER(5)
+*
+ERROR at line 1:
+ORA-00069: cannot acquire lock -- table locks disabled for PP
+
+--------------------------------------------------------------------
 
 # 未使用的列
 SQL> alter table CAILAMEI set unused column CREATED;
@@ -512,6 +555,37 @@ create global temporary table emp_tmp1 on commit preserve rows as select * from 
 基于事务的临时表
 create global temporary table emp_tmp2 on commit delete rows as select * from scott.emp;	
 
+# 外部表
+datapump做驱动
+SQL> create table emp_50
+ organization external
+ (
+ type oracle_datapump
+ default directory DATA_PUMP_DIR
+ location('emp_50.dmp')
+ )
+ as select * from scott.emp;
+
+sqloader做驱动
+ create table emp_load3
+  (e_lname char(20),
+   e_fname char(20),
+   hiredate date)
+  organization external
+  (type oracle_loader
+  default directory DATA_PUMP_DIR
+  access parameters
+  (records delimited by newline
+  fields terminated by ','
+  (e_lname char(20),
+   e_fname char(20),
+   hiredate char(10) date_format DATE mask "mm/dd/yyyy"
+           )
+     )
+   location ('emp.dat')
+  );
+ 
+ 
 #  子查询
 什麼是非關聯子查詢
 而子查詢也可以分成關聯子查詢和非關聯子查詢,  上面那條sql 語句就是非關聯子查詢.
@@ -556,6 +630,29 @@ where a.sal = (select max(b.sal) from emp b where b.deptno =  a.deptno)
 
    如果不足,可以用null補齊
 */
+
+You can combine multiple queries using the set operators UNION, UNION ALL, INTERSECT, and MINUS. All set operators have equal precedence.
+ If a SQL statement contains multiple set operators, then Oracle Database evaluates them from the left to right unless parentheses explicitly specify another order.
+The corresponding expressions in the select lists of the component queries of a compound query must match in number and must be in the same data type group (such as numeric or character).
+If component queries select character data, then the data type of the return values are determined as follows:
+If both queries select values of data type CHAR of equal length, then the returned values have data type CHAR of that length. If the queries select values of CHAR with 
+different lengths, then the returned value is VARCHAR2 with the length of the larger CHAR value.
+If either or both of the queries select values of data type VARCHAR2, then the returned values have data type VARCHAR2.
+If component queries select numeric data, then the data type of the return values is determined by numeric precedence:
+If any query selects values of type BINARY_DOUBLE, then the returned values have data type BINARY_DOUBLE.
+If no query selects values of type BINARY_DOUBLE but any query selects values of type BINARY_FLOAT, then the returned values have data type BINARY_FLOAT.
+If all queries select values of type NUMBER, then the returned values have data type NUMBER.
+In queries using set operators, Oracle does not perform implicit conversion across data type groups. Therefore, if the corresponding expressions of component queries resolve to both character data and numeric data, Oracle returns an error.
+
+Restrictions on the Set Operators 
+The set operators are subject to the following restrictions:
+The set operators are not valid on columns of type BLOB, CLOB, BFILE, VARRAY, or nested table.
+The UNION, INTERSECT, and MINUS operators are not valid on LONG columns.
+If the select list preceding the set operator contains an expression, then you must provide a column alias for the expression in order to refer to it in the order_by_clause.
+You cannot also specify the for_update_clause with the set operators.
+You cannot specify the order_by_clause in the subquery of these operators.
+You cannot use these operators in SELECT statements containing TABLE collection expressions.
+
 
 在oracle中：
 
@@ -644,8 +741,9 @@ Note: If the foreign key consists of multiple columns, and any column is NULL, t
 CHECK
 Specifies a wide range of rules for values in the table.
 
-Column constraints and table constraints have the same function; the difference is in where you specify them. Table constraints allow you to specify more than one column in a PRIMARY KEY,
- UNIQUE, CHECK, or FOREIGN KEY constraint definition. Column-level constraints (except for check constraints) refer to only one column.
+Column constraints and table constraints have the same function; the difference is in where you specify them. 
+Table constraints allow you to specify more than one column in a PRIMARY KEY, UNIQUE, CHECK, or FOREIGN KEY constraint definition. 
+ Column-level constraints (except for check constraints) refer to only one column.
  
 
 ######## Restrictions on the FOR UPDATE Clause 
@@ -656,3 +754,76 @@ The tables locked by this clause must all be located on the same database and on
 
 ######  self join
 A self join uses other joins such as inner join and left join.
+
+
+#   CLOB字段
+union all不排序，可以查询clob字段， union排序，查询clob会出错
+SQL> select * from test_clob where dbms_lob.instr(a,'VSAN')>0
+  2  union all
+  3  select * from test_clob where dbms_lob.instr(a,'XSPARAM_REG_SEQUENCE')>0;
+
+A
+--------------------------------------------------------------------------------
+#!/bin/sh
+# Script with a set of tool for vSAN troubleshooting
+# Author: Jorluis
+
+XSPARAM_REG_SEQUENCE$
+
+SQL> select a from test_clob where dbms_lob.instr(a,'VSAN')>0
+  2  union all
+  3  select a from test_clob where dbms_lob.instr(a,'XSPARAM_REG_SEQUENCE')>0;
+
+A
+--------------------------------------------------------------------------------
+#!/bin/sh
+# Script with a set of tool for vSAN troubleshooting
+# Author: Jorluis
+
+XSPARAM_REG_SEQUENCE$
+
+SQL> select a from test_clob where dbms_lob.instr(a,'VSAN')>0
+  2  union
+  3  select a from test_clob where dbms_lob.instr(a,'XSPARAM_REG_SEQUENCE')>0;
+select a from test_clob where dbms_lob.instr(a,'VSAN')>0
+       *
+ERROR at line 1:
+ORA-00932: inconsistent datatypes: expected - got CLOB
+
+# 查询会话的时间格式
+SELECT value
+FROM   nls_session_parameters
+WHERE  parameter = 'NLS_DATE_FORMAT'
+# 查询数据库的时间格式
+SELECT value
+FROM   nls_database_parameters
+WHERE  parameter = 'NLS_DATE_FORMAT'
+#  日期和字符串的隐式转换
+SQL> select ename,hiredate from scott.emp where hiredate<'28-SEP-81';
+
+ENAME      HIREDATE
+---------- ---------
+SMITH      17-DEC-80
+ALLEN      20-FEB-81
+WARD       22-FEB-81
+JONES      02-APR-81
+BLAKE      01-MAY-81
+CLARK      09-JUN-81
+TURNER     08-SEP-81
+
+7 rows selected.
+
+SQL> select ename,hiredate from scott.emp where hiredate< to_date('28-SEP-81','DD-MON-RR');
+
+ENAME      HIREDATE
+---------- ---------
+SMITH      17-DEC-80
+ALLEN      20-FEB-81
+WARD       22-FEB-81
+JONES      02-APR-81
+BLAKE      01-MAY-81
+CLARK      09-JUN-81
+TURNER     08-SEP-81
+
+7 rows selected.
+
