@@ -470,8 +470,18 @@ Intel(R) Xeon(R) CPU E5-2690 v3 @ 2.60GHz
 Intel(R) Xeon(R) CPU E5-2667 v3 @ 3.20GHz
 
 9 VSAN HCL DB up-to-date
-离线下载并通过vsphere web client上传all.json
-
+离线下载并通过vsphere web client上传all.json, all.json文件放在rvc.bat同层目录下
+通过rvc命令
+> ls
+0 /
+1 localhost/
+> vsan.health.hcl_update_db /localhost/ -l /all.json
+2021-04-06 13:55:15 +0800: Updating DB from local file '/all.json'.
+Proceed? [Yes/No]
+yes
+2021-04-06 13:55:19 +0800: Uploading gzipped DB with size 1112.254KB
+2021-04-06 13:55:36 +0800: Done
+>
 
 查询vcenter数据库SQL语句
 1 VM统计

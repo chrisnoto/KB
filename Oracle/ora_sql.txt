@@ -631,7 +631,7 @@ SQL> select * from emp e
   2  join dept d
   3  on d.deptno=20
   4  where e.deptno=d.deptno;
-下面写法错误
+下面写法错误   join后面没有on
 SQL> select * from emp e
   2  join dept d
   3  where e.deptno=d.deptno
@@ -649,6 +649,22 @@ ON search_condition
         INSERT (col1,col2,...)
         values(value1,value2,...)
         WHERE <insert_condition>;
+例子：
+http://m.hechaku.com/tags/oracle/Oracle_Merge.html
+將member表中的數據合並到member_staging表中，其中member表比member_staging表多幾行，還有幾行的值不同
+merge into member_staging x
+using (select member_id,first_name,last_name,rank from members) y
+on (x.member_id = y.member_id)
+when matched then
+  update set x.first_name = y.first_name,
+             x.last_name = y.last_name,
+			 x.rank = y.rank
+  where x.first_name <> y.first_name OR
+        x.last_name <> y.last_name OR
+		x.rank <> y.rank
+when not matched then
+   insert(x.member_id,x.first_name,x.last_name,x.rank)
+   values(y.member_id,y.first_name,y.last_name,y.rank);
 
 #### insert all语法
 Unconditional 

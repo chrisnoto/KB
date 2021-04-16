@@ -616,3 +616,8 @@ select nvl(current_timestamp,to_yminterval('01-01')) from dual
                              *
 ERROR at line 1:
 ORA-00932: inconsistent datatypes: expected TIMESTAMP WITH TIME ZONE got INTERVAL YEAR TO MONTH
+
+########## count ############
+1.count(1)与count(*)得到的结果一致，包含null值。
+2.count(字段)不计算null值
+3.count(null)结果恒为0

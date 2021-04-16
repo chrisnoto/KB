@@ -70,7 +70,7 @@ SHUTDOWN 关闭 Oracle 实例
 数据库关闭阶段做的工作：
 终止所有会话
 PMON进程回滚活动的事务
-通过DBWn进程将已完成的失误转储至磁盘
+通过DBWn进程将已完成的事务转储至磁盘
 LGWR进程将内存中的所有变更向量转储只redo log文件
 同时关闭数据文件和重做日志文件(更新文件头，关闭文件句柄)
 在数据库卸载阶段关闭控制文件
@@ -338,7 +338,7 @@ unused：该日志从未被写入，这类日志可能是刚被添加到数据�
 Crash recovery has two pahses : rollforward and rollback
 
 The system monitor will first roll forward and apply to the datafiles any transactions in the online redo files that occured after the most recent checkpoint.
- Crash Recovery uses redo information found in the online redo log files onlu . After rolling forward, Oracle will rollback any of those transactions that were never committed.
+ Crash Recovery uses redo information found in the online redo log files only . After rolling forward, Oracle will rollback any of those transactions that were never committed.
  Oracle uses information stored in the undo segments to rollback (undo) any uncommitted transactions.
  
 
@@ -364,7 +364,7 @@ DBWn按极懒算法执行写入：尽可能少，但出现(完全)检查点的�
 4.出现超时（3秒钟内未活动，则进行一次写操作。）
 5.DBWR需要写入的数据的SCN号大于LGWR 记录的SCN号，DBWR 触发LGWR写入
 
-RBA （redo block address）onlin redo log的重做块地址
+RBA （redo block address）online redo log的重做块地址
 ckpt进程还会在控制文件当中记录RBA，这个地址用来标志实例恢复的时候需要从日志中的那个位置开始，也就是一个checkpoint对应一个rba，
 当instance recovery（实例恢复）的时候oracle就会知道从那个检查点开始在redo的那个rba开始介质恢复！
 
@@ -827,3 +827,168 @@ TURNER     08-SEP-81
 
 7 rows selected.
 
+# Object Privileges
+An object privilege is a privilege or right to perform a particular action on a specific table, view, sequence, procedure, function, or package. 
+For example, the privilege to delete rows from the table DEPT is an object privilege. Depending on the type of object, there are different types of object privileges.
+
+Some schema objects (such as clusters, indexes, triggers, and database links) do not have associated object privileges; their use is controlled with system privileges. 
+For example, to alter a cluster, a user must own the cluster or have the ALTER ANY CLUSTER system privilege.
+
+The Mechanisms of Roles
+The functionality of database roles includes the following:
+A role can be granted system or object privileges.
+A role can be granted to other roles. However, a role cannot be granted to itself and cannot be granted circularly (for example, role A cannot be granted to role B if role B 
+has previously been granted to role A).
+Any role can be granted to any database user.
+Each role granted to a user is, at a given time, either enabled or disabled. A user's security domain includes the privileges of all roles currently enabled for the user. 
+A user's security domain does not include the privileges of any roles currently disabled for the user. Oracle allows database applications and users to enable and disable roles to
+ provide selective availability of privileges.
+An indirectly granted role (a role granted to a role) can be explicitly enabled or disabled for a user. However, by enabling a role that contains other roles, you implicitly enable
+ all indirectly granted roles of the directly granted role.
+从role_sys_privs中看ORACLE resource角色的权限
+SQL> select PRIVILEGE from role_sys_privs where role='RESOURCE';  
+
+
+# shrink space
+首先oracle shrink 是10g之后才引出的，有shrink table 和shrink space两种，这里介绍shrink space
+
+压缩分两个阶段：
+1、数据重组：这个过程是通过一系列的insert delete操作，将数据尽量排在列的前面进行重新组合。
+2、HWM调整：这个过程是对HWM的调整，释放空闲数据库。
+PS：shrink之前必须开启行移动功能
+alter table table_name enable row movement;
+
+基本语法：
+alter table <table_name> shrink space [ <null> | cascade | compact  ];
+--alter table <table_name> shrink space compact;
+只收缩表，这个实际上是只执行了第一个阶段，HWM保持不变。
+
+--alter table <table_name>  shrink space cascade;
+收缩表并且相关索引也会被收缩，HWM会降低
+
+--alter table <table_name> shrink space;
+收缩表，降低HWM(High Water Mark)
+
+限制条件：
+1、不能对cluster、clustered  table 或者任何有LONG列的对象使用这个语句
+2、压缩段不支持有函数索引、位图链接索引的表
+3、这语句不能压缩二级索引表的映射表，即使设置了CASCADE
+4、不能对压缩表使用该语句
+5、不能压缩on commit 类型的物化视图的主表，rowid物化视图必须在压缩操作之后重建
+ 
+详解：
+oracle10g开始提供shrink的命令，要求表空间是自动段空间管理（ASSM），降低HWM。 
+segment shrink 分为两个阶段： 
+1、数据重组（compact）：通过一系列insert、delete操作，将数据尽量排在段的前面，这个过程中需要在表上加RX锁，及只需要移动的行上加锁。由于涉及到rowid的改变，需要enable row movement。同时要distable基于rowid的triggers，这个过程对业务影响比较小（--由于采用compact，只有涉及移动的行才加锁，所以不会锁定整个表，其他的DML操作有部分可以进行，进而减小系统高峰期的性能开销）
+ 
+2、HWM调整：第二阶段是调整HWM位置，释放空闲数据块，此过程需要在表上加X锁（独享锁，因此这个表都被锁定，如果系统处在高峰期的时候，其他在此表的DML被挂起，会产生严重阻塞），会造成表上所有DML语句阻塞，系统忙时影响较大，
+锁的内容参考：http://docs.oracle.com/cd/B19306_01/server.102/b14220/consist.htm
+ 
+shrink space语句两个阶段都执行
+shrink space compact语句只执行第一个阶段。
+在业务繁忙的时候，可以先执行shrink space compact重组数据，然后不满的时候执行shrink space降低HWM释放空闲数据块。
+shrink必须开启对象的row movement功能（shrink index 不需要），alter table table_name enable row movement.但是要注意，该语句会造成引用table_name的对象（如存储过程、包、试图等）变为无效，执行完最好由utlrp.sql来编译无效对象。
+shrink不会使表的索引失效。但是move会，因此，move后必须重建索引，（alter table table_name move;alter index index_name rebuild）
+ 
+语法：
+alter table shrink space[|cpmpact|cascade];
+alter table shrink space compcat; 把块中的数据堆到一起，但会保持high water mark
+alter table shrink space;收缩表，降低high water mark
+alter table shrink space cascade;收缩表，降低high water mark，并相关索引也要收缩。
+alter index indexname shrink space;收缩索引
+
+补充：
+--编译无效对象脚本utlrp.sql 
+
+　　>$ sqlplus /no log
+    SQL>connect sys/pwd@sid AS sysdba
+    SQL>@?/rdbms/admin/utlrp.sql 
+
+　　utlrp.sql脚本可以在数据库运行的状态下执行以编译、数据库中的invalid对象. 
+　　oracle建议在对数据库进行迁移、升级、降级后都运行一遍utlrp.sql以编译无效对象。 
+
+--打完patch后重建数据字典视图脚本catpatch.sql 
+
+　　为了保证系统的的数据词典的完整性和有效性，最好的打patch后在migrate状态下运行catpatch.sql 
+　　sql> shutdown immediate 
+　　sql> startup migrate 
+　　sql> @?/rdbms/admin/catpatch.sql 
+　　sql> shutdown immediate 
+　　sql> startup 
+
+　　为加快速度，可临时调大这２个参数： 
+　　show parameter shared_pool_size 
+　　show parameter large_pool_size 
+
+# 延迟段创建  sys用户不生效，默认会分配一个extend
+普通用户生效
+
+# dump logfile
+SQL> alter system dump logfile '/data/oradata/CHENSEN/onlinelog/redo02.log';
+select value from v$diag_info where name='Default Trace File';
+
+# dump datafile的一个块
+alter system dump datafile 1 block 100096;
+select value from v$diag_info where name='Default Trace File';
+
+
+# scheduler 高级
+job包含program和schedule
+
+window与schedule的比较
+它们都允许制定作业的开始和结束时间以及重复时间间隔
+但是window与resource plan能关联在一起
+下面的例子window指定shcedule和resource plan做参数
+SQL> BEGIN
+     DMBS_SCHEDULER.CREATE_WINDOW(
+	 WINDOW_NAME       => 'Test_Window',
+	 SCHEDULE_NAME     => 'Test_Schedule',
+	 RESOURCE_PLAN     => 'Test_ResourcePlan',
+	 DURATION          => interval '180' minute,
+	 COMMENTS          => 'Test Window');
+	 END;
+	 
+创建基于CPU使用率的resource plan
+plan都必须包含一条other_groups的指令
+如果CPU使用率不到100%，那么这些计划将不起作用，只有当CPU
+处理能力不足时，计划才会产生影响。
+plan如下:
+----------------------------
+优先级       组       CPU%  |
+1        SYS_GROUP    100   |
+2        BATCH        100   |
+3        DSS & OLTP   50    |
+4        OTHER_GROUPS 100   |
+-----------------------------
+1 创建挂起区域，用于挂起plan
+SQL> exec dbms_resource_manager.create_pending_area;
+2 创建计划
+SQL> exec dbms_resource_manager.create_plan(-
+plan=>'DAY',comment=>'plan for normal working hours');
+3 创建计划指令
+SQL> exec dbms_resource_manager.crate_plan_directive(-
+plan=>'DAY',group_or_subplan=>'SYS_GROUP',mgmt_pl=>100,-
+comment=>'give sys_group users top priority');
+
+SQL> exec dbms_resource_manager.crate_plan_directive(-
+plan=>'DAY',group_or_subplan=>'OLTP',mgmt_p2=>100,-
+comment=>'give oltp users next priority');
+
+SQL> exec dbms_resource_manager.crate_plan_directive(-
+plan=>'DAY',group_or_subplan=>'DSS',mgmt_p3=>50,-
+comment=>'dss users have half at level 3');
+
+SQL> exec dbms_resource_manager.crate_plan_directive(-
+plan=>'DAY',group_or_subplan=>'BATCH',mgmt_p3=>50,-
+comment=>'batch users have half at level 3');
+
+SQL> exec dbms_resource_manager.crate_plan_directive(-
+plan=>'DAY',group_or_subplan=>'OTHER_GROUPS',mgmt_p4=>100,-
+comment=>'if there is anything left,others can have it');
+
+4 验证挂起区域，如验证成功返回，讲计划保存到数据字典中：
+SQL> exec dbms_resource_manager.validate_pending_area;
+SQL> exec dbms_resource_manager.submit_pending_area;
+
+5 激活计划：
+SQL> alter system set resource_manager_plan=day;
