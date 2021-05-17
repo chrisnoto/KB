@@ -1,3 +1,7 @@
+ vsphere 5.5 重設 sso密碼
+ D:\Program Files\VMware\Infrastructure\VMware\cis\vmdird> .\vdcadmintool.exe
+
+
 https://kb.vmware.com/s/article/2145116?lang=zh_CN 
 
 ISO版本

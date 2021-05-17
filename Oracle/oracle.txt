@@ -368,12 +368,112 @@ RBA （redo block address）online redo log的重做块地址
 ckpt进程还会在控制文件当中记录RBA，这个地址用来标志实例恢复的时候需要从日志中的那个位置开始，也就是一个checkpoint对应一个rba，
 当instance recovery（实例恢复）的时候oracle就会知道从那个检查点开始在redo的那个rba开始介质恢复！
 
+三、CKPT
+分类：
+1 Full Checkpoint
+Writes block images to the database for all dirty buffers from all instances
 
+Statistics updated:
+DBWR checkpoints
+DBWR checkpoint buffers written
+DBWR thread checkpoint buffers written
+
+Caused by:
+Alter system checkpoint [global]
+Alter database begin backup
+Alter database close
+Shutdown
+
+Controlfile and datafile headers are updated
+CHECKPOINT_CHANGE#
+
+2 Thread Checkpoint
+Writes block images to the database for all dirty buffers from one instance
+
+Statistics updated:
+DBWR checkpoints
+DBWR checkpoint buffers written
+DBWR thread checkpoint buffers written
+
+Caused by:
+Alter system checkpoint local
+
+Controlfile and datafile headers are updated
+CHECKPOINT_CHANGE#
+
+3 File Checkpoint
+Writes block images to the database for all dirty buffers for all files of a tablespace from all instances
+Statistics updated:
+
+DBWR tablespace checkpoint buffers written
+DBWR checkpoint buffers written
+DBWR checkpoints
+
+Caused by:
+
+Alter tablespace XXX offline
+Alter tablespace XXX begin backup
+Alter tablespace XXX read only
+
+Controlfile and datafile headers are updated
+CHECKPOINT_CHANGE#
+
+4 Parallel Query Checkpoint
+Writes block images to the database for all dirty buffers belonging to objects accessed by the query from all instances
+
+Statistics updated:
+DBWR checkpoint buffers written
+DBWR checkpoints
+
+Caused by:
+Parallel Query
+Parallel Query component of PDML or PDDL
+Mandatory for consistency
+
+5 Object “Checkpoint”
+Writes block images to the database for all dirty buffers belonging to an object from all instances
+
+Statistics updated:
+
+DBWR object drop buffers written
+DBWR checkpoints
+
+Caused by:
+Drop table XXX
+Drop table XXX purge
+Truncate table XXX
+Mandatory for media recovery purposes
+
+6 Incremental Checkpoint
+Writes the contents of “some” dirty buffers to the database from CKPT-Q
+Block images written in SCN order
+Checkpoint RBA updated in SGA
+
+Statistics updated:
+DBWR checkpoint buffers written
+
+Controlfile is updated every 3 seconds by CKPT
+Checkpoint progress record
+
+7 Log Switch Checkpoint(8i 以前 LOG switch checkpoint是FULL CHECKPOINT)
+Writes the contents of “some” dirty buffers to the database
+
+Statistics updated:
+
+DBWR checkpoints
+DBWR checkpoint buffers written
+background checkpoints started
+background checkpoints completed
+
+Controlfile and datafile headers are updated
+CHECKPOINT_CHANGE#
 ######### oracle 表空间  ########
 表空间的分类
 永久表空间                存放永久性数据，如表，索引等。
 临时表空间                不能存放永久性对象，用于保存数据库排序，分组时产生的临时数据。
 UNDO表空间             保存数据修改前的镜象。
+Temp 表空间必须是 uniform 的， undo 必须是 autoallocate 的
+
 
 表空间的管理方式：
 字典管理：全库所有的空间分配都放在数据字典中。容易引起字典争用，而导致性能问题。
@@ -385,6 +485,112 @@ UNDO表空间             保存数据修改前的镜象。
 
 表空间改名
 在ORACLE 10g 之前，表空间的名称是不能被修改的。在ORACLE 11G中，通过ALTER TABLESPACE 语句中使用RENAME子句，数据库管理员可以修改表空间的名称。
+
+# 缩小临时表空间
+SQL> select * from dba_temp_free_space;
+
+TABLESPACE_NAME                TABLESPACE_SIZE ALLOCATED_SPACE FREE_SPACE
+------------------------------ --------------- --------------- ----------
+TMP2                                 104857600         2097152  103809024
+TEMP                                  20971520        11534336   19922944
+
+SQL> alter tablespace tmp2 shrink space keep 20M;
+
+Tablespace altered.
+
+SQL> select * from dba_temp_free_space;
+
+TABLESPACE_NAME                TABLESPACE_SIZE ALLOCATED_SPACE FREE_SPACE
+------------------------------ --------------- --------------- ----------
+TMP2                                  20971520         1048576   19922944
+TEMP                                  20971520        11534336   19922944
+
+
+# 临时表空间组
+默认临时表空间只有一个
+可以设置组包括多个临时表空间
+SQL> select group_name,tablespace_name from dba_tablespace_groups;          # 没有组
+
+no rows selected
+
+SQL> alter tablespace temp tablespace group tmpgrp;                         # 用alter tablespace创建临时表空间组,也可以在创建临时表空间时指定组
+
+Tablespace altered.
+
+SQL> select property_name,property_value from database_properties
+  2  where property_name='DEFAULT_TEMP_TABLESPACE';
+
+PROPERTY_NAME
+------------------------------
+PROPERTY_VALUE
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+DEFAULT_TEMP_TABLESPACE
+TEMP                                                                        # 默认临时表空间 TEMP
+
+SQL> alter database default temporary tablespace tmpgrp;                     # 更改默认临时表空间为 TMPGRP
+
+Database altered.
+
+SQL> select property_name,property_value from database_properties
+  2  where property_name='DEFAULT_TEMP_TABLESPACE';
+
+PROPERTY_NAME
+------------------------------
+PROPERTY_VALUE
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+DEFAULT_TEMP_TABLESPACE
+TMPGRP                                                                     # 默认临时表空间 TMPGRP
+
+
+
+SQL> select group_name,tablespace_name from dba_tablespace_groups;          # 组有一个临时表空间
+
+GROUP_NAME                     TABLESPACE_NAME
+------------------------------ ------------------------------
+TMPGRP                         TEMP
+
+
+SQL> create temporary tablespace tmp2;                                     # 增加一个临时表空间 tmp2
+
+Tablespace created.
+
+SQL> select * from v$tempfile;
+
+     FILE# CREATION_CHANGE# CREATION_        TS#     RFILE# STATUS  ENABLED         BYTES     BLOCKS CREATE_BYTES BLOCK_SIZE NAME
+---------- ---------------- --------- ---------- ---------- ------- ---------- ---------- ---------- ------------ ---------- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+         1           925770 07-SEP-20          3          1 ONLINE  READ WRITE   20971520       2560     20971520       8192 /data/oradata/CHENSEN/datafile/o1_mf_temp_hth4w51j_.tmp
+         2         15875514 17-APR-21         11          1 ONLINE  READ WRITE  104857600      12800    104857600       8192 /data/oradata/CHENSEN/datafile/o1_mf_tmp2_j7o7lybj_.tmp
+
+SQL> alter tablespace tmp2 tablespace group tmpgrp;                       # 将临时表空间tmp2放到tmpgrp组里
+
+Tablespace altered.
+
+SQL> select group_name,tablespace_name from dba_tablespace_groups;
+
+GROUP_NAME                     TABLESPACE_NAME
+------------------------------ ------------------------------
+TMPGRP                         TEMP
+TMPGRP                         TMP2
+
+SQL> select username,temporary_tablespace from dba_users;                # 查看用户使用的临时表空间
+
+USERNAME                       TEMPORARY_TABLESPACE
+------------------------------ ------------------------------
+CHENSEN                        TMPGRP
+SCOTT                          TMPGRP
+ORACLE_OCM                     TMPGRP
+XS$NULL                        TMPGRP
+MDDATA                         TMPGRP
+DIP                            TMPGRP
+APEX_PUBLIC_USER               TMPGRP
+SPATIAL_CSW_ADMIN_USR          TMPGRP
+SPATIAL_WFS_ADMIN_USR          TMPGRP
+FLOWS_FILES                    TMPGRP
+MDSYS                          TMPGRP
+ORDSYS                         TMPGRP
+EXFSYS                         TMPGRP
+DBSNMP                         TMPGRP
+WMSYS                          TMPGRP
 
 ######### oracle 段空间  ########
 区间（Extent）是Oracle的最小空间分配单元，而Block是Oracle的最小IO操作单元，也就是说，
@@ -848,6 +1054,14 @@ An indirectly granted role (a role granted to a role) can be explicitly enabled 
 从role_sys_privs中看ORACLE resource角色的权限
 SQL> select PRIVILEGE from role_sys_privs where role='RESOURCE';  
 
+# 数据字典相关权限
+select_catalog_role      此角色授予数据字典视图的select权限 
+execute_catalog_role     此角色授予数据字典视图的execute权限
+delete_catalog_role      此角色允许用户从审计表(SYS.AUD$)删除记录
+select any dictionary    此系统权限授予用户从sys模式的任何对象中选择数据的权限
+
+#sysdba和sysoper的区别
+sysdba可以create database,  sysoper不能
 
 # shrink space
 首先oracle shrink 是10g之后才引出的，有shrink table 和shrink space两种，这里介绍shrink space
@@ -875,6 +1089,17 @@ alter table <table_name> shrink space [ <null> | cascade | compact  ];
 3、这语句不能压缩二级索引表的映射表，即使设置了CASCADE
 4、不能对压缩表使用该语句
 5、不能压缩on commit 类型的物化视图的主表，rowid物化视图必须在压缩操作之后重建
+
+不能实现收缩的表
+        群集表
+        具有LONG类型列的表
+        LOB段(尽管表本身可以被缩小)，注，10gR2以后版本支持对LOB段的收缩
+        具有基于提交的物化视图的表(因为禁用了触发器)
+        具有rowid物化视图的表(因为rowid发生了变化)
+        IOT映射表IOT溢出段
+        索引基于函数的表
+        未启用行记录转移的堆表
+
  
 详解：
 oracle10g开始提供shrink的命令，要求表空间是自动段空间管理（ASSM），降低HWM。 
@@ -992,3 +1217,149 @@ SQL> exec dbms_resource_manager.submit_pending_area;
 
 5 激活计划：
 SQL> alter system set resource_manager_plan=day;
+
+
+
+SQL> col property_value for a40
+SQL> select property_name,property_value from database_properties;
+
+PROPERTY_NAME                  PROPERTY_VALUE
+------------------------------ ----------------------------------------
+DICT.BASE                      2
+DEFAULT_TEMP_TABLESPACE        TMPGRP
+DEFAULT_PERMANENT_TABLESPACE   USERS
+DEFAULT_EDITION                ORA$BASE
+Flashback Timestamp TimeZone   GMT
+TDE_MASTER_KEY_ID
+DST_UPGRADE_STATE              NONE
+DST_PRIMARY_TT_VERSION         14
+DST_SECONDARY_TT_VERSION       0
+DEFAULT_TBS_TYPE               SMALLFILE
+NLS_LANGUAGE                   AMERICAN
+NLS_TERRITORY                  AMERICA
+NLS_CURRENCY                   $
+NLS_ISO_CURRENCY               AMERICA
+NLS_NUMERIC_CHARACTERS         .,
+NLS_CHARACTERSET               AL32UTF8
+NLS_CALENDAR                   GREGORIAN
+NLS_DATE_FORMAT                DD-MON-RR
+NLS_DATE_LANGUAGE              AMERICAN
+NLS_SORT                       BINARY
+NLS_TIME_FORMAT                HH.MI.SSXFF AM
+NLS_TIMESTAMP_FORMAT           DD-MON-RR HH.MI.SSXFF AM
+NLS_TIME_TZ_FORMAT             HH.MI.SSXFF AM TZR
+NLS_TIMESTAMP_TZ_FORMAT        DD-MON-RR HH.MI.SSXFF AM TZR
+NLS_DUAL_CURRENCY              $
+NLS_COMP                       BINARY
+NLS_LENGTH_SEMANTICS           BYTE
+NLS_NCHAR_CONV_EXCP            FALSE
+NLS_NCHAR_CHARACTERSET         AL16UTF16
+NLS_RDBMS_VERSION              11.2.0.4.0
+GLOBAL_DB_NAME                 CHENSEN
+EXPORT_VIEWS_VERSION           8
+WORKLOAD_CAPTURE_MODE
+WORKLOAD_REPLAY_MODE
+NO_USERID_VERIFIER_SALT        61FE9A498A8FB6995B77028E02D6C276
+DBTIMEZONE                     00:00
+
+
+
+# 物化视图
+物化視圖可以分為以下三種類型：包含聚集的物化視圖；只包含連接的物化視圖；嵌套物化視圖。
+两种刷新方式
+on commit,  on demand     默认on demand
+四种刷新类型
+complete, fast, force, never    默认force
+查詢重寫(Query Rewrite)：包括ENABLE QUERY REWRITE和DISABLE QUERY REWRITE兩種。分別指出創建的物化視圖是否支持查詢重寫。
+查詢重寫是指當對物化視圖的基表進行查詢時，Oracle會自動判斷能否通過查詢物化視圖來得到結果，如果可以，則避免了聚集或連接操作，
+而直接從已經計算好的物化視圖中讀取數據。默認為DISABLE QUERY REWRITE。
+
+创建MV的过程
+授权给scott
+SQL> grant create materialized view to scott;
+
+Grant succeeded.
+
+SQL> grant query rewrite to scott;
+
+Grant succeeded.
+
+创建MV LOG
+SQL> create materialized view log on emp
+  2  with sequence,rowid
+  3  (empno,ename,sal,deptno)
+  4  including new values;
+
+Materialized view log created.
+
+创建MV，默认是on demand
+SQL> create materialized view emp_mv1 build immediate
+    refresh fast
+    enable query rewrite
+    as select deptno,sum(sal) from emp where deptno in (20,30) group by deptno;
+
+Materialized view created.
+
+SQL> select * from emp_mv1;
+
+    DEPTNO   SUM(SAL)
+---------- ----------
+        30       9400
+        20      10875
+
+SQL> insert into emp values(8000,'SAM','TECH',7566,'23-MAY-90',6000,500,20);
+
+1 row created.
+SQL> commit;
+
+Commit complete.
+
+SQL> select * from emp_mv1;             因为是on demand，没有自动刷新
+
+    DEPTNO   SUM(SAL)
+---------- ----------
+        30       9400
+        20      10875
+
+手动刷新
+SQL> begin
+  2  dbms_mview.refresh(
+  3  list => 'emp_mv1',
+  4  Method => 'C',
+  5  refresh_after_errors => True);
+  6  end;
+  7  /
+
+PL/SQL procedure successfully completed.
+
+SQL> select * from emp_mv1;
+
+    DEPTNO   SUM(SAL)
+---------- ----------
+        30       9400
+        20      16875
+创建on commit的MV
+SQL> create materialized view emp_mv2 build immediate
+  2  refresh fast
+  3  on commit
+  4  enable query rewrite
+  5  as select deptno,sum(sal) from emp where deptno in (20,30) group by deptno;
+
+Materialized view created.
+
+SQL> insert into emp values(9000,'LL','TECH',7566,'22-MAY-90',8000,1000,20);
+
+1 row created.
+
+SQL> commit;
+
+Commit complete.
+
+SQL> select * from emp_mv2;
+
+    DEPTNO   SUM(SAL)
+---------- ----------
+        30       9400
+        20      24875
+創建定時刷新的物化視圖(指定物化視圖每天刷新一次)：
+SQL> create materialized view mv_name refresh force on demand start with sysdate next sysdate+1;

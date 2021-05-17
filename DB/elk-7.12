@@ -1,0 +1,262 @@
+elasticsearch 7.12 搭建
+
+# 主机名(使用FQDN)、本地解析及集群角色，另外在AD域配置域名解析
+10.66.12.228  xtjcesbges01 xtjcesbges01.cesbg.foxconn         master, data节点
+10.66.12.214  xtjcesbges02 xtjcesbges02.cesbg.foxconn         master, data节点
+10.66.12.230  xtjcesbges03 xtjcesbges03.cesbg.foxconn         master, data节点
+10.66.12.122  xtjcesbgsocks01 kibana.cesbg.foxconn kibana                     lb节点，kibana节点
+
+# 安装过程
+
+0  禁用swap
+   准备数据盘
+   /dev/mapper/data-es     /data                   xfs     defaults,noatime   0 0
+mkdir -p /data/elasticsearch
+chown -R elasticsearch:elasticsearch /data
+
+   
+1 安装elasticsearch 7.12 (所有机器)
+rpm -ivh elasticsearch-7.12.0-x86_64.rpm
+systemctl daemon-reload
+systemctl enable elasticsearch
+* 新版本不用单独安装 JDK, 自带了JDK
+
+2 配置证书，为启用xpack security模块做准备
+[root@xtjcesbges01 ~]# export ES_HOME=/usr/share/elasticsearch
+[root@xtjcesbges01 ~]# export ES_PATH_CONF=/etc/elasticsearch
+[root@xtjcesbges01 ~]# mkdir mycert;cd mycert
+[root@xtjcesbges01 mycert]# cat instance.yml
+instances:
+  - name: 'xtjcesbges01'
+    dns: [ 'xtjcesbges01.cesbg.foxconn' ]
+  - name: 'xtjcesbges02'
+    dns: [ 'xtjcesbges02.cesbg.foxconn' ]
+  - name: 'xtjcesbges03'
+    dns: [ 'xtjcesbges03.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash01'
+    dns: [ 'xtjcesbglogstash01.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash02'
+    dns: [ 'xtjcesbglogstash02.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash03'
+    dns: [ 'xtjcesbglogstash03.cesbg.foxconn' ]
+  - name: 'kibana'
+    dns: [ 'kibana.cesbg.foxconn' ]
+[root@xtjcesbges01 elasticsearch]# cd $ES_HOME
+[root@xtjcesbges01 elasticsearch]# bin/elasticsearch-certutil cert --keep-ca-key --pem --in ~/mycert/instance.yml --out ~/mycert/certs.zip
+[root@xtjcesbges01 elasticsearch]# unzip certs.zip -d ./certs
+证书包含了es,logstash,kibana,ca自签名证书
+[root@xtjcesbges01 mycert]# ll certs/*
+certs/ca:
+total 8
+-rw-r--r--. 1 root root 1200 May 13 03:10 ca.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 ca.key
+
+certs/kibana:
+total 8
+-rw-r--r--. 1 root root 1188 May 13 03:10 kibana.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 kibana.key
+
+certs/xtjcesbges01:
+total 8
+-rw-r--r--. 1 root root 1204 May 13 03:10 xtjcesbges01.crt
+-rw-r--r--. 1 root root 1679 May 13 03:10 xtjcesbges01.key
+
+certs/xtjcesbges02:
+total 8
+-rw-r--r--. 1 root root 1204 May 13 03:10 xtjcesbges02.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 xtjcesbges02.key
+
+certs/xtjcesbges03:
+total 8
+-rw-r--r--. 1 root root 1204 May 13 03:10 xtjcesbges03.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 xtjcesbges03.key
+
+certs/xtjcesbglogstash01:
+total 8
+-rw-r--r--. 1 root root 1224 May 13 03:10 xtjcesbglogstash01.crt
+-rw-r--r--. 1 root root 1679 May 13 03:10 xtjcesbglogstash01.key
+
+certs/xtjcesbglogstash02:
+total 8
+-rw-r--r--. 1 root root 1224 May 13 03:10 xtjcesbglogstash02.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 xtjcesbglogstash02.key
+
+certs/xtjcesbglogstash03:
+total 8
+-rw-r--r--. 1 root root 1220 May 13 03:10 xtjcesbglogstash03.crt
+-rw-r--r--. 1 root root 1675 May 13 03:10 xtjcesbglogstash03.key
+
+证书生成之后，将拷贝到各台机器里
+对于ES：
+mkdir -p /etc/elasticsearch/certs
+将ca.crt和xtjcesbges0x.crt/key 拷贝到/etc/elasticsearch/certs
+对于kibana:
+mkdir -p /etc/kibana/certs
+将ca.crt和kibana.crt/key 拷贝到/etc/kibana/certs
+
+3 配置第一台ES  xtjcesbges01 (master, data node)
+[root@xtjcesbges01 mycert]# cat /etc/elasticsearch/elasticsearch.yml |egrep -v '#|^$'
+cluster.name: elk4Fixo
+node.name: xtjcesbges01
+node.master: true
+node.data: true
+path.data: /data/elasticsearch
+path.logs: /var/log/elasticsearch
+network.host: xtjcesbges01.cesbg.foxconn
+http.port: 9200
+discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn"]        # 这两个参数，初始化时只填了第一台
+cluster.initial_master_nodes: ["xtjcesbges01"]              # 集群搭建完后，可添加另两台master节点到这里
+#以下是xpack配置，生效后可以进行用户和权限管理
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.http.ssl.key: certs/xtjcesbges01.key
+xpack.security.http.ssl.certificate: certs/xtjcesbges01.crt
+xpack.security.http.ssl.certificate_authorities: certs/ca.crt
+xpack.security.transport.ssl.key: certs/xtjcesbges01.key
+xpack.security.transport.ssl.certificate: certs/xtjcesbges01.crt
+xpack.security.transport.ssl.certificate_authorities: certs/ca.crt
+
+[root@xtjcesbges01 mycert]# systemctl enable elasticsearch
+[root@xtjcesbges01 mycert]# systemctl start elasticsearch
+检查ES服务状态及端口
+
+配置ES各用户的密码
+[root@xtjcesbges01 elasticsearch]# cd $ES_HOME
+bin/elasticsearch-setup-passwords interactive -u https://xtjcesbges01.cesbg.foxconn:9200
+
+使用ca证书和用户elastic测试ES
+[root@xtjcesbges01 elasticsearch]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/nodes?v
+Enter host password for user 'elastic':
+ip           heap.percent ram.percent cpu load_1m load_5m load_15m node.role   master name
+10.66.12.228           63           5   0    0.05    0.03     0.05 cdfhilmrstw *      xtjcesbges01
+
+4 配置第二台ES (xtjcesbgsocks01    lb,kibana node)
+拷贝ca及kibana证书到/etc/elasticsearch/certs和/etc/kibana/certs里
+
+[root@xtjcesbgsocks01 elasticsearch]# cat elasticsearch.yml |egrep -v '#|^$'
+cluster.name: elk4Fixo
+node.name: kibana             
+node.master: false            # 这三个参数
+node.data: false              # 设置为false后，
+node.ingest: false            # 节点即为 lb 节点
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+network.host: kibana.cesbg.foxconn
+http.port: 9200
+discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn"]     # 这两个参数，初始化时只填了第一台
+cluster.initial_master_nodes: ["xtjcesbges01"]           # 集群搭建完后，可添加另两台master节点到这里
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.http.ssl.key: certs/kibana.key
+xpack.security.http.ssl.certificate: certs/kibana.crt
+xpack.security.http.ssl.certificate_authorities: certs/ca.crt
+xpack.security.transport.ssl.key: certs/kibana.key
+xpack.security.transport.ssl.certificate: certs/kibana.crt
+xpack.security.transport.ssl.certificate_authorities: certs/ca.crt
+
+[root@xtjcesbgsocks01 elasticsearch]# systemctl enable elasticsearch
+[root@xtjcesbgsocks01 elasticsearch]# systemctl start elasticsearch
+
+验证第二台ES加入节点
+[root@xtjcesbgsocks01 elasticsearch]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/nodes?v
+Enter host password for user 'elastic':
+ip           heap.percent ram.percent cpu load_1m load_5m load_15m node.role   master name
+10.66.12.228           63           5   0    0.05    0.03     0.05 cdfhilmrstw *      xtjcesbges01
+10.66.12.122           38          66   0    0.06    0.03     0.05 lr          -      kibana
+
+5 配置kibana
+[root@xtjcesbgsocks01 ~]# rpm -ivh kibana-7.12.0-x86_64.rpm
+先复制好kibana所需的证书
+再配置kibana.yml
+[root@xtjcesbgsocks01 ~]# cat /etc/kibana/kibana.yml |egrep -v '#|^$'
+server.host: "kibana.cesbg.foxconn"
+server.basePath: "/kibana"
+server.rewriteBasePath: true
+server.name: "kibana"
+elasticsearch.hosts: ["https://kibana.cesbg.foxconn:9200"]
+elasticsearch.username: "kibana_system"
+elasticsearch.password: "vSTJ456"
+server.ssl.enabled: true
+server.ssl.certificate: /etc/kibana/certs/kibana.crt
+server.ssl.key: /etc/kibana/certs/kibana.key
+elasticsearch.ssl.certificateAuthorities: [ "/etc/kibana/certs/ca.crt" ]
+xpack.encryptedSavedObjects.encryptionKey: "elk4fixoelk4fixoelk4fixoelk4fixo"
+xpack.security.encryptionKey: "elk4fixoelk4fixoelk4fixoelk4fixo"
+[root@xtjcesbgsocks01 ~]# systemctl enable kibana
+[root@xtjcesbgsocks01 ~]# systemctl start kibana
+
+6 配置另外两台mastre & data ES节点
+先复制好elasticsearch所需的证书
+再配置elasticsearch.yml
+然后systemctl enable/start elasticsearch
+下面是另外两台ES节点的配置
+[root@xtjcesbges02 ~]# cat /etc/elasticsearch/elasticsearch.yml |egrep -v '#|^$'
+cluster.name: elk4Fixo
+node.name: xtjcesbges02
+node.master: true
+node.data: true
+path.data: /data/elasticsearch
+path.logs: /var/log/elasticsearch
+network.host: xtjcesbges02.cesbg.foxconn
+http.port: 9200
+discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn", "xtjcesbges02.cesbg.foxconn"]
+cluster.initial_master_nodes: ["xtjcesbges01", "xtjcesbges02"]
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.http.ssl.key: certs/xtjcesbges02.key
+xpack.security.http.ssl.certificate: certs/xtjcesbges02.crt
+xpack.security.http.ssl.certificate_authorities: certs/ca.crt
+xpack.security.transport.ssl.key: certs/xtjcesbges02.key
+xpack.security.transport.ssl.certificate: certs/xtjcesbges02.crt
+xpack.security.transport.ssl.certificate_authorities: certs/ca.crt
+
+[root@xtjcesbges03 ~]# cat /etc/elasticsearch/elasticsearch.yml |egrep -v '#|^$'
+cluster.name: elk4Fixo
+node.name: xtjcesbges03
+node.master: true
+node.data: true
+path.data: /data/elasticsearch
+path.logs: /var/log/elasticsearch
+network.host: xtjcesbges03.cesbg.foxconn
+http.port: 9200
+discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn", "xtjcesbges02.cesbg.foxconn","xtjcesbges03.cesbg.foxconn"]
+cluster.initial_master_nodes: ["xtjcesbges01", "xtjcesbges02","xtjcesbges03"]
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.http.ssl.key: certs/xtjcesbges03.key
+xpack.security.http.ssl.certificate: certs/xtjcesbges03.crt
+xpack.security.http.ssl.certificate_authorities: certs/ca.crt
+xpack.security.transport.ssl.key: certs/xtjcesbges03.key
+xpack.security.transport.ssl.certificate: certs/xtjcesbges03.crt
+xpack.security.transport.ssl.certificate_authorities: certs/ca.crt
+
+7 验证集群
+查看节点
+[root@xtjcesbges01 ~]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/nodes?v
+Enter host password for user 'elastic':
+ip           heap.percent ram.percent cpu load_1m load_5m load_15m node.role   master name
+10.66.12.228           63           5   0    0.08    0.12     0.08 cdfhilmrstw *      xtjcesbges01
+10.66.12.122           65          67   0    0.02    0.02     0.05 lr          -      kibana
+10.66.12.230           15           3   0    0.00    0.01     0.05 cdfhilmrstw -      xtjcesbges03
+10.66.12.214           21           4   0    0.00    0.01     0.05 cdfhilmrstw -      xtjcesbges02
+查看集群监控状态
+[root@xtjcesbges01 ~]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/health?v
+Enter host password for user 'elastic':
+epoch      timestamp cluster  status node.total node.data shards pri relo init unassign pending_tasks max_task_wait_time active_shards_percent
+1621210747 00:19:07  elk4Fixo green           4         3     18   9    0    0        0             0                  -                100.0%
+
+
+
+
+
+
+
+
+
+
+
+
