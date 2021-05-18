@@ -474,7 +474,7 @@ ESTAB      0      0      10.66.13.24:54800              10.66.12.190:5044
 
 最后一步
 更改/etc/elasticsearch/elasticsearch.yml
-将xtjcesbges01/02 和 kibana.cesbg.foxconn里的elasticsearch初始化节点更改如下
+将xtjcesbges01/02 和 kibana.cesbg.foxconn里的elasticsearch初始化节点更改如下，并重启elasticsearch服务
 discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn", "xtjcesbges02.cesbg.foxconn","xtjcesbges03.cesbg.foxconn"]
 cluster.initial_master_nodes: ["xtjcesbges01", "xtjcesbges02","xtjcesbges03"]  
 
