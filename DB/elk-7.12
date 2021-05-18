@@ -1,4 +1,7 @@
-elasticsearch 7.12 搭建
+ELK 7.12 搭建
+
+---------------------------------第一部分------------------------------------------------------
+elasticsearch集群搭建
 
 # 主机名(使用FQDN)、本地解析及集群角色，另外在AD域配置域名解析
 10.66.12.228  xtjcesbges01 xtjcesbges01.cesbg.foxconn         master, data节点
@@ -139,7 +142,7 @@ cluster.name: elk4Fixo
 node.name: kibana             
 node.master: false            # 这三个参数
 node.data: false              # 设置为false后，
-node.ingest: false            # 节点即为 lb 节点
+node.ingest: false            # 节点即为 LB 节点
 path.data: /var/lib/elasticsearch
 path.logs: /var/log/elasticsearch
 network.host: kibana.cesbg.foxconn
@@ -186,6 +189,8 @@ xpack.encryptedSavedObjects.encryptionKey: "elk4fixoelk4fixoelk4fixoelk4fixo"
 xpack.security.encryptionKey: "elk4fixoelk4fixoelk4fixoelk4fixo"
 [root@xtjcesbgsocks01 ~]# systemctl enable kibana
 [root@xtjcesbgsocks01 ~]# systemctl start kibana
+
+访问https://kibana.cesbg.foxconn:5601/kibana    用户为elastic
 
 6 配置另外两台mastre & data ES节点
 先复制好elasticsearch所需的证书
@@ -250,8 +255,228 @@ epoch      timestamp cluster  status node.total node.data shards pri relo init u
 1621210747 00:19:07  elk4Fixo green           4         3     18   9    0    0        0             0                  -                100.0%
 
 
+---------------------------------第二部分------------------------------------------------------
+logstash 搭建
+
+#主机名 本地解析
+
+0 拷贝证书至本地 /etc/logstash/certs
+转换logstash.key未pkcs8格式，logstash的beats input模块需要pkcs8格式的key
+[root@xtjcesbglogstash01 logstash]# openssl pkcs8 -in certs/xtjcesbglogstash01.key -topk8 -nocrypt -out certs/xtjcesbglogstash01.pkcs8.key
+[root@xtjcesbglogstash01 logstash]# ll certs
+total 16
+-rw-r--r-- 1 root root 1200 May 18 08:23 ca.crt
+-rw-r--r-- 1 root root 1224 May 18 08:23 xtjcesbglogstash01.crt
+-rw-r--r-- 1 root root 1679 May 18 08:23 xtjcesbglogstash01.key
+-rw-r--r-- 1 root root 1708 May 18 08:24 xtjcesbglogstash01.pkcs8.key
+
+1 安装filebeat连接elasticsearch集群，并加载index template和kibana dashboard
+[root@xtjcesbglogstash01 ~]# rpm -ivh filebeat-7.12.0-x86_64.rpm
+warning: filebeat-7.12.0-x86_64.rpm: Header V4 RSA/SHA512 Signature, key ID d88e42b4: NOKEY
+Preparing...                          ################################# [100%]
+Updating / installing...
+   1:filebeat-7.12.0-1                ################################# [100%]
+[root@xtjcesbglogstash01 ~]# systemctl daemon-reload
+[root@xtjcesbglogstash01 ~]# systemctl enable filebeat
+Created symlink from /etc/systemd/system/multi-user.target.wants/filebeat.service to /usr/lib/systemd/system/filebeat.service.
+初始化elasticsearch index & template
+
+[root@xtjcesbglogstash01 filebeat]# cat /etc/filebeat/filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+- type: filestream
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+filebeat.modules:
+- module: system
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+setup.dashboards.enabled: false
+setup.kibana:
+  host: "https://kibana.cesbg.foxconn:5601"
+  path: /kibana
+  ssl.enabled: true
+  ssl.certificate_authorities: ["/root/certs/ca.crt"]
+  ssl.certificate: "/root/certs/xtjcesbglogstash01.crt"
+  ssl.key: "/root/certs/xtjcesbglogstash01.key"
+output.elasticsearch:
+  hosts: ["kibana.cesbg.foxconn:9200"]
+  protocol: "https"
+  ssl.certificate_authorities: ["/root/certs/ca.crt"]
+  ssl.certificate: "/root/certs/xtjcesbglogstash01.crt"
+  ssl.key: "/root/certs/xtjcesbglogstash01.key"
+  username: "elastic"
+  password: "vSTJ456"
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+  - add_kubernetes_metadata: ~
 
 
+[root@xtjcesbglogstash01 ~]# systemctl start filebeat
+filebeat起来OK之后，开始加载template和dashboard
+[root@xtjcesbglogstash01 filebeat]# filebeat setup --index-management -E 'setup.ilm.overwrite=true'
+[root@xtjcesbglogstash01 filebeat]# filebeat setup --dashboards
+
+加载完毕后，登上kibana, 检查dahsboard是否存在
+以下curl语句检查filebeat模板
+[root@xtjcesbges01 ~]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_template | python -m json.tool |jq 'keys'
+Enter host password for user 'elastic':
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  380k  100  380k    0     0  2576k      0 --:--:-- --:--:-- --:--:-- 2587k
+[
+  ".kibana-event-log-7.12.0-template",
+  ".kibana_security_session_index_template_1",
+  ".management-beats",
+  ".ml-anomalies-",
+  ".ml-notifications-000001",
+  ".ml-state",
+  ".ml-stats",
+  ".monitoring-alerts-7",
+  ".monitoring-beats",
+  ".monitoring-es",
+  ".monitoring-kibana",
+  ".monitoring-logstash",
+  ".siem-signals-default",
+  ".transform-notifications-000002",
+  "filebeat-7.12.0"               <====== 这个模板
+  
+
+2 安装和配置logstash
+2.1 在kibana界面里创建logstash_write_role角色和logstash_writer用户
+角色权限：
+cluster privileges:   manage_index_templates,monitoring
+Index privileges:
+indices: filebeat*
+privileges: create_index,write,auto_configure,all
+2.2 安装logstash
+[root@xtjcesbglogstash01 logstash]# rpm -ivh logstash-7.12.0-x86_64.rpm
+[root@xtjcesbglogstash01 logstash]# systemctl enable logstash
+[root@xtjcesbglogstash01 main]# cat /etc/logstash/logstash.yml |egrep -v '#|^$'
+node.name: xtjcesbglogstash01.cesbg.foxconn
+path.data: /var/lib/logstash
+pipeline.ordered: auto
+config.reload.automatic: true
+http.host: 10.66.12.223
+http.port: 9600
+queue.type: persisted
+queue.page_capacity: 128mb
+queue.max_bytes: 8gb
+path.logs: /var/log/logstash
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.username: logstash_system
+xpack.monitoring.elasticsearch.password: vSTJ456
+xpack.monitoring.elasticsearch.hosts: ["https://kibana.cesbg.foxconn:9200"]
+xpack.monitoring.elasticsearch.ssl.certificate_authority: /etc/logstash/certs/ca.crt
+
+[root@xtjcesbglogstash01 main]# cat /etc/logstash/jvm.options |egrep -v '#|^$'
+-Xms4g
+-Xmx4g
+
+
+[root@xtjcesbglogstash01 logstash]# cd conf.d
+[root@xtjcesbglogstash01 conf.d]# ls
+100-beats-input.conf  300-elasticsearch-output.conf
+[root@xtjcesbglogstash01 conf.d]# cat 100-beats-input.conf
+input {
+  beats {
+    port => 5044
+    ssl => true
+    ssl_key => '/etc/logstash/certs/xtjcesbglogstash01.pkcs8.key'
+    ssl_certificate => '/etc/logstash/certs/xtjcesbglogstash01.crt'
+  }
+}
+[root@xtjcesbglogstash01 conf.d]# cat 300-elasticsearch-output.conf
+output {
+  elasticsearch {
+    hosts => ["https://kibana.cesbg.foxconn:9200"]
+    ilm_enabled => false
+    cacert => '/etc/logstash/certs/ca.crt'
+    user => 'logstash_writer'
+    password => vSTJ456
+    index => "%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}"
+  }
+}
+[root@xtjcesbglogstash01 conf.d]# systemctl start logstash
+验证logstash服务
+systemctl status logstash
+[root@xtjcesbglogstash01 logstash]# grep API logstash-plain.log
+同时查看5044 和9600 端口起来没有
+
+3 找台服务器测试filebeat
+[root@xtjplmepdvdb01 ~]# rpm -ivh filebeat-7.12.0-x86_64.rpm
+[root@xtjplmepdvdb01 ~]# systemctl enable filebeat
+拷贝ca.crt到/etc/filebeat/ca.crt
+使用curl测试ssl连通性   域名可以使用本地解析
+curl -v --cacert /etc/filebeat/ca.crt https://xtjcesbglogstash01.cesbg.foxconn:5044
+看到empty response返回，说明https通讯没有问题
+配置filebeat.yml
+[root@xtjplmepdvdb01 filebeat]# cat filebeat.yml |egrep -v '#|^$'
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+- type: filestream
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+filebeat.modules:
+- module: system
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+setup.kibana:
+output.logstash:
+  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044"]
+  ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+  - add_kubernetes_metadata: ~
+启动filebeat   systemctl start filebeat
+查看filebeat日志，并且登kibana检查是否有这台主机的机器名，日志
+
+4 配置其他两台logstash，相同的配置
+不要忘了ssl证书
+[root@xtjcesbglogstash02 logstash]# ll certs
+total 16
+-rw-r--r--. 1 root root 1200 May 18 13:42 ca.crt
+-rw-r--r--. 1 root root 1224 May 18 13:43 xtjcesbglogstash02.crt
+-rw-r--r--. 1 root root 1675 May 18 13:43 xtjcesbglogstash02.key
+-rw-r--r--. 1 root root 1704 May 18 13:43 xtjcesbglogstash02.pkcs8.key
+其他相同
+
+  设置filebeat客户端 loadbalance到三台logstash
+  修改filebeat.yml如下部分，设置lb为true
+output.logstash:
+  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044","xtjcesbglogstash02.cesbg.foxconn:5044","xtjcesbglogstash03.cesbg.foxconn:5044"]
+  loadbalance: true
+重启filebeat后可看到filebeat将负载均衡到三台logstash节点上了
+[root@xtjplmepdvdb02 ~]# ss -ant |grep 5044
+ESTAB      0      0      10.66.13.24:40552              10.66.12.223:5044
+ESTAB      0      0      10.66.13.24:58238              10.66.12.199:5044
+ESTAB      0      0      10.66.13.24:54800              10.66.12.190:5044
+
+最后一步
+更改/etc/elasticsearch/elasticsearch.yml
+将xtjcesbges01/02 和 kibana.cesbg.foxconn里的elasticsearch初始化节点更改如下
+discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn", "xtjcesbges02.cesbg.foxconn","xtjcesbges03.cesbg.foxconn"]
+cluster.initial_master_nodes: ["xtjcesbges01", "xtjcesbges02","xtjcesbges03"]  
 
 
 
