@@ -1,0 +1,76 @@
+0  connect to vCenter
+PowerCLI C:\> Connect-VIServer -server 10.134.103.125 -user administrator@vsphere.local -password 'Foxconn$123'
+
+Name                           Port  User
+----                           ----  ----
+10.134.103.125                 443   VSPHERE.LOCAL\Administrator
+
+1 Enabling SSH
+Check which hosts still have SSH enabled.
+
+Get-VMHost | Get-VMHostService | Where { $_.Key -eq "TSM-SSH" } |select VMHost, Label, Running
+
+If you want to enable SSH on all hosts in your vCenter, you can use the oneliner below.
+
+Get-VMHost | Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+If you want to filter which hosts you want to enable SSH on, specify them on the Get-VMHost:
+Get-VMHost -Name MyHosts*| Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+
+2 Disabling SSH
+If you want to disable SSH on all hosts still running SSH, you can use the following:
+
+Get-VMHost | Foreach {Stop-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+
+
+
+
+
+
+Get-datacenter 'test b11'|get-vmhost
+ Get-datacenter 'test b11'|get-vm
+ get-datacenter 'office 01'|get-vmhost|where {$_.numcpu -gt 4}
+ get-datacenter 'office 01'|get-datastore|where {$_.FreeSpaceGB -gt 200}
+ 
+Get-VMHost
+ Get-vmhost 10.67.50.252|select *
+ Get-VMHost|Get-VM
+ Get-VMHost 10.67.50.252|Get-VMHostDisk
+ get-vmhost 10.67.74.135|Get-VMHostservice
+ get-vmhost 10.67.74.135|Get-VMHostnetworkadapter
+ get-vmhost 10.67.74.135|Get-Virtualswitch
+ get-vmhost 10.67.74.135|Get-virtualportgroup
+ get-vmhost 10.67.74.135|Get-vmhosthba
+ get-vmhost|where {$_.MemoryTotalGB -gt 63}
+ get-vmhost|get-datastore|where {$_.FreeSpaceGB -gt 500}
+get-vmhost|get-datastore|where {($_.FreeSpaceGB -gt 500) -and ($_.Name -like '50*')}
+
+Name                               FreeSpaceGB      CapacityGB
+----                               -----------      ----------
+50.140 Storage02                       511.284       1,117.250
+50.138 Storage02                       583.471       1,117.250
+50.165 Storage02                       591.435       1,117.250
+50.147 Storage02                       643.776       1,117.250
+50.254 Storage02                       524.213         837.000
+
+Get-VM zabbix3 |Get-VMGuest
+ get-vm zabbix3|select *
+ get-vm zabbix3|get-view
+ 
+$vm=Get-VMHost 10.67.50.252|get-view
+$vm.summary.hardware
+
+ ####export the vms per datacenter
+ foreach($h in (get-datacenter 'test b11'|get-vmhost)){echo =====$h=====;get-vmhost $h|get-vm}
+  
+Get-NetworkAdapter -vm zabbix3
+ Get-NetworkAdapter -vm zabbix3|select *
+
+foreach($vs in (Get-VirtualSwitch -vmhost 10.67.50.252)){get-virtualportgroup -virtualswitch $vs|select name,virtualswitchname,vlanid}
+Get-VirtualSwitch -vmhost 10.67.50.252 |select name,numports,numportsavailable,nic,mtu,vmhost
+
+###export the list of vmhosts
+get-vmhost|select Name,ParentId,IsStandalone,Manufacturer,Model,MemoryTotalGB,MemoryUsageGB,NumCpu,CpuTotalMhz,CpuUsageMhz,ProcessorType,Version,LicenseKey |Export-Csv 'd:\vmhost_detail.csv'
+
+###export the list of vms
+get-vm|Select Name, @{N="IP Address";E={@($_.guest.IPAddress[0])}},vmhost,numcpu,memorygb,usedspacegb,provisionedspacegb,powerstate,version|Export-Csv 'D:\vmguest.csv'
+
