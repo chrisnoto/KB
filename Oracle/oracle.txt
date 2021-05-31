@@ -1363,3 +1363,193 @@ SQL> select * from emp_mv2;
         20      24875
 創建定時刷新的物化視圖(指定物化視圖每天刷新一次)：
 SQL> create materialized view mv_name refresh force on demand start with sysdate next sysdate+1;
+
+# SQL Access Advisor vs SQL Tuning Advisor
+The SQL Access Advisor is primarily responsible for making schema modification recommendations, such as adding or dropping indexes and materialized views. 
+The SQL Tuning Advisor makes other types of recommendations, such as creating SQL profiles and restructuring SQL statements. 
+In some cases where significant performance improvements can be gained by creating a new index, the SQL Tuning Advisor may recommend doing so. 
+However, such recommendations should be verified by running the SQL Access Advisor using a SQL workload that contains a set of representative SQL statements.
+
+闪回数据归档：限制和建议
+
+DDL限制
+如果在开启FBDA的表上应用下面这些DDL命令，Oracle 11g将会产生一个异常：
+(1)ALTER TABLE <表名>命令，如
+删除一列
+重命名列
+修改列
+执行PARTITION 或SUBPARTITION 操作
+将列的数据类型从LONG转换为LOB
+调用UPGRADE TABLE操作，不管是否指定了INCLUDING DATA选项
+
+(2)DROP TABLE <表名>;
+(3)RENAME TABLE <表明>;
+(4)TRUNCATE TABLE <表名>;
+
+
+# Row-Archival
+現在12C 有個新功能 In-Database Archiving 它允許在Row 上標記為不活躍的狀態，在進行操作時Oracle能自動略過不活躍的ROW，功能可以在session上個別控制
+
+--把Table的標記功能開啟
+SQL> alter table t_ra row archival;
+
+SYS@POC1:CDB$ROOT> select column_name,data_type,hidden_column from
+  2  dba_tab_cols where table_name='T_RA';
+
+COLUMN_NAME          DATA_TYPE            HID
+-------------------- -------------------- ---
+OWNER                VARCHAR2             NO
+OBJECT_NAME          VARCHAR2             NO
+SUBOBJECT_NAME       VARCHAR2             NO
+OBJECT_ID            NUMBER               NO
+DATA_OBJECT_ID       NUMBER               NO
+OBJECT_TYPE          VARCHAR2             NO
+CREATED              DATE                 NO
+LAST_DDL_TIME        DATE                 NO
+TIMESTAMP            VARCHAR2             NO
+STATUS               VARCHAR2             NO
+TEMPORARY            VARCHAR2             NO
+GENERATED            VARCHAR2             NO
+SECONDARY            VARCHAR2             NO
+NAMESPACE            NUMBER               NO
+EDITION_NAME         VARCHAR2             NO
+SHARING              VARCHAR2             NO
+EDITIONABLE          VARCHAR2             NO
+ORACLE_MAINTAINED    VARCHAR2             NO
+APPLICATION          VARCHAR2             NO
+DEFAULT_COLLATION    VARCHAR2             NO
+DUPLICATED           VARCHAR2             NO
+SHARDED              VARCHAR2             NO
+CREATED_APPID        NUMBER               NO
+CREATED_VSNID        NUMBER               NO
+MODIFIED_APPID       NUMBER               NO
+MODIFIED_VSNID       NUMBER               NO
+SYS_NC00027$         RAW                  YES
+ORA_ARCHIVE_STATE    VARCHAR2             YES
+
+28 rows selected.
+
+--在Session開啟功能
+SYS@POC1:CDB$ROOT> alter session set row archival visibility=active;
+Session altered.
+
+--把資料進行標記為不活躍, 這邊全標記1
+SYS@POC1:CDB$ROOT> update t_ra set ora_archive_state='1' where owner ='SYS';
+103843 rows updated.
+
+Execution Plan
+----------------------------------------------------------
+Plan hash value: 3525175359
+
+---------------------------------------------------------------------------
+| Id  | Operation          | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+---------------------------------------------------------------------------
+|   0 | UPDATE STATEMENT   |      |    31 |  4123 |   778   (1)| 00:00:01 |
+|   1 |  UPDATE            | T_RA |       |       |            |          |
+|*  2 |   TABLE ACCESS FULL| T_RA |    31 |  4123 |   778   (1)| 00:00:01 |
+---------------------------------------------------------------------------
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   2 - filter("T_RA"."ORA_ARCHIVE_STATE"='0' AND "OWNER"='SYS')
+
+
+Statistics
+----------------------------------------------------------
+         26  recursive calls
+     226604  db block gets
+      63489  consistent gets
+       1972  physical reads
+   52414984  redo size
+        869  bytes sent via SQL*Net to client
+        977  bytes received via SQL*Net from client
+          3  SQL*Net roundtrips to/from client
+          1  sorts (memory)
+          0  sorts (disk)
+     103843  rows processed
+
+SYS@POC1:CDB$ROOT> commit;
+
+Commit complete.
+
+SYS@POC1:CDB$ROOT> select count(*) from t_ra;
+
+  COUNT(*)
+----------
+     43122
+
+
+Execution Plan
+----------------------------------------------------------
+Plan hash value: 948257441
+
+---------------------------------------------------------------------------
+| Id  | Operation          | Name | Rows  | Bytes | Cost (%CPU)| Time     |
+---------------------------------------------------------------------------
+|   0 | SELECT STATEMENT   |      |     1 |   133 |   778   (1)| 00:00:01 |
+|   1 |  SORT AGGREGATE    |      |     1 |   133 |            |          |
+|*  2 |   TABLE ACCESS FULL| T_RA |   735 | 97755 |   778   (1)| 00:00:01 |
+---------------------------------------------------------------------------
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   2 - filter("T_RA"."ORA_ARCHIVE_STATE"='0')
+
+
+Statistics
+----------------------------------------------------------
+          1  recursive calls
+          0  db block gets
+       2866  consistent gets
+          0  physical reads
+          0  redo size
+        544  bytes sent via SQL*Net to client
+        608  bytes received via SQL*Net from client
+          2  SQL*Net roundtrips to/from client
+          0  sorts (memory)
+          0  sorts (disk)
+          1  rows processed
+可以看到不活躍的資料都不被顯示出來
+
+--更改參數為 ALL ,資料又可以全部看到
+SYS@POC1:CDB$ROOT> alter session set row archival visibility=all;
+
+Session altered.
+
+SYS@POC1:CDB$ROOT> select count(*) from t_ra;
+
+  COUNT(*)
+----------
+    146965
+
+
+Execution Plan
+----------------------------------------------------------
+Plan hash value: 948257441
+
+-------------------------------------------------------------------
+| Id  | Operation          | Name | Rows  | Cost (%CPU)| Time     |
+-------------------------------------------------------------------
+|   0 | SELECT STATEMENT   |      |     1 |   777   (1)| 00:00:01 |
+|   1 |  SORT AGGREGATE    |      |     1 |            |          |
+|   2 |   TABLE ACCESS FULL| T_RA | 73482 |   777   (1)| 00:00:01 |
+-------------------------------------------------------------------
+
+
+Statistics
+----------------------------------------------------------
+          1  recursive calls
+          0  db block gets
+       2866  consistent gets
+          0  physical reads
+          0  redo size
+        544  bytes sent via SQL*Net to client
+        608  bytes received via SQL*Net from client
+          2  SQL*Net roundtrips to/from client
+          0  sorts (memory)
+          0  sorts (disk)
+          1  rows processed
+看到測試中的執行計畫可以發現,原來Oracle是利用ORA_ARCHIVE_STATE欄位進行篩選
+那我們利用此欄位來讓 full table scan 的操作效能提升

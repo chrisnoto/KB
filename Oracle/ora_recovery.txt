@@ -540,3 +540,45 @@ TYPE      RECORD_SIZE RECORDS_TOTAL RECORDS_USED FIRST_INDEX LAST_INDEX LAST_REC
 ---------------------------- ----------- ------------- ------------ ----------- ---------- ----------
 ARCHIVED LOG      584   896   742  807  652  1800
 至此問題結束。
+
+
+# 查看闪回区的内容
+SYS@POC1:CDB$ROOT> select * from v$flash_recovery_area_usage;
+
+FILE_TYPE               PERCENT_SPACE_USED PERCENT_SPACE_RECLAIMABLE NUMBER_OF_FILES     CON_ID
+----------------------- ------------------ ------------------------- --------------- ----------
+CONTROL FILE                           .22                         0               1          0
+REDO LOG                              7.49                         0               3          0
+ARCHIVED LOG                             0                         0               0          0
+BACKUP PIECE                             0                         0               0          0
+IMAGE COPY                               0                         0               0          0
+FLASHBACK LOG                        29.94                     14.97              12          0
+FOREIGN ARCHIVED LOG                     0                         0               0          0
+AUXILIARY DATAFILE COPY                  0                         0               0          0
+
+8 rows selected.
+
+上面檢視中查詢的結果列出的所有型別的檔案，都可以利用閃回恢復區來存放、管理
+
+#################  OSB  #################
+--To configure Oracle Secure Backup for use with RMAN, perform the following steps in Oracle Secure Backup
+--1. Configure RMAN access to the Oracle Secure Backup SBT. If you are using Enterprise Manager Database Control, then this step involves registering the administrative server with Enterprise Manager.
+--2. Create an Oracle Secure Backup user preauthorized for RMAN operations
+--3. Oracle recommends that you create media families for data files and archived redo logs. If you do not create your own media families, then by default RMAN uses the RMAN-DEFAULT media family.
+--4. Optionally, configure database backup storage selectors or RMAN media management parameters. These settings give you more fine-grained control over storage selection for backups.
+--5. Optionally, disable NUMA-awareness by setting the OB_IGNORE_NUMA to 0.
+
+
+#########Incrementally Updated Backups
+The following example shows how an incrementally updated backup can be used.
+
+RUN {
+  RECOVER COPY OF DATABASE WITH TAG 'mydb_incr_backup' UNTIL TIME 'SYSDATE - 7';
+  BACKUP INCREMENTAL LEVEL 1 FOR RECOVER OF COPY WITH TAG 'mydb_incr_backup' DATABASE;
+}
+The RECOVER COPY... line will not do anything until the script has been running for more than 7 days. The BACKUP INCREMENTAL line will perform image copy backups 
+the first day it is run (and for any new datafiles), with all subsequent backups being level 1 incremental backups. After 7 days, the RECOVER COPY... line will start to take effect,
+ merging all incremental backups older than 7 days into the level 0 backup, effectively moving the level 0 backup forward. The effect of this is that you will permanently have a 7 day
+ recovery window with a 7 day old level 0 backup and 6 level 1 incremental backups. Notice that the tag must be used to identify which incremental backups apply to which image copies.
+ 
+ 

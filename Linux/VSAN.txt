@@ -1,6 +1,9 @@
- vsphere 5.5 重設 sso密碼
- D:\Program Files\VMware\Infrastructure\VMware\cis\vmdird> .\vdcadmintool.exe
+vsphere 5.5 重設 sso密碼
+D:\Program Files\VMware\Infrastructure\VMware\cis\vmdird> .\vdcadmintool.exe
 
+vsphere 6.5 更新证书
+For vCenter Server 6.x/7.x Appliance: /usr/lib/vmware-vmca/bin/certificate-manager
+For Windows vCenter Server 6.x: C:\Program Files\VMware\vCenter Server\vmcad\certificate-manager
 
 https://kb.vmware.com/s/article/2145116?lang=zh_CN 
 
