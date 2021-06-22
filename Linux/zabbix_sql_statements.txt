@@ -1,0 +1,162 @@
+查询主机、主机组、应用负责人、重要性
+MariaDB [zabbix]> select a.hostid,b.host,b.name,a.alias,a.os,a.tag from host_inventory as a inner join hosts as b on a.hostid=b.hostid order by b.host;
++--------+---------------------------------+---------------------------------+-----------+--------------+--------------+--------------+
+| hostid | host                            | name                            | alias     | os           | tag          | type         |
++--------+---------------------------------+---------------------------------+-----------+--------------+--------------+--------------+
+|  10305 | vstjzabdb01                     | 10.67.51.113                    | chensen   | CentOS7      |              | VM           |
+|  10306 | vstjzabdb02                     | 10.67.51.116                    | chensen   | CentOS7      |              | VM           |
+|  10307 | vstjzabdb03                     | 10.67.51.118                    | chensen   | CentOS7      |              | VM           |
+|  10309 | VSTJEPBGSFCSEP1                 | 10.67.74.98                     |           | Windows      |              | VM           |
+|  10313 | VSTJCESBGTRANS2                 | 10.67.50.113                    | 邵玉雪    | Windows 2012 | SA           | 一般         |
+|  10316 | VSTJCESBGTRANS3                 | 10.67.50.96                     | 邵玉雪    | Windows 2012 | SA           | 一般         |
+|  10318 | STJCESVCENTER02                 | 10.67.51.89                     |           |              |              |              |
+|  10320 | VSTJFLOWWEB01                   | 10.67.48.233                    |           |              |              |              |
+|  10321 | VSTJFLOWWEB02                   | 10.67.48.234                    |           |              |              |              |
+|  10322 | VSTJULTIMUS01                   | 10.67.48.235                    |           |              |              |              |
+|  10323 | VSTJULTIMUS02                   | 10.67.48.236                    |           |              |              |              |
+|  10324 | VSTJULTIMUS03                   | 10.67.48.237                    |           |              |              |              |
+MariaDB [zabbix]> select a.hostid as host_id,a.host as host_name,a.name as host_visible_name,c.name as host_group_name from hosts as a inner join hosts_groups as b on a.hostid=b.hostid inner join hstgrp c on b.groupid=c.groupid where a.host not like 'Template%' and c.name not like 'Discovered%';
++---------+--------------------------------------+---------------------------------+---------------------+
+| host_id | host_name                            | host_visible_name               | host_group_name     |
++---------+--------------------------------------+---------------------------------+---------------------+
+|   10084 | Zabbix server                        | Zabbix server                   | Zabbix servers      |
+|   10305 | vstjzabdb01                          | 10.67.51.113                    | Linux servers       |
+|   10305 | vstjzabdb01                          | 10.67.51.113                    | Server_SA           |
+|   10305 | vstjzabdb01                          | 10.67.51.113                    | SA_Server_崔振業    |
+|   10306 | vstjzabdb02                          | 10.67.51.116                    | Linux servers       |
+|   10306 | vstjzabdb02                          | 10.67.51.116                    | Server_SA           |
+|   10306 | vstjzabdb02                          | 10.67.51.116                    | SA_Server_崔振業    |
+|   10307 | vstjzabdb03                          | 10.67.51.118                    | Linux servers       |
+|   10307 | vstjzabdb03                          | 10.67.51.118                    | Server_SA           |
+|   10307 | vstjzabdb03                          | 10.67.51.118                    | SA_Server_崔振業    |
+|   10309 | VSTJEPBGSFCSEP1                      | 10.67.74.98                     | Windows servers     |
+|   10309 | VSTJEPBGSFCSEP1                      | 10.67.74.98                     | SA_Server_邵玉雪    |
+|   10309 | VSTJEPBGSFCSEP1                      | 10.67.74.98                     | Server_SA           |
+|   10313 | VSTJCESBGTRANS2                      | 10.67.50.113                    | Windows servers     |
+|   10313 | VSTJCESBGTRANS2                      | 10.67.50.113                    | SA_Server_邵玉雪    |
+|   10313 | VSTJCESBGTRANS2                      | 10.67.50.113                    | Server_SA           |
+|   10316 | VSTJCESBGTRANS3                      | 10.67.50.96                     | Windows servers     |
+|   10316 | VSTJCESBGTRANS3                      | 10.67.50.96                     | SA_Server_邵玉雪    |
+|   10316 | VSTJCESBGTRANS3                      | 10.67.50.96                     | Server_SA           |
+|   10318 | STJCESVCENTER02                      | 10.67.51.89                     | Windows servers     |
+|   10318 | STJCESVCENTER02                      | 10.67.51.89                     | Server_SA           |
+|   10318 | STJCESVCENTER02                      | 10.67.51.89                     | SA_Server_李俊傑    |
+
+MariaDB [zabbix]> select * from hosts_groups;
++-------------+--------+---------+
+| hostgroupid | hostid | groupid |
++-------------+--------+---------+
+|         194 |  10001 |      10 |
+|         189 |  10047 |      12 |
+|         188 |  10048 |      12 |
+MariaDB [zabbix]> select * from hstgrp;
++---------+-----------------------------+----------+-------+
+| groupid | name                        | internal | flags |
++---------+-----------------------------+----------+-------+
+|      58 | Server_GSCM                 |        0 |     0 |
+|      59 | Server_B2B                  |        0 |     0 |
+|      60 | Server_PLM                  |        0 |     0 |
+|      61 | Server_HR                   |        0 |     0 |
+|      63 | Server_SA                   |        0 |     0 |
+|      64 | Server_SFC                  |        0 |     0 |
+|      65 | Server_PAAS                 |        0 |     0 |
+|      66 | SA_Server_孫佳偉            |        0 |     0 |
+
+MariaDB [zabbix]> select a.hostid,a.name,c.name from hosts as a inner join hosts_groups as b on a.hostid=b.hostid inner join hstgrp as c on b.groupid=c.groupid where a.name not like 'Template%';
++--------+---------------------------------+---------------------+
+| hostid | name                            | name                |
++--------+---------------------------------+---------------------+
+|  11277 | 10.62.163.115                   | Server_DB           |
+|  11278 | 10.62.163.242                   | Server_DB           |
+|  11390 | 10.67.15.67                     | Discovered hosts    |
+|  11390 | 10.67.15.67                     | Windows servers     |
+|  11390 | 10.67.15.67                     | Server_SA           |
+|  11390 | 10.67.15.67                     | SA_Server_孫佳偉    |
+|  10944 | 10.67.15.68                     | Discovered hosts    |
+|  10944 | 10.67.15.68                     | Windows servers     |
+|  10944 | 10.67.15.68                     | SA_Server_陈森      |
+|  10944 | 10.67.15.68                     | Server_SA           |
+|  10864 | 10.67.15.69                     | Discovered hosts    |
+|  10864 | 10.67.15.69                     | Windows servers     |
+|  10864 | 10.67.15.69                     | Server_SA           |
+|  10864 | 10.67.15.69                     | SA_Server_崔振業    |
+
+MariaDB [zabbix]> select * from hosts where hostid=10305\G;
+*************************** 1. row ***************************
+            hostid: 10305
+              host: vstjzabdb01
+              name: 10.67.51.113
+MariaDB [zabbix]> select a.hostid,a.host,a.name,c.name from hosts as a
+     inner join hosts_groups as b
+     on a.hostid=b.hostid
+     inner join hstgrp c
+     on b.groupid=c.groupid;
+
+MariaDB [zabbix]> select a.hostid as host_id,a.host as host_name,a.name as host_visible_name,c.name as host_group_name, d.os,d.alias,d.tag,d.type from hosts as a 
+inner join hosts_groups as b on a.hostid=b.hostid inner join hstgrp c on b.groupid=c.groupid inner join host_inventory as d on a.hostid=d.hostid 
+where a.host not like 'Template%' and c.name not like 'Discovered%';
++---------+---------------------------------+---------------------------------+---------------------+--------------+-----------+--------------+--------------+
+| host_id | host_name                       | host_visible_name               | host_group_name     | os           | alias     | tag          | type         |
++---------+---------------------------------+---------------------------------+---------------------+--------------+-----------+--------------+--------------+
+|   10305 | vstjzabdb01                     | 10.67.51.113                    | Linux servers       | CentOS7      | chensen   |              | VM           |
+|   10305 | vstjzabdb01                     | 10.67.51.113                    | Server_SA           | CentOS7      | chensen   |              | VM           |
+|   10305 | vstjzabdb01                     | 10.67.51.113                    | SA_Server_崔振業    | CentOS7      | chensen   |              | VM           |
+|   10306 | vstjzabdb02                     | 10.67.51.116                    | Linux servers       | CentOS7      | chensen   |              | VM           |
+|   10306 | vstjzabdb02                     | 10.67.51.116                    | Server_SA           | CentOS7      | chensen   |              | VM           |
+|   10306 | vstjzabdb02                     | 10.67.51.116                    | SA_Server_崔振業    | CentOS7      | chensen   |              | VM           |
+|   10307 | vstjzabdb03                     | 10.67.51.118                    | Linux servers       | CentOS7      | chensen   |              | VM           |
+|   10307 | vstjzabdb03                     | 10.67.51.118                    | Server_SA           | CentOS7      | chensen   |              | VM           |
+|   10307 | vstjzabdb03                     | 10.67.51.118                    | SA_Server_崔振業    | CentOS7      | chensen   |              | VM           |
+|   10309 | VSTJEPBGSFCSEP1                 | 10.67.74.98                     | Windows servers     | Windows      |           |              | VM           |
+|   10309 | VSTJEPBGSFCSEP1                 | 10.67.74.98                     | SA_Server_邵玉雪    | Windows      |           |              | VM           |
+|   10309 | VSTJEPBGSFCSEP1                 | 10.67.74.98                     | Server_SA           | Windows      |           |              | VM           |
+|   10313 | VSTJCESBGTRANS2                 | 10.67.50.113                    | Windows servers     | Windows 2012 | 邵玉雪    | SA           | 一般         |
+|   10313 | VSTJCESBGTRANS2                 | 10.67.50.113                    | SA_Server_邵玉雪    | Windows 2012 | 邵玉雪    | SA           | 一般         |
+|   10313 | VSTJCESBGTRANS2                 | 10.67.50.113                    | Server_SA           | Windows 2012 | 邵玉雪    | SA           | 一般         |
+|   10316 | VSTJCESBGTRANS3                 | 10.67.50.96                     | Windows servers     | Windows 2012 | 邵玉雪    | SA           | 一般         |
+|   10316 | VSTJCESBGTRANS3                 | 10.67.50.96                     | SA_Server_邵玉雪    | Windows 2012 | 邵玉雪    | SA           | 一般         |
+|   10316 | VSTJCESBGTRANS3                 | 10.67.50.96                     | Server_SA           | Windows 2012 | 邵玉雪    | SA           | 一般         |
+	 
+############更新zabbix db及监控信息###########
+1 整理好server list清单   (已整理好，后面再添加)
+***手动收集 
+
+2 完善所有要监控的主机 填写主机inventory信息 包括 os, alias, tag,   导入方式
+load data infile '/var/lib/mysql/zabbix/zi2.csv'
+     into table tmp_inventory 
+     character set utf8
+     fields terminated by ','
+     lines terminated by '\n';
+
+MariaDB [zabbix]> update host_inventory h2,tmp_inventory t set h2.os= t.os, h2.alias=t.alias, h2.tag=t.tag where h2.hostid=t.hostid;
+Query OK, 265 rows affected (0.099 sec)
+Rows matched: 265  Changed: 265  Warnings: 0
+ 
+3 追加被监控主机的host group
+***zabbix web页面批量更新字段
+
+4 完善用户和用户组信息   
+4.1 用户组对应上用户  
+    用户组对应上host group   
+***手动处理
+
+4.2 用户设定好发送方式 MCMailSender，邮件地址，报警类型，报警时间等   
+MariaDB [zabbix]> create table tmp_mail as select userid,sendto from media;
+load data infile '/var/lib/mysql/zabbix/u99.csv'
+    into table tmp_mail
+    character set utf8
+    fields terminated by ','
+    lines terminated by '\n';
+MariaDB [zabbix]> create table media3 as select * from media;	
+MariaDB [zabbix]> insert into media3 select floor(12+rand()*980),userid,4,sendto,0,56,'1-7,00:00-24:00' from tmp_mail;  有2行重复随机数，手动处理
+MariaDB [zabbix]> delete from media3 where userid in (6,4,5,53,124,125);
+Query OK, 6 rows affected (0.001 sec)
+MariaDB [zabbix]> insert into media select * from media3;
+Query OK, 69 rows affected (0.004 sec)
+Records: 69  Duplicates: 0  Warnings: 0
+
+5 设定Actions, 
+
+
+查找没有template关联的被监控机器
+MariaDB [zabbix]> select a.hostid,a.host,b.templateid from hosts a left join hosts_templates b on a.hostid=b.hostid where a.host not like 'Template%' and b.templateid is NULL;

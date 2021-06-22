@@ -581,4 +581,6 @@ the first day it is run (and for any new datafiles), with all subsequent backups
  merging all incremental backups older than 7 days into the level 0 backup, effectively moving the level 0 backup forward. The effect of this is that you will permanently have a 7 day
  recovery window with a 7 day old level 0 backup and 6 level 1 incremental backups. Notice that the tag must be used to identify which incremental backups apply to which image copies.
  
+ Note that it is not possible to duplex backup sets to the flash recovery area, 
+ and that duplexing only applies to backup sets, not image copies
  
