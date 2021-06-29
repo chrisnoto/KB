@@ -479,3 +479,90 @@ User: dbadmin
 7 rows in set (0.001 sec)
 
 ERROR: No query specified
+
+
+主从复制碰到 delete_rows错误
+mysql> show slave status\G;
+*************************** 1. row ***************************
+               Slave_IO_State:
+                  Master_Host: 10.67.38.246
+                  Master_User: repl
+                  Master_Port: 3306
+                Connect_Retry: 60
+              Master_Log_File: mysql-bin.000628
+          Read_Master_Log_Pos: 9206398
+               Relay_Log_File: mysql-relay-bin.000340
+                Relay_Log_Pos: 16892736
+        Relay_Master_Log_File: mysql-bin.000169
+             Slave_IO_Running: No
+            Slave_SQL_Running: No
+              Replicate_Do_DB:
+          Replicate_Ignore_DB:
+           Replicate_Do_Table:
+       Replicate_Ignore_Table:
+      Replicate_Wild_Do_Table:
+  Replicate_Wild_Ignore_Table:
+                   Last_Errno: 1032
+                   Last_Error: Could not execute Delete_rows event on table zabbix.history_uint; Can't find record in 'history_uint', Error_code: 1032; handler error HA_ERR_KEY_NOT_FOUND; the event's master log mysql-bin.000169, end_log_pos 16894177
+                 Skip_Counter: 0
+          Exec_Master_Log_Pos: 16892443
+              Relay_Log_Space: 10819205945
+              Until_Condition: None
+               Until_Log_File:
+                Until_Log_Pos: 0
+           Master_SSL_Allowed: No
+           Master_SSL_CA_File:
+           Master_SSL_CA_Path:
+              Master_SSL_Cert:
+            Master_SSL_Cipher:
+               Master_SSL_Key:
+        Seconds_Behind_Master: NULL
+Master_SSL_Verify_Server_Cert: No
+                Last_IO_Errno: 0
+                Last_IO_Error:
+               Last_SQL_Errno: 1032
+               Last_SQL_Error: Could not execute Delete_rows event on table zabbix.history_uint; Can't find record in 'history_uint', Error_code: 1032; handler error HA_ERR_KEY_NOT_FOUND; the event's master log mysql-bin.000169, end_log_pos 16894177
+  Replicate_Ignore_Server_Ids:
+             Master_Server_Id: 1
+                  Master_UUID: 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3
+             Master_Info_File: mysql.slave_master_info
+                    SQL_Delay: 0
+          SQL_Remaining_Delay: NULL
+      Slave_SQL_Running_State:
+           Master_Retry_Count: 86400
+                  Master_Bind:
+      Last_IO_Error_Timestamp:
+     Last_SQL_Error_Timestamp: 200625 14:28:47
+               Master_SSL_Crl:
+           Master_SSL_Crlpath:
+           Retrieved_Gtid_Set: 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:5-9893540:9893558-12573252:12573269-12655748:12655764-12692484:12692489-12694311:12694335-40480213
+            Executed_Gtid_Set: 3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:1-13033267,
+d75b0fff-ee1b-11e9-95c7-fa163e4c7739:1-6
+                Auto_Position: 1
+         Replicate_Rewrite_DB:
+                 Channel_Name:
+           Master_TLS_Version:
+1 row in set (0.00 sec)
+mysql> stop slave;
+mysql> set @@session.gtid_next='3a7b7e13-ebd9-11e9-acb4-fa163ead70f3:9893540'/*!*/;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> begin;commit;
+Query OK, 0 rows affected (0.00 sec)
+
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> set session gtid_next=automatic;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> start slave;
+Query OK, 0 rows affected (0.00 sec)
+问题是，跳过这一个gtid,又卡在下一个gtid,没完没了
+最后是在配置文件里加入这个参数，忽略所有1032的复制错误，解决问题
+slave-skip-errors=1032
+
+主从复制碰到 relay log read failure错误
+Last_Error: Relay log read failure: Could not parse relay log event entry. The possible reasons are: the master's binary log is corrupted 
+(you can check this by running 'mysqlbinlog' on the binary log), the slave's relay log is corrupted (you can check this by running 'mysqlbinlog' on the relay log), 
+a network problem, or a bug in the master's or slave's MySQL code. If you want to check the master's binary log or slave's relay log, you will be able to know their 
+names by issuing 'SHOW SLAVE STATUS' on this slave.

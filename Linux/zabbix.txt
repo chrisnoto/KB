@@ -135,3 +135,41 @@ ansible playbook的目录结构
 │   └── templates
 ├── site.yml
 └── zabbix.yml
+
+# proxy和server之间的监控数据存在huge lag。
+查看zabbix-proxy和zabbix-server之间的lag
+MariaDB [zbx_proxy]> select count(*) from proxy_history where id>(select nextid from ids where
+    -> table_name="proxy_history");
++----------+
+| count(*) |
++----------+
+|   918480 |
++----------+
+1 row in set (1.957 sec)
+
+MariaDB [zbx_proxy]> select count(*) from proxy_history where id>(select nextid from ids where table_name="proxy_history");
++----------+
+| count(*) |
++----------+
+|   918804 |
++----------+
+1 row in set (1.295 sec)
+
+MariaDB [zbx_proxy]> select count(*) from proxy_history where id>(select nextid from ids where table_name="proxy_history");
++----------+
+| count(*) |
++----------+
+|   920722 |
++----------+
+1 row in set (1.562 sec)
+调整proxy和server端的参数，比如增大starttrapper都没有作用。最后删除lag的backlog数据
+To do that, we need:
+1. stop the Zabbix proxy,
+systemctl stop zabbix-proxy
+2. open the database,
+mysql
+3. Tuncate two tables — proxy history query and IDs,
+truncate proxy_history;
+truncate ids;
+4. exit from the database and start Zabbix proxy,
+systemctl start zabbix-proxy

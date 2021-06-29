@@ -564,3 +564,71 @@ vsanperfsvc started
 
 # 虚拟机开机 operating system not found 错误，但是虚拟硬盘没有问题
 解决办法：重新注册虚机
+
+
+# VSAN object health状态
+[root@A21VSAN19:~] esxcli vsan debug object health summary get
+Health Status                                     Number Of Objects
+------------------------------------------------  -----------------
+data-move                                                         0
+nonavailability-related-incompliance                              0
+nonavailability-related-reconfig                                  0
+reduced-availability-with-no-rebuild-delay-timer                  0
+healthy                                                         538
+reduced-availability-with-active-rebuild                          0
+inaccessible                                                      0
+reduced-availability-with-no-rebuild                              1
+
+[root@A21VSAN19:~] esxcli vsan debug object health summary get
+Health Status                                     Number Of Objects
+------------------------------------------------  -----------------
+nonavailability-related-incompliance                              0
+data-move                                                         0
+nonavailability-related-reconfig                                  0
+reduced-availability-with-no-rebuild-delay-timer                  0
+reduced-availability-with-no-rebuild                              0
+healthy                                                         538
+inaccessible                                                      0
+reduced-availability-with-active-rebuild                          1
+
+Q: What does it mean when it is in an error state?
+These are the possible states that an object may have when it is not healthy.
+
+remoteAccessible: This status is�only applicable for client vSAN cluster after mounting remote vSAN datastore and indicates the object is accessible from all hosts in client cluster. The actual object health status like reduced availability need to be queried from server cluster which the client cluster is mounting from.
+
+Data move: vSAN is building data on the ESXi hosts and storage in the cluster either because you requested some form of maintenance mode or evacuation, or because of re-balancing activities. Objects in this state are fully compliant with their policy and are healthy, but vSAN is actively rebuilding them. You should not be worried, as the object is not at risk. However, a performance impact can be expected while objects are in this state. You can cross reference to the re-syncing components view to learn more about active data sync activities.
+
+Healthy: The object is in perfect condition, exactly aligned with its policy, and is not currently being moved or otherwise worked on.
+
+Inaccessible: An object has suffered more failures (permanent or temporary) than it was configured to tolerate, and is currently unavailable and inaccessible. If the failures are not temporary (For example: An ESXi host reboot), you should work on the underlying root cause such as a failed ESXi hosts, failed network, removed disks and so on as quickly as possible to restore availability, as virtual machines that are using these objects cannot function correctly while in this inaccessible state.
+
+Non-availability related incompliance: This is a catch all state when none of the other states apply. An object with this state is not compliant with its policy, but is meeting the availability (NumberOfFailuresToTolerate) policy. There is currently no documented case where this state would be applicable.
+
+Non-availability related reconfig: vSAN is rebuilding data on the ESXi hosts and storage in the cluster because you requested a storage policy change that is unrelated to availability. In other words, such an object is fully in compliance with the NumberOfFailuresToTolerate policy and the data movement is to satisfy another policy change, such as NumberOfDiskStripesPerObject. You do not need to worry about an object in this state, as it is not at risk.
+
+Reduced availability - active rebuild: The object has suffered a failure, but it was configured to be able to tolerate the failure. I/O continues to flow and the object is accessible. vSAN is actively working on re-protecting the object by rebuilding new components to bring the object back to compliance.
+
+Reduced availability with no rebuild: The object has suffered a failure, but VSAN was able to tolerate it. For example: I/O is flowing and the object is accessible. However, VSAN is not working on re-protecting the object. This is not due to the delay timer (reduced availability - no rebuild - delay timer) but due to other reasons. This could be because there are not enough resources in the cluster, or this could be because there was not enough resources in the past, or there was a failure to re-protect in the past and VSAN has yet to retry. Refer to the limits health check for a first assessment if any resources may be exhausted. You have to resolve the failure or add resources as quickly as possible in order to get back to being fully protected against a subsequent failure.
+
+Reduced availability with no rebuild - delay timer: The object has suffered a failure, but vSAN was able to tolerate it. I/O is flowing and the object is accessible. However, vSAN is not yet working on re-protecting the object, as it is waiting for the 60-minute (default) delay timer to expire before issuing the re-protect.
+
+You can choose to issue an explicit request to skip the delay timer and start re-protect immediately, if it is known that the failed entity cannot be recovered within the delay period.
+
+However, if you know that the failed host is actively rebooting or knows that a wrong drive is incorrectly pulled and it is being reinserted, then it is advisable to just wait for those tasks to finish, as that will be the quickest way to fully re-protect the object.
+
+Reduced Availability With Paused Rebuild: The object has suffered a failure or its policy was recently changed to have higher availability requirement. However, the object rebuild is paused because of lack of available resources.
+
+Reduced Availability With Policy Pending: The object policy was recently changed but has not yet been applied to the object. The object current availability is less than what is expected by the new policy. Note it's a transient status and will either transit to 'healthy' or 'Reduced Availability With Policy Pending Failed' eventually depending on if the new policy can be accepted or not due to resource limitation. And depending on how much transient capacity is being used in the cluster, the object will stay in the status from minutes to hours. No user action needed for this status.
+
+Reduced Availability With Policy Pending Failed: Object policy has been changed but failed to apply to the object because of lack of available resources. User need add more resource to the cluster so that vSAN can re-apply the new availability policy to the object automatically to make it full compliant.
+
+Non-availability Related In-compliance With Policy Pending: Object policy was recently changed and has not yet been applied. The object is still fully compliant with the new availability policy, but not compliant the new non-availability related policies. Note it's a transient status and will either transit to 'healthy' or 'Non-availability Relate In-compliance With Policy Pending Failed' status eventually depending on if the new policy can be accepted or not due to resource limitation. And depending on how much transient capacity is being used in the cluster, the object will stay in the status from minutes to hours. No user action needed for this status.
+
+Non-availability Relate In-compliance With Policy Pending Failed: Object policy was recently changed but failed to apply to the object because of lacking of resource. The object is still fully compliant with the new availability policy. User need add more resource to the cluster so that vSAN can re-apply the new non-availability related policy to the object automatically to make it fully compliant.
+
+Non-availability Related In-compliance With Paused Rebuild: The object is not compliant with its current policy, but is meeting the availability (NumberOfFailuresToTolerate) policy. However, the object rebuild is paused because of lack of available resources.
+
+Q: How does one troubleshoot and fix the error state?
+By reviewing the object state from the above list, you know what activities are occurring on the vSAN cluster from an object perspective, and whether any corrective actions should be taken.
+
+Contact VMware Support if there is any concern with the object states, or the objects are in an unexpected state. For more information, see How to file a Support Request in My VMware (2006985).
