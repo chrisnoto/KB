@@ -631,4 +631,37 @@ Non-availability Related In-compliance With Paused Rebuild: The object is not co
 Q: How does one troubleshoot and fix the error state?
 By reviewing the object state from the above list, you know what activities are occurring on the vSAN cluster from an object perspective, and whether any corrective actions should be taken.
 
-Contact VMware Support if there is any concern with the object states, or the objects are in an unexpected state. For more information, see How to file a Support Request in My VMware (2006985).
+Contact VMware Support if there is any concern with the object states, or the objects are in an unexpected state. For more information, see How to file a Support Request in My VMware
+ (2006985).
+ 
+ # IPMI-TOOL
+安装VIB的步骤如下
+更改ESXi主机软件接受级别设置为【CommunitySupported】
+[root@esx-e1:~] esxcli software acceptance set --level=CommunitySupported
+Host acceptance level changed to 'CommunitySupported'.
+使用如下指令进行安装
+[root@esx-e1:~] esxcli software vib install -v /tmp/ipmitool-1.8.11-2.x86_64.vib
+Installation Result
+Message: Operation finished successfully.
+Reboot Required: false
+VIBs Installed: ipmitool_bootbank_ipmitool_1.8.11-2
+VIBs Removed:
+VIBs Skipped:
+[root@esx-e1:~] esxcli software vib install -v /tmp/ipmitool-1.8.11-2.x86_64.vib
+Installation Result
+Message: Operation finished successfully.
+Reboot Required: false
+VIBs Installed: ipmitool_bootbank_ipmitool_1.8.11-2
+VIBs Removed:
+VIBs Skipped: 
+
+[root@STJVSAN05:~] /opt/ipmitool/ipmitool lan print
+Set in Progress         : Set Complete
+Auth Type Support       : NONE MD2 MD5 PASSWORD
+Auth Type Enable        : Callback : NONE MD2 MD5 PASSWORD
+                        : User     : NONE MD2 MD5 PASSWORD
+                        : Operator : NONE MD2 MD5 PASSWORD
+                        : Admin    : NONE MD2 MD5 PASSWORD
+                        : OEM      :
+IP Address Source       : Static Address
+IP Address              : 10.67.62.229

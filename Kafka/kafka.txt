@@ -33,6 +33,9 @@ rmr /admin/delete_topics/<topic_name>
 简单的将消息输出到标准输出中
 bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning
 
+读指定offset
+kafka-console-consumer --bootstrap-server 10.67.51.144:9092 --topic filebeat --partition 8 --offset 493000 --max-messages 1
+
 将文件或标准输入的内容发送到Kafka集群
 bin/kafka-console-producer.sh --broker-list localhost:9092 --topic test < file-input.txt
 
