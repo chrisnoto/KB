@@ -48,6 +48,12 @@ crm resource disable metric_collector
 crm resource disable p_ceilometer-agent-central
 pcs resource disable p_aodh-evaluator
 
+update-rc.d -f ceilometer-agent-central remove
+update-rc.d -f ceilometer-agent-notification remove
+update-rc.d -f ceilometer-agent-api remove
+update-rc.d -f ceilometer-agent-collector remove
+update-rc.d -f ceilometer-agent-polling remove
+
 清空metering.sample queue里的消息
 root@node-1:/var/log/ceilometer# rabbitmqctl purge_queue metering.sample
 Purging queue 'metering.sample' in vhost '/' ...

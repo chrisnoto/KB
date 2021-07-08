@@ -329,6 +329,10 @@ listen mysqld
   server node-1 192.168.0.9:3307  check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
   server node-2 192.168.0.12:3307 backup check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
   server node-3 192.168.0.10:3307 backup check port 49000 inter 20s fastinter 2s downinter 2s rise 3 fall 3
+#port 49000 是xinetd.d里托管的gelaracheck脚本
+脚本会reponse http code和gelara synced的状态，用以判断集群的单个节点是否synced  
+The problem with Galera is that the MySQL server which HAproxy has selected can be up&running but it could be that the internal status 
+is not Synced with the rest of the cluster.
 ------130-object-storage.cfg------
 
 listen object-storage

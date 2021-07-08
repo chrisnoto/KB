@@ -163,3 +163,17 @@ osd.17 down out weight 0 up_from 80350 up_thru 80350 down_at 80352 last_clean_in
 osd.49 down out weight 0 up_from 48682 up_thru 73555 down_at 74308 last_clean_interval [48513,48653) 192.168.1.13:6820/1147772 192.168.1.13:6821/1147772 192.168.1.13:6822/1147772 192.168.1.13:6823/1147772 autoout,exists 4d9888d3-7341-4fe4-8b76-dab49631a929
 osd.55 down out weight 0 up_from 48682 up_thru 60032 down_at 60035 last_clean_interval [48513,48653) 192.168.1.13:6808/1147458 192.168.1.13:6809/1147458 192.168.1.13:6810/1147458 192.168.1.13:6811/1147458 autoout,exists 89ca16b3-cf70-457b-860f-dad522bbcb07
 
+##20210707  osd.21坏掉了
+root@node-1:~# ceph health detail
+HEALTH_WARN 8 pgs stale; 8 pgs stuck stale
+pg 5.12 is stuck stale for 4946413.799694, current state stale+active+clean, last acting [21]
+pg 5.e3 is stuck stale for 4946413.800250, current state stale+active+clean, last acting [21]
+pg 5.1eb is stuck stale for 4946413.800492, current state stale+active+clean, last acting [21]
+pg 5.53 is stuck stale for 4946413.800310, current state stale+active+clean, last acting [21]
+pg 5.1ac is stuck stale for 4946413.800359, current state stale+active+clean, last acting [21]
+pg 5.77 is stuck stale for 4946413.800320, current state stale+active+clean, last acting [21]
+pg 5.1a3 is stuck stale for 4946413.800363, current state stale+active+clean, last acting [21]
+pg 5.1c2 is stuck stale for 4946413.800373, current state stale+active+clean, last acting [21]
+root@node-1:~# ceph pg 5.12 query
+Error ENOENT: i don't have pgid 5.12
+
