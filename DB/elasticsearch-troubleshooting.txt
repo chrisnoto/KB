@@ -269,3 +269,35 @@ logstash-0-f60dd446-b04d-4580-afa6-2c70e500e153 /10.67.50.200   logstash-0      
 ########很多index unassigned##########
 找出unassigned的index将其删除
 [root@stjes1 log]# curl http://10.67.51.150:9200/_cluster/allocation/explain |grep index
+
+#############  elasticsearch无法写入
+es存在一种flood_stage的机制. 默认磁盘空间设置为95%, 当磁盘占用超过此值时, 将会触发flood_stage机制, es将强制将各索引
+index.blocks.read_only_allow_delete设置为true, 即仅允许只读只删, 不允许新增.
+
+以上排查结果表明: 线上服务出问题的原因在于es索引均被设置为只读只删模式. 所以导致索引数据写入时失败.
+
+[root@vstjlogstash01 logstash]# tail -f logstash-plain.log
+[2021-07-13T16:06:04,233][INFO ][logstash.outputs.elasticsearch] retrying failed action with response code: 403 ({"type"=>"cluster_block_exception", 
+"reason"=>"blocked by: [FORBIDDEN/12/index read-only / allow delete (api)];"})
+磁盘使用率高导致，删除index后，在es1上执行
+curl -XPUT -H "Content-Type: application/json" http://10.67.51.150:9200/_all/_settings -d '{"index.blocks.read_only_allow_delete": null}'
+
+[root@vstjlogstash01 logstash]# tail -f logstash-plain.log
+[2021-07-13T16:15:40,965][WARN ][org.apache.kafka.clients.consumer.internals.ConsumerCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Synchronous auto-commit of offsets {filebeat-5=OffsetAndMetadata{offset=4924594420, leaderEpoch=null, metadata=''}, filebeat-4=OffsetAndMetadata{offset=5001823400, leaderEpoch=null, metadata=''}, filebeat-7=OffsetAndMetadata{offset=5484377512, leaderEpoch=null, metadata=''}, filebeat-6=OffsetAndMetadata{offset=4985105564, leaderEpoch=null, metadata=''}, filebeat-9=OffsetAndMetadata{offset=5154426739, leaderEpoch=null, metadata=''}, filebeat-8=OffsetAndMetadata{offset=5089271506, leaderEpoch=null, metadata=''}, k8s-0=OffsetAndMetadata{offset=0, leaderEpoch=null, metadata=''}, filebeat-11=OffsetAndMetadata{offset=5589043508, leaderEpoch=null, metadata=''}, k8s-1=OffsetAndMetadata{offset=0, leaderEpoch=null, metadata=''}, filebeat-10=OffsetAndMetadata{offset=4999937175, leaderEpoch=null, metadata=''}, filebeat-1=OffsetAndMetadata{offset=4842257099, leaderEpoch=null, metadata=''}, filebeat-0=OffsetAndMetadata{offset=4975865460, leaderEpoch=null, metadata=''}, filebeat-3=OffsetAndMetadata{offset=5104209230, leaderEpoch=null, metadata=''}, filebeat-2=OffsetAndMetadata{offset=4989277432, leaderEpoch=null, metadata=''}} failed: Commit cannot be completed since the group has already rebalanced and assigned the partitions to another member. This means that the time between subsequent calls to poll() was longer than the configured max.poll.interval.ms, which typically implies that the poll loop is spending too much time message processing. You can address this either by increasing max.poll.interval.ms or by reducing the maximum size of batches returned in poll() with max.poll.records.
+[2021-07-13T16:15:40,965][INFO ][org.apache.kafka.clients.consumer.internals.ConsumerCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Revoking previously assigned partitions [filebeat-5, filebeat-4, filebeat-7, filebeat-6, filebeat-9, filebeat-8, k8s-0, filebeat-11, k8s-1, filebeat-10, filebeat-1, filebeat-0, filebeat-3, filebeat-2]
+[2021-07-13T16:15:40,965][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] (Re-)joining group
+[2021-07-13T16:15:40,968][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Group coordinator 10.67.51.144:9092 (id: 2147483646 rack: null) is unavailable or invalid, will attempt rediscovery
+[2021-07-13T16:15:41,143][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Discovered group coordinator 10.67.51.144:9092 (id: 2147483646 rack: null)
+[2021-07-13T16:15:41,143][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] (Re-)joining group
+[2021-07-13T16:15:43,769][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Successfully joined group with generation 50
+[2021-07-13T16:15:43,775][INFO ][org.apache.kafka.clients.consumer.internals.ConsumerCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Setting newly assigned partitions [k8s-0, filebeat-1, filebeat-0, filebeat-3, filebeat-2]
+[2021-07-13T16:15:46,970][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:15:49,997][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:15:52,138][WARN ][logstash.outputs.elasticsearch] Could not index event to Elasticsearch. {:status=>400, :action=>["index", {:_id=>nil, :_index=>"filebeat-6.2.3-2021.07.11", :_type=>"doc", :routing=>nil, :pipeline=>"filebeat-6.2.3-system-syslog-pipeline"}, #<LogStash::Event:0x20adcecb>], :response=>{"index"=>{"_index"=>"filebeat-6.2.3-2021.07.11", "_type"=>"doc", "_id"=>nil, "status"=>400, "error"=>{"type"=>"illegal_argument_exception", "reason"=>"pipeline with id [filebeat-6.2.3-system-syslog-pipeline] does not exist"}}}}
+[2021-07-13T16:15:53,068][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:15:56,072][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:15:59,184][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:16:02,367][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:16:05,460][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:16:08,514][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+[2021-07-13T16:16:11,606][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing

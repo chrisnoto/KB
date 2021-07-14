@@ -665,3 +665,106 @@ Auth Type Enable        : Callback : NONE MD2 MD5 PASSWORD
                         : OEM      :
 IP Address Source       : Static Address
 IP Address              : 10.67.62.229
+
+
+###  flash disk挂掉，整个disk group没了
+[root@A21VSAN79:/dev/disks] vdq -q -d mpx.vmhba2:C0:T1:L0
+VsanInfoImpl: Failed to find disk 'mpx.vmhba2:C0:T1:L0'
+[
+   {
+      "Name"     : "",
+      "VSANUUID" : "528ddf4d-8b6e-846c-180c-bc73d105ccaf",
+      "State"    : "In-use for VSAN",
+      "Reason"   : "None",
+      "IsSSD"    : "1",
+"IsCapacityFlash": "0",
+      "IsPDL"    : "1",
+   },
+
+]
+
+[root@A21VSAN79:/dev/disks] esxcli vsan debug disk list 
+UUID: 5211dfc2-6a5d-797c-b621-71248c1d1fdb
+   Name: naa.5000c5007e42316b   hdd
+   Owner: N/A
+   Version: -1
+   Disk Group: N/A
+   Disk Tier: Capacity
+UUID: 521390f5-e5b2-3051-d175-7211ef032a28
+   Name: naa.5000c5007e42519f  hdd
+   Owner: N/A
+   Version: -1
+   Disk Group: N/A
+   Disk Tier: Capacity
+UUID: 5290b4a4-c73e-3bc6-3c3a-86190ca2e163
+   Name: naa.5000c5007e4233e7    hdd
+   Owner: N/A
+   Version: -1
+   Disk Group: N/A
+   Disk Tier: Capacity
+UUID: 528ddf4d-8b6e-846c-180c-bc73d105ccaf
+   Name: vsan:528ddf4d-8b6e-846c-180c-bc73d105ccaf              ssd
+   Owner: N/A
+   Version: -1
+   Disk Group: N/A
+   Disk Tier: Capacity
+更换硬盘后，重建Disk Group
+[root@A21VSAN79:~] esxcli vsan storage add -s naa.5001b44e552aa4bf -d naa.5000c5007e42316b -d naa.5000c5007e42519f -d naa.5000c5007e4233e7
+Unable to add device: Disk: naa.5000c5007e42316b In use by vSAN
+[root@A21VSAN79:~] esxcli vsan storage remove -u 528ddf4d-8b6e-846c-180c-bc73d105ccaf
+[root@A21VSAN79:~] esxcli vsan storage add -s naa.5001b44e552aa4bf -d naa.5000c5007e42316b -d naa.5000c5007e42519f -d naa.5000c5007e4233e7
+重建完后验证
+[root@A21VSAN79:~] esxcli vsan debug disk list |grep -A2 -B2 A21VSAN79
+UUID: 5254a814-3784-0bc1-68fe-8e5c5daab895
+   Name: naa.5001b44e552aa4bf
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 5254a814-3784-0bc1-68fe-8e5c5daab895
+--
+UUID: 526b6074-cfc7-5420-5f8a-c921b50a6c6f
+   Name: naa.5000c5007e4233e7
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 5254a814-3784-0bc1-68fe-8e5c5daab895
+--
+UUID: 52e9c19c-936b-2bfd-bcd3-794e5b10f006
+   Name: naa.5000c5007e42316b
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 5254a814-3784-0bc1-68fe-8e5c5daab895
+--
+UUID: 5262725a-8cbc-fde4-ec85-95ea897fcf36
+   Name: naa.5000c5007e42519f
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 5254a814-3784-0bc1-68fe-8e5c5daab895
+--
+UUID: 52a1b1d3-b5c7-367d-e7b5-6087c940c2e0
+   Name: naa.5001b44e20986758
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 52a1b1d3-b5c7-367d-e7b5-6087c940c2e0
+--
+UUID: 523149e1-8b6e-91a2-d37f-11b779e3447e
+   Name: naa.5000c5007e422c5b
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 52a1b1d3-b5c7-367d-e7b5-6087c940c2e0
+--
+UUID: 529c2368-a17f-020a-79ef-9a29eceaca94
+   Name: naa.5000c5007e424f87
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 52a1b1d3-b5c7-367d-e7b5-6087c940c2e0
+--
+UUID: 52b3093b-6f0c-c51c-1526-f0b4e4aed1ab
+   Name: naa.5000c5007e421ba7
+   Owner: A21VSAN79
+   Version: 5
+   Disk Group: 52a1b1d3-b5c7-367d-e7b5-6087c940c2e0
+[root@A21VSAN79:~] esxcli vsan debug disk summary get
+   Overall Health: green
+   Component Metadata Health: green
+   Memory Pools (heaps): green
+   Memory Pools (slabs): green
+

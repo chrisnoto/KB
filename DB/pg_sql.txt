@@ -1,0 +1,159 @@
+postgresql-13主从 streaming复制
+===========================================================================================================================
+# Install the repository RPM:
+sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+
+# Install PostgreSQL:
+sudo yum install -y postgresql13-server
+
+# Optionally initialize the database and enable automatic start:
+sudo /usr/pgsql-13/bin/postgresql-13-setup initdb
+sudo systemctl enable postgresql-13
+sudo systemctl start postgresql-13
+
+环境变量
+export PATH=/usr/pgsql-13/bin:$PATH
+export PGDATA=/var/lib/postgresql/data
+
+cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.67.39.58  postgres-1
+10.67.39.59  postgres-2
+
+------主库操作
+1 初始化数据库
+postgresql-setup --initdb
+
+2 在pg_hba.conf增加一行
+host    replication     repl            postgres-2              trust
+
+3 修改postgresql.conf
+listen_addresses = '*'
+synchronous_standby_names = '*'
+# - Archiving -
+archive_mode = on              
+archive_command = 'test ! -f /opt/archivedir/%f && cp %p /opt/archivedir/%f'
+
+4 重启postgresql
+5 创建复制用户
+create user repl replication LOGIN CONNECTION LIMIT 30 ENCRYPTED PASSWORD 'Foxconn123';
+
+---------从库操作
+从库只安装数据库软件，不进行数据库初始化
+/usr/pgsql-13/bin/pg_basebackup --pgdata=$PGDATA --format=p --write-recovery-conf --checkpoint=fast --label=mffb --progress --host=postgres-1 --port=5432 --username=repl
+
+修改potgresql.conf， 这个配置文件从主库复制来
+primary_conninfo = 'host=10.67.39.58 port=5432 user=repl password=Foxconn123'
+primary_slot_name = 'postgres2_slot'
+
+---------主库操作
+在主库创建replication slot
+select * from pg_create_physical_replication_slot('postgres2_slot');
+select slot_name,slot_type,active,wal_status from pg_replication_slots;
+
+---------从库操作
+systemctl start postgresql-13
+如果从库设置正确的话，可以从log里看到
+2021-07-14 06:07:25.820 UTC [852] LOG:  started streaming WAL from primary at 0/3000000 on timeline 1
+
+---------在主库再次检查
+postgres=# select slot_name,slot_type,active,wal_status from pg_replication_slots;
+   slot_name    | slot_type | active | wal_status
+----------------+-----------+--------+------------
+ standby_slot   | physical  | f      |
+ postgres2_slot | physical  | t      | reserved
+---------观察进程
+从库进程
+-bash-4.2$ ps -ef |grep wal
+postgres   852 17759  0 06:07 ?        00:00:01 postgres: walreceiver streaming 0/302FA60
+主库进程
+-bash-4.2$ ps -ef|grep wal
+postgres  2481 18063  0 06:07 ?        00:00:00 postgres: walsender repl 10.67.39.59(38252) streaming 0/302FA60
+
+--------主库观察同步状态
+postgres=# select * from pg_stat_replication;
+-[ RECORD 1 ]----+------------------------------
+pid              | 2481
+usesysid         | 16384
+usename          | repl
+application_name | walreceiver
+client_addr      | 10.67.39.59
+client_hostname  | postgres-2
+client_port      | 38252
+backend_start    | 2021-07-14 06:07:28.239589+00
+backend_xmin     |
+state            | streaming
+sent_lsn         | 0/4000148
+write_lsn        | 0/4000148
+flush_lsn        | 0/4000148
+replay_lsn       | 0/4000148
+write_lag        |
+flush_lag        |
+replay_lag       |
+sync_priority    | 1
+sync_state       | sync
+reply_time       | 2021-07-14 07:05:54.037038+00
+
+--------从库观察同步状态
+postgres=# select * from pg_stat_wal_receiver;
+-[ RECORD 1 ]---------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+pid                   | 852
+status                | streaming
+receive_start_lsn     | 0/3000000
+receive_start_tli     | 1
+written_lsn           | 0/4000148
+flushed_lsn           | 0/4000148
+received_tli          | 1
+last_msg_send_time    | 2021-07-14 07:04:26.345695+00
+last_msg_receipt_time | 2021-07-14 07:04:23.79761+00
+latest_end_lsn        | 0/4000148
+latest_end_time       | 2021-07-14 06:40:52.494625+00
+slot_name             | postgres2_slot
+sender_host           | postgres-1
+sender_port           | 5432
+conninfo              | user=repl passfile=/var/lib/pgsql/.pgpass channel_binding=prefer dbname=replication host=postgres-1 port=5432 fallback_application_name=walreceiver sslmode=prefer sslcompression=0 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres target_session_attrs=any
+
+ ---------测试
+ 在主库create table, 从库观察
+
+
+切归档
+[root@postgres-1 archivedir]# ls -lh
+total 33M
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
+-rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
+
+postgres=# select pg_switch_wal();
+ pg_switch_wal
+---------------
+ 0/302FA78
+(1 row)
+
+[root@postgres-1 archivedir]# ls -lh
+total 49M
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
+-rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
+-rw-------. 1 postgres postgres 16M Jul 14 06:36 000000010000000000000003
+
+
+窗口函数
+select groupid,hostid,hostgroupid,row_number() over(partition by groupid order by hostgroupid) as hostgroupid_asc from hosts_groups;
+ groupid | hostid | hostgroupid | hostgroupid_asc
+---------+--------+-------------+-----------------
+       4 |  10084 |          92 |               1
+       8 |  10093 |         175 |               1
+       8 |  10095 |         177 |               2
+       8 |  10094 |         178 |               3
+       8 |  10096 |         179 |               4
+       8 |  10097 |         180 |               5
+       8 |  10098 |         181 |               6
+       8 |  10099 |         182 |               7
+       8 |  10100 |         183 |               8
+       8 |  10101 |         184 |               9
+       8 |  10102 |         185 |              10
+       8 |  10103 |         186 |              11
+       8 |  10050 |         187 |              12
+       8 |  10183 |         209 |              13
