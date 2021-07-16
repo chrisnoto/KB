@@ -1,3 +1,61 @@
+如果想知道这些快捷命令后面用了什么SQL，可以开启-E选项
+-bash-4.2$ psql -E
+psql (13.3)
+Type "help" for help.
+
+postgres=# \l
+********* QUERY **********
+SELECT d.datname as "Name",
+       pg_catalog.pg_get_userbyid(d.datdba) as "Owner",
+       pg_catalog.pg_encoding_to_char(d.encoding) as "Encoding",
+       d.datcollate as "Collate",
+       d.datctype as "Ctype",
+       pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
+FROM pg_catalog.pg_database d
+ORDER BY 1;
+**************************
+
+                                  List of databases
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+-----------+----------+----------+-------------+-------------+-----------------------
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+或者postgres=# \set ECHO_HIDDEN on
+
+# 自增数据类型 serial
+postgres=# create table t2(id serial not null,name text);
+CREATE TABLE
+
+# 生成列 由其他列计算而来
+postgres=# create table tax1(salary numeric,taxindex numeric,tax numeric generated always as (salary*taxindex) stored);
+CREATE TABLE
+postgres=# insert into tax1 values(10000,0.13);
+INSERT 0 1
+postgres=# select * from tax1;
+-[ RECORD 1 ]-----
+salary   | 10000
+taxindex | 0.13
+tax      | 1300.00
+
+
+# 查询postgres 参数
+postgres=# select * from pg_settings where name in ('wal_level','archive_mode','archive_command');
+
+
+
+
+
+
+
+
+
+
+
+
+
 postgresql-13主从 streaming复制
 ===========================================================================================================================
 # Install the repository RPM:
@@ -42,6 +100,8 @@ create user repl replication LOGIN CONNECTION LIMIT 30 ENCRYPTED PASSWORD 'Foxco
 ---------从库操作
 从库只安装数据库软件，不进行数据库初始化
 /usr/pgsql-13/bin/pg_basebackup --pgdata=$PGDATA --format=p --write-recovery-conf --checkpoint=fast --label=mffb --progress --host=postgres-1 --port=5432 --username=repl
+***在PG12之前，-R备份结束之后会自动生成recovery.conf文件，用来做流复制判断主从同步的信息。但是从PG12开始，这个文件已经不需要了。***
+***只需要在参数文件postgresql.conf中配置primary_conninfo参数即可。***
 
 修改potgresql.conf， 这个配置文件从主库复制来
 primary_conninfo = 'host=10.67.39.58 port=5432 user=repl password=Foxconn123'
@@ -116,6 +176,11 @@ conninfo              | user=repl passfile=/var/lib/pgsql/.pgpass channel_bindin
 
  ---------测试
  在主库create table, 从库观察
+ 
+postgres=# select pg_is_in_recovery();       主库是f代表false ；备库是t，代表true
+ pg_is_in_recovery
+-------------------
+ t
 
 
 切归档
@@ -137,6 +202,34 @@ total 49M
 -rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
 -rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
 -rw-------. 1 postgres postgres 16M Jul 14 06:36 000000010000000000000003
+或者
+postgres=# select * from pg_stat_get_archiver();
+-[ RECORD 1 ]------+-----------------------------
+archived_count     | 11
+last_archived_wal  | 000000010000000000000008
+last_archived_time | 2021-07-14 09:07:57.06432+00
+failed_count       | 0
+last_failed_wal    |
+last_failed_time   |
+stats_reset        | 2021-07-13 08:26:45.98489+00
+
+postgres=# select pg_switch_wal();
+-[ RECORD 1 ]-+----------
+pg_switch_wal | 0/901BD78
+
+postgres=# select * from pg_stat_get_archiver();
+-[ RECORD 1 ]------+------------------------------
+archived_count     | 12
+last_archived_wal  | 000000010000000000000009
+last_archived_time | 2021-07-15 06:21:10.562539+00
+failed_count       | 0
+last_failed_wal    |
+last_failed_time   |
+stats_reset        | 2021-07-13 08:26:45.98489+00
+
+# 数据库之外创建用户和数据库
+createuser --pwprompt zabbix
+createdb -O zabbix -E Unicode -T template0 zabbix
 
 
 窗口函数

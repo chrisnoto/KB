@@ -218,6 +218,14 @@ KERNEL=="sd*", ENV{DEVTYPE}=="disk", SUBSYSTEM=="block", PROGRAM=="/usr/lib/udev
 /sbin/udevadm control --reload-rules
 /sbin/udevadm trigger --type=devices --action=change
 
+***
+openstack/kvm平台上的方法   不能使用UUID，但可以使用磁盘的SN,SN可以自定义
+[root@c8-cilent1 ~]# ll /dev/asm-disk1
+lrwxrwxrwx. 1 root root 4 Jul 16 10:02 /dev/asm-disk1 -> vdb1
+[root@c8-cilent1 ~]# cat /etc/udev/rules.d/99-asm.rules
+KERNEL=="vd*",SUBSYSTEM=="block",ENV{ID_SERIAL}=="88888",SYMLINK+="asm-disk1",OWNER="grid", GROUP="asmadmin", MODE="0660"
+***
+
 # 检查ASM磁盘是否生效    **** 两台机都做，注意/dev/sd*的owner,group
 [grid@rac1 grid]$ ll /dev/asmdisk/*
 lrwxrwxrwx 1 root root 6 Oct 25 15:02 /dev/asmdisk/DBDISK01 -> ../sdg

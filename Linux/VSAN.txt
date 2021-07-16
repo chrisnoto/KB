@@ -338,6 +338,14 @@ Object UUID: aacb695e-53c0-19c7-36bb-4cd98f6983fe
    Directory Name: N/A
 
 3 VSAN两个磁盘数据使用率过高，数据分布不均衡
+手动平衡磁盘数据
+/localhost/A21VSANDatacenter/computers> vsan.health.cluster_rebalance  0
+This command will trigger the immediate rebalance of vSAN
+cluster. It will rebalance the vSAN objects for the imbalance hosts
+based on the disk usage. This process may take a moment ...
+
+ VSAN-A21Cluster: running [==                                                  ]
+
    /localhost/A21VSANDatacenter/computers> vsan.proactive_rebalance -s -t 604800 0
 2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.80 ...
 2020-12-24 16:08:03 +0800: Processing vSAN proactive rebalance on host 10.67.51.18 ...
