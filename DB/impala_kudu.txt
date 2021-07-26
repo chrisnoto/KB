@@ -1,0 +1,29 @@
+kudu: 3 master   5 tserver
+docker-compose -f docker/quickstart.yml -f docker/quickstart-kudu-minimal.yml -f docker/quickstart-load-data.yml up -d
+
+impala:
+[root@rancher impala-master]# cat run.sh
+export QUICKSTART_IP=$(docker network inspect quickstart-network -f '{{(index .IPAM.Config 0).Gateway}}')
+export QUICKSTART_LISTEN_ADDR=0.0.0.0
+export IMPALA_QUICKSTART_IMAGE_PREFIX="apache/impala:81d5377c2-"
+docker-compose -f docker/quickstart.yml -f docker/quickstart-kudu-minimal.yml \
+                 -f docker/quickstart-load-data.yml up -d
+
+
+CREATE EXTERNAL TABLE my_mapping_table
+STORED AS KUDU
+TBLPROPERTIES (
+  'kudu.table_name' = 'my_kudu_table',
+  'kudu.master_addresses' = '10.67.36.58:7051'
+);
+
+create table test1
+(id BIGINT,
+name STRING,
+PRIMARY KEY(id)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU
+TBLPROPERTIES (
+'kudu.master_addresses' = '10.67.36.58:7051'
+);

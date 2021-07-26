@@ -776,3 +776,87 @@ UUID: 52b3093b-6f0c-c51c-1526-f0b4e4aed1ab
    Memory Pools (heaps): green
    Memory Pools (slabs): green
 
+# 磁盘物理位置  
+[root@A21VSAN79:~] for u in `vdq -q |grep -B2 'In-use' |grep Name |awk -F'"' '{print $4}'`;do echo "--------$u--------";esxcfg-mpath -bd $u;esxcli storage core device physical get -d $u;done
+--------naa.5000c5007e424f87--------
+naa.5000c5007e424f87 : Local SEAGATE Disk (naa.5000c5007e424f87)
+   vmhba2:C0:T7:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e424f85
+
+   Physical Location: enclosure 1, slot 7
+--------naa.5000c5007e421ba7--------
+naa.5000c5007e421ba7 : Local SEAGATE Disk (naa.5000c5007e421ba7)
+   vmhba2:C0:T3:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e421ba5
+
+   Physical Location: enclosure 1, slot 3
+--------naa.5001b44e552aa4bf--------
+naa.5001b44e552aa4bf : Local ATA Disk (naa.5001b44e552aa4bf)
+   vmhba2:C0:T1:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 4433221107000000
+
+   Physical Location: enclosure 1, slot 1
+--------naa.5000c5007e422c5b--------
+naa.5000c5007e422c5b : Local SEAGATE Disk (naa.5000c5007e422c5b)
+   vmhba2:C0:T6:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e422c59
+
+   Physical Location: enclosure 1, slot 6
+--------naa.5000c5007e4233e7--------
+naa.5000c5007e4233e7 : Local SEAGATE Disk (naa.5000c5007e4233e7)
+   vmhba2:C0:T2:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e4233e5
+
+not well-formed (invalid token): line 9, column 0
+--------naa.5000c5007e42316b--------
+naa.5000c5007e42316b : Local SEAGATE Disk (naa.5000c5007e42316b)
+   vmhba2:C0:T4:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e423169
+
+   Physical Location: enclosure 1, slot 4
+--------naa.5001b44e20986758--------
+naa.5001b44e20986758 : Local ATA Disk (naa.5001b44e20986758)
+   vmhba2:C0:T0:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 4433221106000000
+
+not well-formed (invalid token): line 9, column 0
+--------naa.5000c5007e42519f--------
+naa.5000c5007e42519f : Local SEAGATE Disk (naa.5000c5007e42519f)
+   vmhba2:C0:T5:L0 LUN:0 state:active sas Adapter: 5004e010039e0300  Target: 5000c5007e42519d
+
+not well-formed (invalid token): line 9, column 0
+ 
+[root@STJVSan03:/var/log] for u in `vdq -q |grep -B2 'In-use' |grep Name |awk -F'"' '{print $4}'`;do echo "--------$u--------";esxcfg-mpath -bd $u;esxcli storage core device physical get -d $u;done
+--------naa.5000c5008081fca8--------
+naa.5000c5008081fca8 : Local ATA Disk (naa.5000c5008081fca8)
+   vmhba2:C0:T1:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c6572703c
+
+   Physical Location: enclosure 2, slot 5
+--------naa.518f29209b673132334b373331303535--------
+naa.518f29209b673132334b373331303535 : Local Shannon Disk (naa.518f29209b673132334b373331303535)
+   vmhba3:C0:T0:L0 LUN:0 state:active Local HBA vmhba3 channel 0 target 0
+
+Cannot get information for device with name naa.518f29209b673132334b373331303535
+--------naa.5000c500807cce32--------
+naa.5000c500807cce32 : Local ATA Disk (naa.5000c500807cce32)
+   vmhba2:C0:T6:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c64864b3a
+
+   Physical Location: enclosure 2, slot 10
+--------naa.5000c500807c9d45--------
+naa.5000c500807c9d45 : Local ATA Disk (naa.5000c500807c9d45)
+   vmhba2:C0:T4:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c64874c56
+
+   Physical Location: enclosure 2, slot 8
+--------naa.55cd2e414de40624--------
+naa.55cd2e414de40624 : Local ATA Disk (naa.55cd2e414de40624)
+   vmhba2:C0:T5:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 67314d61b6fbba8f
+
+   Physical Location: enclosure 2, slot 9
+--------naa.5000c50080821f16--------
+naa.5000c50080821f16 : Local ATA Disk (naa.5000c50080821f16)
+   vmhba2:C0:T0:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c65725146
+
+   Physical Location: enclosure 2, slot 4
+--------naa.5000c500807ca8e1--------
+naa.5000c500807ca8e1 : Local ATA Disk (naa.5000c500807ca8e1)
+   vmhba2:C0:T2:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c6486725c
+
+   Physical Location: enclosure 2, slot 6
+--------naa.5000c500807caa1c--------
+naa.5000c500807caa1c : Local ATA Disk (naa.5000c500807caa1c)
+   vmhba2:C0:T3:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c64866f50
+
+   Physical Location: enclosure 2, slot 7
