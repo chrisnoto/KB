@@ -1,6 +1,10 @@
+############ kudu docker安装 ############	
 kudu: 3 master   5 tserver
+
+git clone https://github.com/apache/kudu
 docker-compose -f docker/quickstart.yml -f docker/quickstart-kudu-minimal.yml -f docker/quickstart-load-data.yml up -d
 
+############ impala dev docker安装 ############	
 impala:
 [root@rancher impala-master]# cat run.sh
 export QUICKSTART_IP=$(docker network inspect quickstart-network -f '{{(index .IPAM.Config 0).Gateway}}')
@@ -9,7 +13,23 @@ export IMPALA_QUICKSTART_IMAGE_PREFIX="apache/impala:81d5377c2-"
 docker-compose -f docker/quickstart.yml -f docker/quickstart-kudu-minimal.yml \
                  -f docker/quickstart-load-data.yml up -d
 
+############ streamsets docker安装 ############				 
+[root@worker5 ~]# cat sdc.sh
+docker run -p 18630:18630 -d \
+--name sdc \
+--env SDC_CONF_http_authentication=form \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-mongodb_3-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-mysql-binlog-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-apache-kafka_2_0-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-jdbc-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-elasticsearch_5-lib-3.16.0-latest) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-redis-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-rabbitmq-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-apache-kudu_1_7-lib-3.16.0) \
+--volumes-from=$(docker create streamsets/datacollector-libs:streamsets-datacollector-cdh_5_16-lib-3.16.0) \
+streamsets/datacollector:3.16.0
 
+-------------------------------------------------------------------------------------------------------------------------------
 CREATE EXTERNAL TABLE my_mapping_table
 STORED AS KUDU
 TBLPROPERTIES (
