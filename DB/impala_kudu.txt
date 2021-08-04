@@ -2,7 +2,7 @@
 kudu: 3 master   5 tserver
 
 git clone https://github.com/apache/kudu
-docker-compose -f docker/quickstart.yml -f docker/quickstart-kudu-minimal.yml -f docker/quickstart-load-data.yml up -d
+docker-compose -f docker/quickstart.yml up -d
 
 ############ impala dev docker安装 ############	
 impala:
@@ -30,6 +30,7 @@ docker run -p 18630:18630 -d \
 streamsets/datacollector:3.16.0
 
 -------------------------------------------------------------------------------------------------------------------------------
+docker run --network=quickstart-network -it ${IMPALA_QUICKSTART_IMAGE_PREFIX}impala_quickstart_client impala-shell
 CREATE EXTERNAL TABLE my_mapping_table
 STORED AS KUDU
 TBLPROPERTIES (
@@ -37,7 +38,7 @@ TBLPROPERTIES (
   'kudu.master_addresses' = '10.67.36.58:7051'
 );
 
-create table test1
+create table chensen1
 (id BIGINT,
 name STRING,
 PRIMARY KEY(id)

@@ -132,6 +132,24 @@ MariaDB [zabbix]> update host_inventory h2,tmp_inventory t set h2.os= t.os, h2.a
 Query OK, 265 rows affected (0.099 sec)
 Rows matched: 265  Changed: 265  Warnings: 0
  
+#######################20210729更新   1 注意csv文件的编码   2 遇到windows控制符 CTRL-M(^M)用dos2unix处理掉
+load data infile '/data/mysql/host_inventory.csv'
+     into table tmp_host_inventory20210729 
+     character set utf8
+     fields terminated by ','
+     lines terminated by '\n';
+
+update host_inventory h,tmp_host_inventory20210729 t set h.contact=t.contact where h.hostid=t.hostid; 
+#更新邮件通知的subject值
+select operationid,subject from opmessage where subject like '%ALIAS%' and subject not like 'Resolved%';
+update opmessage as t1 join opmessage as t2 on t2.operationid=63 set t1.subject=t2.subject where t1.operationid in (15,24,28,32,34,35,36,38,39,40,42,43,44,47,48,49,52,53,54);
+select operationid,subject from opmessage where subject like '%ALIAS%' and subject not like 'Resolved%';
+
+select operationid,subject from opmessage where subject like '%ALIAS%' and subject like 'Resolved%';
+update opmessage as t1 join opmessage as t2 on t2.operationid=64 set t1.subject=t2.subject where t1.operationid in (16,29,41,45,46,50,51,55,56,61,62);
+select operationid,subject from opmessage where subject like '%ALIAS%' and subject like 'Resolved%';
+#20210729更新############################
+
 3 追加被监控主机的host group
 ***zabbix web页面批量更新字段
 
