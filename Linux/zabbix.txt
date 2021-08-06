@@ -251,5 +251,7 @@ UserParameter=pgsql.replication.lag.sec[*], psql -qtAX -h "$1" -p "$2" -U "$3"  
 UserParameter=pgsql.replication.status[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.replication.status.sql"
 3.5 在/etc/profile里加入
 PATH=$PATH:/usr/pgsql-13/bin
+无用，最后是给pg_isready加绝对路径
+UserParameter=pgsql.ping[*], /usr/pgsql-13/binpg_isready -h "$1" -p "$2" -U "$3"  -d "$4"
 3.6 重启zabbix-agent
 
