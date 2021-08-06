@@ -173,3 +173,83 @@ truncate proxy_history;
 truncate ids;
 4. exit from the database and start Zabbix proxy,
 systemctl start zabbix-proxy
+
+
+############## zabbix 5.0监控 PGSQL-13 ##############
+1 zabbix 5.0自带pgsql模板，将模板full clone为 agent active模式
+2 PGSQL的主机安装zabbix-agent，并能正常监控
+[root@postgres-1 zabbix]# cat zabbix_agentd.conf |egrep -v '#|^$'
+PidFile=/var/run/zabbix/zabbix_agentd.pid
+LogFile=/var/log/zabbix/zabbix_agentd.log
+LogFileSize=0
+DebugLevel=5
+StartAgents=0
+ServerActive=monitoring.cesbg.foxconn:30051
+HostnameItem=system.hostname
+HostMetadata=Linux
+Include=/etc/zabbix/zabbix_agentd.d/*.conf
+
+3 PGSQL配置
+3.1 建账号
+create user zbx_monitor with password 'vSTJ456' inherit;
+grant pg_monitor to zbx_monitor;
+3.2 配置pg_hba.conf 重启postgresql
+-bash-4.2$ cat pg_hba.conf |egrep -v '#|^$'
+host all zbx_monitor 127.0.0.1/32 trust
+host all zbx_monitor 0.0.0.0/0 md5
+host all zbx_monitor ::0/0 md5
+local   all             all                                     peer
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+local   replication     all                                     peer
+host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             ::1/128                 scram-sha-256
+host    replication     repl            postgres-2              trust
+host    replication     repl            postgres-1              trust
+3.3 copy postgresql SQL脚本到/var/lib/zabbix下，并更改权限为zabbix:zabbix
+脚本参见KB/monitoring/pg_monitoring_sql
+[root@postgres-1 zabbix]# ls -lh postgresql/
+total 80K
+-rw-r--r--. 1 zabbix zabbix  492 Aug  5 08:05 pgsql.bgwriter.sql
+-rw-r--r--. 1 zabbix zabbix   81 Aug  5 08:05 pgsql.cache.hit.sql
+-rw-r--r--. 1 zabbix zabbix  371 Aug  5 08:06 pgsql.config.hash.sql
+-rw-r--r--. 1 zabbix zabbix   39 Aug  5 08:07 pgsql.connections.prepared.sql
+-rw-r--r--. 1 zabbix zabbix 1.4K Aug  5 08:08 pgsql.connections.sql
+-rw-r--r--. 1 zabbix zabbix 1.4K Aug  5 08:08 pgsql.connections.sum.sql
+-rw-r--r--. 1 zabbix zabbix  340 Aug  5 08:10 pgsql.dbstat.sql
+
+3.4 copy postgresql.conf到/etc/zabbix/zabbix_agentd.d   
+[root@postgres-1 zabbix_agentd.d]# cat postgresql.conf
+UserParameter=pgsql.bgwriter[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.bgwriter.sql"
+
+UserParameter=pgsql.connections.sum[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.connections.sum.sql"
+UserParameter=pgsql.connections[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.connections.sql"
+UserParameter=pgsql.connections.prepared[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.connections.prepared.sql"
+
+UserParameter=pgsql.dbstat.sum[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.dbstat.sum.sql"
+UserParameter=pgsql.dbstat[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.dbstat.sql"
+
+UserParameter=pgsql.transactions[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.transactions.sql"
+UserParameter=pgsql.config.hash[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.config.hash.sql"
+UserParameter=pgsql.wal.stat[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.wal.stat.sql"
+UserParameter=pgsql.locks[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.locks.sql"
+UserParameter=pgsql.queries[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -v tmax=$5 -f "/var/lib/zabbix/postgresql/pgsql.query.time.sql"
+UserParameter=pgsql.uptime[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.uptime.sql"
+UserParameter=pgsql.cache.hit[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.cache.hit.sql"
+UserParameter=pgsql.scans[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.scans.sql"
+UserParameter=pgsql.frozenxid[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.frozenxid.sql"
+
+UserParameter=pgsql.discovery.db[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.discovery.db.sql"
+UserParameter=pgsql.db.size[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -c "SELECT pg_database_size('$5')"
+UserParameter=pgsql.ping[*], pg_isready -h "$1" -p "$2" -U "$3"  -d "$4"
+UserParameter=pgsql.ping.time[*], LANG=C.UTF-8 psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.ping.time.sql"
+UserParameter=pgsql.version[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -c "SELECT version();"
+
+UserParameter=pgsql.replication.count[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -c "SELECT count(*) FROM pg_stat_replication"
+UserParameter=pgsql.replication.recovery_role[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.replication.recovery_role.sql"
+UserParameter=pgsql.replication.lag.sec[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.replication.lag.sql"
+UserParameter=pgsql.replication.status[*], psql -qtAX -h "$1" -p "$2" -U "$3"  -d "$4" -f "/var/lib/zabbix/postgresql/pgsql.replication.status.sql"
+3.5 在/etc/profile里加入
+PATH=$PATH:/usr/pgsql-13/bin
+3.6 重启zabbix-agent
+
