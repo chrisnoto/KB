@@ -1190,10 +1190,11 @@ socks pass {
     log: error connect # disconnect
 }
 [root@cobbler ansible]# cat ~/.ssh/config
-#Host 10.20.0.8
-#  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
-Host 10.20.0.*
-  ProxyCommand connect-proxy -S 10.67.51.159 %h %p
+Host 10.21.0.*                                   需要在36.66装socks proxy
+  ProxyCommand connect-proxy -S 10.67.36.66 %h %p
+Host 10.21.0.*                                   不需要装，但要有36.66的访问权限
+  ProxyCommand ssh -q -W %h:%p 10.67.36.66
+
 
 
 ################### mrepo ##############
