@@ -255,3 +255,16 @@ PATH=$PATH:/usr/pgsql-13/bin
 UserParameter=pgsql.ping[*], /usr/pgsql-13/binpg_isready -h "$1" -p "$2" -U "$3"  -d "$4"
 3.6 重启zabbix-agent
 
+########### zabbix-agent2 监控 Oralce #######
+1 更改oracle template为agent active模式
+2 在主机web配置界面上添加宏
+{$ORACLE.SERVICE}  tcp://10.67.51.95:1521
+{$ORACLE.PASSWORD} sys123sys
+{$ORACLE.SERVICE} POC1
+{$ORACLE.USER} SYSTEM
+3 配置zabbix配置文件，并添加 oracle连接字串等。重启zabbix-agent2  #貌似不需要，添加宏就可以。
+[root@myora2 zabbix_agent2.d]# cat oracle.conf
+Plugins.Oracle.Sessions.POC1.Uri=tcp://10.67.51.95:1521
+Plugins.Oracle.Sessions.POC1.User=SYSTEM
+Plugins.Oracle.Sessions.POC1.Password=sys123sys
+Plugins.Oracle.Sessions.POC1.Service=POC1

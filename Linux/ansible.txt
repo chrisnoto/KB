@@ -92,3 +92,210 @@ ansible playbook的目录结构
 │   └── templates
 ├── site.yml
 └── zabbix.yml
+
+####   使用 inventory脚本
+1 编辑 /etc/ansible/ansible.cfg，修改inventory
+inventory      = /etc/ansible/inv.py
+
+2 准备sqlite3 db
+dbname = '/etc/ansible/inv.db'
+导入数据如下
+[root@repo-centos ansible]# cat inv.sql
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE server(id int primary key,type text,name text);
+INSERT INTO "server" VALUES(1,'k8s','10.67.36.58');
+INSERT INTO "server" VALUES(2,'k8s','10.67.49.241');
+INSERT INTO "server" VALUES(3,'k8s','10.67.49.242');
+INSERT INTO "server" VALUES(4,'k8s','10.67.49.243');
+INSERT INTO "server" VALUES(5,'k8s','10.67.49.244');
+INSERT INTO "server" VALUES(6,'k8s','10.67.49.245');
+INSERT INTO "server" VALUES(7,'k8s','10.67.49.246');
+INSERT INTO "server" VALUES(8,'k8s','10.67.49.247');
+COMMIT;
+
+3 准备 inv.py
+[root@repo-centos ansible]# cat inv.py
+#!/usr/bin/env python
+
+import sqlite3
+import sys
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
+dbname = '/etc/ansible/inv.db'
+
+def grouplist(conn):
+
+    inventory ={}
+
+    # Add group for [local] (e.g. local_action). If needed,
+    # set ansible_python_interpreter in host_vars/127.0.0.1
+    inventory['local'] = [ '127.0.0.1' ]
+
+    cur = conn.cursor()
+    cur.execute("SELECT type, name FROM server ORDER BY 1, 2")
+
+    for row in cur.fetchall():
+        group = row['type']
+        if group is None:
+            group = 'ungrouped'
+
+        # Add group with empty host list to inventory{} if necessary
+        if not group in inventory:
+            inventory[group] = {
+                'hosts' : []
+            }
+        inventory[group]['hosts'].append(row['name'])
+
+    cur.close()
+    print json.dumps(inventory, indent=4)
+
+def hostinfo(conn, name):
+
+    vars = {}
+
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM server WHERE name=?", (name, ))
+
+    row = cur.fetchone()
+    if row[0] == 0:
+        print json.dumps({})
+        sys.exit(0)
+
+    # Inject some variables for all hosts
+    vars = {
+        'admin'         : 'Sen Chen',
+        'datacenter'    : 1
+    }
+
+    # Assuming you *know* that certain hosts need special vars
+    # and you can't or don't want to use host_vars/ group_vars,
+    # you could specify them here. For example, I *know* that
+    # hosts with the word 'ldap' in them need a base DN
+
+    if 'ldap' in name.lower():
+        vars['baseDN'] = 'dc=mens,dc=de'
+
+
+    print json.dumps(vars, indent=4)
+
+
+if __name__ == '__main__':
+    con = sqlite3.connect(dbname)
+    con.row_factory=sqlite3.Row
+
+    if len(sys.argv) == 2 and (sys.argv[1] == '--list'):
+        grouplist(con)
+    elif len(sys.argv) == 3 and (sys.argv[1] == '--host'):
+        hostinfo(con, sys.argv[2])
+    else:
+        print "Usage: %s --list or --host <hostname>" % sys.argv[0]
+        sys.exit(1)
+
+    con.close()
+
+#ansible列出group
+ansible localhost -m debug -a 'var=groups'
+	
+[root@repo-centos ansible]# ansible-inventory --list |jq .[].children
+null
+[
+  "ceph",
+  "compute",
+  "controller",
+  "es",
+  "k8s",
+  "kafka",
+  "local",
+  "logstash",
+  "oracle",
+  "ungrouped",
+  "zabdb"
+]
+#ansible (单个/多个组)列出host
+ansible k8s:kafka --list-hosts
+
+####### ansible facts 导入到 SQLITE3 #########
+1 配置ansible fact缓存为redis
+[root@repo-centos ~]# cat /etc/ansible/ansible.cfg |grep '^fact_caching'
+fact_caching = redis
+fact_caching_connection=localhost:6379:0
+2 安装python-redis-2.10.3-1.sdl7.noarch.rpm，使python可以使用redis库
+3 升级sqlite3从centos 7默认版本3.7到最新版
+download sqlite3编译好的二进制文件sqlite-tools-linux-x86-3360000.zip，解压并copy到sqlite3相应目录做文件替换
+4 安装facts_to_sqlite3脚本
+[root@repo-centos ~]# cat facts_to_sqlite.py
+#!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+
+import json
+import redis
+import sqlite3
+
+
+def main(redis_match, db_file, db_table):
+    """Grab data from Redis."""
+    r = redis.Redis()
+    data = r.mget(r.scan_iter(match=redis_match))
+
+    """Prepare table in SQLite."""
+    conn = sqlite3.connect(db_file)
+    c = conn.cursor()
+    c.execute('CREATE TABLE IF NOT EXISTS facts (host varchar(255) PRIMARY KEY,data json)')
+    conn.commit()
+
+    """Import data from Redis to SQLite."""
+    for host in data:
+        host_json = json.loads(host)
+        c.execute('REPLACE INTO facts values (?,?)',[host_json["ansible_fqdn"], json.dumps(host_json)],)
+        conn.commit()
+    conn.close()
+
+
+if __name__ == "__main__":
+    """
+    Pass redis key for matching, SQLite file name and table name for the facts.
+    """
+    main("ansible_facts*", "/root/facts.db", "facts")
+
+## 执行过程：
+1 ansible kafka -m setup
+此时kafka group的3台kafka机器的facts结果以json格式存放到redis里了
+
+2 可以查看redis数据 
+[root@repo-centos ~]# redis-cli keys '*'
+1) "ansible_facts10.67.51.145"
+2) "ansible_facts10.67.51.146"
+3) "ansible_facts10.67.48.194"
+4) "ansible_cache_keys"
+5) "ansible_facts10.67.51.2"
+6) "ansible_facts10.67.50.200"
+7) "ansible_facts10.67.51.144"
+
+3 执行 ./facts_to_sqlite.py, 把redis的数据存到sqlite3里
+
+4 进入sqlite3查看结果
+sqlite> .mode column
+sqlite> select * from serverinfo;
+host            ip            OS      OS_version  Product                  CPU  Memory
+--------------  ------------  ------  ----------  -----------------------  ---  --------
+vstjlogstash03  10.67.48.194  CentOS  7.5         VMware Virtual Platform  8    15.51 GB
+kafka3          10.67.51.146  CentOS  7.5         R2-1206R-PA              32   62.73 GB
+vstjlogstash01  10.67.50.200  CentOS  7.5         VMware Virtual Platform  8    15.51 GB
+kafka1          10.67.51.144  CentOS  7.5         R2-1206R-PA              32   62.73 GB
+kafka2          10.67.51.145  CentOS  7.5         Pangu                    32   62.73 GB
+vstjlogstash02  10.67.51.2    CentOS  7.5         VMware Virtual Platform  8    15.51 GB
+
+5 查看表结构
+sqlite> .schema facts
+CREATE TABLE facts (host varchar(255) PRIMARY KEY,data json);
+sqlite> .schema serverinfo
+CREATE VIEW serverinfo as
+select host,json_extract(data,'$.ansible_default_ipv4.address') as ip,json_extract(data,'$.ansible_distribution') as OS,
+json_extract(data,'$.ansible_distribution_version') as OS_version,json_extract(data,'$.facter_productname') as Product,
+json_extract(data,'$.facter_processorcount') as CPU,json_extract(data,'$.facter_memorysize') as Memory from facts
+/* serverinfo(host,ip,OS,OS_version,Product,CPU,Memory) */;
+	

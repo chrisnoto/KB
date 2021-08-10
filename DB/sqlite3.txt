@@ -1,0 +1,35 @@
+####  sqlite ####
+1 建库                sqlite3 test.db
+2 dump DB to sql    
+sqlite> .output server.sql
+sqlite> .dump
+3 建库并导入sql文件   sqlite3 inv.db <inv.sql
+
+4 导出到csv
+.show 查看设置
+sqlite> .show
+sqlite> .mode csv
+sqlite> .output server.csv
+sqlite> select * from server;
+sqlite> .quit
+
+5 导入csv
+.show 查看设置
+sqlite> .show
+     echo: off
+  explain: off
+  headers: on
+     mode: csv
+nullvalue: ""
+   output: stdout
+separator: ","
+    stats: off
+    width:
+sqlite> .separator "," 
+sqlite> .import extra.csv server
+
+6. 备份
+sqlite> .database
+main: /root/server.db
+sqlite> .backup main 1.db
+sqlite> .quit
