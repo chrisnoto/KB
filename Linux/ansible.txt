@@ -293,9 +293,12 @@ vstjlogstash02  10.67.51.2    CentOS  7.5         VMware Virtual Platform  8    
 sqlite> .schema facts
 CREATE TABLE facts (host varchar(255) PRIMARY KEY,data json);
 sqlite> .schema serverinfo
-CREATE VIEW serverinfo as
+CREATE VIEW serverinfo_lin as
 select host,json_extract(data,'$.ansible_default_ipv4.address') as ip,json_extract(data,'$.ansible_distribution') as OS,
 json_extract(data,'$.ansible_distribution_version') as OS_version,json_extract(data,'$.facter_productname') as Product,
-json_extract(data,'$.facter_processorcount') as CPU,json_extract(data,'$.facter_memorysize') as Memory from facts
+json_extract(data,'$.facter_processorcount') as CPU,json_extract(data,'$.facter_memorysize') as Memory from facts where OS not like '%Windows%';
 /* serverinfo(host,ip,OS,OS_version,Product,CPU,Memory) */;
-	
+CREATE VIEW serverinfo_win as
+select host,json_extract(data,'$.ansible_ip_addresses[0]') as ip,json_extract(data,'$.ansible_distribution') as OS,
+json_extract(data,'$.ansible_distribution_version') as OS_version,json_extract(data,'$.ansible_virtualization_type') as Product,
+json_extract(data,'$.ansible_processor_count') as CPU,json_extract(data,'$.ansible_memtotal_mb') as Memory from facts where OS like '%Windows%';	
