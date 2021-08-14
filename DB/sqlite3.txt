@@ -1,4 +1,4 @@
-####  sqlite ####
+########  sqlite基本命令 ########
 1 建库                sqlite3 test.db
 2 dump DB to sql    
 sqlite> .output server.sql
@@ -33,3 +33,284 @@ sqlite> .database
 main: /root/server.db
 sqlite> .backup main 1.db
 sqlite> .quit
+
+7.  vacuum   delete并不减少占用空间，要使用vacuum
+[root@c8-cilent1 ~]# ls -lh bin.db
+-rw-r--r--. 1 root root 228M Aug 13 09:49 bin.db
+[root@c8-cilent1 ~]# sqlite3 bin.db
+SQLite version 3.26.0 2018-12-01 12:34:55
+Enter ".help" for usage hints.
+sqlite> .table
+command
+sqlite> delete from command;
+sqlite> .shell ls -lh bin.db
+-rw-r--r--. 1 root root 228M Aug 13 10:16 bin.db
+sqlite> vacuum
+   ...> ;
+sqlite> .shell ls -lh bin.db
+-rw-r--r--. 1 root root 12K Aug 13 10:17 bin.db
+
+
+####  BLOB类型  ####
+插入二进制文件到blob类型
+[root@c8-cilent1 ~]# sqlite-utils insert-files bin.db command /usr/bin/ls
+  [####################################]  100%
+[root@c8-cilent1 ~]# sqlite3 bin.db
+SQLite version 3.26.0 2018-12-01 12:34:55
+Enter ".help" for usage hints.
+sqlite> .table
+command
+sqlite> select * from command
+   ...> ;
+/usr/bin/ls|ELF|166448
+sqlite> .schema command
+CREATE TABLE [command] (
+   [path] TEXT PRIMARY KEY,
+   [content] BLOB,
+   [size] INTEGER
+);
+sqlite> select typeof(path),typeof(content),typeof(size) from command;
+text|blob|integer
+从blob类型导出二进制文件
+[root@c8-cilent1 ~]# sqlite-utils bin.db "select content from command" --raw > myls
+[root@c8-cilent1 ~]# chmod +x myls
+[root@c8-cilent1 ~]# ./myls
+164.json  admin.csr        cacert.p12   Desktop               jwt.example.com.csr  liurui.pem   server
+[root@c8-cilent1 ~]# file myls
+myls: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=937708964f0f7e3673465d7749d6c
+f6a2601dea2, stripped, too many notes (256)
+
+
+#### full text searching ####
+sqlite> create virtual table booksearch using fts5(id,title,desc);
+sqlite> .table
+booksearch          booksearch_content  booksearch_docsize
+booksearch_config   booksearch_data     booksearch_idx
+sqlite> .schema booksearch_idx
+CREATE TABLE IF NOT EXISTS 'booksearch_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+sqlite> .schema booksearch_content
+CREATE TABLE IF NOT EXISTS 'booksearch_content'(id INTEGER PRIMARY KEY, c0, c1, c2);
+sqlite> insert into booksearch select * from book;
+sqlite> select * from booksearch;
+1|MongoDB cookbook|Mongodb is a NoSQL database
+2|MySQL cookbook|MySQL is relational database
+3|Oracle cookbook|Oracle is a commecial database
+4|PostgreSQL cookbook|PostgreSQL is a opensource database
+sqlite> select * from booksearch where booksearch match 'NoSQL';
+1|MongoDB cookbook|Mongodb is a NoSQL database
+
+
+#### json  ####
+sqlite> select json_extract(value,'$.ansible_nodename') as nodename,json_extract(value,'$.ansible_all_ipv4_addresses') as IP from json_each(readfile('facts.json'));
+c8-cilent1.xq.foxconn  ["192.168.122.1","10.67.36.15"]
+sqlite>
+
+####   union, intersect, except
+sqlite> select * from serverinfo_lin where OS_version='7.5'
+   ...> intersect
+   ...> select * from serverinfo_lin where host like '%es%';
+stjes1|10.67.51.147|CentOS|7.5|PowerEdge R730|56|125.64 GB
+stjes2|10.67.51.148|CentOS|7.5|PowerEdge R730|40|125.64 GB
+stjes3|10.67.51.149|CentOS|7.5|PowerEdge R730|56|125.64 GB
+sqlite> select * from serverinfo_lin where OS_version='7.5'
+   ...> except
+   ...> select * from serverinfo_lin where host like '%es%';
+kafka1|10.67.51.144|CentOS|7.5|R2-1206R-PA|32|62.73 GB
+kafka2|10.67.51.145|CentOS|7.5|Pangu|32|62.73 GB
+kafka3|10.67.51.146|CentOS|7.5|R2-1206R-PA|32|62.73 GB
+rancher|10.67.36.58|CentOS|7.5|VMware Virtual Platform|6|11.58 GB
+vstjlogstash01|10.67.50.200|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
+vstjlogstash02|10.67.51.2|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
+vstjlogstash03|10.67.48.194|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
+
+
+
+####  sqlite-utils ####
+1 使用in-memory db
+sqlite-utils memory 'select datetime()'
+[{"datetime()": "2021-08-14 01:10:10"}]
+2 csv 放入 in-memory db
+[root@c8-cilent1 ~]# sqlite-utils memory data.csv "select * from data"
+[{"1": 2, "k8s": "k8s", "10.67.36.58": "10.67.49.241"},
+ {"1": 3, "k8s": "k8s", "10.67.36.58": "10.67.49.242"},
+ {"1": 4, "k8s": "k8s", "10.67.36.58": "10.67.49.243"},
+ {"1": 5, "k8s": "k8s", "10.67.36.58": "10.67.49.244"},
+3 json 放入 in-memory db
+[root@c8-cilent1 ~]# cat repos.json |sqlite-utils memory - 'select full_name,html_url,forks_count,stargazers_count from stdin  order by stargazers_count desc' -t
+full_name                          html_url                                                forks_count    stargazers_count
+---------------------------------  ----------------------------------------------------  -------------  ------------------
+dogsheep/twitter-to-sqlite         https://github.com/dogsheep/twitter-to-sqlite                    12                 234
+dogsheep/github-to-sqlite          https://github.com/dogsheep/github-to-sqlite                     17                 146
+dogsheep/dogsheep-photos           https://github.com/dogsheep/dogsheep-photos                       5                 119
+
+4 dump 建表语句
+[root@c8-cilent1 ~]# cat facts.json |sqlite-utils memory - 'select * from stdin' --dump
+BEGIN TRANSACTION;
+CREATE TABLE [stdin] (
+   [ansible_all_ipv4_addresses] TEXT,
+   [ansible_all_ipv6_addresses] TEXT,
+   [ansible_apparmor] TEXT,
+   [ansible_architecture] TEXT,
+   [ansible_bios_date] TEXT,
+   [ansible_bios_version] TEXT,
+   [ansible_cmdline] TEXT,
+   [ansible_date_time] TEXT,
+   [ansible_default_ipv4] TEXT,
+   [ansible_default_ipv6] TEXT,
+   [ansible_device_links] TEXT,
+   [ansible_devices] TEXT,
+   [ansible_distribution] TEXT,
+   [ansible_distribution_file_parsed] INTEGER,
+   [ansible_distribution_file_path] TEXT,
+   [ansible_distribution_file_variety] TEXT,
+   [ansible_distribution_major_version] TEXT,
+   [ansible_distribution_release] TEXT,
+   [ansible_distribution_version] TEXT,
+   [ansible_dns] TEXT,
+   [ansible_domain] TEXT,
+   [ansible_effective_group_id] INTEGER,
+   [ansible_effective_user_id] INTEGER,
+   [ansible_ens3] TEXT,
+   [ansible_env] TEXT,
+   [ansible_fibre_channel_wwn] TEXT,
+   [ansible_fips] INTEGER,
+   [ansible_form_factor] TEXT,
+   [ansible_fqdn] TEXT,
+   [ansible_hostname] TEXT,
+   [ansible_hostnqn] TEXT,
+   [ansible_interfaces] TEXT,
+   [ansible_is_chroot] INTEGER,
+   [ansible_iscsi_iqn] TEXT,
+   [ansible_kernel] TEXT,
+   [ansible_kernel_version] TEXT,
+   [ansible_lo] TEXT,
+   [ansible_local] TEXT,
+   [ansible_lsb] TEXT,
+   [ansible_lvm] TEXT,
+   [ansible_machine] TEXT,
+   [ansible_machine_id] TEXT,
+   [ansible_memfree_mb] INTEGER,
+   [ansible_memory_mb] TEXT,
+   [ansible_memtotal_mb] INTEGER,
+   [ansible_mounts] TEXT,
+   [ansible_nodename] TEXT,
+   [ansible_os_family] TEXT,
+   [ansible_pkg_mgr] TEXT,
+   [ansible_proc_cmdline] TEXT,
+   [ansible_processor] TEXT,
+   [ansible_processor_cores] INTEGER,
+   [ansible_processor_count] INTEGER,
+   [ansible_processor_threads_per_core] INTEGER,
+   [ansible_processor_vcpus] INTEGER,
+   [ansible_product_name] TEXT,
+   [ansible_product_serial] TEXT,
+   [ansible_product_uuid] TEXT,
+   [ansible_product_version] TEXT,
+   [ansible_python] TEXT,
+   [ansible_python_version] TEXT,
+   [ansible_real_group_id] INTEGER,
+   [ansible_real_user_id] INTEGER,
+   [ansible_selinux] TEXT,
+   [ansible_selinux_python_present] INTEGER,
+   [ansible_service_mgr] TEXT,
+   [ansible_ssh_host_key_ecdsa_public] TEXT,
+   [ansible_ssh_host_key_ed25519_public] TEXT,
+   [ansible_ssh_host_key_rsa_public] TEXT,
+   [ansible_swapfree_mb] INTEGER,
+   [ansible_swaptotal_mb] INTEGER,
+   [ansible_system] TEXT,
+   [ansible_system_capabilities] TEXT,
+   [ansible_system_capabilities_enforced] TEXT,
+   [ansible_system_vendor] TEXT,
+   [ansible_uptime_seconds] INTEGER,
+   [ansible_user_dir] TEXT,
+   [ansible_user_gecos] TEXT,
+   [ansible_user_gid] INTEGER,
+   [ansible_user_id] TEXT,
+   [ansible_user_shell] TEXT,
+   [ansible_user_uid] INTEGER,
+   [ansible_userspace_architecture] TEXT,
+   [ansible_userspace_bits] TEXT,
+   [ansible_virbr0] TEXT,
+   [ansible_virbr0_nic] TEXT,
+   [ansible_virtualization_role] TEXT,
+   [ansible_virtualization_type] TEXT,
+   [facter_disks] TEXT,
+   [facter_dmi] TEXT,
+   [facter_facterversion] TEXT,
+   [facter_filesystems] TEXT,
+   [facter_fips_enabled] INTEGER,
+   [facter_identity] TEXT,
+   [facter_is_virtual] INTEGER,
+   [facter_kernel] TEXT,
+   [facter_kernelmajversion] TEXT,
+   [facter_kernelrelease] TEXT,
+   [facter_kernelversion] TEXT,
+   [facter_load_averages] TEXT,
+   [facter_memory] TEXT,
+   [facter_mountpoints] TEXT,
+   [facter_networking] TEXT,
+   [facter_os] TEXT,
+   [facter_partitions] TEXT,
+   [facter_path] TEXT,
+   [facter_processors] TEXT,
+   [facter_ssh] TEXT,
+   [facter_system_uptime] TEXT,
+   [facter_timezone] TEXT,
+   [facter_virtual] TEXT,
+   [gather_subset] TEXT,
+   [module_setup] INTEGER
+);
+INSERT INTO "stdin" VALUES('["192.168.122.1", "10.67.36.15"]'
+
+#######  db-to-sqlite 安装和使用  ########
+## 安装
+
+[root@c8-cilent1 ~]# dnf install gcc
+[root@c8-cilent1 ~]# dnf install platform-python-devel redhat-rpm-config 
+[root@c8-cilent1 ~]# pip3.6 --proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128 install 'db-to-sqlite'
+[root@c8-cilent1 ~]# dnf install mysql-devel
+[root@c8-cilent1 ~]# pip3.6 --proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128 install 'db-to-sqlite[mysql]'
+[root@c8-cilent1 ~]# dnf install postgresql-devel
+[root@c8-cilent1 ~]# pip3.6 --proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128 install 'db-to-sqlite[postgresql]'
+
+## 使用
+
+1 先保证sam用户能访问到pgsql里的test db
+修改pg_hba.conf
+# "local" is for Unix domain socket connections only
+local   all             all                                     trust
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            md5
+
+2 测试登录
+[sam@c8-cilent1 ~]$ psql -h 127.0.0.1 -U sam test
+Password for user sam:
+psql (12.1)
+Type "help" for help.
+
+3 从postgresql导入表t1到sqlite3
+[sam@c8-cilent1 ~]$ db-to-sqlite "postgresql://sam:Foxconn123@127.0.0.1/test" test.db --table t1
+4 验证sqlite3
+[sam@c8-cilent1 ~]$ sqlite-utils tables test.db --counts --columns
+[{"table": "t1", "count": 7, "columns": ["id", "t"]}]
+
+[sam@c8-cilent1 ~]$ sqlite-utils test.db "select * from t1"
+[{"id": 1, "t": "MacOS"},
+ {"id": 2, "t": "CentOS"},
+ {"id": 3, "t": "Windows"},
+ {"id": 4, "t": "Ubuntu"},
+ {"id": 5, "t": "Debian"},
+ {"id": 6, "t": "Gentoo"},
+ {"id": 7, "t": "AIX"}]
+或者
+[sam@c8-cilent1 ~]$ sqlite-utils rows test.db t1
+[{"id": 1, "t": "MacOS"},
+ {"id": 2, "t": "CentOS"},
+ {"id": 3, "t": "Windows"},
+ {"id": 4, "t": "Ubuntu"},
+ {"id": 5, "t": "Debian"},
+ {"id": 6, "t": "Gentoo"},
+ {"id": 7, "t": "AIX"}]
+[sam@c8-cilent1 ~]$ sqlite-utils rows test.db t1 -t
+[sam@c8-cilent1 ~]$ sqlite-utils rows test.db t1 --csv

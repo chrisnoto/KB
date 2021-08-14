@@ -48,6 +48,68 @@ postgres=# select * from pg_settings where name in ('wal_level','archive_mode','
 
 
 
+# centos8 上安装pgsql 12
+
+[root@c8-cilent1 ~]# dnf module list postgresql
+Last metadata expiration check: 1:04:36 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+CentOS-8 - AppStream
+Name                           Stream                     Profiles                               Summary
+postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     12                         client, server [d]                     PostgreSQL server and client module
+postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+默认安装10版本，现enable 12版本，进行12版本的安装
+[root@c8-cilent1 ~]# dnf module enable postgresql:12
+Last metadata expiration check: 1:05:26 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+Dependencies resolved.
+========================================================================================================================================================
+ Package                             Arch                               Version                               Repository                           Size
+========================================================================================================================================================
+Enabling module streams:
+ postgresql                                                             12
+
+Transaction Summary
+========================================================================================================================================================
+
+Is this ok [y/N]: y
+Complete!
+
+Switching module streams does not alter installed packages (see 'module enable' in dnf(8) for details)
+[root@c8-cilent1 ~]# dnf module list postgresql
+Last metadata expiration check: 1:05:39 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+CentOS-8 - AppStream
+Name                           Stream                     Profiles                               Summary
+postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     12 [e]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+[root@c8-cilent1 ~]# dnf install postgresql-server
+Last metadata expiration check: 1:06:19 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+Dependencies resolved.
+========================================================================================================================================================
+ Package                             Arch                     Version                                                 Repository                   Size
+========================================================================================================================================================
+Installing:
+ postgresql-server                   x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   5.5 M
+Installing dependencies:
+ libpq                               x86_64                   12.4-1.el8_2                                            AppStream                   195 k
+ postgresql                          x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   1.4 M
+
+Transaction Summary
+========================================================================================================================================================
+Install  3 Packages
+
+Total download size: 7.1 M
+Installed size: 30 M
+Is this ok [y/N]:y
+
+[root@c8-cilent1 ~]# postgresql-setup --initdb
+ * Initializing database in '/var/lib/pgsql/data'
+ * Initialized, logs are in /var/lib/pgsql/initdb_postgresql.log
+[root@c8-cilent1 ~]# systemctl enable --now postgresql
+
 
 
 

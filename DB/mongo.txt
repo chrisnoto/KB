@@ -1,0 +1,40 @@
+######## Mongo ########
+连接db
+root@f5429e1c496e:/# mongosh "mongodb://root:example@127.0.0.1:27017/admin"
+Current Mongosh Log ID: 6113643d26d56d29f6a36161
+Connecting to:          mongodb://<credentials>@127.0.0.1:27017/admin?directConnection=true&serverSelectionTimeoutMS=2000
+Using MongoDB:          5.0.2
+Using Mongosh:          1.0.4
+
+root@f5429e1c496e:/# mongoimport --host 127.0.0.1:27017 --db test --collection example --authenticationDatabase admin --username root --password example --file /facts.json
+2021-08-12T06:29:00.431+0000    connected to: mongodb://127.0.0.1:27017/
+2021-08-12T06:29:00.431+0000    dropping: test.example
+2021-08-12T06:29:00.456+0000    1 document(s) imported successfully. 0 document(s) failed to import.
+
+test> db.example.find({ansible_architecture:"x86_64"},{"ansible_all_ipv4_addresses":1,"ansible_nodename":1,"ansible_distribution":1,"ansible_distribution_version":1,"ansible_kernel":1,"ansible_product_name":1,"ansible_processor_vcpus":1,"ansible_memtotal_mb":1})
+[
+  {
+    _id: ObjectId("6114ccc7dfaa80771ed8efc0"),
+    ansible_all_ipv4_addresses: [ '192.168.122.1', '10.67.36.15' ],
+    ansible_distribution: 'CentOS',
+    ansible_distribution_version: '8.0',
+    ansible_kernel: '4.18.0-80.11.2.el8_0.x86_64',
+    ansible_memtotal_mb: 3780,
+    ansible_nodename: 'c8-cilent1.xq.foxconn',
+    ansible_processor_vcpus: 2,
+    ansible_product_name: 'KVM'
+  },
+  {
+    _id: ObjectId("6114ccde4626e9983f6593a3"),
+    ansible_all_ipv4_addresses: [ '172.17.0.1', '10.67.51.164' ],
+    ansible_distribution: 'CentOS',
+    ansible_distribution_version: '7.5',
+    ansible_kernel: '3.10.0-957.27.2.el7.x86_64',
+    ansible_memtotal_mb: 7931,
+    ansible_nodename: 'repo-centos',
+    ansible_processor_vcpus: 4,
+    ansible_product_name: 'VMware Virtual Platform'
+  }
+]
+
+
