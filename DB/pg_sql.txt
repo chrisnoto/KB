@@ -390,6 +390,14 @@ analyze t3;
 explain select count(*) from t3 where t='Linux';
 prepare mypan(text) as select count(*) from t3 where t=$1;
 explain execute mypan('Linux');
+
+##############################  FDW ############################
+FDW的安装
+[root@postgres-1 ~]# rpm -qa |grep fdw
+mysql_fdw_13-2.6.0-1.rhel7.x86_64
+redis_fdw_13-1.1-1.rhel7.x86_64
+sqlite_fdw_13-2.0.0-1.rhel7.x86_64
+mongo_fdw13-5.2.7-1.rhel7.x86_64
 	   
 #####   mysql_fdw
 postgres@u1804:~$ psql
@@ -464,6 +472,7 @@ postgres=# create foreign table redis_db0(key text,value text)
 postgres-# server redis_51164
 postgres-# options (database '0');
 CREATE FOREIGN TABLE
+postgres-# create user mapping for chensen server redis_51164;
 postgres-# create foreign table redis_ansible(key text,value text)server redis_51164 options (database '0',tabletype 'string');
 postgres-# grant select,insert,update,delete on myredis_s_hash to chensen;
 postgres=> select * from redis_ansible where key='mongo';        # using user chensen  （读redis）
