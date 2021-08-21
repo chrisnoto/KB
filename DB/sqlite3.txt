@@ -50,6 +50,19 @@ sqlite> vacuum
 sqlite> .shell ls -lh bin.db
 -rw-r--r--. 1 root root 12K Aug 13 10:17 bin.db
 
+########  GLOB ######
+sqlite> select * from serverinfo where host glob 'kafka*';
+host    ip            OS      OS_version  Product      CPU  Memory
+------  ------------  ------  ----------  -----------  ---  --------
+kafka1  10.67.51.144  CentOS  7.5         R2-1206R-PA  32   62.73 GB
+kafka2  10.67.51.145  CentOS  7.5         Pangu        32   62.73 GB
+kafka3  10.67.51.146  CentOS  7.5         R2-1206R-PA  32   62.73 GB
+sqlite> select * from serverinfo where ip glob '10.67.[4-5]*';
+host                       ip            OS                                         OS_version  Product                  CPU  Memory
+-------------------------  ------------  -----------------------------------------  ----------  -----------------------  ---  ---------
+kafka1                     10.67.51.144  CentOS                                     7.5         R2-1206R-PA              32   62.73 GB
+kafka2                     10.67.51.145  CentOS                                     7.5         Pangu                    32   62.73 GB
+
 
 ####  BLOB类型  ####
 插入二进制文件到blob类型
@@ -99,11 +112,132 @@ sqlite> select * from booksearch;
 sqlite> select * from booksearch where booksearch match 'NoSQL';
 1|MongoDB cookbook|Mongodb is a NoSQL database
 
+###  upsert类语句 ###
+sqlite> insert into products values('bear toy',100,0.1,0.13) on conflict(name) do update set price=price+1;
+Error: ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint
+sqlite> create unique index idx_products_1 on products(name);
+sqlite> .schema products
+CREATE TABLE products(
+name text not null,
+price real not null,
+discount real not null,
+tax real not null,
+net_price real generated always
+as (price*(1-discount)*(1+tax))
+);
+CREATE UNIQUE INDEX idx_products_1 on products(name);
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  100.0  0.05      0.13  107.35
+bear toy    99.0   0.1       0.13  100.683
+sqlite> insert into products values('bear toy',100,0.1,0.13) on conflict(name) do update set price=price+1;
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  100.0  0.05      0.13  107.35
+bear toy    100.0  0.1       0.13  101.7
+# upsert更新以set为准
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  100.0  0.05      0.13  107.35
+bear toy    102.0  0.1       0.13  103.734
+sqlite> insert into products values('abc widget',130,0.05,0.13) on conflict(name) do update set price=price+100;
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  200.0  0.05      0.13  214.7
+bear toy    102.0  0.1       0.13  103.734
+
+#
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  200.0  0.05      0.13  214.7
+bear toy    102.0  0.1       0.13  103.734
+tree        200.0  0.15      0.13  192.1
+sqlite> insert or replace into products(name,price,discount,tax) values('tree',203,0.2,0.13);
+sqlite> select * from products;
+name        price  discount  tax   net_price
+----------  -----  --------  ----  ---------
+abc widget  200.0  0.05      0.13  214.7
+bear toy    102.0  0.1       0.13  103.734
+tree        203.0  0.2       0.13  183.512
+
+
+###  generated column ###
+1 default virtual
+sqlite> .schema products
+CREATE TABLE products(
+name text not null,
+price real not null,
+discount real not null,
+tax real not null,
+net_price real generated always
+as (price*(1-discount)*(1+tax))
+);
+2 
+CREATE TABLE products2(
+name text not null,
+price real not null,
+discount real not null,
+tax real not null,
+net_price real generated always
+as (price*(1-discount)*(1+tax)) stored
+);
+#### virtual table vsv ####
+sqlite> .load "/root/vsv.so"
+sqlite> create virtual table temp.host_inventory using vsv(
+   ...> filename="/root/host_inventory.csv",
+   ...> schema="create table x(hostid interger,hostname text,ip text,appowner text,sysowner text,os text,appdept text)",
+   ...> header=on,
+   ...> fsep=',',
+   ...> nulls=on
+   ...> );
+   
+create virtual table temp.host_inventory using vsv(
+filename="/root/host_inventory.csv",
+schema="create table x(hostid interger,hostname text,ip text,appowner text,sysowner text,os text,appdept text)",
+header=on,
+fsep=',',
+nulls=on
+);
+   
+sqlite> select * from temp.host_inventory;
+Error: out of memory
+sqlite> .schema temp.host_inventory
+CREATE VIRTUAL TABLE temp.host_inventory using vsv(
+filename="/root/host_inventory.csv",
+schema="create table x(hostid interger,hostname text,ip text,appowner text,sysowner text,os text,appdept text)",
+header=on,
+fsep=',',
+nulls=on
+)
+/* temp.host_inventory(hostid,hostname,ip,appowner,sysowner,os,appdept) */;
+
+###
+使用sqlite-utils
+[root@c8-cilent1 ~]# sqlite-utils search ft.db booksearch 'is a' -o id
+[{"rowid": 1, "id": 1, "title": "MongoDB cookbook", "desc": "Mongodb is a NoSQL database"},
+ {"rowid": 3, "id": 3, "title": "Oracle cookbook", "desc": "Oracle is a commecial database"},
+ {"rowid": 4, "id": 4, "title": "PostgreSQL cookbook", "desc": "PostgreSQL is a opensource database"}]
+
 
 #### json  ####
 sqlite> select json_extract(value,'$.ansible_nodename') as nodename,json_extract(value,'$.ansible_all_ipv4_addresses') as IP from json_each(readfile('facts.json'));
 c8-cilent1.xq.foxconn  ["192.168.122.1","10.67.36.15"]
 sqlite>
+
+### join  ###
+1 SQLite inner joins 
+INNER JOIN
+NATURAL INNER JOIN
+CROSS INNER JOIN
+
+2 SQLite outer joins
+LEFT OUTER JOIN
+NATURAL LEFT OUTER JOIN
 
 ####   union, intersect, except
 sqlite> select * from serverinfo_lin where OS_version='7.5'
@@ -123,6 +257,53 @@ vstjlogstash01|10.67.50.200|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
 vstjlogstash02|10.67.51.2|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
 vstjlogstash03|10.67.48.194|CentOS|7.5|VMware Virtual Platform|8|15.51 GB
 
+#  case
+sqlite> select host,ip,OS,OS_version,Product,CPU,case
+when trim(Memory,' GB')+0<=128 and trim(Memory,' GB')+0 >120 then '128 GB'
+when trim(Memory,' GB')+0<=64 and trim(Memory,' GB')+0 >60 then '64 GB'
+when trim(Memory,' GB')+0<=32 and trim(Memory,' GB')+0 >30 then '32 GB'
+when trim(Memory,' GB')+0<=16 and trim(Memory,' GB')+0 >14 then '16 GB'
+else 'tiny memory'
+end as Memory
+from serverinfo;
+
+host                       Memory
+-------------------------  -----------
+kafka1                     64 GB
+kafka2                     64 GB
+kafka3                     64 GB
+rancher                    tiny memory
+stjes1                     128 GB
+stjes2                     128 GB
+stjes3                     128 GB
+vSTJPLMWEB2.CESBG.FOXCONN  tiny memory
+vstjk8s01                  tiny memory
+vstjk8s02                  tiny memory
+vstjk8s03                  tiny memory
+vstjk8s04                  32 GB
+vstjk8s05                  32 GB
+vstjk8s06                  32 GB
+vstjk8s07                  32 GB
+vstjlogstash01             16 GB
+vstjlogstash02             16 GB
+vstjlogstash03             16 GB
+
+
+
+### trigger ###
+sqlite> .schema friends
+CREATE TABLE friends(id int,name text,sex text);
+CREATE INDEX idx_friends_1 on friends(id);
+sqlite> create table log(id integer primary key,oldname text,newname text,date text);
+sqlite> create trigger mytrigger update of name on friends
+   ...> begin
+   ...> insert into log(oldname,newname,date) values (old.name,new.name,datetime('now'));
+   ...> end;
+sqlite> update friends set name='Frank' where id=3;
+sqlite> select * from log;
+id  oldname   newname  date
+--  --------  -------  -------------------
+1   Franklin  Frank    2021-08-18 02:11:16
 
 
 ####  sqlite-utils ####

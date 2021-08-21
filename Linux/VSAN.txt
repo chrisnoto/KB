@@ -1,5 +1,6 @@
 vsphere 5.5 重設 sso密碼
 D:\Program Files\VMware\Infrastructure\VMware\cis\vmdird> .\vdcadmintool.exe
+cHk0w".#zZxih0qiFPDF
 
 vsphere 6.5 更新证书
 For vCenter Server 6.x/7.x Appliance: /usr/lib/vmware-vmca/bin/certificate-manager
@@ -453,6 +454,8 @@ vmkerrcode -l
 
 vim-cmd  vmsvc/getallvms
 vim-cmd  vmsvc/get.summary  224
+[root@A21VSAN1:~] vim-cmd vmsvc/power.on 19
+Powering on VM:
 8  for循环快速获取信息
 [root@repo-centos ~]# for u in 16 18 19 79 8 80 81 82;do sshpass -f avsan ssh 10.67.51.$u esxcli network ip interface ipv4 get;done
 [root@repo-centos ~]# for u in 206 207 208 210 211;do echo "===============10.67.49.$u==========";sshpass -f bvsan ssh 10.67.49.$u vsish -e get /hardware/cpu/cpuModelName;done

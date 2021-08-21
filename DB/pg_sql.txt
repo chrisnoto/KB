@@ -391,3 +391,152 @@ explain select count(*) from t3 where t='Linux';
 prepare mypan(text) as select count(*) from t3 where t=$1;
 explain execute mypan('Linux');
 	   
+#####   mysql_fdw
+postgres@u1804:~$ psql
+psql (10.18 (Ubuntu 10.18-0ubuntu0.18.04.1))
+Type "help" for help.
+
+postgres=# create extension mysql_fdw;
+CREATE EXTENSION
+postgres=# create server zabbixdb
+postgres-# foreign data wrapper mysql_fdw
+postgres-# options (host '10.67.51.113',port '3306');
+CREATE SERVER
+postgres=# create user mapping for chensen
+server zabbixdb
+options (username 'root',password 'vSTJ456');
+CREATE USER MAPPING
+postgres=# create foreign table tf_interface(interfaceid bigint,hostid bigint,main int,type int,useip int,ip varchar(64),dns varchar(64),port varchar(64)) server zabbixdb options (dbname 'zabbix',table_name 'interface');
+CREATE FOREIGN TABLE
+postgres=# \dew
+                 List of foreign-data wrappers
+   Name    |  Owner   |      Handler      |      Validator
+-----------+----------+-------------------+---------------------
+ mysql_fdw | postgres | mysql_fdw_handler | mysql_fdw_validator
+(1 row)
+
+postgres=# \des
+          List of foreign servers
+   Name   |  Owner   | Foreign-data wrapper
+----------+----------+----------------------
+ zabbixdb | postgres | mysql_fdw
+(1 row)
+
+postgres=# \des+ zabbixdb
+                                                      List of foreign servers
+   Name   |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |            FDW options             | Description
+----------+----------+----------------------+-------------------+------+---------+------------------------------------+-------------
+ zabbixdb | postgres | mysql_fdw            |                   |      |         | (host '10.67.51.113', port '3306') |
+(1 row)
+
+postgres=# \dE
+                List of relations
+ Schema |     Name     |     Type      |  Owner
+--------+--------------+---------------+----------
+ public | tf_interface | foreign table | postgres
+(1 row)
+
+postgres=> \d tf_interface
+                        Foreign table "public.tf_interface"
+   Column    |         Type          | Collation | Nullable | Default | FDW options
+-------------+-----------------------+-----------+----------+---------+-------------
+ interfaceid | bigint                |           |          |         |
+ hostid      | bigint                |           |          |         |
+ main        | integer               |           |          |         |
+ type        | integer               |           |          |         |
+ useip       | integer               |           |          |         |
+ ip          | character varying(64) |           |          |         |
+ dns         | character varying(64) |           |          |         |
+ port        | character varying(64) |           |          |         |
+Server: zabbixdb
+FDW options: (dbname 'zabbix', table_name 'interface')
+	   
+#####  redis_fdw
+postgres=# create extension redis_fdw;
+CREATE EXTENSION
+
+postgres=# create server redis_51164
+foreign data wrapper redis_fdw
+options(host '10.67.51.164',port '6379');
+CREATE SERVER
+
+postgres=# create foreign table redis_db0(key text,value text)
+postgres-# server redis_51164
+postgres-# options (database '0');
+CREATE FOREIGN TABLE
+postgres-# create foreign table redis_ansible(key text,value text)server redis_51164 options (database '0',tabletype 'string');
+postgres-# grant select,insert,update,delete on myredis_s_hash to chensen;
+postgres=> select * from redis_ansible where key='mongo';        # using user chensen  （读redis）
+  key  |         value
+-------+------------------------
+ mongo | This is mongo cookbook
+(1 row)
+postgres=> insert into redis_ansible values('oracle','oracle is great');      (写入redis)
+INSERT 0 1
+10.67.51.164:6379> keys *               （查看redis）
+ 1) "mongo"
+ 2) "elasticsearch"
+ 3) "ansible_facts10.21.0.15"
+ 4) "ansible_facts10.21.0.20"
+ 5) "ansible_facts10.21.0.14"
+ 6) "ansible_facts10.21.0.21"
+ 7) "TiDB"
+ 8) "mysql"
+ 9) "oracle"
+
+postgres=> create table dbs as select key,value from redis_ansible where key='mongo';
+SELECT 1
+postgres=> select * from dbs;
+-[ RECORD 1 ]-----------------
+key   | mongo
+value | This is mongo cookbook
+
+postgres=> insert into dbs select key,value from redis_ansible where key='mysql';
+INSERT 0 1
+postgres=> select * from dbs;
+-[ RECORD 1 ]-----------------
+key   | mongo
+value | This is mongo cookbook
+-[ RECORD 2 ]-----------------
+key   | mysql
+value | I like mysql
+
+postgres=> \d redis_ansible
+             Foreign table "public.redis_ansible"
+ Column | Type | Collation | Nullable | Default | FDW options
+--------+------+-----------+----------+---------+-------------
+ key    | text |           |          |         |
+ value  | text |           |          |         |
+Server: redis_51164
+FDW options: (tabletype 'string')
+	   
+#####  sqlite_fdw
+postgres=# create extension sqlite_fdw;
+CREATE EXTENSION
+postgres=# create server sqlite_server foreign data wrapper sqlite_fdw options (database '/var/lib/pgsql/inv.db');
+CREATE SERVER
+postgres=# create foreign table server(id integer options(key 'true'),type text,name text) server sqlite_server options(table 'server');
+CREATE FOREIGN TABLE
+postgres=# grant select,insert,update,delete on server to chensen;
+GRANT
+postgres=> select * from server;                        # user chensen 查询
+ id |    type    |     name
+----+------------+--------------
+  1 | k8s        | 10.67.36.58
+postgres=> insert into server values(44,'sep','10.67.51.24');        # user chensen 插入    数据已经写入到sqlite3里了
+INSERT 0 1
+
+postgres=> \d server
+                  Foreign table "public.server"
+ Column |  Type   | Collation | Nullable | Default | FDW options
+--------+---------+-----------+----------+---------+--------------
+ id     | integer |           |          |         | (key 'true')
+ type   | text    |           |          |         |
+ name   | text    |           |          |         |
+Server: sqlite_server
+FDW options: ("table" 'server')
+ 
+##### mongo_fdw
+postgres=# create extension mongo_fdw;
+ERROR:  could not load library "/usr/pgsql-13/lib/mongo_fdw.so": /usr/pgsql-13/lib/mongo_fdw.so: undefined symbol: mongoc_collection_find_with_opts
+ 
