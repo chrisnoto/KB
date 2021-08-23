@@ -48,3 +48,14 @@ STORED AS KUDU
 TBLPROPERTIES (
 'kudu.master_addresses' = '10.67.36.58:7051'
 );
+
+create table chensen2
+(id BIGINT,
+name STRING,
+PRIMARY KEY(id)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU
+TBLPROPERTIES (
+'kudu.master_addresses' = 'kudu-master-1:7051,kudu-master-2:7151,kudu-master-3:7251'
+);

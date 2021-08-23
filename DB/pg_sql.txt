@@ -393,6 +393,8 @@ explain execute mypan('Linux');
 
 ##############################  FDW ############################
 FDW的安装
+# Install the repository RPM:
+sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
 [root@postgres-1 ~]# rpm -qa |grep fdw
 mysql_fdw_13-2.6.0-1.rhel7.x86_64
 redis_fdw_13-1.1-1.rhel7.x86_64
