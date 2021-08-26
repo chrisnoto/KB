@@ -1,3 +1,11 @@
+用docker跑个测试
+docker run -d \
+    --name postgres-mongo-fdw \
+	-p 5432:5432 \
+    -e POSTGRES_PASSWORD=Foxconn123 \
+    -e PGDATA=/var/lib/postgresql/data/pgdata \
+    fuww/postgresql-mongodb-fdw:latest
+
 如果想知道这些快捷命令后面用了什么SQL，可以开启-E选项
 -bash-4.2$ psql -E
 psql (13.3)
@@ -395,6 +403,9 @@ explain execute mypan('Linux');
 FDW的安装
 # Install the repository RPM:
 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+# postgresql自带的fdw 如 file_fdw,  postgrel_fdw
+yum install postgresql13-contrib
+# 其他的fdw，安装包如下
 [root@postgres-1 ~]# rpm -qa |grep fdw
 mysql_fdw_13-2.6.0-1.rhel7.x86_64
 redis_fdw_13-1.1-1.rhel7.x86_64
@@ -546,8 +557,100 @@ postgres=> \d server
  name   | text    |           |          |         |
 Server: sqlite_server
 FDW options: ("table" 'server')
+
+##### file_fdw
+前提是安装了postgresql13-contrib
+postgres=# create extension file_fdw;
+CREATE EXTENSION
+postgres=# create server pglog foreign data wrapper file_fdw;
+CREATE SERVER
+
+postgres=# CREATE FOREIGN TABLE pglog (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text
+  SERVER pglog
+  OPTIONS (
+  program $$cat $PGDATA/$(psql -d postgres -qtAX -c "select 'log/' || name from pg_ls_logdir() where name ~ 'csv$' order by modification")$$,
+  format 'csv'
+  );
+CREATE FOREIGN TABLE
+/* 也可以这样，但只能指定单一文件 OPTIONS (filename '/home/pg13/emp.csv', format 'csv' ); 
+或者这样，利用find命令  OPTIONS ( program 'find $PGDATA/log -type f -name "*.csv" -mtime -1 -exec cat {} \;', format 'csv' ); */
+postgres=# grant select on pglog to public;
+GRANT
+客户端查询
+postgres=>   select log_time,user_name,database_name,message,query from pglog limit 2;
+          log_time          | user_name | database_name |                                                     message                                                      | query
+----------------------------+-----------+---------------+------------------------------------------------------------------------------------------------------------------+-------
+ 2021-08-23 09:16:04.319+00 |           |               | starting PostgreSQL 13.3 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit |
+ 2021-08-23 09:16:04.32+00  |           |               | listening on IPv4 address "0.0.0.0", port 5432                                                                   |
+
  
 ##### mongo_fdw
 postgres=# create extension mongo_fdw;
 ERROR:  could not load library "/usr/pgsql-13/lib/mongo_fdw.so": /usr/pgsql-13/lib/mongo_fdw.so: undefined symbol: mongoc_collection_find_with_opts
+另外下载docker image fuww/postgresql-mongodb-fdw:latest 解决
+postgres=# create extension mongo_fdw;
+CREATE EXTENSION
+postgres=# create server mongo_server foreign data wrapper mongo_fdw
+postgres-# options(address '10.67.36.58',port '27017');
+CREATE SERVER
+postgres=# create user mapping for postgres server mongo_server options(username 'root', password 'example');
+CREATE USER MAPPING
+postgres=# create foreign table warehouse(_id NAME, warehouse_id int, warehouse_name text, warehouse_created timestamptz) server mongo_server options (database 'test', collection 'warehouse');
+CREATE FOREIGN TABLE
+postgres=# select * from warehouse;
+ _id | warehouse_id | warehouse_name | warehouse_created
+-----+--------------+----------------+-------------------
+(0 rows)
+
+postgres=# INSERT INTO warehouse values (0, 1, 'UPS', '2014-12-12T07:12:10Z');
+INSERT 0 1
+postgres=# INSERT INTO warehouse values (0, 2, 'Server', '2015-10-02T17:32:10Z');
+INSERT 0 1
+postgres=# select * from warehouse;
+           _id            | warehouse_id | warehouse_name |   warehouse_created
+--------------------------+--------------+----------------+------------------------
+ 612712f8bd6f18005c276452 |            1 | UPS            | 2014-12-12 07:12:10+00
+ 6127138bbd6f18005c276453 |            2 | Server         | 2015-10-02 17:32:10+00
+(2 rows)
+
+mongo中查看collection warehouse 
+test> db.warehouse.find();
+[
+  {
+    _id: ObjectId("612712f8bd6f18005c276452"),
+    warehouse_id: 1,
+    warehouse_name: 'UPS',
+    warehouse_created: ISODate("2014-12-12T07:12:10.000Z")
+  },
+  {
+    _id: ObjectId("6127138bbd6f18005c276453"),
+    warehouse_id: 2,
+    warehouse_name: 'Server',
+    warehouse_created: ISODate("2015-10-02T17:32:10.000Z")
+  }
+]
  
