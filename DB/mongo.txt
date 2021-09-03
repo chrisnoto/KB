@@ -1,5 +1,19 @@
 ######## Mongo ########
 连接db
+[root@c8-cilent1 ~]# mongosh mongodb://root:example@10.67.36.58/test  需要在test数据库中添加root用户并赋权限
+admin> use test
+switched to db test
+test> db.createUser({user:"root",pwd:"example",roles:["readWrite"]})
+{ ok: 1 }
+test> db.auth("root","example")
+{ ok: 1 }
+
+Current Mongosh Log ID: 61273589b813596cfbd3a5ae
+Connecting to:          mongodb://<credentials>@10.67.36.58/test?directConnection=true
+Using MongoDB:          5.0.2
+Using Mongosh Beta:     0.12.1
+
+
 root@f5429e1c496e:/# mongosh "mongodb://root:example@127.0.0.1:27017/admin"
 Current Mongosh Log ID: 6113643d26d56d29f6a36161
 Connecting to:          mongodb://<credentials>@127.0.0.1:27017/admin?directConnection=true&serverSelectionTimeoutMS=2000

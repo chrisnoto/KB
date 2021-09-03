@@ -36,6 +36,16 @@ long_query_time = 1
 
 具体做法：参考 https://www.kancloud.cn/devops-centos/centos-linux-devops/375488
 
+删除分区
+alter table history drop partition p202104030000;
+alter table history_log drop partition p202104030000;
+alter table history_str drop partition p202104030000;
+alter table history_text drop partition p202104030000;
+alter table history_uint drop partition p202104030000;
+alter table trends_uint drop partition p202104030000;
+alter table trends drop partition p202104030000;
+
+
 #########zabbix 收集数据########
 1 zabbix agent active
 

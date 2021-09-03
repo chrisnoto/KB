@@ -20,3 +20,62 @@ Redis将生成一个新的AOF文件， 这个文件包含重建当前数据集�
 ############  Redis 集群 ##################
 使用redis主從 + 哨兵（sentinel）+ 漂移VIP的方案搭建了一個redis高可用系統，但這個系統保證的是單個redis例項的高可用，所以適合業務比較小的應用。
 如果業務比較大，併發量比較高，建議搭建redis叢集，比如官方redis cluster，還有開源的codings叢集
+
+#####  redis 基本用法 ######
+1 string
+keys '*'  查询所有健
+set mongo "it's document DB"
+get mongo  查询mongo这个健的健值
+127.0.0.1:6379> mget mongo mysql
+1) "This is mongo cookbook"
+2) "I like mysql"
+
+2 hash
+set键为record1的hash表
+127.0.0.1:6379> hset record1 name "chensen"
+(integer) 1
+127.0.0.1:6379> hset record1 age 40
+(integer) 1F0xc0nn!23
+
+127.0.0.1:6379> hkeys record1        获取record1的hash field
+1) "name"
+2) "age"
+127.0.0.1:6379> hmget record1 name age  获取record1的hash field的值
+1) "chensen"
+2) "40"
+127.0.0.1:6379> hvals record1         获取record1哈希表里所有的值
+1) "chensen"
+2) "40"
+
+3 集合
+127.0.0.1:6379> sadd os CentOS Windows Debian Ubuntu AIX HPUX Solaris
+(integer) 7
+127.0.0.1:6379> scard os
+(integer) 7
+127.0.0.1:6379> smembers os
+1) "CentOS"
+2) "Windows"
+3) "Debian"
+4) "Ubuntu"
+5) "AIX"
+6) "Solaris"
+7) "HPUX"
+4 列表
+127.0.0.1:6379> lpush dept sa oa gscm b2b hr sap
+(integer) 6
+
+127.0.0.1:6379> lrange dept 0 5
+1) "sap"
+2) "hr"
+3) "b2b"
+4) "gscm"
+5) "oa"
+6) "sa"
+127.0.0.1:6379> llen dept
+(integer) 6
+127.0.0.1:6379> lindex dept 4
+"oa"
+127.0.0.1:6379> lset dept 4 OA        改
+OK
+127.0.0.1:6379> lindex dept 4
+"OA"

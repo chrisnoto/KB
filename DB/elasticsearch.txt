@@ -1,3 +1,19 @@
+###########  elasticsearch 7 新功能之 Visualize data from a log file ########
+介绍
+The File Data Visualizer helps you understand the fields and metrics in a log file. Upload your file, analyze its data, and then choose whether to import the data into an Elasticsearch index.
+The File Data Visualizer supports these file formats:
+Delimited text files, such as CSV and TSV
+Newline-delimited JSON
+Log files with a common format for the timestamp
+You can upload files up to 100 MB.
+可以用csv, tsv, ndjson,log with timestamp 等格式
+log with timestamp格式不会解析log内容的
+1 从postgresql :  select row_to_json(pglog) from pglog \g 111.json
+编辑111.json去掉头和尾
+2 在kibana中 home-> upload a file 
+
+
+
 ############# elasticsearch查询 ############
 [naifa@repo-centos ~]$ curl -s -XGET http://10.67.51.150:9200/winlogbeat-6.8.1-2019.12.25/_search?_source=beat.hostname |jq '.hits|.hits|.[]|._source|.beat|.hostname'
 "VSTJCAEVMI2DB02"

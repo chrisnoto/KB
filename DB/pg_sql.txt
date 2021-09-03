@@ -6,6 +6,62 @@ docker run -d \
     -e PGDATA=/var/lib/postgresql/data/pgdata \
     fuww/postgresql-mongodb-fdw:latest
 
+#########  概念 ##########
+在 Postgresql中是以下的關係
+Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
+
+一台電腦可以有多個 Cluster,在 Oracle 叫 Instance
+一個 Cluster 可以有多個 Catalog ,包含Postgresql在內,許多資料庫會另外稱作 Database.
+一個 Database 可以有多個 Schema, 又叫做  namespace of relations (關聯式物件), 還有相關存取規則(ACL).	
+postgres=# \l
+                                  List of databases
+   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
+-----------+----------+----------+-------------+-------------+-----------------------
+ postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
+ template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+ template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
+           |          |          |             |             | postgres=CTc/postgres
+(3 rows)
+
+postgres=# select * from information_schema.information_schema_catalog_name;
+ catalog_name
+--------------
+ postgres
+(1 row)
+
+两个隐藏schema   pg_catalog和information_schema
+postgres=# \dn      隐藏的看不到
+  List of schemas
+  Name  |  Owner
+--------+----------
+ public | postgres
+(1 row)
+
+postgres=# select table_schema
+postgres-#   from information_schema.tables
+postgres-#  group by table_schema;
+    table_schema
+--------------------
+ public
+ pg_catalog
+ information_schema
+
+postgres=# \dn pg_catalog
+    List of schemas
+    Name    |  Owner
+------------+----------
+ pg_catalog | postgres
+(1 row)
+
+postgres=# \dn information_schema
+        List of schemas
+        Name        |  Owner
+--------------------+----------
+ information_schema | postgres
+(1 row)
+	
+	
 如果想知道这些快捷命令后面用了什么SQL，可以开启-E选项
 -bash-4.2$ psql -E
 psql (13.3)
@@ -37,6 +93,79 @@ ORDER BY 1;
 postgres=# create table t2(id serial not null,name text);
 CREATE TABLE
 
+# 数据类型 enum
+create type color_t as enum('blue', 'red', 'gray', 'black');
+
+drop table if exists cars;
+
+create table cars (
+  brand text
+, model text
+, color color_t
+);
+
+insert into cars(brand, model, color) values 
+('ferari', 'testarosa', 'red'),
+('aston martin', 'db2', 'blue'),
+('bentley', 'mulsanne', 'gray'),
+('ford', 'T', 'black');
+
+# 数据类型domain
+接著來看一個 Create Domain 的例子,為了與 Oracle Date 資料型態相容.
+CREATE DOMAIN tdate
+    AS timestamp(0) without time zone;
+
+使用了基本資料型態 timestamp(0) without time zone
+
+在psql 使用 \dD ,可以列出現在Database 的 自定義 Domain
+
+List of domains
++-[ RECORD 1 ]-------------------------------+
+| Schema    | miku                           |
+| Name      | tdate                          |
+| Type      | timestamp(0) without time zone |
+| Collation |                                |
+| Nullable  |                                |
+| Default   |                                |
+| Check     |                                |
++-----------+--------------------------------+
+
+這樣就能很容易了解到 定義 Domain 是基於其他基本資料型態,可以定義新的 Collation , 
+這樣我們就能指定 Collation 方便排序使用.
+還有指定 Nullable , Default, 還有建立前面提到過的 Check 運算式.
+
+create domain 是 ANSI SQL 標準.
+有了 domain, 我們可以很方便的定義 domain specific type, 讓我們開發系統時,
+有符合領域特性的 type system.
+
+接著我們來看實例
+
+create domain md5 as
+text not null
+check (
+    length(value) = 32
+);
+
+create table ithelp191002 (
+  fname text
+, checksum md5
+);
+
+insert into ithelp191002 values
+('passwd', 'abcd123xxx');
+
+ERROR:  23514: value for domain md5 violates check constraint "md5_check"
+SCHEMA NAME:  miku
+DATATYPE NAME:  md5
+CONSTRAINT NAME:  md5_check
+
+回報錯誤了...
+
+insert into ithelp191002 values
+('passwd', '76a2173be6393254e72ffa4d6df1030a');
+
+這樣就正確了.
+
 # 生成列 由其他列计算而来
 postgres=# create table tax1(salary numeric,taxindex numeric,tax numeric generated always as (salary*taxindex) stored);
 CREATE TABLE
@@ -48,12 +177,136 @@ salary   | 10000
 taxindex | 0.13
 tax      | 1300.00
 
+# hstore类型
+postgres=# CREATE TABLE books (
+postgres(#    id serial primary key,
+postgres(#    title VARCHAR (255),
+postgres(#    attr hstore
+postgres(# );
+CREATE TABLE
+postgres=# INSERT INTO books (title, attr)
+postgres-# VALUES
+postgres-#    (
+postgres(#       'PostgreSQL Tutorial',
+postgres(#       '"paperback" => "243",
+postgres'#       "publisher" => "postgresqltutorial.com",
+postgres'#       "language"  => "English",
+postgres'#       "ISBN-13"   => "978-1449370000",
+postgres'#        "weight"   => "11.2 ounces"'
+postgres(#    );
+INSERT 0 1
+postgres=# INSERT INTO books (title, attr)
+postgres-# VALUES
+postgres-#    (
+postgres(#       'PostgreSQL Cheat Sheet',
+postgres(#       '
+postgres'# "paperback" => "5",
+postgres'# "publisher" => "postgresqltutorial.com",
+postgres'# "language"  => "English",
+postgres'# "ISBN-13"   => "978-1449370001",
+postgres'# "weight"    => "1 ounces"'
+postgres(#    );
+INSERT 0 1
+postgres=# select * from books;
+ id |         title          |                                                                  attr
+----+------------------------+----------------------------------------------------------------------------------------------------------------------------------------
+  1 | PostgreSQL Tutorial    | "weight"=>"11.2 ounces", "ISBN-13"=>"978-1449370000", "language"=>"English", "paperback"=>"243", "publisher"=>"postgresqltutorial.com"
+  2 | PostgreSQL Cheat Sheet | "weight"=>"1 ounces", "ISBN-13"=>"978-1449370001", "language"=>"English", "paperback"=>"5", "publisher"=>"postgresqltutorial.com"
+(2 rows)
+
+返回hstore列所有key
+postgres=# select akeys(attr) from books;
+                     akeys
+-----------------------------------------------
+ {weight,ISBN-13,language,paperback,publisher}
+ {weight,ISBN-13,language,paperback,publisher}
+(2 rows)
+或者使用skeys()函数返回key集合：
+postgres=# select skeys(attr) from books;
+   skeys
+-----------
+ weight
+ ISBN-13
+ language
+ paperback
+ publisher
+ weight
+ ISBN-13
+ language
+ paperback
+ publisher
+
+返回hstore列所有value
+postgres=# select avals(attr) from books;
+或者使用svals()函数返回结果集：
+postgres=# select svals(attr) from books;
+
+转换hstore为json
+postgres=# select title,hstore_to_json(attr) from books;
+         title          |                                                              hstore_to_json
+------------------------+------------------------------------------------------------------------------------------------------------------------------------------
+ PostgreSQL Tutorial    | {"weight": "11.2 ounces", "ISBN-13": "978-1449370000", "language": "English", "paperback": "243", "publisher": "postgresqltutorial.com"}
+ PostgreSQL Cheat Sheet | {"weight": "1 ounces", "ISBN-13": "978-1449370001", "language": "English", "paperback": "5", "publisher": "postgresqltutorial.com"}
+(2 rows)
+
+
+each函数转换hstore数据为结果集
+postgres=# select title,(each(attr)).* from books;
+         title          |    key    |         value
+------------------------+-----------+------------------------
+ PostgreSQL Tutorial    | weight    | 11.2 ounces
+ PostgreSQL Tutorial    | ISBN-13   | 978-1449370000
+ PostgreSQL Tutorial    | language  | English
+ PostgreSQL Tutorial    | paperback | 243
+ PostgreSQL Tutorial    | publisher | postgresqltutorial.com
+ PostgreSQL Cheat Sheet | weight    | 1 ounces
+ PostgreSQL Cheat Sheet | ISBN-13   | 978-1449370001
+ PostgreSQL Cheat Sheet | language  | English
+ PostgreSQL Cheat Sheet | paperback | 5
+ PostgreSQL Cheat Sheet | publisher | postgresqltutorial.com
+
+
+查询特定key的值
+postgres=# select attr->'ISBN-13' AS isbn from books;
+      isbn
+----------------
+ 978-1449370000
+ 978-1449370001
+(2 rows)
+where子句
+postgres=# SELECT
+postgres-#    attr -> 'weight' AS weight
+postgres-# FROM
+postgres-#    books
+postgres-# WHERE
+postgres-#    attr -> 'ISBN-13' = '978-1449370000';
+   weight
+-------------
+ 11.2 ounces
+(1 row)
+
+增
+UPDATE books
+SET attr = attr || '"freeshipping"=>"yes"' :: hstore;
+删
+UPDATE books 
+SET attr = delete(attr, 'freeshipping');
+改
+UPDATE books
+SET attr = attr || '"freeshipping"=>"no"' :: hstore;
+
 
 # 查询postgres 参数
 postgres=# select * from pg_settings where name in ('wal_level','archive_mode','archive_command');
 
-
-
+# 导出select查询
+Either: 
+ SELECT * FROM table \g filename
+to just output to the file 'filename', or:
+ select * from lineshoot \g |cat >> /solsolute/path/filename
+to append to the file. Both in psql, or:
+ echo 'SELECT * FROM table' | psql database >> test.out
+from your terminal.
 
 
 # centos8 上安装pgsql 12
@@ -363,10 +616,16 @@ zabbix=# \dp+ users;
 (1 row)
 
 
-# copy命令进行导入导出
+## copy命令进行导入导出
+# 导出
 copy 表名 to '文件名' with csv;
 copy (select a.hostid,a.name,c.name from hosts as a inner join hosts_groups as b on a.hostid=b.hostid inner join hstgrp as c on b.groupid=c.groupid where a.name not like 'Template%') to '/tmp/zabbixhost.csv' with csv;
+# 导入
+postgres=# create table staff(name text,team text,position text,height integer,weight integer,age numeric);
+CREATE TABLE
 
+postgres=# \copy staff from '/var/lib/pgsql/sample2.csv' with csv header delimiter ',' encoding 'UTF8';
+COPY 1034
 窗口函数
 select groupid,hostid,hostgroupid,row_number() over(partition by groupid order by hostgroupid) as hostgroupid_asc from hosts_groups;
  groupid | hostid | hostgroupid | hostgroupid_asc
@@ -653,4 +912,15 @@ test> db.warehouse.find();
     warehouse_created: ISODate("2015-10-02T17:32:10.000Z")
   }
 ]
- 
+mongo_fdw 還支援把整個 JSON 以 PostgreSQL 的 JSON 欄位來裝資料。不過要注意的是，這個欄位名稱「限定」叫做 __doc，JSON 型態（JSONB 不可以）；還有，這功能的目標指用來「擷取」資料，不包含用這個欄位寫資料進去 MongoDB：
+conn_mongo=> CREATE FOREIGN TABLE test2mongo(__doc json)
+    SERVER mongo_server
+    OPTIONS (database 'test', collection 'testc2');
+CREATE FOREIGN TABLE
+conn_mongo=> select * from test2mongo;
+                                      __doc                                        
+-------------------------------------------------------------------------------------
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d6" }, "i" : 0, "datafrom" : "test" }
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d7" }, "i" : 1, "datafrom" : "test" }
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d8" }, "i" : 2, "datafrom" : "test" }
+(3 rows) 

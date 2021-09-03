@@ -1,0 +1,19 @@
+pg_start_backup() is a function we execute to start a base backup. It was part of the original API for physical backup introduced in PostgreSQL 8.0. It’s now been mostly superceded by the replication command BASE_BACKUP,
+ which is most frequently executed by the pg_basebackup utility.
+
+So what does a base backup actually do? Well, first we execute a checkpoint so that as many changed data blocks are on disk as possible. Next we force full page writes to occur, even if full_page_writes = off, 
+because we need to see the whole page for any changes. Lastly, we record the starting point of the backup. That’s all.
+
+Base backup does NOT prevent writes to the data directory. It’s designed to be “fully online” so it doesn’t take locks on objects, doesn’t interefere with the operation of the database apart from some details 
+if you try to shut it down while taking a backup.
+
+pg_stop_backup() is the end marker for that backup.
+
+The key point is that the base backup is NOT a consistent copy of the database. You might have copied every file, but all the data is taken at different times. So its wrong. Until you recover the database with the WAL changes 
+that occurred between the start backup and the stop backup.
+
+Which is why you’ll be wanting to use a command like this
+
+pg_basebackup –xlog-method=stream
+
+or use a utility that does everything for you, like Barman.

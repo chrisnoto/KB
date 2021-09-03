@@ -1,0 +1,109 @@
+select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name='Juan Uribe') ti ) as details from staff where name='Juan Uribe') ta;
+
+####  存储过程  ###
+do $$
+declare a text;
+begin
+for var in 1..3
+loop
+select name into a from t1 where id=var;
+raise notice 'value is %',a;
+end loop;
+end;
+$$ language plpgsql;
+
+=============================================
+返回单列
+create or replace function create_json ()
+returns setof text as $$
+declare
+    r text;
+begin
+  for r in select name from staff
+  loop
+    return next r;
+  end loop;
+  return;
+end;
+$$ language plpgsql;
+
+=============================================
+返回单列
+create or replace function create_json ()
+returns setof text as $$
+declare
+    rd text;
+    myrec record;
+   cur_name cursor
+        for select * from staff;
+begin
+  open cur_name;
+  loop
+    fetch cur_name into myrec;
+    exit when not found;
+    select team into rd from staff where name=myrec.team;
+    return rd;
+  end loop;
+  close cur_name
+  return;
+end;
+$$ language plpgsql;
+
+=============================================
+返回 json 类型的值
+create or replace function create_json ()
+returns setof json as $$
+declare
+    myrec record;
+   cur_name cursor
+        for select * from staff;
+begin
+  open cur_name;
+  loop
+    fetch cur_name into myrec;
+    exit when not found;
+    return query execute 'select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name=''' || myrec.name || ''') ti ) as details from staff where name=''' || myrec.name || '''' || ') ta';
+      end loop;
+  close cur_name;
+end;
+$$ language plpgsql;
+
+
+--------------------------------------------------------------------------------
+返回 text 类型的值
+create or replace function create_json ()
+returns setof text as $$
+declare
+    myrec record;
+   cur_name cursor
+        for select * from staff;
+begin
+  open cur_name;
+  loop
+    fetch cur_name into myrec;
+    exit when not found;
+    return query execute 'select team  from staff where height=' || myrec.height ;
+      end loop;
+  close cur_name;
+end;
+$$ language plpgsql;
+--------------------------------------------------------------------------------
+返回 text 类型的值
+CREATE OR REPLACE FUNCTION chensen.create_json()
+ RETURNS SETOF text
+ LANGUAGE plpgsql
+AS $$
+declare
+    myrec record;
+   cur_name cursor
+        for select * from staff;
+begin
+  open cur_name;
+  loop
+    fetch cur_name into myrec;
+    exit when not found;
+    return query execute 'select team  from staff where name=''' || myrec.name || '''' ;
+      end loop;
+  close cur_name;
+end;
+$$ language plpgsql;

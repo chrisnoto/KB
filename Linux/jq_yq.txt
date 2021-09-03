@@ -1,0 +1,130 @@
+############ jq解析 yaml #########
+jq 取key
+[root@rancher ~]# jq keys 164.json
+[
+  "ansible_all_ipv4_addresses",
+  "ansible_all_ipv6_addresses",
+  "ansible_apparmor",
+  "ansible_architecture",
+  "ansible_bios_date",
+  "ansible_bios_version",
+  "ansible_cmdline",
+  "ansible_date_time",
+  "ansible_default_ipv4",
+  "ansible_default_ipv6",
+  "ansible_device_links",
+  "ansible_devices",
+  "ansible_distribution",
+  "ansible_distribution_file_parsed",
+  "ansible_distribution_file_path",
+  "ansible_distribution_file_variety",
+  "ansible_distribution_major_version",
+  "ansible_distribution_release",
+
+
+
+jq取同一path底下的多个值
+[root@rancher ~]# kubectl get po -o json |jq '.items[].metadata | .name,.namespace'
+"logstash-847f7d5d4c-29lt5"
+"default"
+"logstash-847f7d5d4c-29t4g"
+"default"
+"logstash-847f7d5d4c-7bnxl"
+"default"
+"maxscale-5dc999bd8c-d6dll"
+"default"
+"reloader-8446ffcb4d-95jp4"
+"default"
+"zabbix-java-gateway-5857bcfd9c-d2r4s"
+"default"
+"zabbix-server-mysql-5f5f75b4cf-dw889"
+"default"
+"zabbix-web-nginx-mysql-5988c594ff-5sdpc"
+"default"
+
+jq取不同path底下的多个值
+[root@rancher ~]# kubectl get po -o json |jq '.items[] | .metadata.name,.spec.nodeName'
+"logstash-847f7d5d4c-29lt5"
+"vstjk8s06"
+"logstash-847f7d5d4c-29t4g"
+"vstjk8s07"
+"logstash-847f7d5d4c-7bnxl"
+"vstjk8s04"
+"maxscale-5dc999bd8c-d6dll"
+"vstjk8s07"
+"reloader-8446ffcb4d-95jp4"
+"vstjk8s05"
+"zabbix-java-gateway-5857bcfd9c-d2r4s"
+"vstjk8s04"
+"zabbix-server-mysql-5f5f75b4cf-dw889"
+"vstjk8s05"
+"zabbix-web-nginx-mysql-5988c594ff-5sdpc"
+"vstjk8s06"
+
+############ yq 解析 yaml ############ 
+打印成props格式
+[root@rancher zabbix]# yq e zabbix-server-mysql.yaml -o=props
+apiVersion = apps/v1beta2
+kind = Deployment
+metadata.name = zabbix-server-mysql
+metadata.namespace = default
+metadata.labels.app = zabbix-server-mysql
+spec.replicas = 1
+spec.selector.matchLabels.app = zabbix-server-mysql
+spec.template.metadata.labels.app = zabbix-server-mysql
+spec.template.spec.securityContext.fsGroup = 1000
+spec.template.spec.securityContext.sysctls.0.name = net.ipv4.ip_local_port_range
+spec.template.spec.securityContext.sysctls.0.value = 1024 65000
+spec.template.spec.containers.0.name = zabbix-server-mysql
+spec.template.spec.containers.0.image = zabbix/zabbix-server-mysql:centos-5.0.2
+spec.template.spec.containers.0.imagePullPolicy = IfNotPresent
+spec.template.spec.containers.0.volumeMounts.0.name = mailsender
+spec.template.spec.containers.0.volumeMounts.0.mountPath = /usr/lib/zabbix/alertscripts
+spec.template.spec.containers.0.env.0.name = TZ
+spec.template.spec.containers.0.env.0.value = Asia/Shanghai
+spec.template.spec.containers.0.env.1.name = ZBX_SERVER_NAME
+spec.template.spec.containers.0.env.1.value = zabbixserver
+
+# from yaml file
+[root@rancher zabbix]# yq e '.spec.template.spec.containers[0].env[0]' zabbix-server-mysql.yaml
+name: TZ
+value: "Asia/Shanghai"
+---
+
+# yq取key
+[root@rancher zabbix]# yq eval 'keys' zabbix-server-mysql.yaml
+- apiVersion
+- kind
+- metadata
+- spec
+
+
+# from stdin
+[root@rancher zabbix]# kubectl get po -o yaml |yq e '.items[].metadata.name' -
+logstash-847f7d5d4c-29lt5
+logstash-847f7d5d4c-29t4g
+logstash-847f7d5d4c-7bnxl
+maxscale-5dc999bd8c-d6dll
+reloader-8446ffcb4d-95jp4
+zabbix-java-gateway-5857bcfd9c-d2r4s
+zabbix-server-mysql-5f5f75b4cf-dw889
+zabbix-web-nginx-mysql-5988c594ff-5sdpc
+
+# select操作
+[root@rancher zabbix]# kubectl get po -o yaml |yq e '.items[].metadata.name |select (. == "zabbix*")' -
+zabbix-java-gateway-5857bcfd9c-d2r4s
+zabbix-server-mysql-5f5f75b4cf-dw889
+zabbix-web-nginx-mysql-5988c594ff-5sdpc
+
+
+# from stjdin to json
+[root@rancher zabbix]# kubectl get po -o yaml |yq e - -o=json
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "cni.projectcalico.org/podIP": "10.42.0.6/32"
