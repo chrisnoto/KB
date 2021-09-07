@@ -89,6 +89,62 @@ ORDER BY 1;
            |          |          |             |             | postgres=CTc/postgres
 或者postgres=# \set ECHO_HIDDEN on
 
+
+# 日期时间类型
+postgres=# show datestyle;
+ DateStyle
+-----------
+ ISO, MDY
+postgres=# select now();
+              now
+-------------------------------
+ 2021-09-04 05:43:17.282491+00
+postgres=# set datestyle='SQL,DMY';
+SET
+postgres=# select now();
+              now
+--------------------------------
+ 04/09/2021 05:45:00.682158 UTC
+
+postgres=# show intervalstyle;
+ IntervalStyle
+---------------
+ postgres
+ 
+postgres=# select interval '1 year 2mons';
+   interval
+---------------
+ 1 year 2 mons
+(1 row)
+
+postgres=# set intervalstyle='sql_standard';
+SET
+postgres=# select interval '1 year 2mons';
+ interval
+----------
+ 1-2
+
+postgres=# show lc_monetary;
+ lc_monetary
+-------------
+ en_US.UTF-8
+(1 row)
+
+postgres=# select '12.33'::money;
+ money
+--------
+ $12.33
+(1 row)
+
+# money类型
+postgres=# set lc_monetary='zh_CN';
+SET
+postgres=# select '12.33'::money;
+  money
+---------
+ ￥12.33
+(1 row)
+
 # 自增数据类型 serial
 postgres=# create table t2(id serial not null,name text);
 CREATE TABLE
@@ -307,6 +363,17 @@ to just output to the file 'filename', or:
 to append to the file. Both in psql, or:
  echo 'SELECT * FROM table' | psql database >> test.out
 from your terminal.
+
+# recursive CTE
+ with recursive t(n) as (
+ values(1)                                     --非递归子句
+ union all
+ select n+1 from t where n<100)                --递归子句  t是temp working table
+ select sum(n) from t;
+ sum
+------
+ 5050
+(1 row)
 
 
 # centos8 上安装pgsql 12
@@ -924,3 +991,119 @@ conn_mongo=> select * from test2mongo;
  { "_id" : { "$oid" : "5850b7888dad99b6c35390d7" }, "i" : 1, "datafrom" : "test" }
  { "_id" : { "$oid" : "5850b7888dad99b6c35390d8" }, "i" : 2, "datafrom" : "test" }
 (3 rows) 
+
+
+#####  查看page ########
+一个page为8k
+page header结构
+---------------------------------------------------------------------------------------------------------
+Field	            Type	        Length	    Description
+pd_lsn	            PageXLogRecPtr	8 bytes	    LSN: next byte after last byte of WAL record for last change to this page
+pd_checksum	        uint16	        2 bytes	    Page checksum
+pd_flags	        uint16	        2 bytes	    Flag bits
+pd_lower	        LocationIndex	2 bytes	    Offset to start of free space
+pd_upper	        LocationIndex	2 bytes   	Offset to end of free space
+pd_special	        LocationIndex	2 bytes	    Offset to start of special space
+pd_pagesize_version	uint16	        2 bytes   	Page size and layout version number information
+pd_prune_xid	    TransactionId	4 bytes  	Oldest unpruned XMAX on page, or zero if none
+---------------------------------------------------------------------------------------------------------
+HeapTupleHeaderData结构
+---------------------------------------------------------------------------------------------------------
+Field	            Type	     	Length	    Description
+t_xmin	            TransactionId	4 bytes	    insert XID stamp
+t_xmax	            TransactionId	4 bytes	    delete XID stamp
+t_cid	            CommandId	    4 bytes	    insert and/or delete CID stamp (overlays with t_xvac)
+t_xvac	            TransactionId	4 bytes	    XID for VACUUM operation moving a row version
+t_ctid	            ItemPointerData	6 bytes	    current TID of this or newer row version
+t_infomask2         uint16		    2 bytes	    number of attributes, plus various flag bits
+t_infomask	        uint16		    2 bytes	    various flag bits
+t_hoff            	uint8	     	1 byte	    offset to user data
+---------------------------------------------------------------------------------------------------------
+postgres=# create extension pageinspect ;
+CREATE EXTENSION
+postgres=# select * from page_header(get_raw_page('t3',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3B99988 |        0 |     0 |   636 |  2072 |    8192 |     8192 |       4 |       567(一个删除的事务)
+
+postgres=# select count(*) from t3;
+ count
+-------
+   151
+postgres=# select * from heap_page_items(get_raw_page('t3',0));
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
+-----+--------+----------+--------+--------+--------+----------+---------+-------------+------------+--------+--------+-------+----------------------------
+
+ 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
+ 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
+ 149 |   2232 |        1 |     36 |    499 |    568 |        0 | (0,153) |           2 |        258 |     24 |        |       | \x950000001157696e646f7773
+ 150 |   2192 |        1 |     36 |    499 |    567 |        0 | (0,150) |        8194 |       1282 |     24 |        |       | \x960000001157696e646f7773
+ 151 |   2152 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
+ 152 |   2112 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
+ 153 |   2072 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10242 |     24 |        |       | \x950000001146726565425344
+
+事务568：  postgres=# update t3 set t='FreeBSD' where id=149;      \x950000001146726565425344
+事务567：  postgres=# delete from t3 where id=150;
+事务566：  postgres=# insert into t3(t) values('CentOS');          \x980000000f43656e744f53
+事务565：  postgres=# insert into t3(t) values('Solaris');         \x9700000011536f6c61726973
+
+通过lower能算出指针的数量。表中的指针数为(636-24)/4= 153 ，但实际表的数据只有151行。 指针有153个，lp 150代表delete，lp 149和153 代表update
+空间没有减少。
+现在vacuum表t3
+postgres=# vacuum verbose t3;
+
+postgres=# select * from page_header(get_raw_page('t3',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3B9BE38 |        0 |     5 |   636 |  2152 |    8192 |     8192 |       4 |         0
+(1 row)
+
+postgres=# select * from heap_page_items(get_raw_page('t3',0));
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
+ 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
+ 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
+ 149 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
+ 150 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
+ 151 |   2232 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
+ 152 |   2192 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
+ 153 |   2152 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10498 |     24 |        |       | \x950000001146726565425344
+vacuum后，指针不回收，页面回收了，upper从2072变为2152，两个40的单位
+索引也可以查看，貌似没有变化
+postgres=# select * from heap_page_items(get_raw_page('idx_t3_t',0));
+ lp | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid | t_data
+----+--------+----------+--------+--------+--------+----------+--------+-------------+------------+--------+--------+-------+--------
+  1 |  12642 |        2 |      2 |        |        |          |        |             |            |        |        |       |
+  2 |      4 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  3 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  4 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  5 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  6 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  7 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  8 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  9 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+ 10 |      0 |        0 |  24568 |        |        |          |        |             |            |        |        |       |
+ 11 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+ 12 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+(12 rows)
+**************************************************************
+最多167行，然后再查看其他block number  'idx_t3_t',1,2,3,4。。。。。。
+postgres=# select * from heap_page_items(get_raw_page('t3',49)) limit 10 offset 110;
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 |  t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |                 t_data
+-----+--------+----------+--------+--------+--------+----------+----------+-------------+------------+--------+--------+-------+----------------------------------------
+ 111 |   3184 |        1 |     42 |    582 |      0 |        0 | (49,111) |           2 |       2306 |     24 |        |       | \xd22000001d52616e6479204b6569736c6572
+ 112 |   3144 |        1 |     40 |    582 |      0 |        0 | (49,112) |           2 |       2306 |     24 |        |       | \xd3200000194a6f7368204b696e6e6579
+(2 rows)                                                          这里表示第50个块的第112个tuple
+postgres=# select * from page_header(get_raw_page('t3',19));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3C420B0 |        0 |     4 |   688 |   704 |    8192 |     8192 |       4 |         0
+                                  688-704 这里没有空间了
+**************************************************************
+postgres=# select * from heap_page_items(get_raw_page('t3',50));
+ERROR:  block number 50 is out of range for relation "t3"
+
+postgres=# select * from page_header(get_raw_page('idx_t3_t',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 0/C0284A0 |        0 |     0 |    72 |  8176 |    8176 |     8192 |       4 |         0
+(1 row)

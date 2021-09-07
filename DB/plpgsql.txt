@@ -1,6 +1,8 @@
 select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name='Juan Uribe') ti ) as details from staff where name='Juan Uribe') ta;
 
 ####  存储过程  ###
+--------------------------------------------
+    for loop    select into    raise notice
 do $$
 declare a text;
 begin
@@ -13,7 +15,7 @@ end;
 $$ language plpgsql;
 
 =============================================
-返回单列
+返回单列         for loop    return next
 create or replace function create_json ()
 returns setof text as $$
 declare
@@ -28,7 +30,7 @@ end;
 $$ language plpgsql;
 
 =============================================
-返回单列
+返回单列   cursor   select into    return
 create or replace function create_json ()
 returns setof text as $$
 declare
@@ -50,7 +52,7 @@ end;
 $$ language plpgsql;
 
 =============================================
-返回 json 类型的值
+返回 json 类型的值  cursor   return query
 create or replace function create_json ()
 returns setof json as $$
 declare
@@ -70,25 +72,7 @@ $$ language plpgsql;
 
 
 --------------------------------------------------------------------------------
-返回 text 类型的值
-create or replace function create_json ()
-returns setof text as $$
-declare
-    myrec record;
-   cur_name cursor
-        for select * from staff;
-begin
-  open cur_name;
-  loop
-    fetch cur_name into myrec;
-    exit when not found;
-    return query execute 'select team  from staff where height=' || myrec.height ;
-      end loop;
-  close cur_name;
-end;
-$$ language plpgsql;
---------------------------------------------------------------------------------
-返回 text 类型的值
+返回 text 类型的值，单引号的跳脱  cursor   return query
 CREATE OR REPLACE FUNCTION chensen.create_json()
  RETURNS SETOF text
  LANGUAGE plpgsql
@@ -107,3 +91,91 @@ begin
   close cur_name;
 end;
 $$ language plpgsql;
+
+=====================================================================================
+返回结果集
+-------------------------------------------------------------------------------------
+返回 table's row type        setof 表名    return query
+ create table t1 (id int,name text,crt_time timestamp(0));  
+ create or replace function f_t1 (i_id int) returns setof t1 as $$  --可以只returns setof t1(id integer,name text)
+ declare  
+ begin  
+ return query select * from t1 where id=i_id;  
+ return;  
+ end;  $$ language plpgsql; 
+ 
+ insert into t1 values(1,'digoal',now());  
+ insert into t1 values(1,'DIGOAL',now());  
+ select * from f_t1(1);  
+ id |  name  |      crt_time         
+ ----+--------+---------------------   
+ 1 | digoal | 2012-04-26 08:15:09   
+ 1 | DIGOAL | 2012-04-26 08:15:15 
+ 
+可以使用sql语言让代码更简单 ,但控制能力比较弱
+CREATE OR REPLACE FUNCTION q_server () RETURNS SETOF server AS
+$body$
+SELECT * from server;
+$body$
+LANGUAGE 'sql';
+ -------------------------------------------------------------------------------------
+ 返回复合类型 type
+ create type type1 as (id int,name text,crt_time timestamp(0));  
+ create or replace function f_type1 (i_id int) returns setof type1 as $$   
+ declare  
+ begin  
+ return query select * from t1 where id=i_id;  
+ return;  
+ end;  
+ $$ language plpgsql; 
+ 
+select * from f_type1(1);  
+id |  name  |      crt_time         
+----+--------+---------------------   
+1 | digoal | 2012-04-26 08:15:09   
+1 | DIGOAL | 2012-04-26 08:15:15 
+ -------------------------------------------------------------------------------------
+ 返回record   优点    它唯一的用处在于“一定程度上”解决了动态返回结果集字段的问题
+ 缺点    如果你不知道function将要返回的字段类型是什么，则你根本无法在jdbc端调用该function
+  create or replace function f_record1 (i_id int) returns setof record as $$  
+  declare 
+  begin 
+  return query select * from t1 where id=i_id; 
+  return; 
+  end; 
+  $$ language plpgsql; 
+ 
+select * from f_record1(1) as (id int,name text,crt_time timestamp(0));  
+id |  name  |      crt_time         
+----+--------+---------------------   
+1 | digoal | 2012-04-26 08:15:09   
+1 | DIGOAL | 2012-04-26 08:15:15 
+----------------------------------------------------------------------------------------
+返回 游标类型             缺点依然很明显：我们不能对要返回的结果集做进一步的筛选
+create or replace function q2_server() returns refcursor as $$
+declare
+result refcursor;
+begin
+open result for select * from server;     ---任意选择想返回的表和字段
+return result;
+end;
+$$ language plpgsql;
+查看结果，需要fetch
+postgres=# begin;
+BEGIN
+postgres=*# select q2_server();
+     q2_server
+--------------------
+ <unnamed portal 5>
+(1 row)
+
+postgres=*# fetch all from "<unnamed portal 5>";
+ id |    type    |     name
+----+------------+--------------
+  1 | k8s        | 10.67.36.58
+  2 | k8s        | 10.67.49.241
+  3 | k8s        | 10.67.49.242
+
+
+postgres=*# commit;
+COMMIT

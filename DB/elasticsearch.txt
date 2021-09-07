@@ -1,6 +1,7 @@
 ###########  elasticsearch 7 新功能之 Visualize data from a log file ########
 介绍
-The File Data Visualizer helps you understand the fields and metrics in a log file. Upload your file, analyze its data, and then choose whether to import the data into an Elasticsearch index.
+The File Data Visualizer helps you understand the fields and metrics in a log file. 
+Upload your file, analyze its data, and then choose whether to import the data into an Elasticsearch index.
 The File Data Visualizer supports these file formats:
 Delimited text files, such as CSV and TSV
 Newline-delimited JSON
