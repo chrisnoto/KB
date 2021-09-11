@@ -53,3 +53,41 @@ root@node-5:~# megacli -CfgForeign -Scan -aALL
 
 There is no foreign configuration on controller 0.
 There is no foreign configuration on controller 1.
+
+########## hpacucli ############
+https://www.thegeekstuff.com/2014/07/hpacucli-examples/
+查看逻辑盘和物理盘
+# hpacucli
+=> ctrl all show config
+
+Smart Array P410i in Slot 0 (Embedded)    (sn: 50014380101D61C0)
+
+   array A (SAS, Unused Space: 0  MB)
+
+      logicaldrive 1 (136.7 GB, RAID 1, OK)
+
+      physicaldrive 1I:1:1 (port 1I:box 1:bay 1, SAS, 146 GB, OK)
+      physicaldrive 1I:1:2 (port 1I:box 1:bay 2, SAS, 146 GB, OK)
+
+   unassigned
+
+      physicaldrive 1I:1:3 (port 1I:box 1:bay 3, SAS, 300 GB, OK)
+      physicaldrive 1I:1:4 (port 1I:box 1:bay 4, SAS, 300 GB, OK)
+      physicaldrive 2I:1:6 (port 2I:box 1:bay 6, SAS, 300 GB, OK)
+      physicaldrive 2I:1:7 (port 2I:box 1:bay 7, SAS, 300 GB, OK)
+      physicaldrive 2I:1:8 (port 2I:box 1:bay 8, SAS, 300 GB, OK)
+
+   SEP (Vendor ID PMCSIERA, Model  SRC 8x6G) 250 (WWID: 50014380101D61CF)
+查看raid卡状态和电池状态
+=> ctrl all show status
+查看单个硬盘的状态
+=> ctrl slot=0 pd 2I:1:6 show detail
+查看逻辑盘的状态
+=> ctrl slot=0 ld 2 show
+启用/禁用raid卡cache
+=> ctrl slot=0 modify dwc=disable
+
+=> ctrl slot=0 modify dwc=enable
+打开/关掉磁盘LED
+=> ctrl slot=0 ld 2 modify led=on
+=> ctrl slot=0 ld 2 modify led=off	  

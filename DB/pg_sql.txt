@@ -6,7 +6,7 @@ docker run -d \
     -e PGDATA=/var/lib/postgresql/data/pgdata \
     fuww/postgresql-mongodb-fdw:latest
 
-#########  概念 ##########
+#########  逻辑概念 ##########
 在 Postgresql中是以下的關係
 Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
 
@@ -23,7 +23,7 @@ postgres=# \l
  template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
            |          |          |             |             | postgres=CTc/postgres
 (3 rows)
-
+ 
 postgres=# select * from information_schema.information_schema_catalog_name;
  catalog_name
 --------------
@@ -60,7 +60,56 @@ postgres=# \dn information_schema
 --------------------+----------
  information_schema | postgres
 (1 row)
-	
+
+Postgresql独特的术语
+a tuple or an item                is a synonym for a row
+a relation                        is a synonym for a table
+a filenode                        is an id which represent a reference to a table or an index.
+a block and page                  are equals and they represent a 8kb segment information the file storing the table.
+a heap                            refer to heap file. Heap files are lists of unordered records of variable size. Although sharing a similar name, heap files are different from heap data structure.
+CTID                              represent the physical location of the row version within its table. CTID is also a special column available for every tables but not visible unless specifically mentioned. It consists of a page number and the index of an item identifier.
+OID                               stands for Object Identifier.
+database cluster                  we call a database cluster the storage area on disk. A database cluster is a collection of databases that is managed by a single instance of a running database server.
+VACCUM                            PostgreSQL databases require periodic maintenance known as vacuuming	
+
+###### oid  filenode
+shell命令找出db与oid的映射关系
+-bash-4.2$ oid2name
+All databases:
+    Oid  Database Name  Tablespace
+----------------------------------
+  14172       postgres  pg_default
+  14171      template0  pg_default
+      1      template1  pg_default
+sql命令找出db与oid的映射关系
+postgres=# select oid, datname from pg_database;
+  oid  |  datname
+-------+-----------
+ 14172 | postgres
+     1 | template1
+ 14171 | template0
+sql命令找出表的存放路径	  
+postgres=# select pg_relation_filepath('books');
+ pg_relation_filepath
+----------------------
+ base/14172/16669
+(1 row)
+shell命令找出表的filenode
+-bash-4.2$ oid2name -d postgres -t books
+From database "postgres":
+  Filenode  Table Name
+----------------------
+     16669       books
+注意：A table's filenode often matches its OID, this is not necessarily the case
+postgres=# select oid,relname,relfilenode from pg_class where relname='books';
+  oid  | relname | relfilenode
+-------+---------+-------------
+ 16669 | books   |       16669
+ server是外部表
+postgres=# select oid,relname,relfilenode from pg_class where relname='server';
+  oid  | relname | relfilenode
+-------+---------+-------------
+ 16487 | server  |           0
 	
 如果想知道这些快捷命令后面用了什么SQL，可以开启-E选项
 -bash-4.2$ psql -E
@@ -89,7 +138,387 @@ ORDER BY 1;
            |          |          |             |             | postgres=CTc/postgres
 或者postgres=# \set ECHO_HIDDEN on
 
+####### 物理概念 ###########
+tablespace
+postgres=# select oid,* from pg_tablespace;
+ oid  | oid  |  spcname   | spcowner | spcacl | spcoptions
+------+------+------------+----------+--------+------------
+ 1663 | 1663 | pg_default |       10 |        |
+ 1664 | 1664 | pg_global  |       10 |        |
+pg_default默认的表空间                        The location of the pg_default tablespace is $PGDATA\base
+pg_global 存放'database cluster' level的表    The location of the pg_global tablespace is $PGDATA\global
+查看pg_global表空间的表有哪些
+postgres=# select oid,relname,reltablespace from pg_class where  reltablespace=1664;
+ oid  |                 relname                 | reltablespace
+------+-----------------------------------------+---------------
+ 4175 | pg_toast_1260                           |          1664
+ 4176 | pg_toast_1260_index                     |          1664
+ 4177 | pg_toast_1262                           |          1664
+ 4178 | pg_toast_1262_index                     |          1664
+ 2966 | pg_toast_2964                           |          1664
+ 2967 | pg_toast_2964_index                     |          1664
+ 4181 | pg_toast_6000                           |          1664
+ 4182 | pg_toast_6000_index                     |          1664
+ 2846 | pg_toast_2396                           |          1664
+ 2847 | pg_toast_2396_index                     |          1664
+ 4060 | pg_toast_3592                           |          1664
+ 4061 | pg_toast_3592_index                     |          1664
+ 4183 | pg_toast_6100                           |          1664
+ 4184 | pg_toast_6100_index                     |          1664
+ 4185 | pg_toast_1213                           |          1664
+ 4186 | pg_toast_1213_index                     |          1664
+ 2676 | pg_authid_rolname_index                 |          1664
+ 2677 | pg_authid_oid_index                     |          1664
+ 2694 | pg_auth_members_role_member_index       |          1664
+ 2695 | pg_auth_members_member_role_index       |          1664
+ 2671 | pg_database_datname_index               |          1664
+ 2672 | pg_database_oid_index                   |          1664
+ 2397 | pg_shdescription_o_c_index              |          1664
+ 1232 | pg_shdepend_depender_index              |          1664
+ 1233 | pg_shdepend_reference_index             |          1664
+ 2697 | pg_tablespace_oid_index                 |          1664
+ 2698 | pg_tablespace_spcname_index             |          1664
+ 2965 | pg_db_role_setting_databaseid_rol_index |          1664
+ 3593 | pg_shseclabel_object_index              |          1664
+ 6001 | pg_replication_origin_roiident_index    |          1664
+ 6002 | pg_replication_origin_roname_index      |          1664
+ 6114 | pg_subscription_oid_index               |          1664
+ 6115 | pg_subscription_subname_index           |          1664
+ 1260 | pg_authid                               |          1664
+ 6100 | pg_subscription                         |          1664
+ 1262 | pg_database                             |          1664
+ 2964 | pg_db_role_setting                      |          1664
+ 1213 | pg_tablespace                           |          1664
+ 1261 | pg_auth_members                         |          1664
+ 1214 | pg_shdepend                             |          1664
+ 2396 | pg_shdescription                        |          1664
+ 6000 | pg_replication_origin                   |          1664
+ 3592 | pg_shseclabel                           |          1664
+(43 rows)
+用户表空间
+不要建在$PGDATA目录里
+postgres=# create tablespace mtbs01 location '/data01';           
+CREATE TABLESPACE
+postgres=# select oid,* from pg_tablespace;
+  oid  |  oid  |  spcname   | spcowner | spcacl | spcoptions
+-------+-------+------------+----------+--------+------------
+  1663 |  1663 | pg_default |       10 |        |
+  1664 |  1664 | pg_global  |       10 |        |
+ 16719 | 16719 | mtbs01     |       10 |        |
 
+在$PGDATA/pg_tblspc 目录下有指向/data01的链接
+-bash-4.2$ ll $PGDATA/pg_tblspc
+total 0
+lrwxrwxrwx. 1 postgres postgres 7 Sep 11 03:23 16719 -> /data01
+******* 创建tbs，导致从库down掉， 注意!
+-bash-4.2$ cat postgresql-Sat.log          -postgres-2
+2021-09-11 03:19:58.281 UTC [14107] FATAL:  directory "/data01" does not exist
+2021-09-11 03:19:58.281 UTC [14107] HINT:  Create this directory for the tablespace before restarting the server.
+2021-09-11 03:19:58.281 UTC [14107] CONTEXT:  WAL redo at 1/3D12500 for Tablespace/CREATE: 16719 "/data01"
+2021-09-11 03:19:58.296 UTC [14104] LOG:  startup process (PID 14107) exited with exit code 1
+2021-09-11 03:19:58.296 UTC [14104] LOG:  terminating any other active server processes
+2021-09-11 03:19:58.341 UTC [14104] LOG:  database system is shut down
+
+
+修改用户表空间的位置：  手动新建目录，拷贝原表空间的数据，用ln -s命令做新的链接(要停postgres)
+#####  查看page ########
+postgresql的表为堆表,表是page/block的集合，而page是row/tuple/item的集合
+一个page为8k，一个表太大的话就会产生数据分片，一个分片最大1G，block/page数量为131072
+A Pointer to an item is called CTID (ItemPointer), created by PostgreSQL, it consists of a page number and the index of an item identifier.
+inside a page the pointers to the row are stored at the starts and the tuples (rows) are stored at the end of the page. 一个page里，指针在前，tuples在后
+
+
+postgres=# select ctid,* from t3;
+   ctid   |  id  |          t
+----------+------+---------------------
+ (0,1)    |  156 | Adam Donachie
+ (0,2)    |  157 | Paul Bako
+ (0,3)    |  158 | Ramon Hernandez
+ (0,4)    |  159 | Kevin Millar
+ (0,5)    |  160 | Chris Gomez
+
+postgres=# \! ls -lh 13/data/base/14172/16427*
+-rw-------. 1 postgres postgres 1.0G Aug  6 00:25 13/data/base/14172/16427
+-rw-------. 1 postgres postgres 1.0G Aug  6 00:29 13/data/base/14172/16427.1
+-rw-------. 1 postgres postgres 441M Aug  6 00:32 13/data/base/14172/16427.2
+-rw-------. 1 postgres postgres 648K Aug  6 00:32 13/data/base/14172/16427_fsm
+-rw-------. 1 postgres postgres  80K Aug  6 00:32 13/data/base/14172/16427_vm
+postgres=# select oid,relname,relpages,reltuples from pg_class where relname='t4';
+  oid  | relname | relpages |   reltuples
+-------+---------+----------+---------------
+ 16427 | t4      |   318472 | 5.0000104e+07
+
+page header结构
+---------------------------------------------------------------------------------------------------------
+Field	            Type	        Length	    Description
+pd_lsn	            PageXLogRecPtr	8 bytes	    LSN: next byte after last byte of WAL record for last change to this page
+pd_checksum	        uint16	        2 bytes	    Page checksum
+pd_flags	        uint16	        2 bytes	    Flag bits
+pd_lower	        LocationIndex	2 bytes	    Offset to start of free space
+pd_upper	        LocationIndex	2 bytes   	Offset to end of free space
+pd_special	        LocationIndex	2 bytes	    Offset to start of special space
+pd_pagesize_version	uint16	        2 bytes   	Page size and layout version number information
+pd_prune_xid	    TransactionId	4 bytes  	Oldest unpruned XMAX on page, or zero if none
+---------------------------------------------------------------------------------------------------------
+HeapTupleHeaderData结构
+---------------------------------------------------------------------------------------------------------
+Field	            Type	     	Length	    Description
+t_xmin	            TransactionId	4 bytes	    insert XID stamp
+t_xmax	            TransactionId	4 bytes	    delete XID stamp
+t_cid	            CommandId	    4 bytes	    insert and/or delete CID stamp (overlays with t_xvac)
+t_xvac	            TransactionId	4 bytes	    XID for VACUUM operation moving a row version
+t_ctid	            ItemPointerData	6 bytes	    current TID of this or newer row version
+t_infomask2         uint16		    2 bytes	    number of attributes, plus various flag bits
+t_infomask	        uint16		    2 bytes	    various flag bits
+t_hoff            	uint8	     	1 byte	    offset to user data
+---------------------------------------------------------------------------------------------------------
+postgres=# create extension pageinspect ;
+CREATE EXTENSION
+postgres=# select * from page_header(get_raw_page('t3',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3B99988 |        0 |     0 |   636 |  2072 |    8192 |     8192 |       4 |       567(一个删除的事务)
+
+postgres=# select count(*) from t3;
+ count
+-------
+   151
+postgres=# select * from heap_page_items(get_raw_page('t3',0));
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
+-----+--------+----------+--------+--------+--------+----------+---------+-------------+------------+--------+--------+-------+----------------------------
+
+ 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
+ 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
+ 149 |   2232 |        1 |     36 |    499 |    568 |        0 | (0,153) |           2 |        258 |     24 |        |       | \x950000001157696e646f7773
+ 150 |   2192 |        1 |     36 |    499 |    567 |        0 | (0,150) |        8194 |       1282 |     24 |        |       | \x960000001157696e646f7773
+ 151 |   2152 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
+ 152 |   2112 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
+ 153 |   2072 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10242 |     24 |        |       | \x950000001146726565425344
+
+事务568：  postgres=# update t3 set t='FreeBSD' where id=149;      \x950000001146726565425344
+事务567：  postgres=# delete from t3 where id=150;
+事务566：  postgres=# insert into t3(t) values('CentOS');          \x980000000f43656e744f53
+事务565：  postgres=# insert into t3(t) values('Solaris');         \x9700000011536f6c61726973
+
+通过lower能算出指针的数量。表中的指针数为(636-24)/4= 153 ，但实际表的数据只有151行。 指针有153个，lp 150代表delete，lp 149和153 代表update
+空间没有减少。
+现在vacuum表t3
+postgres=# vacuum verbose t3;
+
+postgres=# select * from page_header(get_raw_page('t3',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3B9BE38 |        0 |     5 |   636 |  2152 |    8192 |     8192 |       4 |         0
+(1 row)
+
+postgres=# select * from heap_page_items(get_raw_page('t3',0));
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
+ 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
+ 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
+ 149 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
+ 150 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
+ 151 |   2232 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
+ 152 |   2192 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
+ 153 |   2152 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10498 |     24 |        |       | \x950000001146726565425344
+vacuum后，指针不回收，页面回收了，upper从2072变为2152，两个40的单位
+索引也可以查看，貌似没有变化
+postgres=# select * from heap_page_items(get_raw_page('idx_t3_t',0));
+ lp | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid | t_data
+----+--------+----------+--------+--------+--------+----------+--------+-------------+------------+--------+--------+-------+--------
+  1 |  12642 |        2 |      2 |        |        |          |        |             |            |        |        |       |
+  2 |      4 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  3 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  4 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  5 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  6 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  7 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  8 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+  9 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+ 10 |      0 |        0 |  24568 |        |        |          |        |             |            |        |        |       |
+ 11 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+ 12 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
+(12 rows)
+**************************************************************
+最多167行，然后再查看其他block number  'idx_t3_t',1,2,3,4。。。。。。
+postgres=# select * from heap_page_items(get_raw_page('t3',49)) limit 10 offset 110;
+ lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 |  t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |                 t_data
+-----+--------+----------+--------+--------+--------+----------+----------+-------------+------------+--------+--------+-------+----------------------------------------
+ 111 |   3184 |        1 |     42 |    582 |      0 |        0 | (49,111) |           2 |       2306 |     24 |        |       | \xd22000001d52616e6479204b6569736c6572
+ 112 |   3144 |        1 |     40 |    582 |      0 |        0 | (49,112) |           2 |       2306 |     24 |        |       | \xd3200000194a6f7368204b696e6e6579
+(2 rows)                                                          这里表示第50个块的第112个tuple
+postgres=# select * from page_header(get_raw_page('t3',19));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 1/3C420B0 |        0 |     4 |   688 |   704 |    8192 |     8192 |       4 |         0
+                                  688-704 这里没有空间了
+**************************************************************
+postgres=# select * from heap_page_items(get_raw_page('t3',50));
+ERROR:  block number 50 is out of range for relation "t3"
+
+postgres=# select * from page_header(get_raw_page('idx_t3_t',0));
+    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
+-----------+----------+-------+-------+-------+---------+----------+---------+-----------
+ 0/C0284A0 |        0 |     0 |    72 |  8176 |    8176 |     8192 |       4 |         0
+(1 row)
+
+# pg_filedump查看datafile
+安装
+[root@postgres-1 ~]# yum install pg_filedump_13
+-bash-4.2$ pg_filedump 16521
+
+*******************************************************************
+* PostgreSQL File/Block Formatted Dump Utility
+*
+* File: 16521
+* Options used: None
+*******************************************************************
+Flags有unused, normal       normal的才有内容
+Block    0 ********************************************************
+<Header> -----
+ Block Offset: 0x00000000         Offsets: Lower     424 (0x01a8)
+ Block: Size 8192  Version    4            Upper    8192 (0x2000)
+ LSN:  logid      1 recoff 0x03a7da80      Special  8192 (0x2000)
+ Items:  100                      Free Space: 7768
+ Checksum: 0x0000  Prune XID: 0x00000000  Flags: 0x0005 (HAS_FREE_LINES|ALL_VISIBLE)
+ Length (including item array): 424
+
+<Data> -----
+ Item   1 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item   2 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item   3 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item   4 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item   5 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item   6 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+
+-bash-4.2$  pg_filedump -f 16521      # 可查看行的内容
+Block    9 ********************************************************
+<Header> -----
+ Block Offset: 0x00012000         Offsets: Lower     428 (0x01ac)
+ Block: Size 8192  Version    4            Upper    7752 (0x1e48)
+ LSN:  logid      1 recoff 0x03a80ef0      Special  8192 (0x2000)
+ Items:  101                      Free Space: 7324
+ Checksum: 0x0000  Prune XID: 0x00000000  Flags: 0x0005 (HAS_FREE_LINES|ALL_VISIBLE)
+ Length (including item array): 428
+             
+  Item  93 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item  94 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item  95 -- Length:    0  Offset:    0 (0x0000)  Flags: UNUSED
+ Item  96 -- Length:   67  Offset: 8120 (0x1fb8)  Flags: NORMAL
+  1fb8: 26020000 00000000 00000000 00000900  &...............
+  1fc8: 60000600 02091800 1d416461 6d20446f  `........Adam Do
+  1fd8: 6e616368 69650b20 42414c13 20436174  nachie. BAL. Cat
+  1fe8: 63686572 4a000000 b4000000 0f008116  cherJ...........
+  1ff8: 00ac26                               ..&
+
+ Item  97 -- Length:   63  Offset: 8056 (0x1f78)  Flags: NORMAL
+  1f78: 26020000 00000000 00000000 00000900  &...............
+  1f88: 61000600 02091800 15506175 6c204261  a........Paul Ba
+  1f98: 6b6f0b20 42414c13 20436174 63686572  ko. BAL. Catcher
+  1fa8: 4a000000 d7000000 0f008122 00f41a    J.........."...
+postgres=# select * from staff where ctid='(9,96)';
+     name      | team | position | height | weight |  age
+---------------+------+----------+--------+--------+-------
+ Adam Donachie |  BAL |  Catcher |     74 |    180 | 22.99
+(1 row)
+可以发现staff表的第一行数据在page9,item96       很奇怪，别的表没有出现这个情况，第一个page就有数据
+
+用-D  加上数据类型去decode行
+-bash-4.2$ pg_filedump -D text,text,text,int,int,float 16521
+Error: unable to decode a tuple, callback #6 returned -2. Partial data: Adam Donachie    BAL     Catcher        74      180
+ Item  97 -- Length:   63  Offset: 8056 (0x1f78)  Flags: NORMAL
+Error: unable to decode a tuple, callback #6 returned -2. Partial data: Paul Bako        BAL     Catcher        74      215
+ Item  98 -- Length:   71  Offset: 7984 (0x1f30)  Flags: NORMAL
+
+ 
+##### TOAST ######  行外存储
+It stands for The Oversized-Attribute Storage Technique
+The mechanism is accomplished by splitting up the large column entry into 2KB bytes and storing them as chunks in the TOAST tables. 
+It then stores the length and a pointer to the TOAST entry back where the column is normally stored. Because of how the pointer system is implemented,
+ most TOAST'able column types are limited to a max size of 1GB.
+
+只有特定的数据类型支持TOAST，因为那些整数、浮点数等不太长的数据类型是没有必要使用TOAST的。
+另外，支持TOAST的数据类型必须是变长的。在变长类型中：
+前4字节（32bit）称为长度字，长度字后面存储具体的内容或一个指针。
+长度字的高2bit位是标志位，后面的30bit是长度值（表示值的总长度，包括长度字本身，以字节计）。
+由长度值可知TOAST数据类型的逻辑长度最多是30bit，即1GB(2^30-1字节）之内。
+前2bit的标志位，一个表示压缩标志位，一个表示是否行外存储，如果两个都是零，那么表示既未压缩也未行外存储。
+如果设置了压缩标志标志位，表示该数值被压缩过（使用的是非常简单且快速的LZ压缩方法），使用前必须先解压缩。
+如果设置了行外存储标志位，则表示该数值是在行外存储的。此时，长度字后面的部分只是一个指针，指向存储实际数据的TOAST表中的位置。如果两个标志位都设置了，那么这个行外数据也会被压缩。
+不管是哪种情况，长度字里剩下的30bit的长度值都表示数据的实际尺寸，而不是压缩后的长度。
+
+在 PG 中每个表字段有四种 TOAST 的策略：
+PLAIN —— 避免压缩和行外存储。只有那些不需要 TOAST 策略就能存放的数据类型允许选择（例如 int 类型），而对于 text 这类要求存储长度超过页大小的类型，是不允许采用此策略的。
+EXTENDED —— 允许压缩和行外存储。一般会先压缩，如果还是太大，就会行外存储。这是大多数可以TOAST的数据类型的默认策略。
+EXTERNAL —— 允许行外存储，但不许压缩。这让在text类型和bytea类型字段上的子串操作更快。类似字符串这种会对数据的一部分进行操作的字段，采用此策略可能获得更高的性能，因为不需要读取出整行数据再解压。
+MAIN —— 允许压缩，但不许行外存储。不过实际上，为了保证过大数据的存储，行外存储在其它方式（例如压缩）都无法满足需求的情况下，作为最后手段还是会被启动。因此理解为：尽量不使用行外存储更贴切。 
+行外存储被切成了多个Chunk块，每个Chunk块大约是一个BLOCK的四分之一大小，如果块大小为8KB（默认就是8KB），则Chunk大约为2KB（比2KB略小一点），每个Chunk都作为独立的行存储在TOAST表中。
+
+TOAST表有三个字段：
+chunk_id —— 用来表示特定 TOAST 值的 OID ，可以理解为具有同样 chunk_id 值的所有行组成原表（这里的 blog ）的 TOAST 字段的一行数据。
+chunk_seq —— 用来表示该行数据在整个数据中的位置。
+chunk_data —— 该Chunk实际的数据。 
+查找实际的toast表和它的数据
+postgres=# select relname,relfilenode,reltoastrelid from pg_class where relname='facts';
+ relname | relfilenode | reltoastrelid
+---------+-------------+---------------
+ facts   |       16462 |         16466
+(1 row)
+
+postgres=# \d+ pg_toast.pg_toast_16462
+TOAST table "pg_toast.pg_toast_16462"
+   Column   |  Type   | Storage
+------------+---------+---------
+ chunk_id   | oid     | plain
+ chunk_seq  | integer | plain
+ chunk_data | bytea   | plain
+Owning table: "public.facts"
+Indexes:
+    "pg_toast_16462_index" PRIMARY KEY, btree (chunk_id, chunk_seq)
+Access method: heap
+facts表json类型data字段的长度
+postgres=# select id,key,pg_column_size(data) from facts;
+ id |           key           | pg_column_size
+----+-------------------------+----------------
+  1 | ansible_facts10.21.0.14 |          18038
+可以发现data被分为10个chunk,每个chunk为1996 byte
+postgres=# select chunk_id,chunk_seq,length(chunk_data) from pg_toast.pg_toast_16462;
+ chunk_id | chunk_seq | length
+----------+-----------+--------
+    16471 |         0 |   1996      略小于2k
+    16471 |         1 |   1996
+    16471 |         2 |   1996
+    16471 |         3 |   1996
+    16471 |         4 |   1996
+    16471 |         5 |   1996
+    16471 |         6 |   1996
+    16471 |         7 |   1996
+    16471 |         8 |   1996
+    16471 |         9 |     74
+postgres=# select * from pg_toast.pg_toast_16462;
+ chunk_id | chunk_seq | chunk_data
+    16471 |         0 | \xc4ca010000227b5c6e20202020005c22616e73........... 
+	16471 |         1 | \xbf02c40ffe16bf12ff0f2b013fbf12030f320b...........
+	.................
+    16471 |         9 | \x0f28026c04616e94c93130332c312030312c31...........	
+(10 rows)	
+修改TOAST策略
+alter table blog alter content set storage external/extended;
+######## FSM ########
+Free Space Map stores information about free
+space in a relation
+• Used by INSERTs and UPDATEs
+######## VM ########
+Visibility Map
+• A bitmap of heap pages
+• 1 means “all tuples on page are visible to all
+transactions”
+• Bits are set in VACUUM
+• Cleared at INSERT/UPDATE/DELETE
+VACUUM can now skip pages that are already
+marked in visibility map
+• Still needs to scan all indexes
+
+######### 数据类型 ###########
 # 日期时间类型
 postgres=# show datestyle;
  DateStyle
@@ -376,285 +805,6 @@ from your terminal.
 (1 row)
 
 
-# centos8 上安装pgsql 12
-
-[root@c8-cilent1 ~]# dnf module list postgresql
-Last metadata expiration check: 1:04:36 ago on Fri 13 Aug 2021 02:48:24 PM CST.
-CentOS-8 - AppStream
-Name                           Stream                     Profiles                               Summary
-postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
-postgresql                     12                         client, server [d]                     PostgreSQL server and client module
-postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
-
-Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
-默认安装10版本，现enable 12版本，进行12版本的安装
-[root@c8-cilent1 ~]# dnf module enable postgresql:12
-Last metadata expiration check: 1:05:26 ago on Fri 13 Aug 2021 02:48:24 PM CST.
-Dependencies resolved.
-========================================================================================================================================================
- Package                             Arch                               Version                               Repository                           Size
-========================================================================================================================================================
-Enabling module streams:
- postgresql                                                             12
-
-Transaction Summary
-========================================================================================================================================================
-
-Is this ok [y/N]: y
-Complete!
-
-Switching module streams does not alter installed packages (see 'module enable' in dnf(8) for details)
-[root@c8-cilent1 ~]# dnf module list postgresql
-Last metadata expiration check: 1:05:39 ago on Fri 13 Aug 2021 02:48:24 PM CST.
-CentOS-8 - AppStream
-Name                           Stream                     Profiles                               Summary
-postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
-postgresql                     12 [e]                     client, server [d]                     PostgreSQL server and client module
-postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
-
-Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
-[root@c8-cilent1 ~]# dnf install postgresql-server
-Last metadata expiration check: 1:06:19 ago on Fri 13 Aug 2021 02:48:24 PM CST.
-Dependencies resolved.
-========================================================================================================================================================
- Package                             Arch                     Version                                                 Repository                   Size
-========================================================================================================================================================
-Installing:
- postgresql-server                   x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   5.5 M
-Installing dependencies:
- libpq                               x86_64                   12.4-1.el8_2                                            AppStream                   195 k
- postgresql                          x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   1.4 M
-
-Transaction Summary
-========================================================================================================================================================
-Install  3 Packages
-
-Total download size: 7.1 M
-Installed size: 30 M
-Is this ok [y/N]:y
-
-[root@c8-cilent1 ~]# postgresql-setup --initdb
- * Initializing database in '/var/lib/pgsql/data'
- * Initialized, logs are in /var/lib/pgsql/initdb_postgresql.log
-[root@c8-cilent1 ~]# systemctl enable --now postgresql
-
-
-
-
-
-
-
-
-
-postgresql-13主从 streaming复制
-===========================================================================================================================
-1 概念和原理
-一.物理流复制
-物理流复制是一种数据库主备同步技术，该特性同步的数据是数据库中物理页面变化数据（WAL），该模式备库的底层数据页面状态和主库完全相同，这样的实现方案让数据库主备以及同步状态都非常稳定。
-二.流复制中的角色
-1. 主库 backend 进程，它负责执行用户的 SQL，在修改数据前会先记录 WAL（Write-Ahead Logging）日志。这些日志中事物提交日志（CommitTransaction）由 backend 进程负责写到磁盘。
-2. 主库 WALsender 进程，负责把 WAL 日志发送给备库的 WALreceiver 进程。
-3. 备库 WALreceiver 进程，负责接收 WALsender 发送的 WAL 日志，并持久化到存储。
-4. 备库 startup 进程，负责恢复 WALsender 写到磁盘上的 WAL 日志，把数据 apply 到数据页面上。
-异步流复制和同步流复制
-一.异步流复制
-默认状态下的流复制是以异步方式工作的，也就是说主库写本地数据和 WAL 日志，WALsender 异步的把数据发送给备库，备库收到数据后再异步的做数据恢复。
-异步模式可以做到较好的性能，它的劣势是：极端情况下，主库如果当机，被库被激活成主库，部分 WAL 没有发送到备库，可能造成数据丢失。
-二.同步流复制
-相对于异步模式，PostgreSQL 还支持同步模式的流复制。同模模式可以细分为三级
-1. REMOTE_WRITE 保证该事务的所有数据被备库收到（备库收到数据并调用 write 写磁盘，但并未持久化到磁盘）
-2. REMOTE_FLUSH 保证该事务的所有数据在备库持久化到磁盘（调用 flush，但只读查询看不到）
-3. REMOTE_APPLY 保证该事务的所有数据在备库被恢复到数据页面（恢复进程读取并解析 WAL，再 APPLY 到数据页面，在备库上执行的只读查询能看到数据的变化）
-三. 同步流复制源码解析
-1. MVCC 机制和数据可见性
-简单的说 PostgreSQL ACID 是基于 MVCC 和 WAL 技术。数据的修改过程可以简单描述为
-1. 首先 backend 开启是一个事务,获得一个事务号 XID;
-2. 在这个事务中对数据的任意修改，都被 XID 标记。
-3. 其他 backend 在扫描数据时，会看到被这个 XID 修改过的数据，根据当前的隔离级别，选择对这些数据是否可见（默认的读已提交隔离级别看不到这些数据）。
-4. 只有当此 XID 最后被标记成 commit （写 WAL commit log 和写 clog）后，其他的 backend 才能看到这个 XID 修改的数据。
-2. 同模流复制的关键点
-总结一下，实现流复制的同步模式，关键点在每个事务提交或回滚时，保证它产生的所有数据变化日志，即 WAL 都“同步”到备库。最后一条 WAL commit log 尤为关键。
-3. 如何实现同步流复制
-铺垫完所有概念和前提技术，我们看看同步模式具体是怎么实现的。以事务提交流程为例：
-1. [主库 backend 进程]调用 RecordTransactionCommit 中写 WAL commit log，获得这条日志在在 WAL 中的位置 XLogRecPtr
-2. [主库 backend 进程]完成写 WAL 后，进入 SyncRepWaitForLSN 等待 WAL 日志“同步”到备库。具体做法是:在共享内存中创建一个等待队列 SHMQueue 记录 XLogRecPtr，并调动 WaitLatch，让出 CPU 等待被唤醒。
-3. [主库 WALsender 进程]相应所有备库的 WALreceiver 拉取 WAL 的请求。把 WAL 发送给所有备库。
-4. [备库 WALreceiver 进程]写 WAL 的偏移（LogstreamResult.Write）和持久化 WAL 偏移（LogstreamResult.Flush）记录下来。
-5. [备库 startup 进程]不断的恢复数据，把当前恢复到的 WAL 位点放在共享内存 xlogctl->lastReplayedEndRecPtr 中。
-6. [备库 WALreceiver 进程]不断通过 r 报文和主库 WALsender 进程同步的状态，即 XLOGWRITELSN XLOGREMOTELSN XLOGAPPLYLSN（XLogWalRcvSendReply）
-7. [主库 WALsender 进程]收到备库发送的 r 报文后，检查共享内存中的等待队列 SHMQueue, 根据备库反馈的位点结合 SHMQueue，唤醒那些等待队列中睡眠的 主库 backend 进程（WalSndWaitForWal）。
-8. [主库 backend 进程]被唤醒，当前事务成功提交，SQL 执行完成返回给客户端。
-===========================================================================================================================
-2 配置
-# Install the repository RPM:
-sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-
-# Install PostgreSQL:
-sudo yum install -y postgresql13-server
-
-# Optionally initialize the database and enable automatic start:
-sudo /usr/pgsql-13/bin/postgresql-13-setup initdb
-sudo systemctl enable postgresql-13
-sudo systemctl start postgresql-13
-
-环境变量
-export PATH=/usr/pgsql-13/bin:$PATH
-export PGDATA=/var/lib/postgresql/data
-
-cat /etc/hosts
-127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
-::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
-10.67.39.58  postgres-1
-10.67.39.59  postgres-2
-
-------主库操作
-1 初始化数据库
-postgresql-setup --initdb
-
-2 在pg_hba.conf增加一行
-host    replication     repl            postgres-2              trust
-
-3 修改postgresql.conf
-listen_addresses = '*'
-synchronous_standby_names = '*'
-# - Archiving -
-archive_mode = on              
-archive_command = 'test ! -f /opt/archivedir/%f && cp %p /opt/archivedir/%f'
-
-4 重启postgresql
-5 创建复制用户
-create user repl replication LOGIN CONNECTION LIMIT 30 ENCRYPTED PASSWORD 'Foxconn123';
-
----------从库操作
-从库只安装数据库软件，不进行数据库初始化
-/usr/pgsql-13/bin/pg_basebackup --pgdata=$PGDATA --format=p --write-recovery-conf --checkpoint=fast --label=mffb --progress --host=postgres-1 --port=5432 --username=repl
-***在PG12之前，-R备份结束之后会自动生成recovery.conf文件，用来做流复制判断主从同步的信息。但是从PG12开始，这个文件已经不需要了。***
-***只需要在参数文件postgresql.conf中配置primary_conninfo参数即可。***
-
-修改potgresql.conf， 这个配置文件从主库复制来
-primary_conninfo = 'host=10.67.39.58 port=5432 user=repl password=Foxconn123'
-primary_slot_name = 'postgres2_slot'
-
----------主库操作
-在主库创建replication slot
-select * from pg_create_physical_replication_slot('postgres2_slot');
-select slot_name,slot_type,active,wal_status from pg_replication_slots;
-
----------从库操作
-systemctl start postgresql-13
-如果从库设置正确的话，可以从log里看到
-2021-07-14 06:07:25.820 UTC [852] LOG:  started streaming WAL from primary at 0/3000000 on timeline 1
-
----------在主库再次检查
-postgres=# select slot_name,slot_type,active,wal_status from pg_replication_slots;
-   slot_name    | slot_type | active | wal_status
-----------------+-----------+--------+------------
- standby_slot   | physical  | f      |
- postgres2_slot | physical  | t      | reserved
----------观察进程
-从库进程
--bash-4.2$ ps -ef |grep wal
-postgres   852 17759  0 06:07 ?        00:00:01 postgres: walreceiver streaming 0/302FA60
-主库进程
--bash-4.2$ ps -ef|grep wal
-postgres  2481 18063  0 06:07 ?        00:00:00 postgres: walsender repl 10.67.39.59(38252) streaming 0/302FA60
-
---------主库观察同步状态
-postgres=# select * from pg_stat_replication;
--[ RECORD 1 ]----+------------------------------
-pid              | 2481
-usesysid         | 16384
-usename          | repl
-application_name | walreceiver
-client_addr      | 10.67.39.59
-client_hostname  | postgres-2
-client_port      | 38252
-backend_start    | 2021-07-14 06:07:28.239589+00
-backend_xmin     |
-state            | streaming
-sent_lsn         | 0/4000148
-write_lsn        | 0/4000148
-flush_lsn        | 0/4000148
-replay_lsn       | 0/4000148
-write_lag        |
-flush_lag        |
-replay_lag       |
-sync_priority    | 1
-sync_state       | sync
-reply_time       | 2021-07-14 07:05:54.037038+00
-
---------从库观察同步状态
-postgres=# select * from pg_stat_wal_receiver;
--[ RECORD 1 ]---------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-pid                   | 852
-status                | streaming
-receive_start_lsn     | 0/3000000
-receive_start_tli     | 1
-written_lsn           | 0/4000148
-flushed_lsn           | 0/4000148
-received_tli          | 1
-last_msg_send_time    | 2021-07-14 07:04:26.345695+00
-last_msg_receipt_time | 2021-07-14 07:04:23.79761+00
-latest_end_lsn        | 0/4000148
-latest_end_time       | 2021-07-14 06:40:52.494625+00
-slot_name             | postgres2_slot
-sender_host           | postgres-1
-sender_port           | 5432
-conninfo              | user=repl passfile=/var/lib/pgsql/.pgpass channel_binding=prefer dbname=replication host=postgres-1 port=5432 fallback_application_name=walreceiver sslmode=prefer sslcompression=0 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres target_session_attrs=any
-
- ---------测试
- 在主库create table, 从库观察
- 
-postgres=# select pg_is_in_recovery();       主库是f代表false ；备库是t，代表true
- pg_is_in_recovery
--------------------
- t
-
-
-切归档
-[root@postgres-1 archivedir]# ls -lh
-total 33M
--rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
--rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
--rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
-
-postgres=# select pg_switch_wal();
- pg_switch_wal
----------------
- 0/302FA78
-(1 row)
-
-[root@postgres-1 archivedir]# ls -lh
-total 49M
--rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
--rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
--rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
--rw-------. 1 postgres postgres 16M Jul 14 06:36 000000010000000000000003
-或者
-postgres=# select * from pg_stat_get_archiver();
--[ RECORD 1 ]------+-----------------------------
-archived_count     | 11
-last_archived_wal  | 000000010000000000000008
-last_archived_time | 2021-07-14 09:07:57.06432+00
-failed_count       | 0
-last_failed_wal    |
-last_failed_time   |
-stats_reset        | 2021-07-13 08:26:45.98489+00
-
-postgres=# select pg_switch_wal();
--[ RECORD 1 ]-+----------
-pg_switch_wal | 0/901BD78
-
-postgres=# select * from pg_stat_get_archiver();
--[ RECORD 1 ]------+------------------------------
-archived_count     | 12
-last_archived_wal  | 000000010000000000000009
-last_archived_time | 2021-07-15 06:21:10.562539+00
-failed_count       | 0
-last_failed_wal    |
-last_failed_time   |
-stats_reset        | 2021-07-13 08:26:45.98489+00
-
 # 数据库之外创建用户和数据库
 createuser --pwprompt zabbix
 createdb -O zabbix -E Unicode -T template0 zabbix
@@ -725,385 +875,3 @@ explain select count(*) from t3 where t='Linux';
 prepare mypan(text) as select count(*) from t3 where t=$1;
 explain execute mypan('Linux');
 
-##############################  FDW ############################
-FDW的安装
-# Install the repository RPM:
-sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-# postgresql自带的fdw 如 file_fdw,  postgrel_fdw
-yum install postgresql13-contrib
-# 其他的fdw，安装包如下
-[root@postgres-1 ~]# rpm -qa |grep fdw
-mysql_fdw_13-2.6.0-1.rhel7.x86_64
-redis_fdw_13-1.1-1.rhel7.x86_64
-sqlite_fdw_13-2.0.0-1.rhel7.x86_64
-mongo_fdw13-5.2.7-1.rhel7.x86_64
-	   
-#####   mysql_fdw
-postgres@u1804:~$ psql
-psql (10.18 (Ubuntu 10.18-0ubuntu0.18.04.1))
-Type "help" for help.
-
-postgres=# create extension mysql_fdw;
-CREATE EXTENSION
-postgres=# create server zabbixdb
-postgres-# foreign data wrapper mysql_fdw
-postgres-# options (host '10.67.51.113',port '3306');
-CREATE SERVER
-postgres=# create user mapping for chensen
-server zabbixdb
-options (username 'root',password 'vSTJ456');
-CREATE USER MAPPING
-postgres=# create foreign table tf_interface(interfaceid bigint,hostid bigint,main int,type int,useip int,ip varchar(64),dns varchar(64),port varchar(64)) server zabbixdb options (dbname 'zabbix',table_name 'interface');
-CREATE FOREIGN TABLE
-postgres=# \dew
-                 List of foreign-data wrappers
-   Name    |  Owner   |      Handler      |      Validator
------------+----------+-------------------+---------------------
- mysql_fdw | postgres | mysql_fdw_handler | mysql_fdw_validator
-(1 row)
-
-postgres=# \des
-          List of foreign servers
-   Name   |  Owner   | Foreign-data wrapper
-----------+----------+----------------------
- zabbixdb | postgres | mysql_fdw
-(1 row)
-
-postgres=# \des+ zabbixdb
-                                                      List of foreign servers
-   Name   |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |            FDW options             | Description
-----------+----------+----------------------+-------------------+------+---------+------------------------------------+-------------
- zabbixdb | postgres | mysql_fdw            |                   |      |         | (host '10.67.51.113', port '3306') |
-(1 row)
-
-postgres=# \dE
-                List of relations
- Schema |     Name     |     Type      |  Owner
---------+--------------+---------------+----------
- public | tf_interface | foreign table | postgres
-(1 row)
-
-postgres=> \d tf_interface
-                        Foreign table "public.tf_interface"
-   Column    |         Type          | Collation | Nullable | Default | FDW options
--------------+-----------------------+-----------+----------+---------+-------------
- interfaceid | bigint                |           |          |         |
- hostid      | bigint                |           |          |         |
- main        | integer               |           |          |         |
- type        | integer               |           |          |         |
- useip       | integer               |           |          |         |
- ip          | character varying(64) |           |          |         |
- dns         | character varying(64) |           |          |         |
- port        | character varying(64) |           |          |         |
-Server: zabbixdb
-FDW options: (dbname 'zabbix', table_name 'interface')
-	   
-#####  redis_fdw
-postgres=# create extension redis_fdw;
-CREATE EXTENSION
-
-postgres=# create server redis_51164
-foreign data wrapper redis_fdw
-options(host '10.67.51.164',port '6379');
-CREATE SERVER
-
-postgres=# create foreign table redis_db0(key text,value text)
-postgres-# server redis_51164
-postgres-# options (database '0');
-CREATE FOREIGN TABLE
-postgres-# create user mapping for chensen server redis_51164;
-postgres-# create foreign table redis_ansible(key text,value text)server redis_51164 options (database '0',tabletype 'string');
-postgres-# grant select,insert,update,delete on myredis_s_hash to chensen;
-postgres=> select * from redis_ansible where key='mongo';        # using user chensen  （读redis）
-  key  |         value
--------+------------------------
- mongo | This is mongo cookbook
-(1 row)
-postgres=> insert into redis_ansible values('oracle','oracle is great');      (写入redis)
-INSERT 0 1
-10.67.51.164:6379> keys *               （查看redis）
- 1) "mongo"
- 2) "elasticsearch"
- 3) "ansible_facts10.21.0.15"
- 4) "ansible_facts10.21.0.20"
- 5) "ansible_facts10.21.0.14"
- 6) "ansible_facts10.21.0.21"
- 7) "TiDB"
- 8) "mysql"
- 9) "oracle"
-
-postgres=> create table dbs as select key,value from redis_ansible where key='mongo';
-SELECT 1
-postgres=> select * from dbs;
--[ RECORD 1 ]-----------------
-key   | mongo
-value | This is mongo cookbook
-
-postgres=> insert into dbs select key,value from redis_ansible where key='mysql';
-INSERT 0 1
-postgres=> select * from dbs;
--[ RECORD 1 ]-----------------
-key   | mongo
-value | This is mongo cookbook
--[ RECORD 2 ]-----------------
-key   | mysql
-value | I like mysql
-
-postgres=> \d redis_ansible
-             Foreign table "public.redis_ansible"
- Column | Type | Collation | Nullable | Default | FDW options
---------+------+-----------+----------+---------+-------------
- key    | text |           |          |         |
- value  | text |           |          |         |
-Server: redis_51164
-FDW options: (tabletype 'string')
-	   
-#####  sqlite_fdw
-postgres=# create extension sqlite_fdw;
-CREATE EXTENSION
-postgres=# create server sqlite_server foreign data wrapper sqlite_fdw options (database '/var/lib/pgsql/inv.db');
-CREATE SERVER
-postgres=# create foreign table server(id integer options(key 'true'),type text,name text) server sqlite_server options(table 'server');
-CREATE FOREIGN TABLE
-postgres=# grant select,insert,update,delete on server to chensen;
-GRANT
-postgres=> select * from server;                        # user chensen 查询
- id |    type    |     name
-----+------------+--------------
-  1 | k8s        | 10.67.36.58
-postgres=> insert into server values(44,'sep','10.67.51.24');        # user chensen 插入    数据已经写入到sqlite3里了
-INSERT 0 1
-
-postgres=> \d server
-                  Foreign table "public.server"
- Column |  Type   | Collation | Nullable | Default | FDW options
---------+---------+-----------+----------+---------+--------------
- id     | integer |           |          |         | (key 'true')
- type   | text    |           |          |         |
- name   | text    |           |          |         |
-Server: sqlite_server
-FDW options: ("table" 'server')
-
-##### file_fdw
-前提是安装了postgresql13-contrib
-postgres=# create extension file_fdw;
-CREATE EXTENSION
-postgres=# create server pglog foreign data wrapper file_fdw;
-CREATE SERVER
-
-postgres=# CREATE FOREIGN TABLE pglog (
-  log_time timestamp(3) with time zone,
-  user_name text,
-  database_name text,
-  process_id integer,
-  connection_from text,
-  session_id text,
-  session_line_num bigint,
-  command_tag text,
-  session_start_time timestamp with time zone,
-  virtual_transaction_id text,
-  transaction_id bigint,
-  error_severity text,
-  sql_state_code text,
-  message text,
-  detail text,
-  hint text,
-  internal_query text,
-  internal_query_pos integer,
-  context text,
-  query text,
-  query_pos integer,
-  location text,
-  application_name text,
-  backend_type text
-  SERVER pglog
-  OPTIONS (
-  program $$cat $PGDATA/$(psql -d postgres -qtAX -c "select 'log/' || name from pg_ls_logdir() where name ~ 'csv$' order by modification")$$,
-  format 'csv'
-  );
-CREATE FOREIGN TABLE
-/* 也可以这样，但只能指定单一文件 OPTIONS (filename '/home/pg13/emp.csv', format 'csv' ); 
-或者这样，利用find命令  OPTIONS ( program 'find $PGDATA/log -type f -name "*.csv" -mtime -1 -exec cat {} \;', format 'csv' ); */
-postgres=# grant select on pglog to public;
-GRANT
-客户端查询
-postgres=>   select log_time,user_name,database_name,message,query from pglog limit 2;
-          log_time          | user_name | database_name |                                                     message                                                      | query
-----------------------------+-----------+---------------+------------------------------------------------------------------------------------------------------------------+-------
- 2021-08-23 09:16:04.319+00 |           |               | starting PostgreSQL 13.3 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit |
- 2021-08-23 09:16:04.32+00  |           |               | listening on IPv4 address "0.0.0.0", port 5432                                                                   |
-
- 
-##### mongo_fdw
-postgres=# create extension mongo_fdw;
-ERROR:  could not load library "/usr/pgsql-13/lib/mongo_fdw.so": /usr/pgsql-13/lib/mongo_fdw.so: undefined symbol: mongoc_collection_find_with_opts
-另外下载docker image fuww/postgresql-mongodb-fdw:latest 解决
-postgres=# create extension mongo_fdw;
-CREATE EXTENSION
-postgres=# create server mongo_server foreign data wrapper mongo_fdw
-postgres-# options(address '10.67.36.58',port '27017');
-CREATE SERVER
-postgres=# create user mapping for postgres server mongo_server options(username 'root', password 'example');
-CREATE USER MAPPING
-postgres=# create foreign table warehouse(_id NAME, warehouse_id int, warehouse_name text, warehouse_created timestamptz) server mongo_server options (database 'test', collection 'warehouse');
-CREATE FOREIGN TABLE
-postgres=# select * from warehouse;
- _id | warehouse_id | warehouse_name | warehouse_created
------+--------------+----------------+-------------------
-(0 rows)
-
-postgres=# INSERT INTO warehouse values (0, 1, 'UPS', '2014-12-12T07:12:10Z');
-INSERT 0 1
-postgres=# INSERT INTO warehouse values (0, 2, 'Server', '2015-10-02T17:32:10Z');
-INSERT 0 1
-postgres=# select * from warehouse;
-           _id            | warehouse_id | warehouse_name |   warehouse_created
---------------------------+--------------+----------------+------------------------
- 612712f8bd6f18005c276452 |            1 | UPS            | 2014-12-12 07:12:10+00
- 6127138bbd6f18005c276453 |            2 | Server         | 2015-10-02 17:32:10+00
-(2 rows)
-
-mongo中查看collection warehouse 
-test> db.warehouse.find();
-[
-  {
-    _id: ObjectId("612712f8bd6f18005c276452"),
-    warehouse_id: 1,
-    warehouse_name: 'UPS',
-    warehouse_created: ISODate("2014-12-12T07:12:10.000Z")
-  },
-  {
-    _id: ObjectId("6127138bbd6f18005c276453"),
-    warehouse_id: 2,
-    warehouse_name: 'Server',
-    warehouse_created: ISODate("2015-10-02T17:32:10.000Z")
-  }
-]
-mongo_fdw 還支援把整個 JSON 以 PostgreSQL 的 JSON 欄位來裝資料。不過要注意的是，這個欄位名稱「限定」叫做 __doc，JSON 型態（JSONB 不可以）；還有，這功能的目標指用來「擷取」資料，不包含用這個欄位寫資料進去 MongoDB：
-conn_mongo=> CREATE FOREIGN TABLE test2mongo(__doc json)
-    SERVER mongo_server
-    OPTIONS (database 'test', collection 'testc2');
-CREATE FOREIGN TABLE
-conn_mongo=> select * from test2mongo;
-                                      __doc                                        
--------------------------------------------------------------------------------------
- { "_id" : { "$oid" : "5850b7888dad99b6c35390d6" }, "i" : 0, "datafrom" : "test" }
- { "_id" : { "$oid" : "5850b7888dad99b6c35390d7" }, "i" : 1, "datafrom" : "test" }
- { "_id" : { "$oid" : "5850b7888dad99b6c35390d8" }, "i" : 2, "datafrom" : "test" }
-(3 rows) 
-
-
-#####  查看page ########
-一个page为8k
-page header结构
----------------------------------------------------------------------------------------------------------
-Field	            Type	        Length	    Description
-pd_lsn	            PageXLogRecPtr	8 bytes	    LSN: next byte after last byte of WAL record for last change to this page
-pd_checksum	        uint16	        2 bytes	    Page checksum
-pd_flags	        uint16	        2 bytes	    Flag bits
-pd_lower	        LocationIndex	2 bytes	    Offset to start of free space
-pd_upper	        LocationIndex	2 bytes   	Offset to end of free space
-pd_special	        LocationIndex	2 bytes	    Offset to start of special space
-pd_pagesize_version	uint16	        2 bytes   	Page size and layout version number information
-pd_prune_xid	    TransactionId	4 bytes  	Oldest unpruned XMAX on page, or zero if none
----------------------------------------------------------------------------------------------------------
-HeapTupleHeaderData结构
----------------------------------------------------------------------------------------------------------
-Field	            Type	     	Length	    Description
-t_xmin	            TransactionId	4 bytes	    insert XID stamp
-t_xmax	            TransactionId	4 bytes	    delete XID stamp
-t_cid	            CommandId	    4 bytes	    insert and/or delete CID stamp (overlays with t_xvac)
-t_xvac	            TransactionId	4 bytes	    XID for VACUUM operation moving a row version
-t_ctid	            ItemPointerData	6 bytes	    current TID of this or newer row version
-t_infomask2         uint16		    2 bytes	    number of attributes, plus various flag bits
-t_infomask	        uint16		    2 bytes	    various flag bits
-t_hoff            	uint8	     	1 byte	    offset to user data
----------------------------------------------------------------------------------------------------------
-postgres=# create extension pageinspect ;
-CREATE EXTENSION
-postgres=# select * from page_header(get_raw_page('t3',0));
-    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
------------+----------+-------+-------+-------+---------+----------+---------+-----------
- 1/3B99988 |        0 |     0 |   636 |  2072 |    8192 |     8192 |       4 |       567(一个删除的事务)
-
-postgres=# select count(*) from t3;
- count
--------
-   151
-postgres=# select * from heap_page_items(get_raw_page('t3',0));
- lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
------+--------+----------+--------+--------+--------+----------+---------+-------------+------------+--------+--------+-------+----------------------------
-
- 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
- 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
- 149 |   2232 |        1 |     36 |    499 |    568 |        0 | (0,153) |           2 |        258 |     24 |        |       | \x950000001157696e646f7773
- 150 |   2192 |        1 |     36 |    499 |    567 |        0 | (0,150) |        8194 |       1282 |     24 |        |       | \x960000001157696e646f7773
- 151 |   2152 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
- 152 |   2112 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
- 153 |   2072 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10242 |     24 |        |       | \x950000001146726565425344
-
-事务568：  postgres=# update t3 set t='FreeBSD' where id=149;      \x950000001146726565425344
-事务567：  postgres=# delete from t3 where id=150;
-事务566：  postgres=# insert into t3(t) values('CentOS');          \x980000000f43656e744f53
-事务565：  postgres=# insert into t3(t) values('Solaris');         \x9700000011536f6c61726973
-
-通过lower能算出指针的数量。表中的指针数为(636-24)/4= 153 ，但实际表的数据只有151行。 指针有153个，lp 150代表delete，lp 149和153 代表update
-空间没有减少。
-现在vacuum表t3
-postgres=# vacuum verbose t3;
-
-postgres=# select * from page_header(get_raw_page('t3',0));
-    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
------------+----------+-------+-------+-------+---------+----------+---------+-----------
- 1/3B9BE38 |        0 |     5 |   636 |  2152 |    8192 |     8192 |       4 |         0
-(1 row)
-
-postgres=# select * from heap_page_items(get_raw_page('t3',0));
- lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |           t_data
- 147 |   2312 |        1 |     36 |    499 |      0 |        0 | (0,147) |           2 |       2306 |     24 |        |       | \x930000001157696e646f7773
- 148 |   2272 |        1 |     36 |    499 |      0 |        0 | (0,148) |           2 |       2306 |     24 |        |       | \x940000001157696e646f7773
- 149 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
- 150 |      0 |        0 |      0 |        |        |          |         |             |            |        |        |       |
- 151 |   2232 |        1 |     36 |    565 |      0 |        0 | (0,151) |           2 |       2306 |     24 |        |       | \x9700000011536f6c61726973
- 152 |   2192 |        1 |     35 |    566 |      0 |        0 | (0,152) |           2 |       2306 |     24 |        |       | \x980000000f43656e744f53
- 153 |   2152 |        1 |     36 |    568 |      0 |        0 | (0,153) |           2 |      10498 |     24 |        |       | \x950000001146726565425344
-vacuum后，指针不回收，页面回收了，upper从2072变为2152，两个40的单位
-索引也可以查看，貌似没有变化
-postgres=# select * from heap_page_items(get_raw_page('idx_t3_t',0));
- lp | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid | t_data
-----+--------+----------+--------+--------+--------+----------+--------+-------------+------------+--------+--------+-------+--------
-  1 |  12642 |        2 |      2 |        |        |          |        |             |            |        |        |       |
-  2 |      4 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  3 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  4 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  5 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  6 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  7 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  8 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-  9 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
- 10 |      0 |        0 |  24568 |        |        |          |        |             |            |        |        |       |
- 11 |      1 |        0 |      0 |        |        |          |        |             |            |        |        |       |
- 12 |      0 |        0 |      0 |        |        |          |        |             |            |        |        |       |
-(12 rows)
-**************************************************************
-最多167行，然后再查看其他block number  'idx_t3_t',1,2,3,4。。。。。。
-postgres=# select * from heap_page_items(get_raw_page('t3',49)) limit 10 offset 110;
- lp  | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 |  t_ctid  | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |                 t_data
------+--------+----------+--------+--------+--------+----------+----------+-------------+------------+--------+--------+-------+----------------------------------------
- 111 |   3184 |        1 |     42 |    582 |      0 |        0 | (49,111) |           2 |       2306 |     24 |        |       | \xd22000001d52616e6479204b6569736c6572
- 112 |   3144 |        1 |     40 |    582 |      0 |        0 | (49,112) |           2 |       2306 |     24 |        |       | \xd3200000194a6f7368204b696e6e6579
-(2 rows)                                                          这里表示第50个块的第112个tuple
-postgres=# select * from page_header(get_raw_page('t3',19));
-    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
------------+----------+-------+-------+-------+---------+----------+---------+-----------
- 1/3C420B0 |        0 |     4 |   688 |   704 |    8192 |     8192 |       4 |         0
-                                  688-704 这里没有空间了
-**************************************************************
-postgres=# select * from heap_page_items(get_raw_page('t3',50));
-ERROR:  block number 50 is out of range for relation "t3"
-
-postgres=# select * from page_header(get_raw_page('idx_t3_t',0));
-    lsn    | checksum | flags | lower | upper | special | pagesize | version | prune_xid
------------+----------+-------+-------+-------+---------+----------+---------+-----------
- 0/C0284A0 |        0 |     0 |    72 |  8176 |    8176 |     8192 |       4 |         0
-(1 row)

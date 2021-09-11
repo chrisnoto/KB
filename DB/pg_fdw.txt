@@ -1,0 +1,339 @@
+FDW类似oracle的外部表
+
+FDW的安装
+# Install the repository RPM:
+sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+# postgresql自带的fdw 如 file_fdw,  postgrel_fdw
+yum install postgresql13-contrib
+# 其他的fdw，安装包如下
+[root@postgres-1 ~]# rpm -qa |grep fdw
+mysql_fdw_13-2.6.0-1.rhel7.x86_64
+redis_fdw_13-1.1-1.rhel7.x86_64
+sqlite_fdw_13-2.0.0-1.rhel7.x86_64
+mongo_fdw13-5.2.7-1.rhel7.x86_64
+	   
+#####   mysql_fdw
+postgres@u1804:~$ psql
+psql (10.18 (Ubuntu 10.18-0ubuntu0.18.04.1))
+Type "help" for help.
+
+postgres=# create extension mysql_fdw;
+CREATE EXTENSION
+postgres=# create server zabbixdb
+postgres-# foreign data wrapper mysql_fdw
+postgres-# options (host '10.67.51.113',port '3306');
+CREATE SERVER
+postgres=# create user mapping for chensen
+server zabbixdb
+options (username 'root',password 'vSTJ456');
+CREATE USER MAPPING
+postgres=# create foreign table tf_interface(interfaceid bigint,hostid bigint,main int,type int,useip int,ip varchar(64),dns varchar(64),port varchar(64)) server zabbixdb options (dbname 'zabbix',table_name 'interface');
+CREATE FOREIGN TABLE
+postgres=# \dew
+                 List of foreign-data wrappers
+   Name    |  Owner   |      Handler      |      Validator
+-----------+----------+-------------------+---------------------
+ mysql_fdw | postgres | mysql_fdw_handler | mysql_fdw_validator
+(1 row)
+
+postgres=# \des
+          List of foreign servers
+   Name   |  Owner   | Foreign-data wrapper
+----------+----------+----------------------
+ zabbixdb | postgres | mysql_fdw
+(1 row)
+
+postgres=# \des+ zabbixdb
+                                                      List of foreign servers
+   Name   |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |            FDW options             | Description
+----------+----------+----------------------+-------------------+------+---------+------------------------------------+-------------
+ zabbixdb | postgres | mysql_fdw            |                   |      |         | (host '10.67.51.113', port '3306') |
+(1 row)
+
+postgres=# \dE
+                List of relations
+ Schema |     Name     |     Type      |  Owner
+--------+--------------+---------------+----------
+ public | tf_interface | foreign table | postgres
+(1 row)
+
+postgres=> \d tf_interface
+                        Foreign table "public.tf_interface"
+   Column    |         Type          | Collation | Nullable | Default | FDW options
+-------------+-----------------------+-----------+----------+---------+-------------
+ interfaceid | bigint                |           |          |         |
+ hostid      | bigint                |           |          |         |
+ main        | integer               |           |          |         |
+ type        | integer               |           |          |         |
+ useip       | integer               |           |          |         |
+ ip          | character varying(64) |           |          |         |
+ dns         | character varying(64) |           |          |         |
+ port        | character varying(64) |           |          |         |
+Server: zabbixdb
+FDW options: (dbname 'zabbix', table_name 'interface')
+	   
+#####  redis_fdw
+postgres=# create extension redis_fdw;
+CREATE EXTENSION
+
+postgres=# create server redis_51164
+foreign data wrapper redis_fdw
+options(host '10.67.51.164',port '6379');
+CREATE SERVER
+
+postgres=# create foreign table redis_db0(key text,value text)
+postgres-# server redis_51164
+postgres-# options (database '0');
+CREATE FOREIGN TABLE
+postgres-# create user mapping for chensen server redis_51164;
+postgres-# create foreign table redis_ansible(key text,value text)server redis_51164 options (database '0',tabletype 'string');
+postgres-# grant select,insert,update,delete on myredis_s_hash to chensen;
+postgres=> select * from redis_ansible where key='mongo';        # using user chensen  （读redis）
+  key  |         value
+-------+------------------------
+ mongo | This is mongo cookbook
+(1 row)
+postgres=> insert into redis_ansible values('oracle','oracle is great');      (写入redis)
+INSERT 0 1
+10.67.51.164:6379> keys *               （查看redis）
+ 1) "mongo"
+ 2) "elasticsearch"
+ 3) "ansible_facts10.21.0.15"
+ 4) "ansible_facts10.21.0.20"
+ 5) "ansible_facts10.21.0.14"
+ 6) "ansible_facts10.21.0.21"
+ 7) "TiDB"
+ 8) "mysql"
+ 9) "oracle"
+
+postgres=> create table dbs as select key,value from redis_ansible where key='mongo';
+SELECT 1
+postgres=> select * from dbs;
+-[ RECORD 1 ]-----------------
+key   | mongo
+value | This is mongo cookbook
+
+postgres=> insert into dbs select key,value from redis_ansible where key='mysql';
+INSERT 0 1
+postgres=> select * from dbs;
+-[ RECORD 1 ]-----------------
+key   | mongo
+value | This is mongo cookbook
+-[ RECORD 2 ]-----------------
+key   | mysql
+value | I like mysql
+
+postgres=> \d redis_ansible
+             Foreign table "public.redis_ansible"
+ Column | Type | Collation | Nullable | Default | FDW options
+--------+------+-----------+----------+---------+-------------
+ key    | text |           |          |         |
+ value  | text |           |          |         |
+Server: redis_51164
+FDW options: (tabletype 'string')
+	   
+#####  sqlite_fdw
+postgres=# create extension sqlite_fdw;
+CREATE EXTENSION
+postgres=# create server sqlite_server foreign data wrapper sqlite_fdw options (database '/var/lib/pgsql/inv.db');
+CREATE SERVER
+postgres=# create foreign table server(id integer options(key 'true'),type text,name text) server sqlite_server options(table 'server');
+CREATE FOREIGN TABLE
+postgres=# grant select,insert,update,delete on server to chensen;
+GRANT
+postgres=> select * from server;                        # user chensen 查询
+ id |    type    |     name
+----+------------+--------------
+  1 | k8s        | 10.67.36.58
+postgres=> insert into server values(44,'sep','10.67.51.24');        # user chensen 插入    数据已经写入到sqlite3里了
+INSERT 0 1
+
+postgres=> \d server
+                  Foreign table "public.server"
+ Column |  Type   | Collation | Nullable | Default | FDW options
+--------+---------+-----------+----------+---------+--------------
+ id     | integer |           |          |         | (key 'true')
+ type   | text    |           |          |         |
+ name   | text    |           |          |         |
+Server: sqlite_server
+FDW options: ("table" 'server')
+
+##### file_fdw
+前提是安装了postgresql13-contrib
+postgres=# create extension file_fdw;
+CREATE EXTENSION
+postgres=# create server pglog foreign data wrapper file_fdw;
+CREATE SERVER
+
+postgres=# CREATE FOREIGN TABLE pglog (
+  log_time timestamp(3) with time zone,
+  user_name text,
+  database_name text,
+  process_id integer,
+  connection_from text,
+  session_id text,
+  session_line_num bigint,
+  command_tag text,
+  session_start_time timestamp with time zone,
+  virtual_transaction_id text,
+  transaction_id bigint,
+  error_severity text,
+  sql_state_code text,
+  message text,
+  detail text,
+  hint text,
+  internal_query text,
+  internal_query_pos integer,
+  context text,
+  query text,
+  query_pos integer,
+  location text,
+  application_name text,
+  backend_type text
+  SERVER pglog
+  OPTIONS (
+  program $$cat $PGDATA/$(psql -d postgres -qtAX -c "select 'log/' || name from pg_ls_logdir() where name ~ 'csv$' order by modification")$$,
+  format 'csv'
+  );
+CREATE FOREIGN TABLE
+/* 也可以这样，但只能指定单一文件 OPTIONS (filename '/home/pg13/emp.csv', format 'csv' ); 
+或者这样，利用find命令  OPTIONS ( program 'find $PGDATA/log -type f -name "*.csv" -mtime -1 -exec cat {} \;', format 'csv' ); */
+postgres=# grant select on pglog to public;
+GRANT
+客户端查询
+postgres=>   select log_time,user_name,database_name,message,query from pglog limit 2;
+          log_time          | user_name | database_name |                                                     message                                                      | query
+----------------------------+-----------+---------------+------------------------------------------------------------------------------------------------------------------+-------
+ 2021-08-23 09:16:04.319+00 |           |               | starting PostgreSQL 13.3 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit |
+ 2021-08-23 09:16:04.32+00  |           |               | listening on IPv4 address "0.0.0.0", port 5432                                                                   |
+
+ 
+##### mongo_fdw
+postgres=# create extension mongo_fdw;
+ERROR:  could not load library "/usr/pgsql-13/lib/mongo_fdw.so": /usr/pgsql-13/lib/mongo_fdw.so: undefined symbol: mongoc_collection_find_with_opts
+另外下载docker image fuww/postgresql-mongodb-fdw:latest 解决
+
+用docker跑个测试
+docker run -d \
+    --name postgres-mongo-fdw \
+	-p 5432:5432 \
+    -e POSTGRES_PASSWORD=Foxconn123 \
+    -e PGDATA=/var/lib/postgresql/data/pgdata \
+    fuww/postgresql-mongodb-fdw:latest
+
+postgres=# create extension mongo_fdw;
+CREATE EXTENSION
+postgres=# create server mongo_server foreign data wrapper mongo_fdw
+postgres-# options(address '10.67.36.58',port '27017');
+CREATE SERVER
+postgres=# create user mapping for postgres server mongo_server options(username 'root', password 'example');
+CREATE USER MAPPING
+postgres=# create foreign table warehouse(_id NAME, warehouse_id int, warehouse_name text, warehouse_created timestamptz) server mongo_server options (database 'test', collection 'warehouse');
+CREATE FOREIGN TABLE
+postgres=# select * from warehouse;
+ _id | warehouse_id | warehouse_name | warehouse_created
+-----+--------------+----------------+-------------------
+(0 rows)
+
+postgres=# INSERT INTO warehouse values (0, 1, 'UPS', '2014-12-12T07:12:10Z');
+INSERT 0 1
+postgres=# INSERT INTO warehouse values (0, 2, 'Server', '2015-10-02T17:32:10Z');
+INSERT 0 1
+postgres=# select * from warehouse;
+           _id            | warehouse_id | warehouse_name |   warehouse_created
+--------------------------+--------------+----------------+------------------------
+ 612712f8bd6f18005c276452 |            1 | UPS            | 2014-12-12 07:12:10+00
+ 6127138bbd6f18005c276453 |            2 | Server         | 2015-10-02 17:32:10+00
+(2 rows)
+
+mongo中查看collection warehouse 
+test> db.warehouse.find();
+[
+  {
+    _id: ObjectId("612712f8bd6f18005c276452"),
+    warehouse_id: 1,
+    warehouse_name: 'UPS',
+    warehouse_created: ISODate("2014-12-12T07:12:10.000Z")
+  },
+  {
+    _id: ObjectId("6127138bbd6f18005c276453"),
+    warehouse_id: 2,
+    warehouse_name: 'Server',
+    warehouse_created: ISODate("2015-10-02T17:32:10.000Z")
+  }
+]
+mongo_fdw 還支援把整個 JSON 以 PostgreSQL 的 JSON 欄位來裝資料。不過要注意的是，這個欄位名稱「限定」叫做 __doc，JSON 型態（JSONB 不可以）；還有，這功能的目標指用來「擷取」資料，不包含用這個欄位寫資料進去 MongoDB：
+conn_mongo=> CREATE FOREIGN TABLE test2mongo(__doc json)
+    SERVER mongo_server
+    OPTIONS (database 'test', collection 'testc2');
+CREATE FOREIGN TABLE
+conn_mongo=> select * from test2mongo;
+                                      __doc                                        
+-------------------------------------------------------------------------------------
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d6" }, "i" : 0, "datafrom" : "test" }
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d7" }, "i" : 1, "datafrom" : "test" }
+ { "_id" : { "$oid" : "5850b7888dad99b6c35390d8" }, "i" : 2, "datafrom" : "test" }
+(3 rows) 
+
+
+# centos8 上安装pgsql 12
+
+[root@c8-cilent1 ~]# dnf module list postgresql
+Last metadata expiration check: 1:04:36 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+CentOS-8 - AppStream
+Name                           Stream                     Profiles                               Summary
+postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     12                         client, server [d]                     PostgreSQL server and client module
+postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+默认安装10版本，现enable 12版本，进行12版本的安装
+[root@c8-cilent1 ~]# dnf module enable postgresql:12
+Last metadata expiration check: 1:05:26 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+Dependencies resolved.
+========================================================================================================================================================
+ Package                             Arch                               Version                               Repository                           Size
+========================================================================================================================================================
+Enabling module streams:
+ postgresql                                                             12
+
+Transaction Summary
+========================================================================================================================================================
+
+Is this ok [y/N]: y
+Complete!
+
+Switching module streams does not alter installed packages (see 'module enable' in dnf(8) for details)
+[root@c8-cilent1 ~]# dnf module list postgresql
+Last metadata expiration check: 1:05:39 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+CentOS-8 - AppStream
+Name                           Stream                     Profiles                               Summary
+postgresql                     10 [d]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     12 [e]                     client, server [d]                     PostgreSQL server and client module
+postgresql                     9.6                        client, server [d]                     PostgreSQL server and client module
+
+Hint: [d]efault, [e]nabled, [x]disabled, [i]nstalled
+[root@c8-cilent1 ~]# dnf install postgresql-server
+Last metadata expiration check: 1:06:19 ago on Fri 13 Aug 2021 02:48:24 PM CST.
+Dependencies resolved.
+========================================================================================================================================================
+ Package                             Arch                     Version                                                 Repository                   Size
+========================================================================================================================================================
+Installing:
+ postgresql-server                   x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   5.5 M
+Installing dependencies:
+ libpq                               x86_64                   12.4-1.el8_2                                            AppStream                   195 k
+ postgresql                          x86_64                   12.1-2.module_el8.1.0+273+979c16e6                      AppStream                   1.4 M
+
+Transaction Summary
+========================================================================================================================================================
+Install  3 Packages
+
+Total download size: 7.1 M
+Installed size: 30 M
+Is this ok [y/N]:y
+
+[root@c8-cilent1 ~]# postgresql-setup --initdb
+ * Initializing database in '/var/lib/pgsql/data'
+ * Initialized, logs are in /var/lib/pgsql/initdb_postgresql.log
+[root@c8-cilent1 ~]# systemctl enable --now postgresql

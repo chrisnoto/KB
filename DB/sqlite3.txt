@@ -495,3 +495,42 @@ Type "help" for help.
  {"id": 7, "t": "AIX"}]
 [sam@c8-cilent1 ~]$ sqlite-utils rows test.db t1 -t
 [sam@c8-cilent1 ~]$ sqlite-utils rows test.db t1 --csv
+
+# history
+[root@c8-cilent1 ~]# cat his.sh
+#!/bin/bash
+cmd=$1
+ansible localhost -m shell -a "$cmd" |jq ".plays[].tasks[].hosts.localhost" |sqlite-utils memory - 'select start,cmd,stdout from stdin' --csv --no-headers >>tmp_cmd.csv
+cat tmp_cmd.csv | sqlite-utils memory - 'select * from stdin' -t
+2021-08-26 16:52:47.295199    uname -a    Linux c8-cilent1.xq.foxconn 4.18.0-80.11.2.el8_0.x86_64 #1 SMP Tue Sep 24 11:32:19 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+----------------------------  ----------  ----------------------------------------------------------------------------------------------------------------------------
+2021-08-26 16:52:53.971929    df -h       Filesystem           Size  Used Avail Use% Mounted on
+                                          devtmpfs             1.9G     0  1.9G   0% /dev
+                                          tmpfs                1.9G  124K  1.9G   1% /dev/shm
+                                          tmpfs                1.9G   33M  1.9G   2% /run
+                                          tmpfs                1.9G     0  1.9G   0% /sys/fs/cgroup
+                                          /dev/mapper/cl-root   36G  7.2G   28G  21% /
+                                          /dev/vda1            976M  185M  724M  21% /boot
+                                          tmpfs                379M   16K  379M   1% /run/user/42
+                                          tmpfs                379M     0  379M   0% /run/user/0
+2021-08-26 16:53:02.311293    free -g     total        used        free      shared  buff/cache   available
+                                          Mem:              3           0           1           0           1           2
+                                          Swap:             3           0           3
+2021-08-26 16:53:11.537579    ip a        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+                                              link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+                                              inet 127.0.0.1/8 scope host lo
+                                                 valid_lft forever preferred_lft forever
+                                              inet6 ::1/128 scope host
+                                                 valid_lft forever preferred_lft forever
+                                          2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+                                              link/ether 52:54:00:57:80:4b brd ff:ff:ff:ff:ff:ff
+                                              inet 10.67.36.15/22 brd 10.67.39.255 scope global noprefixroute ens3
+                                                 valid_lft forever preferred_lft forever
+                                              inet6 fe80::a524:1b0f:d5bb:12b0/64 scope link noprefixroute
+                                                 valid_lft forever preferred_lft forever
+                                          3: virbr0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default qlen 1000
+                                              link/ether 52:54:00:f9:c1:ad brd ff:ff:ff:ff:ff:ff
+                                              inet 192.168.122.1/24 brd 192.168.122.255 scope global virbr0
+                                                 valid_lft forever preferred_lft forever
+                                          4: virbr0-nic: <BROADCAST,MULTICAST> mtu 1500 qdisc fq_codel master virbr0 state DOWN group default qlen 1000
+                                              link/ether 52:54:00:f9:c1:ad brd ff:ff:ff:ff:ff:ff

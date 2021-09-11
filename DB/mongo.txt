@@ -25,7 +25,8 @@ root@f5429e1c496e:/# mongoimport --host 127.0.0.1:27017 --db test --collection e
 2021-08-12T06:29:00.431+0000    dropping: test.example
 2021-08-12T06:29:00.456+0000    1 document(s) imported successfully. 0 document(s) failed to import.
 
-test> db.example.find({ansible_architecture:"x86_64"},{"ansible_all_ipv4_addresses":1,"ansible_nodename":1,"ansible_distribution":1,"ansible_distribution_version":1,"ansible_kernel":1,"ansible_product_name":1,"ansible_processor_vcpus":1,"ansible_memtotal_mb":1})
+test> db.example.find({ansible_architecture:"x86_64"},{"ansible_all_ipv4_addresses":1,"ansible_nodename":1,"ansible_distribution":1,"ansible_distribution_version":1,"ansible_kernel":1,"ansible_product_name":1,
+"ansible_processor_vcpus":1,"ansible_memtotal_mb":1})
 [
   {
     _id: ObjectId("6114ccc7dfaa80771ed8efc0"),
@@ -51,4 +52,96 @@ test> db.example.find({ansible_architecture:"x86_64"},{"ansible_all_ipv4_address
   }
 ]
 
+mongoimport --host 127.0.0.1:27017 --db test --collection staff --authenticationDatabase admin --username root --password example --drop --file /2.json
 
+查询  where, sort
+test> db.staff.find({"details.weight":{$gt:270},"details.age":{$gt:26}}).sort({"details.age":-1})
+[
+  {
+    _id: ObjectId("61372182aeb931801cbe0a1d"),
+    name: 'Frank Thomas',
+    team: ' TOR',
+    position: ' Designated Hitter',
+    details: { height: 77, weight: 275, age: 38.76 }
+  },
+  {
+    _id: ObjectId("61372182aeb931801cbe090c"),
+    name: 'C.C. Sabathia',
+    team: ' CLE',
+    position: ' Starting Pitcher',
+    details: { height: 79, weight: 290, age: 26.61 }
+  }
+]
+
+创建索引
+test> db.staff.createIndex({"details.age":1})
+details.age_1
+test> db.staff.getIndexes()
+[
+  { v: 2, key: { _id: 1 }, name: '_id_' },
+  { v: 2, key: { 'details.age': 1 }, name: 'details.age_1' }
+]
+test>
+
+分组
+各team的人数
+test> db.staff.aggregate([{$group : {_id : "$team", num_tutorial : {$sum : 1}}}])
+[
+  { _id: ' PIT', num_tutorial: 35 },
+  { _id: ' OAK', num_tutorial: 37 },
+  { _id: ' ARZ', num_tutorial: 30 },
+  { _id: ' LA', num_tutorial: 33 },
+  { _id: ' BAL', num_tutorial: 35 },
+  { _id: ' ATL', num_tutorial: 38 },
+  { _id: ' MLW', num_tutorial: 35 },
+  { _id: ' NYM', num_tutorial: 38 },
+各team的平均年纪
+test> db.staff.aggregate([{$group : {_id : "$team", avg_age : {$avg : "$details.age"}}}])
+[
+  { _id: ' PIT', avg_age: 27.194857142857146 },
+  { _id: ' OAK', avg_age: 28.716486486486485 },
+  { _id: ' ARZ', avg_age: 27.60033333333333 },
+  { _id: ' LA', avg_age: 29.778181818181817 },
+  { _id: ' BAL', avg_age: 29.062285714285718 },
+  { _id: ' ATL', avg_age: 28.262894736842107 },
+  { _id: ' MLW', avg_age: 29.04057142857143 },
+  { _id: ' NYM', avg_age: 30.525000000000002 },
+  { _id: ' CWS', avg_age: 28.270909090909093 },
+  { _id: ' TB', avg_age: 26.797272727272727 },
+  { _id: ' DET', avg_age: 29.149459459459457 },
+  { _id: ' SEA', avg_age: 27.681818181818183 },
+  { _id: ' BOS', avg_age: 29.78388888888889 },
+  { _id: ' MIN', avg_age: 28.241818181818182 },
+各team的最大年纪
+test> db.staff.aggregate([{$group : {_id : "$team", avg_age : {$max : "$details.age"}}}])
+[
+  { _id: ' PIT', avg_age: 34.97 },
+  { _id: ' OAK', avg_age: 38.49 },
+  { _id: ' ARZ', avg_age: 43.47 },
+  { _id: ' LA', avg_age: 39.49 },
+  { _id: ' BAL', avg_age: 36.33 },
+  { _id: ' ATL', avg_age: 39.79 },
+  { _id: ' MLW', avg_age: 38.43 },
+  { _id: ' NYM', avg_age: 48.52 },
+  { _id: ' CWS', avg_age: 36.51 },
+  { _id: ' TB', avg_age: 36.47 },
+  { _id: ' DET', avg_age: 42.3 },
+  { _id: ' SEA', avg_age: 36.03 },
+  { _id: ' BOS', avg_age: 40.97 },
+  { _id: ' MIN', avg_age: 37.43 },
+  
+  
+备份db
+mongodump 是 MongoDB 官方提供的逻辑备份工具，它可以从 MongoDB 数据库读取数据，并生成 BSON 文件，mongodump 适合用于备份和恢复数据量较小的 MongoDB 数据库，不适用于大数据量备份。
+mongorestore恢复工具
+root@5a83f9cbb735:/# mongodump --host 127.0.0.1 --port 27017 -u root -p example -d test
+2021-09-07T09:07:30.801+0000    writing test.staff to dump/test/staff.bson
+2021-09-07T09:07:30.804+0000    done dumping test.staff (1035 documents)
+
+查看bson二进制文件
+root@5a83f9cbb735:/dump/test# bsondump staff.bson | head -10
+{"_id":{"$oid":"61372182aeb931801cbe086c"},"name":"Brian Roberts","team":" BAL","position":" Second Baseman","details":{"height":{"$numberInt":"69"},"weight":{"$numberInt":"176"},"age":{"$numberDouble":"29.39"}}}
+{"_id":{"$oid":"61372182aeb931801cbe086d"},"name":"Paul Bako","team":" BAL","position":" Catcher","details":{"height":{"$numberInt":"74"},"weight":{"$numberInt":"215"},"age":{"$numberDouble":"34.69"}}}
+{"_id":{"$oid":"61372182aeb931801cbe086e"},"name":"Adam Donachie","team":" BAL","position":" Catcher","details":{"height":{"$numberInt":"74"},"weight":{"$numberInt":"180"},"age":{"$numberDouble":"22.99"}}}
+{"_id":{"$oid":"61372182aeb931801cbe086f"},"name":"Miguel Tejada","team":" BAL","position":" Shortstop","details":{"height":{"$numberInt":"69"},"weight":{"$numberInt":"209"},"age":{"$numberDouble":"30.77"}}}
+{"_id":{"$oid":"61372182aeb931801cbe0870"},"name":"Melvin Mora","team":" BAL","position":" Third Baseman","details":{"height":{"$numberInt":"71"},"weight":{"$numberInt":"200"},"age":{"$numberDouble":"35.07"}}}
