@@ -1,11 +1,3 @@
-用docker跑个测试
-docker run -d \
-    --name postgres-mongo-fdw \
-	-p 5432:5432 \
-    -e POSTGRES_PASSWORD=Foxconn123 \
-    -e PGDATA=/var/lib/postgresql/data/pgdata \
-    fuww/postgresql-mongodb-fdw:latest
-
 #########  逻辑概念 ##########
 在 Postgresql中是以下的關係
 Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
@@ -503,21 +495,238 @@ postgres=# select * from pg_toast.pg_toast_16462;
 (10 rows)	
 修改TOAST策略
 alter table blog alter content set storage external/extended;
+
+######### WAL ###########
+•WAL –Write Ahead Log. It is used in context of transaction log files.
+•Xlog  -Transaction log. It is used in context of transaction log  buffers.
+•LSN –Log sequence number. It is used to mark position of log in  pages. 
+•Bgwriter –Background writer.This is used to flush shared buffers  and perform checkpoint. 
+•Clog  -Commit log. It is used in context of transaction status buffers.
+•Partial Page Write –This happens when OS is able to write partial page in disk files which can cause corruption.
+
+The transaction log files are stored in $PGDATA/pg_wal directory. They are named as 000000010000070A0000008E. 
+  -The first 8 digits identifies the timeline, 
+  -The following 8 digits identifies the (logical) xlog file and      
+  -The last ones represents the (physical) xlog file (Segement) 
+The physical files in pg_xlog directory are not actually the xlog files; PostgreSQL calls it segments. 
+Each Segment contains Bocks of 8K and Segment size is 16M
+Block 0     1.Seg Hdr 2.Block Header 3.WAL Records Each WAL record has header. WAL 1, 2 ,3
+Block 1     1. Block Header 2. WAL Records 3. Each WAL record has header. WAL 4,5
+Block 2     1. Block Header 2. WAL Records 3. Each WAL record has header. WAL 5,6,7,8
+…
+Block 255   1. Block Header 2. WAL Records 3. Each WAL record has header. WAL m,n,…
+
+switch wal之后, segment 号 加 1
+-rw-------. 1 postgres postgres 16M Sep 13 02:43 0000000100000001000000A2
+postgres=# select pg_switch_wal();
+-[ RECORD 1 ]-+-----------
+pg_switch_wal | 1/A21613D8
+-rw-------. 1 postgres postgres 16M Sep 13 03:10 0000000100000001000000A3
+
+postgres=# select * from pg_control_checkpoint();
+-[ RECORD 1 ]--------+-------------------------
+checkpoint_lsn       | 1/A2161310
+redo_lsn             | 1/A21612D8
+redo_wal_file        | 0000000100000001000000A2
+timeline_id          | 1
+prev_timeline_id     | 1
+full_page_writes     | t
+next_xid             | 0:591
+next_oid             | 24700
+next_multixact_id    | 1
+next_multi_offset    | 0
+oldest_xid           | 479
+oldest_xid_dbid      | 1
+oldest_active_xid    | 591
+oldest_multi_xid     | 1
+oldest_multi_dbid    | 1
+oldest_commit_ts_xid | 0
+newest_commit_ts_xid | 0
+checkpoint_time      | 2021-09-13 02:58:38+00
+
+WALInsertLock •This lock is used to insert transaction log record contents into transaction log memory buffer
+WALWriteLock •This lock is used to write transaction log buffer data to WAL file
+
+postgres=# select * from  pg_current_wal_insert_lsn();
+-[ RECORD 1 ]-------------+-----------
+pg_current_wal_insert_lsn | 1/A21613C0
+
+postgres=# select * from  pg_current_wal_flush_lsn();
+-[ RECORD 1 ]------------+-----------
+pg_current_wal_flush_lsn | 1/A21613C0
+
+postgres=# select * from  pg_current_wal_lsn();  一直在变
+-[ RECORD 1 ]------+-----------
+pg_current_wal_lsn | 1/A21613C0
+
+postgres=# select pg_walfile_name('1/A21613C0');
+-[ RECORD 1 ]---+-------------------------
+pg_walfile_name | 0000000100000001000000A2
+
+postgres=# select txid_current();
+-[ RECORD 1 ]+----
+txid_current | 590
+
+
 ######## FSM ########
-Free Space Map stores information about free
-space in a relation
+VACUUM performs processing while referring to the Visibility Map, and updates the Free Space Map
+Free Space Map stores information about free space in a relation
 • Used by INSERTs and UPDATEs
+FSM的空间管理中，没有细粒度到数据页的每个比特，而是将最小单元定义为页大小（BLCKSZ）的256分之一，也就是说，
+在默认8KB数据页的大小下，从FSM的角度观察，它有256个单元。所以，为了表述这个256个单元的状态，FSM为每个数据页分配了一个字节的空间。这也是FSM在设计时，一个空间和时间的折中选择
+https://www.bookstack.cn/read/aliyun-rds-core/2470b8d6a68945ba.md
+postgres=# create extension pg_freespacemap;
+CREATE EXTENSION
+postgres=# select * from pg_freespace('staff');
+ blkno | avail
+-------+-------
+     0 |  7744
+     1 |  7744
+     2 |  7744
+     3 |  7744
+     4 |  7744
+     5 |  7744
+     6 |  7744
+     7 |  7744
+     8 |  7744
+     9 |  7296
+    10 |    32
+    11 |    32
+    12 |     0
+    13 |    96
+    14 |     0
+    15 |    64
+    16 |    32
+    17 |    64
+    18 |    32
+    19 |    96
+    20 |  6400
+postgres=# select * from staff where ctid='(9,96)';
+     name      | team | position | height | weight |  age
+---------------+------+----------+--------+--------+-------
+ Adam Donachie |  BAL |  Catcher |     74 |    180 | 22.99
+(1 row)
+可以发现staff表的第一行数据在page9,item96
+
 ######## VM ########
-Visibility Map
+Visibility Map  跟vacuum密切相关
 • A bitmap of heap pages
-• 1 means “all tuples on page are visible to all
-transactions”
+• 1 means “all tuples on page are visible to all transactions”
 • Bits are set in VACUUM
 • Cleared at INSERT/UPDATE/DELETE
-VACUUM can now skip pages that are already
-marked in visibility map
+VACUUM can now skip pages that are already marked in visibility map
 • Still needs to scan all indexes
+http://www.postgres.cn/v2/news/viewone/1/525
+pg的冻结炸弹，事务号回卷会导致刚创建的元组不可见
+postgresql数据库使用32位事务号，最大容纳42亿左右的事务号，事务号是循环使用的，当事务号耗尽后又会从3开始循环使用。事务环被分为两个半圆，
+当前事务号过去的21亿事务属于过去的事务号，当前事务号往前的21亿属于未来的事务号，未来的事务号对当前事务是不可见的。
 
+当数据页中的所有记录已经是FROZEN状态时，在发起vacuum freeze时会跳过这个页的扫描，从而大幅提升静态数据的freeze操作，减少IO扫描。
+目前这个page frozen标记放在表对应的VM文件中
+postgres=# create extension pg_visibility;
+CREATE EXTENSION
+postgres=# select * from pg_visibility_map_summary('t4');
+ all_visible | all_frozen
+-------------+------------
+      318472 |          0
+(1 row)
+第一次freeze很耗时间，没有frozen page
+postgres=# vacuum freeze verbose t4;
+INFO:  aggressively vacuuming "public.t4"
+INFO:  "t4": found 0 removable, 50000000 nonremovable row versions in 318472 out of 318472 pages
+DETAIL:  0 dead row versions cannot be removed yet, oldest xmin: 587
+There were 0 unused item identifiers.
+Skipped 0 pages due to buffer pins, 0 frozen pages.
+0 pages are entirely empty.
+CPU: user: 7.76 s, system: 6.71 s, elapsed: 180.29 s.
+
+postgres=# select * from pg_visibility_map_summary('t4');
+ all_visible | all_frozen
+-------------+------------
+      318472 |     318472
+
+第二次freeze立即结束，因为跳过了318471个frozen pages。vm文件记录了frozen page标志位
+postgres=# vacuum freeze verbose t4;
+INFO:  aggressively vacuuming "public.t4"
+INFO:  "t4": found 0 removable, 53 nonremovable row versions in 1 out of 318472 pages
+DETAIL:  0 dead row versions cannot be removed yet, oldest xmin: 587
+There were 0 unused item identifiers.
+Skipped 0 pages due to buffer pins, 318471 frozen pages.
+0 pages are entirely empty.
+CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
+
+查看详细
+postgres=# select * from pg_visibility_map('t4');
+ blkno  | all_visible | all_frozen
+--------+-------------+------------
+      0 | t           | t
+      1 | t           | t
+      2 | t           | t
+      3 | t           | t
+      4 | t           | t
+	  
+###	pg_control  ###
+用命令读pg_control
+-bash-4.2$ pg_controldata
+pg_control version number:            1300
+Catalog version number:               202007201
+Database system identifier:           6984324583401825557
+Database cluster state:               in production
+pg_control last modified:             Sat 11 Sep 2021 06:39:13 AM UTC
+Latest checkpoint location:           1/A2160AD8
+Latest checkpoint's REDO location:    1/A2160AA0
+Latest checkpoint's REDO WAL file:    0000000100000001000000A2
+
+用以下几个函数获取control的内容
+https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-CONTROLDATA
+
+postgres=# select * from pg_control_system();
+-[ RECORD 1 ]------------+-----------------------
+pg_control_version       | 1300
+catalog_version_no       | 202007201
+system_identifier        | 6984324583401825557
+pg_control_last_modified | 2021-09-11 06:39:13+00
+
+postgres=# select * from pg_control_checkpoint();
+-[ RECORD 1 ]--------+-------------------------
+checkpoint_lsn       | 1/A2160AD8
+redo_lsn             | 1/A2160AA0
+redo_wal_file        | 0000000100000001000000A2
+......
+
+postgres=# select * from pg_control_init();
+-[ RECORD 1 ]--------------+---------
+max_data_alignment         | 8
+database_block_size        | 8192
+blocks_per_segment         | 131072
+wal_block_size             | 8192
+bytes_per_wal_segment      | 16777216
+max_identifier_length      | 64
+max_index_columns          | 32
+max_toast_chunk_size       | 1996
+large_object_chunk_size    | 2048
+float8_pass_by_value       | t
+data_page_checksum_version | 0
+
+postgres=# select * from pg_control_recovery();
+-[ RECORD 1 ]-----------------+----
+min_recovery_end_lsn          | 0/0
+min_recovery_end_timeline     | 0
+backup_start_lsn              | 0/0
+backup_end_lsn                | 0/0
+end_of_backup_record_required | f
+
+$ pg_resetwal -D /var/lib/pgsql/node_1/data/ --dry-run
+Current pg_control values:
+
+# Restoring pg_control
+In the unlikely event pg_control becomes corrupted, it might be possible to restore it using pg_resetwal
+pg_control version number:            1300
+Catalog version number:               202108031
+Database system identifier:           6998038587784135836
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:709
 ######### 数据类型 ###########
 # 日期时间类型
 postgres=# show datestyle;
@@ -734,7 +943,6 @@ postgres=# select title,hstore_to_json(attr) from books;
  PostgreSQL Cheat Sheet | {"weight": "1 ounces", "ISBN-13": "978-1449370001", "language": "English", "paperback": "5", "publisher": "postgresqltutorial.com"}
 (2 rows)
 
-
 each函数转换hstore数据为结果集
 postgres=# select title,(each(attr)).* from books;
          title          |    key    |         value
@@ -749,7 +957,6 @@ postgres=# select title,(each(attr)).* from books;
  PostgreSQL Cheat Sheet | language  | English
  PostgreSQL Cheat Sheet | paperback | 5
  PostgreSQL Cheat Sheet | publisher | postgresqltutorial.com
-
 
 查询特定key的值
 postgres=# select attr->'ISBN-13' AS isbn from books;
@@ -780,7 +987,6 @@ SET attr = delete(attr, 'freeshipping');
 UPDATE books
 SET attr = attr || '"freeshipping"=>"no"' :: hstore;
 
-
 # 查询postgres 参数
 postgres=# select * from pg_settings where name in ('wal_level','archive_mode','archive_command');
 
@@ -804,7 +1010,6 @@ from your terminal.
  5050
 (1 row)
 
-
 # 数据库之外创建用户和数据库
 createuser --pwprompt zabbix
 createdb -O zabbix -E Unicode -T template0 zabbix
@@ -821,7 +1026,6 @@ zabbix=# \dp+ users;
  public | users | table | zabbix=arwdDxt/zabbix+|                   |
         |       |       | chensen=r/zabbix      |                   |
 (1 row)
-
 zabbix=# grant update,insert,delete,truncate on users to chensen;
 GRANT
 zabbix=# \dp+ users;
@@ -832,7 +1036,6 @@ zabbix=# \dp+ users;
         |       |       | chensen=arwdD/zabbix  |                   |
 (1 row)
 
-
 ## copy命令进行导入导出
 # 导出
 copy 表名 to '文件名' with csv;
@@ -840,7 +1043,6 @@ copy (select a.hostid,a.name,c.name from hosts as a inner join hosts_groups as b
 # 导入
 postgres=# create table staff(name text,team text,position text,height integer,weight integer,age numeric);
 CREATE TABLE
-
 postgres=# \copy staff from '/var/lib/pgsql/sample2.csv' with csv header delimiter ',' encoding 'UTF8';
 COPY 1034
 窗口函数
@@ -875,3 +1077,46 @@ explain select count(*) from t3 where t='Linux';
 prepare mypan(text) as select count(*) from t3 where t=$1;
 explain execute mypan('Linux');
 
+#查看锁
+在一个session里
+postgres=# begin;
+BEGIN
+postgres=*# insert into dbs values('oracle','big database');
+INSERT 0 1
+
+在另一个session里
+select pid, state, usename, query, query_start 
+from pg_stat_activity 
+where pid in (
+  select pid from pg_locks l 
+  join pg_class t on l.relation = t.oid 
+  and t.relkind = 'r' 
+  where t.relname = 'dbs'
+);
+  pid  |        state        | usename  |                       query                        |          query_start
+-------+---------------------+----------+----------------------------------------------------+-------------------------------
+ 27066 | idle in transaction | postgres | insert into dbs values('sqlite3','tiny database'); | 2021-09-11 08:21:47.500668+00
+ 27719 | idle in transaction | postgres | select key from dbs;                               | 2021-09-11 08:20:19.181387+00
+(2 rows)
+
+postgres=# select locktype,relation,mode from pg_locks;
+   locktype    | relation |       mode
+---------------+----------+------------------
+ relation      |    12141 | AccessShareLock
+ virtualxid    |          | ExclusiveLock
+ relation      |    16676 | AccessShareLock
+ relation      |    16669 | AccessShareLock
+ relation      |    16472 | RowExclusiveLock
+ virtualxid    |          | ExclusiveLock
+ relation      |    16472 | AccessShareLock
+ virtualxid    |          | ExclusiveLock
+ transactionid |          | ExclusiveLock
+
+postgres=# select oid,relname,relfilenode from pg_class where relname='dbs';
+  oid  | relname | relfilenode
+-------+---------+-------------
+ 16472 | dbs     |       16472
+
+kill进程 
+SELECT pg_cancel_backend(11929);
+SELECT pg_terminate_backend(11929); 
