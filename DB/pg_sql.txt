@@ -567,6 +567,38 @@ postgres=# select txid_current();
 -[ RECORD 1 ]+----
 txid_current | 590
 
+全页写
+PG数据页写入是以page为单位，每个page默认大小为8K，而操作系统数据块是4K（操作系统每次写入4k），在断电等情况下，极有可能部分pg数据页只写到4K系统就已经崩溃。
+此时pg数据页中就一半是新写入的数据，一半是还没来得及写入的旧数据，这称为部分写问题。这种数据页可以看作是损坏的，在崩溃恢复时，由于XLOG记录无法在损坏的页面上重放，
+它无法完全恢复该页。因此，我们需要一个额外附加的功能。
+
+pg支持一种称为全页写的功能来处理部分写问题。如果启用（默认启用），pg会在每个检查点之后、每个页面第一次发生变更时，将头数据和整个页面作为一条XLOG记录写入WAL缓冲区。
+在pg中，这种包含整个页面的XLOG记录称为备份块或全页镜像 (backup block or full-page image)。
+
+查看wal日志
+-bash-4.2$ pg_controldata
+pg_control version number:            1300
+Catalog version number:               202007201
+Database system identifier:           6984324583401825557
+Database cluster state:               in production
+pg_control last modified:             Mon 13 Sep 2021 03:13:38 AM UTC
+Latest checkpoint location:           1/A3000098
+Latest checkpoint's REDO location:    1/A3000060
+
+-bash-4.2$ pg_waldump -p ./ -s 1/A3000060
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 1/A3000060, prev 1/A3000028, desc: RUNNING_XACTS nextXid 591 latestCompletedXid 590 oldestRunningXid 591
+rmgr: XLOG        len (rec/tot):    114/   114, tx:          0, lsn: 1/A3000098, prev 1/A3000060, desc: CHECKPOINT_ONLINE redo 1/A3000060; tli 1; prev tli 1; fpw true; xid 0:591; oid 24700; multi 1; offset 0; oldest xid 479 in DB 1; oldest multi 1 in DB 1; oldest/newest commit timestamp xid: 0/0; oldest running xid 591; online
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 1/A3000110, prev 1/A3000098, desc: RUNNING_XACTS nextXid 591 latestCompletedXid 590 oldestRunningXid 591
+rmgr: Heap        len (rec/tot):     54/   362, tx:        591, lsn: 1/A3000148, prev 1/A3000110, desc: INSERT off 5 flags 0x00, blkref #0: rel 1663/14172/16472 blk 0 FPW
+rmgr: Transaction len (rec/tot):     34/    34, tx:        591, lsn: 1/A30002B8, prev 1/A3000148, desc: COMMIT 2021-09-14 05:12:20.545562 UTC
+rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 1/A30002E0, prev 1/A30002B8, desc: RUNNING_XACTS nextXid 592 latestCompletedXid 591 oldestRunningXid 592
+
+-bash-4.2$ pg_waldump 0000000100000001000000A3 --r heap      增删改
+rmgr: Heap        len (rec/tot):     54/   362, tx:        591, lsn: 1/A3000148, prev 1/A3000110, desc: INSERT off 5 flags 0x00, blkref #0: rel 1663/14172/16472 blk 0 FPW
+rmgr: Heap        len (rec/tot):     54/   422, tx:        592, lsn: 1/A3000400, prev 1/A30003C8, desc: INSERT off 6 flags 0x00, blkref #0: rel 1663/14172/16472 blk 0 FPW
+rmgr: Heap        len (rec/tot):     93/    93, tx:        593, lsn: 1/A3000608, prev 1/A30005D0, desc: INSERT off 7 flags 0x00, blkref #0: rel 1663/14172/16472 blk 0
+rmgr: Heap        len (rec/tot):     78/    78, tx:        594, lsn: 1/A30006C8, prev 1/A3000690, desc: HOT_UPDATE off 4 xmax 594 flags 0x60 ; new off 8 xmax 0, blkref #0: rel 1663/14172/16472 blk 0
+rmgr: Heap        len (rec/tot):     54/    54, tx:        595, lsn: 1/A3000778, prev 1/A3000740, desc: DELETE off 5 flags 0x00 KEYS_UPDATED , blkref #0: rel 1663/14172/16472 blk 0
 
 ######## FSM ########
 VACUUM performs processing while referring to the Visibility Map, and updates the Free Space Map

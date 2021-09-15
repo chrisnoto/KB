@@ -1,0 +1,103 @@
+配置域用户登录sftp服务 on CentOS7
+
+实现的功能：
+1 域用户登录sftp服务，但只有在特定的域用户组里才有权限登录 (域用户非linux本地用户)
+2 配置域用户在sftp服务器上的quota
+
+此处以域用户f111111为例，说明如何配置登录sftp服务
+
+1 在AD域控(10.67.50.111)中将用户f111111添加到SFTPUser组
+
+2 AD域用户f111111 ssh登录sftp server 10.67.49.193, 目的是让server在用户第一次登录时自动创建家目录
+此处家目录设置的是/data1/f111111
+ ssh f111111@10.67.49.193
+ 登录后，随即退出
+ 
+3  root用户登录sftp server，以下操作均为root用户操作
+
+3.1 创建用户f111111的子目录，并配置权限  1988800513代表的是domain user用户组 
+mkdir -p /data1/f111111/f111111
+chown root:root /data1/f111111
+chgrp 1988800513 /data1/f111111/f111111
+chmod 755 /data1/f111111
+chmod g+w /data1/f111111/f111111
+
+3.2 通过xfs_quota限制f111111用户在sftp server上可使用空间的quota
+查看/etc/projid 最新的project id
+[root@vstjsftp data1]# tail -1 /etc/projid
+h7108579:39
+  追加一行到该文件中
+echo "f111111:40" >>/etc/projid
+
+查看/etc/projets 最新的 project id
+[root@vstjsftp data1]# tail -1 /etc/projects
+39:/data1/h7108579
+  追加一行到该文件中
+echo "40:/data1/f111111" >>/etc/projects
+
+此处，给用户f111111的quota设置为50M
+xfs_quota -x -c "limit -p bsoft=0 bhard=50M f111111" /data1
+
+验证quota配置
+[root@vstjsftp data1]# xfs_quota -x -c "report -pibh" /data1/
+Project quota on /data1 (/dev/sdb1)
+                        Blocks                            Inodes
+Project ID   Used   Soft   Hard Warn/Grace     Used   Soft   Hard Warn/Grace
+---------- --------------------------------- ---------------------------------
+#0            52K      0      0  00 [------]     22      0      0  00 [------]
+myuser          0      0   500M  00 [------]      2      0      0  00 [------]
+tjsap        272K      0    50M  00 [------]      3      0      0  00 [------]
+TJIT01          0      0    50M  00 [------]      2      0      0  00 [------]
+EPDVPE01   500.0M      0   500M  00 [------]    474      0      0  00 [------]
+PDM01         46M      0    50M  00 [------]    806      0      0  00 [------]
+#7              0      0      0  00 [------]      2      0      0  00 [------]
+#8              0      0      0  00 [------]      2      0      0  00 [------]
+plmtest01   97.2M      0   100M  00 [------]    348      0      0  00 [------]
+tjmold01    68.6M      0   500M  00 [------]    342      0      0  00 [------]
+F2135774   233.5M      0   500M  00 [------]     28      0      0  00 [------]
+f2170456       8K      0    50M  00 [------]     63      0      0  00 [------]
+plm01       26.1M      0   500M  00 [------]    134      0      0  00 [------]
+cesfiles        0      0    50M  00 [------]      2      0      0  00 [------]
+cmctj        2.7M      0    50M  00 [------]     28      0      0  00 [------]
+Multimedia      0      0    50M  00 [------]      3      0      0  00 [------]
+FW11            0      0    50M  00 [------]      2      0      0  00 [------]
+H7109415        0      0   500M  00 [------]      2      0      0  00 [------]
+CMB-88     151.6M      0   500M  00 [------]     23      0      0  00 [------]
+CMD-SCM      3.5M      0   500M  00 [------]      8      0      0  00 [------]
+CIA             0      0   500M  00 [------]      2      0      0  00 [------]
+HA-01      195.7M      0   500M  00 [------]    357      0      0  00 [------]
+jingguan123      0      0   500M  00 [------]      2      0      0  00 [------]
+chensen         0      0   4.9G  00 [------]      2      0      0  00 [------]
+JGCY01     455.6M      0   500M  00 [------]    228      0      0  00 [------]
+rdtest          0      0   500M  00 [------]      2      0      0  00 [------]
+#32             0      0   500M  00 [------]      0      0      0  00 [------]
+C7003567     328K      0   500M  00 [------]      9      0      0  00 [------]
+IG0515          0      0     5G  00 [------]      2      0      0  00 [------]
+#35             0      0    50M  00 [------]      0      0      0  00 [------]
+SRDgonghui00      0      0   500M  00 [------]      2      0      0  00 [------]
+printer         0      0   4.9G  00 [------]      6      0      0  00 [------]
+h7108579     3.6M      0    50M  00 [------]      9      0      0  00 [------]
+f111111         0      0    50M  00 [------]      0      0      0  00 [------]
+
+3.3 追加三行到/etc/ssh/sshd_config文件末尾，并reload sshd服务
+Match User f111111
+Chrootdirectory /data1/f111111
+ForceCommand internal-sftp -l VERBOSE
+然后systemctl reload sshd
+
+4 用户f111111进行sftp测试
+[root@vstjlinuxtrans1 ~]# sftp f111111@10.67.49.193
+f111111@10.67.49.193's password:
+Connected to 10.67.49.193.
+sftp> cd f111111          /* 一定要先进入到子目录再上传下载文件 */
+sftp> ls
+sftp> put zabbix-agent-4.4.0-1.el7.x86_64.rpm
+Uploading zabbix-agent-4.4.0-1.el7.x86_64.rpm to /f111111/zabbix-agent-4.4.0-1.el7.x86_64.rpm
+zabbix-agent-4.4.0-1.el7.x86_64.rpm                                                   100%  419KB  38.4MB/s   00:00
+sftp> put zabbix-proxy-sqlite3.5.0.2.tar
+Uploading zabbix-proxy-sqlite3.5.0.2.tar to /f111111/zabbix-proxy-sqlite3.5.0.2.tar
+zabbix-proxy-sqlite3.5.0.2.tar                                                        100%  265MB  81.7MB/s   00:03
+sftp> get zabbix-proxy-sqlite3.5.0.2.tar
+Fetching /f111111/zabbix-proxy-sqlite3.5.0.2.tar to zabbix-proxy-sqlite3.5.0.2.tar
+/f111111/zabbix-proxy-sqlite3.5.0.2.tar                                               100%  265MB  58.2MB/s   00:04
+sftp>
