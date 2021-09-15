@@ -5,22 +5,15 @@ Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
 一台電腦可以有多個 Cluster,在 Oracle 叫 Instance
 一個 Cluster 可以有多個 Catalog ,包含Postgresql在內,許多資料庫會另外稱作 Database.
 一個 Database 可以有多個 Schema, 又叫做  namespace of relations (關聯式物件), 還有相關存取規則(ACL).	
-postgres=# \l
-                                  List of databases
-   Name    |  Owner   | Encoding |   Collate   |    Ctype    |   Access privileges
------------+----------+----------+-------------+-------------+-----------------------
- postgres  | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |
- template0 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
-           |          |          |             |             | postgres=CTc/postgres
- template1 | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres          +
-           |          |          |             |             | postgres=CTc/postgres
-(3 rows)
- 
+
+## schema
+# information_schema
 postgres=# select * from information_schema.information_schema_catalog_name;
  catalog_name
 --------------
  postgres
 (1 row)
+
 
 两个隐藏schema   pg_catalog和information_schema
 postgres=# \dn      隐藏的看不到
@@ -73,6 +66,7 @@ All databases:
   14172       postgres  pg_default
   14171      template0  pg_default
       1      template1  pg_default
+	  
 sql命令找出db与oid的映射关系
 postgres=# select oid, datname from pg_database;
   oid  |  datname
@@ -80,6 +74,7 @@ postgres=# select oid, datname from pg_database;
  14172 | postgres
      1 | template1
  14171 | template0
+ 
 sql命令找出表的存放路径	  
 postgres=# select pg_relation_filepath('books');
  pg_relation_filepath
@@ -145,18 +140,7 @@ postgres=# select oid,relname,reltablespace from pg_class where  reltablespace=1
 ------+-----------------------------------------+---------------
  4175 | pg_toast_1260                           |          1664
  4176 | pg_toast_1260_index                     |          1664
- 4177 | pg_toast_1262                           |          1664
- 4178 | pg_toast_1262_index                     |          1664
- 2966 | pg_toast_2964                           |          1664
- 2967 | pg_toast_2964_index                     |          1664
- 4181 | pg_toast_6000                           |          1664
- 4182 | pg_toast_6000_index                     |          1664
- 2846 | pg_toast_2396                           |          1664
- 2847 | pg_toast_2396_index                     |          1664
- 4060 | pg_toast_3592                           |          1664
- 4061 | pg_toast_3592_index                     |          1664
- 4183 | pg_toast_6100                           |          1664
- 4184 | pg_toast_6100_index                     |          1664
+...........
  4185 | pg_toast_1213                           |          1664
  4186 | pg_toast_1213_index                     |          1664
  2676 | pg_authid_rolname_index                 |          1664
@@ -218,7 +202,6 @@ postgresql的表为堆表,表是page/block的集合，而page是row/tuple/item�
 一个page为8k，一个表太大的话就会产生数据分片，一个分片最大1G，block/page数量为131072
 A Pointer to an item is called CTID (ItemPointer), created by PostgreSQL, it consists of a page number and the index of an item identifier.
 inside a page the pointers to the row are stored at the starts and the tuples (rows) are stored at the end of the page. 一个page里，指针在前，tuples在后
-
 
 postgres=# select ctid,* from t3;
    ctid   |  id  |          t
