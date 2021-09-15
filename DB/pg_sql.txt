@@ -1060,7 +1060,33 @@ postgres=# create table staff(name text,team text,position text,height integer,w
 CREATE TABLE
 postgres=# \copy staff from '/var/lib/pgsql/sample2.csv' with csv header delimiter ',' encoding 'UTF8';
 COPY 1034
-窗口函数
+
+# lateral join 实现select嵌套循环
+伪代码
+select name from staff as o1
+do select .... from staff where name= o1.name
+do
+实现
+postgres=# select * from (select name from staff) as o1, lateral (select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name=o1.name) ti )as details from staff where name=o1.name) ta) as o2 order by name;
+        name         |                                                        row_to_json
+---------------------+----------------------------------------------------------------------------------------------------------------------------
+ Aaron Boone         | {"name":"Aaron Boone","team":" FLA","position":" Third Baseman","details":{"height":74,"weight":200,"age":33.98}}
+ Aaron Cook          | {"name":"Aaron Cook","team":" COL","position":" Starting Pitcher","details":{"height":75,"weight":205,"age":28.06}}
+ Aaron Fultz         | {"name":"Aaron Fultz","team":" CLE","position":" Relief Pitcher","details":{"height":72,"weight":205,"age":33.49}}
+ Aaron Harang        | {"name":"Aaron Harang","team":" CIN","position":" Starting Pitcher","details":{"height":79,"weight":240,"age":28.81}}
+ Aaron Heilman       | {"name":"Aaron Heilman","team":" NYM","position":" Relief Pitcher","details":{"height":77,"weight":220,"age":28.3}}
+ Aaron Hill          | {"name":"Aaron Hill","team":" TOR","position":" Second Baseman","details":{"height":71,"weight":195,"age":24.94}}
+ Aaron Miles         | {"name":"Aaron Miles","team":" STL","position":" Second Baseman","details":{"height":67,"weight":180,"age":30.21}}
+ Aaron Rowand        | {"name":"Aaron Rowand","team":" PHI","position":" Outfielder","details":{"height":72,"weight":205,"age":29.5}}
+ Abraham Nu?ez       | {"name":"Abraham Nu?ez","team":" PHI","position":" Third Baseman","details":{"height":71,"weight":190,"age":30.96}}
+ Adam Donachie       | {"name":"Adam Donachie","team":" BAL","position":" Catcher","details":{"height":74,"weight":180,"age":22.99}}
+ Adam Dunn           | {"name":"Adam Dunn","team":" CIN","position":" Outfielder","details":{"height":78,"weight":240,"age":27.31}}
+ Adam Eaton          | {"name":"Adam Eaton","team":" PHI","position":" Starting Pitcher","details":{"height":74,"weight":196,"age":29.27}}
+ Adam Everett        | {"name":"Adam Everett","team":" HOU","position":" Shortstop","details":{"height":72,"weight":170,"age":30.06}}
+ Adam Jones          | {"name":"Adam Jones","team":" SEA","position":" Outfielder","details":{"height":74,"weight":200,"age":21.58}}
+ Adam Kennedy        | {"name":"Adam Kennedy","team":" STL","position":" Second Baseman","details":{"height":73,"weight":185,"age":31.14}}
+
+# 窗口函数
 select groupid,hostid,hostgroupid,row_number() over(partition by groupid order by hostgroupid) as hostgroupid_asc from hosts_groups;
  groupid | hostid | hostgroupid | hostgroupid_asc
 ---------+--------+-------------+-----------------
