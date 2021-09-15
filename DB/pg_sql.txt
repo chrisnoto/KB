@@ -1065,7 +1065,7 @@ COPY 1034
 伪代码
 select name from staff as o1
 do select .... from staff where name= o1.name
-do
+done
 实现
 postgres=# select * from (select name from staff) as o1, lateral (select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name=o1.name) ti )as details from staff where name=o1.name) ta) as o2 order by name;
         name         |                                                        row_to_json
