@@ -1202,7 +1202,8 @@ SELECT pg_terminate_backend(11929);
 https://github.com/zubkov-andrei/pg_profile/releases/download/0.3.4/pg_profile--0.3.4.tar.gz
 
 2 修改postgresql.conf，配置以下参数
--bash-4.2$ cat postgresql.conf |egrep -i '^pg_stat_statements|^track'
+-bash-4.2$ cat postgresql.conf |egrep -i '^pg_stat_statements|^track|^shared_preload_libraries'
+shared_preload_libraries = 'pg_stat_statements'
 track_activities = on
 track_counts = on
 track_io_timing = on
@@ -1244,3 +1245,26 @@ postgres=# select profile.show_samples();
 用cronjob 创建计划任务
 
 */30 * * * *  psql -c 'SELECT profile.snapshot()' > /tmp/pg_awr.log  2>&1
+
+# pg_cron配置
+[root@postgres-1 ~]# yum install pg_cron_13
+
+修改postgresql.conf，配置以下参数
+shared_preload_libraries = 'pg_stat_statements,pg_cron'
+cron.database_name = 'postgres'
+重启pg:   systemctl restart postgresql-13
+
+postgres=# create extension pg_cron;
+CREATE EXTENSION
+
+postgres=# select cron.schedule('30 * * * *',$$SELECT profile.snapshot()$$);
+ schedule
+----------
+        1
+(1 row)
+
+postgres=# select * from cron.job;
+ jobid |  schedule  |          command          | nodename  | nodeport | database | username | active | jobname
+-------+------------+---------------------------+-----------+----------+----------+----------+--------+---------
+     1 | 30 * * * * | SELECT profile.snapshot() | localhost |     5432 | postgres | postgres | t      |
+(1 row)
