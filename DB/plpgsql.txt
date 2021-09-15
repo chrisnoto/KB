@@ -1,6 +1,26 @@
 select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) from (select height,weight,age where name='Juan Uribe') ti ) as details from staff where name='Juan Uribe') ta;
 
 ####  存储过程  ###
+
+1. Inserting data using a procedure
+
+2. Displaying a message on the screen
+
+3. Using transaction control 
+
+4. Using columns data types
+
+5. Raising notices, warnings, and INFO messages
+
+6. Raising exceptions
+
+7. Traversing values in a table using a FOR loop
+
+8. Using SECURITY INVOKER
+
+9. Using SECURITY DEFINER
+
+10. Setting configuration parameters
 --------------------------------------------
     for loop    select into    raise notice
 do $$

@@ -66,6 +66,36 @@ All databases:
   14172       postgres  pg_default
   14171      template0  pg_default
       1      template1  pg_default
+-bash-4.2$ oid2name -s
+All tablespaces:
+    Oid  Tablespace Name
+------------------------
+   1663       pg_default
+   1664        pg_global
+  16719           mtbs01
+
+-bash-4.2$ oid2name -d postgres -i 包括表，索引，序列
+From database "postgres":
+  Filenode    Table Name
+------------------------
+     16669         books
+     16667  books_id_seq
+     16676    books_pkey
+     16472           dbs
+     16462         facts
+     16460  facts_id_seq
+     16469    facts_pkey
+     16715      idx_t3_t
+     16385            it
+     16391           it1
+     16521         staff
+     16402            t2
+     16400     t2_id_seq
+     16713            t3
+     16416     t3_id_seq
+     16427            t4
+     16409          tax1
+     16397          tbl1
 	  
 sql命令找出db与oid的映射关系
 postgres=# select oid, datname from pg_database;
@@ -1166,3 +1196,51 @@ postgres=# select oid,relname,relfilenode from pg_class where relname='dbs';
 kill进程 
 SELECT pg_cancel_backend(11929);
 SELECT pg_terminate_backend(11929); 
+
+# postgresql awr配置
+1 下载并解压pg_profile--0.3.4.tar.gz，解压后的文件放到/usr/pgsql-13/share/extension
+https://github.com/zubkov-andrei/pg_profile/releases/download/0.3.4/pg_profile--0.3.4.tar.gz
+
+2 修改postgresql.conf，配置以下参数
+-bash-4.2$ cat postgresql.conf |egrep -i '^pg_stat_statements|^track'
+track_activities = on
+track_counts = on
+track_io_timing = on
+track_functions = 'all'                 # none, pl, all
+pg_stat_statements.max = 10000
+pg_stat_statements.track = all
+systemctl restart postgresql-13
+
+3 创建extension
+create extension pg_stat_statements;
+create extension dblink;
+create schema profile;
+create extension pg_profile schema profile;
+
+4 创建awr snapshot
+postgres=# select profile.snapshot();
+        snapshot
+------------------------
+ (local,OK,00:00:00.37)
+(1 row)
+
+几分钟后，再次创建snapshot
+postgres=# select profile.snapshot();
+        snapshot
+------------------------
+ (local,OK,00:00:00.37)
+(1 row)
+
+postgres=# select profile.show_samples();
+           show_samples
+-----------------------------------
+ (1,"2021-09-15 08:23:56+00",t,,,)
+ (2,"2021-09-15 08:32:06+00",t,,,)
+(2 rows)
+
+5 生成awr html
+-bash-4.2$ psql -qtc "select profile.get_report(1,2)" --output awr_report_postgres_1_2.html
+
+用cronjob 创建计划任务
+
+*/30 * * * *  psql -c 'SELECT profile.snapshot()' > /tmp/pg_awr.log  2>&1
