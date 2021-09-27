@@ -1439,6 +1439,28 @@ select n from t;
  32
  64
 
+# 生成指定范围内的随机数
+CREATE OR REPLACE FUNCTION public.random_between(low integer, high integer)
+ RETURNS integer
+ LANGUAGE plpgsql
+ STRICT
+AS $function$
+BEGIN
+   RETURN floor(random()* (high-low + 1) + low);
+END;
+$function$
+postgres=# select random_between(1000,1500);
+ random_between
+----------------
+           1248
+postgres=# insert into r1(value) select random_between(1,99999) from generate_series(1,999);
+INSERT 0 999
+postgres=# select * from r1;
+ id  | value
+-----+-------
+   1 | 28586
+   2 | 62447
+   3 | 44234
 	   
 # 绑定变量和执行计划
 create table t3(id serial,t text);
