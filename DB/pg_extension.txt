@@ -1,0 +1,126 @@
+# postgresql awr配置
+1 下载并解压pg_profile--0.3.4.tar.gz，解压后的文件放到/usr/pgsql-13/share/extension
+https://github.com/zubkov-andrei/pg_profile/releases/download/0.3.4/pg_profile--0.3.4.tar.gz
+
+2 修改postgresql.conf，配置以下参数
+-bash-4.2$ cat postgresql.conf |egrep -i '^pg_stat_statements|^track|^shared_preload_libraries'
+shared_preload_libraries = 'pg_stat_statements'
+track_activities = on
+track_counts = on
+track_io_timing = on
+track_functions = 'all'                 # none, pl, all
+pg_stat_statements.max = 10000
+pg_stat_statements.track = all
+systemctl restart postgresql-13
+
+3 创建extension
+create extension pg_stat_statements;
+create extension dblink;
+create schema profile;
+create extension pg_profile schema profile;
+
+4 创建awr snapshot
+postgres=# select profile.snapshot();
+        snapshot
+------------------------
+ (local,OK,00:00:00.37)
+(1 row)
+
+几分钟后，再次创建snapshot
+postgres=# select profile.snapshot();
+        snapshot
+------------------------
+ (local,OK,00:00:00.37)
+(1 row)
+
+postgres=# select profile.show_samples();
+           show_samples
+-----------------------------------
+ (1,"2021-09-15 08:23:56+00",t,,,)
+ (2,"2021-09-15 08:32:06+00",t,,,)
+(2 rows)
+
+5 生成awr html
+-bash-4.2$ psql -qtc "select profile.get_report(1,2)" --output awr_report_postgres_1_2.html
+
+用cronjob 创建计划任务
+
+*/30 * * * *  psql -c 'SELECT profile.snapshot()' > /tmp/pg_awr.log  2>&1
+
+# pg_stat_kcache配置
+https://github.com/powa-team/pg_stat_kcache/
+功能 Gathers statistics about real reads and writes done by the filesystem layer
+[root@postgres-1 ~]# yum install pg_stat_kcache13
+
+# postgresql.conf
+shared_preload_libraries = 'pg_stat_statements,pg_stat_kcache'
+pg_stat_kcache.track = top
+
+restart postgresql
+
+postgres=# create extension pg_stat_kcache;
+CREATE EXTENSION
+postgres=# select * from pg_stat_kcache();
+-[ RECORD 1 ]----+-----------------------
+queryid          | 6305979699841620080
+top              | t
+userid           | 16426
+dbid             | 14172
+plan_reads       | 0
+plan_writes      | 0
+plan_user_time   | 0
+plan_system_time | 0
+plan_minflts     | 0
+plan_majflts     | 0
+plan_nswaps      | 0
+plan_msgsnds     | 0
+plan_msgrcvs     | 0
+plan_nsignals    | 0
+plan_nvcsws      | 0
+plan_nivcsws     | 0
+exec_reads       | 0
+exec_writes      | 0
+exec_user_time   | 0.0009139999999999994
+exec_system_time | 0.0005109999999999993
+exec_minflts     | 348
+exec_majflts     | 0
+exec_nswaps      | 0
+exec_msgsnds     | 0
+exec_msgrcvs     | 0
+exec_nsignals    | 0
+exec_nvcsws      | 0
+exec_nivcsws     | 0
+
+
+# pg_cron配置
+It’s important to take into account that pg_cron does not run any jobs as long as the server is in hot standby mode,
+but it automatically starts when the server is promoted.
+[root@postgres-1 ~]# yum install pg_cron_13
+
+修改postgresql.conf，配置以下参数
+shared_preload_libraries = 'pg_stat_statements,pg_cron'
+cron.database_name = 'postgres'
+重启pg:   systemctl restart postgresql-13
+
+postgres=# create extension pg_cron;
+CREATE EXTENSION
+
+postgres=# select cron.schedule('30 * * * *',$$SELECT profile.snapshot()$$);
+ schedule
+----------
+        1
+(1 row)
+
+postgres=# select * from cron.job;
+ jobid |  schedule  |          command          | nodename  | nodeport | database | username | active | jobname
+-------+------------+---------------------------+-----------+----------+----------+----------+--------+---------
+     1 | 30 * * * * | SELECT profile.snapshot() | localhost |     5432 | postgres | postgres | t      |
+(1 row)
+
+postgres=# update cron.job set nodename='';    改为connection走unix domain socks，否则pg_hba.conf就得允许 host postgres postgres 127.0.0.1/32 trust
+UPDATE 1
+postgres=# select * from cron.job;
+ jobid |  schedule  |          command          | nodename | nodeport | database | username | active | jobname
+-------+------------+---------------------------+----------+----------+----------+----------+--------+---------
+     1 | 30 * * * * | SELECT profile.snapshot() |          |     5432 | postgres | postgres | t      |
+(1 row)

@@ -305,6 +305,23 @@ id  oldname   newname  date
 --  --------  -------  -------------------
 1   Franklin  Frank    2021-08-18 02:11:16
 
+#  shell pass variable to sqlite3
+带自增的表
+sqlite> .schema user1
+CREATE TABLE user1(id integer primary key autoincrement,name text);
+用CAT EOF传参数
+[root@vstjsftp ~]# cat 1.sh
+#!/bin/bash
+a=$1
+sqlite3 user.db <<EOF
+insert into user1(name) values("${a}");
+EOF
+取最后一条记录
+[root@vstjsftp ~]# sqlite3 user.db -separator ':' "select name,id from user1 order by id desc limit 1"
+pear:45
+[root@vstjsftp ~]# sqlite3 user.db -separator ':' "select id,'/data1/'||name from user1 order by id desc limit 1"
+45:/data1/pear
+
 
 ####  sqlite-utils ####
 1 使用in-memory db

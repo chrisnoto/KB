@@ -563,7 +563,9 @@ SELECT TOP 1000 [EVENT_ID]
       ,[PARTITION_INDEX]
   FROM [vCenter_Server].[dbo].[VPXV_EVENT_ALL] where [EVENT_TYPE] LIKE '%VmConvertedToTemplate%' 
   
-  
+4 查询vm和host对应关系
+select v.[VMID],v.[NAME],v.[IP_ADDRESS],h.[NAME] from [vCenter_Server].[dbo].[VPXV_VMS] as v,[vCenter_Server].[dbo].[VPXV_HOSTS] as h
+where v.[HOSTID]=h.[HOSTID] and h.[DATACENTER_ID] in (17,516) order by h.[NAME]  
 --------------------------------------- troubeleshooting ---------------------------------------------------
 # Physical disk health retrieval issues: red  
 [root@A21VSAN5:~] /etc/init.d/vsanmgmtd restart

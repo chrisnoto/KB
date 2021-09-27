@@ -7,6 +7,14 @@ Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
 一個 Database 可以有多個 Schema, 又叫做  namespace of relations (關聯式物件), 還有相關存取規則(ACL).	
 
 ## schema
+postgres=# create schema authorization chensen;    为用户创建schema
+CREATE SCHEMA
+postgres=# \dn
+  List of schemas
+  Name   |  Owner
+---------+----------
+ chensen | chensen
+
 # information_schema
 postgres=# select * from information_schema.information_schema_catalog_name;
  catalog_name
@@ -16,7 +24,7 @@ postgres=# select * from information_schema.information_schema_catalog_name;
 
 
 两个隐藏schema   pg_catalog和information_schema
-postgres=# \dn      隐藏的看不到
+postgres=# \dn      隐藏的看不到       *** 可以加S来查看全部schema， \dnS ***
   List of schemas
   Name  |  Owner
 --------+----------
@@ -772,6 +780,7 @@ Database system identifier:           6998038587784135836
 Latest checkpoint's TimeLineID:       1
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:709
+
 ######### 数据类型 ###########
 # 日期时间类型
 postgres=# show datestyle;
@@ -1059,7 +1068,9 @@ from your terminal.
 createuser --pwprompt zabbix
 createdb -O zabbix -E Unicode -T template0 zabbix
 
-# 创建用户和赋权
+\c dbname username  切换数据库或用户
+
+# 创建用户和赋予用户对象权限
 zabbix=# create user chensen with password 'chensen';
 
 zabbix=# grant select on users to chensen;
@@ -1080,6 +1091,211 @@ zabbix=# \dp+ users;
  public | users | table | zabbix=arwdDxt/zabbix+|                   |
         |       |       | chensen=arwdD/zabbix  |                   |
 (1 row)
+
+postgres=# grant select on it1 to chensen with grant option;
+GRANT
+postgres=# \dp+ it1
+                                Access privileges
+ Schema | Name | Type  |     Access privileges     | Column privileges | Policies
+--------+------+-------+---------------------------+-------------------+----------
+ public | it1  | table | postgres=arwdDxt/postgres+|                   |
+        |      |       | chensen=r*/postgres       |                   |
+上面的r*代表 with grant option
+
+# grant命令
+GRANT on Roles (with admin option)     用於將角色加入成為其他角色的成員。如果指定了 WITH ADMIN OPTION，則該成員就可以將角色的成員資格再授予其他人
+GRANT on Objects (with grant option)   对象权限
+
+# 创建role时赋予权限
+postgres=# create role cl LOGIN CREATEDB CREATEROLE PASSWORD 'cloverclock123' valid until '2021-09-28';
+CREATE ROLE
+postgres=# \du
+                                      List of roles
+  Role name  |                         Attributes                         |  Member of
+-------------+------------------------------------------------------------+--------------
+ chensen     |                                                            | {}
+ cl          | Create role, Create DB                                    +| {}
+             | Password valid until 2021-09-28 00:00:00+00                |
+ postgres    | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+
+# group role以及 grant grouprole to role
+postgres=# create role dba CREATEDB CREATEROLE;
+CREATE ROLE
+postgres=# create role clm LOGIN PASSWORD 'clm123123';
+CREATE ROLE
+postgres=# \du
+                                      List of roles
+  Role name  |                         Attributes                         |  Member of
+-------------+------------------------------------------------------------+--------------
+ chensen     |                                                            | {}
+ cl          | Create role, Create DB                                    +| {}
+             | Password valid until 2021-09-28 00:00:00+00                |
+ clm         |                                                            | {}
+ dba         | Create role, Create DB, Cannot login                       | {}
+ postgres    | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ repl        | Replication                                               +| {}
+             | 30 connections                                             |
+ sam         |                                                            | {}
+ zbx_monitor |                                                            | {pg_monitor}
+
+postgres=# grant dba to clm;
+GRANT ROLE
+postgres=# \du
+                                      List of roles
+  Role name  |                         Attributes                         |  Member of
+-------------+------------------------------------------------------------+--------------
+ chensen     |                                                            | {}
+ cl          | Create role, Create DB                                    +| {}
+             | Password valid until 2021-09-28 00:00:00+00                |
+ clm         |                                                            | {dba}
+ dba         | Create role, Create DB, Cannot login                       | {}
+ postgres    | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ repl        | Replication                                               +| {}
+             | 30 connections                                             |
+ sam         |                                                            | {}
+ zbx_monitor |                                                            | {pg_monitor}
+
+postgres=# create role clm2 LOGIN PASSWORD 'clm123123';
+CREATE ROLE
+postgres=# grant dba to clm2 with admin option;
+GRANT ROLE
+postgres=# \du
+                                      List of roles
+  Role name  |                         Attributes                         |  Member of
+-------------+------------------------------------------------------------+--------------
+ chensen     |                                                            | {}
+ cl          | Create role, Create DB                                    +| {}
+             | Password valid until 2021-09-28 00:00:00+00                |
+ clm         |                                                            | {dba}
+ clm2        |                                                            | {dba}
+ dba         | Create role, Create DB, Cannot login                       | {}
+ postgres    | Superuser, Create role, Create DB, Replication, Bypass RLS | {}
+ repl        | Replication                                               +| {}
+             | 30 connections                                             |
+ sam         |                                                            | {}
+ zbx_monitor |                                                            | {pg_monitor}
+ 
+postgres=# select * from pg_authid where rolname='sam';
+  oid  | rolname | rolsuper | rolinherit | rolcreaterole | rolcreatedb | rolcanlogin | rolreplication | rolbypassrls | rolconnlimit |                                                              rolpassword                                                              | r
+olvaliduntil
+-------+---------+----------+------------+---------------+-------------+-------------+----------------+--------------+--------------+---------------------------------------------------------------------------------------------------------------------------------------+--
+-------------
+ 18728 | sam     | f        | t          | f             | f           | t           | f              | f            |           -1 | SCRAM-SHA-256$4096:DNulkDpKBLqkY90Z4z4P3Q==$f+jAGXc1BC7K39LJ3XXmLQ7RpFUGotQaC1uJiBIonHk=:cCx2zsHzUGUooAtoyB4U79afIWnX4qpeXZglPC6WoGk= |
+(1 row)
+
+# 更改用户权限
+赋予权限:alter user xxx with (CREATEDB, CREATEROLE, CREATEUSER, and even SUPERUSER)
+revoke权限:  alter user xxx with nocreatedb  权限前面加no
+
+postgres=# \du chensen
+           List of roles
+ Role name | Attributes | Member of
+-----------+------------+-----------
+ chensen   |            | {}
+
+postgres=# alter user chensen with superuser;
+ALTER ROLE
+postgres=# \du chensen
+           List of roles
+ Role name | Attributes | Member of
+-----------+------------+-----------
+ chensen   | Superuser  | {}
+postgres=# alter user chensen with nosuperuser;
+ALTER ROLE
+postgres=# \du chensen
+           List of roles
+ Role name | Attributes | Member of
+-----------+------------+-----------
+ chensen   |            | {}
+
+
+pg_hba.conf
+Trust Authentication
+Allow the connection unconditionally. This method allows anyone that can connect to the PostgreSQL database server to login as any PostgreSQL user they wish, 
+without the need for a password or any other authentication.
+Ident authentication can only be used on TCP/IP connections. 
+When specified for local connections, peer authentication will be used instead.
+md5 Authentication
+Require the client to supply a double-MD5-hashed password for authentication.
+
+最好设置为允许所有用户通过网络走密码验证，这样就不需要reload postgresql
+host    all             all             0.0.0.0/0               md5
+
+
+新增用户sam, 用md5验证
+-bash-4.2$ grep sam $PGDATA/pg_hba.conf |grep -v '#'
+host    all             sam             0.0.0.0/0               md5
+host    all             sam             127.0.0.1/32               md5
+-------写.pgpass文件
+-bash-4.2$ cat .pgpass
+127.0.0.1:5432:postgres:zbx_monitor:vSTJ456
+127.0.0.1:5432:postgres:sam:Foxconn123
+-bash-4.2$ psql -h 127.0.0.1 -U sam -d postgres -c "select * from dbs"
+   key   |              value
+---------+---------------------------------
+ mongo   | This is mongo cookbook
+ mysql   | I like mysql
+ oracle  | big database
+ access  | microsoft tiny database
+ mssql   | Microsoft SQL Server
+ redis   | popular opensource key value db
+ sqlite3 | a good tiny database
+(7 rows)
+-------不写.pgpass文件
+-bash-4.2$ PGPASSWORD=Foxconn123 psql -h 127.0.0.1 -U sam -d postgres -c "select * from dbs"
+   key   |              value
+---------+---------------------------------
+ mongo   | This is mongo cookbook
+ mysql   | I like mysql
+ oracle  | big database
+ access  | microsoft tiny database
+ mssql   | Microsoft SQL Server
+ redis   | popular opensource key value db
+ sqlite3 | a good tiny database
+(7 rows)
+
+-bash-4.2$ psql postgresql://sam:Foxconn123@127.0.0.1/postgres  -c "select * from dbs"
+   key   |              value
+---------+---------------------------------
+ mongo   | This is mongo cookbook
+ mysql   | I like mysql
+ oracle  | big database
+ access  | microsoft tiny database
+ mssql   | Microsoft SQL Server
+ redis   | popular opensource key value db
+ sqlite3 | a good tiny database
+(7 rows)
+
+
+# search_path
+默认设置为
+postgres=# show search_path;
+   search_path
+-----------------
+ "$user", public
+(1 row)
+此时看不到其他用户的schema的表
+如要看schema chensen的表
+postgres=# set search_path to chensen;
+SET
+postgres=# \d
+                       List of relations
+ Schema  |            Name            |     Type      |  Owner
+---------+----------------------------+---------------+---------
+ chensen | acknowledges               | foreign table | chensen
+ chensen | actions                    | foreign table | chensen
+ chensen | alerts                     | foreign table | chensen
+ chensen | auditlog                   | foreign table | chensen
+或者
+postgres=# select * from information_schema.tables where table_schema='chensen';
+
+### root账号下使用psql
+[root@postgres-1 ~]# sudo -u postgres psql -c 'select * from cron.job'
+could not change directory to "/root": Permission denied
+ jobid |  schedule  |          command          | nodename | nodeport | database | username | active | jobname
+-------+------------+---------------------------+----------+----------+----------+----------+--------+---------
+     1 | 40 * * * * | SELECT profile.snapshot() |          |     5432 | postgres | postgres | t      |
+
 
 ## copy命令进行导入导出
 # 导出
@@ -1109,17 +1325,6 @@ postgres=# select * from (select name from staff) as o1, lateral (select row_to_
  Aaron Cook          | {"name":"Aaron Cook","team":" COL","position":" Starting Pitcher","details":{"height":75,"weight":205,"age":28.06}}
  Aaron Fultz         | {"name":"Aaron Fultz","team":" CLE","position":" Relief Pitcher","details":{"height":72,"weight":205,"age":33.49}}
  Aaron Harang        | {"name":"Aaron Harang","team":" CIN","position":" Starting Pitcher","details":{"height":79,"weight":240,"age":28.81}}
- Aaron Heilman       | {"name":"Aaron Heilman","team":" NYM","position":" Relief Pitcher","details":{"height":77,"weight":220,"age":28.3}}
- Aaron Hill          | {"name":"Aaron Hill","team":" TOR","position":" Second Baseman","details":{"height":71,"weight":195,"age":24.94}}
- Aaron Miles         | {"name":"Aaron Miles","team":" STL","position":" Second Baseman","details":{"height":67,"weight":180,"age":30.21}}
- Aaron Rowand        | {"name":"Aaron Rowand","team":" PHI","position":" Outfielder","details":{"height":72,"weight":205,"age":29.5}}
- Abraham Nu?ez       | {"name":"Abraham Nu?ez","team":" PHI","position":" Third Baseman","details":{"height":71,"weight":190,"age":30.96}}
- Adam Donachie       | {"name":"Adam Donachie","team":" BAL","position":" Catcher","details":{"height":74,"weight":180,"age":22.99}}
- Adam Dunn           | {"name":"Adam Dunn","team":" CIN","position":" Outfielder","details":{"height":78,"weight":240,"age":27.31}}
- Adam Eaton          | {"name":"Adam Eaton","team":" PHI","position":" Starting Pitcher","details":{"height":74,"weight":196,"age":29.27}}
- Adam Everett        | {"name":"Adam Everett","team":" HOU","position":" Shortstop","details":{"height":72,"weight":170,"age":30.06}}
- Adam Jones          | {"name":"Adam Jones","team":" SEA","position":" Outfielder","details":{"height":74,"weight":200,"age":21.58}}
- Adam Kennedy        | {"name":"Adam Kennedy","team":" STL","position":" Second Baseman","details":{"height":73,"weight":185,"age":31.14}}
 
 # 窗口函数
 select groupid,hostid,hostgroupid,row_number() over(partition by groupid order by hostgroupid) as hostgroupid_asc from hosts_groups;
@@ -1140,6 +1345,101 @@ select groupid,hostid,hostgroupid,row_number() over(partition by groupid order b
        8 |  10050 |         187 |              12
        8 |  10183 |         209 |              13
 
+# generate_series 生成序列
+https://blog.csdn.net/horses/article/details/107337354
+基于时间
+postgres=# select * from generate_series('2021-09-01 00:00:00'::timestamp,'2021-10-01 00:00:00'::timestamp,interval '1 day');
+   generate_series
+---------------------
+ 2021-09-01 00:00:00
+ 2021-09-02 00:00:00
+ 2021-09-03 00:00:00
+ 2021-09-04 00:00:00
+ postgres=# select * from generate_series('2021-10-01 00:00:00'::timestamp,'2021-09-01 00:00:00'::timestamp,interval '-1 day');
+   generate_series
+---------------------
+ 2021-10-01 00:00:00
+ 2021-09-30 00:00:00
+ 2021-09-29 00:00:00
+ 2021-09-28 00:00:00
+ 2021-09-27 00:00:00
+
+基于数字， asc, desc
+postgres=# select * from generate_series(5,1,-1);
+ generate_series
+-----------------
+               5
+               4
+               3
+               2
+               1
+(5 rows)
+
+postgres=# select * from generate_series(1,5);
+ generate_series
+-----------------
+               1
+               2
+               3
+               4
+               5
+postgres=# select * from generate_series(1,10,2);
+ generate_series
+-----------------
+               1
+               3
+               5
+               7
+               9
+基于字符
+postgres=# select chr(v) from generate_series(65,90) v;
+ chr
+-----
+ A
+ B
+ C
+ D
+
+postgres=# select chr(v) from generate_series(90,65,-1) v;
+ chr
+-----
+ Z
+ Y
+ X
+ W
+
+# CTE生成序列
+postgres=# with recursive t(n) as (
+  values (1)
+  union all
+  select n+2 from t where n<50
+)
+select n from t;
+ n
+----
+  1
+  3
+  5
+  7
+  9
+ 11
+postgres=# with recursive t(n) as (
+  values (1)
+  union all
+  select n*2 from t where n<50
+)
+select n from t;
+ n
+----
+  1
+  2
+  4
+  8
+ 16
+ 32
+ 64
+
+	   
 # 绑定变量和执行计划
 create table t3(id serial,t text);
 \d t3
@@ -1152,6 +1452,13 @@ analyze t3;
 explain select count(*) from t3 where t='Linux';
 prepare mypan(text) as select count(*) from t3 where t=$1;
 explain execute mypan('Linux');
+
+#索引
+PostgreSQL的B-tree索引与Oracle的B-tree索引区别比较大，主要是以下4点：
+1.PostgreSQL中索引会存储NULL，而Oracle不会；  还可以指定null first, null last
+2.PostgreSQL中建立索引时，可以使用where来建立部分索引，而Oracle不能；
+3.PostgreSQL中可以对同一列建立两个相同的索引，而Oracle不能；
+4.PostgreSQL中可以使用concurrently关键字达到创建索引时不阻塞表的DML的功能，Oracle也有online参数实现类似的功能。
 
 #查看锁
 在一个session里
@@ -1197,74 +1504,90 @@ kill进程
 SELECT pg_cancel_backend(11929);
 SELECT pg_terminate_backend(11929); 
 
-# postgresql awr配置
-1 下载并解压pg_profile--0.3.4.tar.gz，解压后的文件放到/usr/pgsql-13/share/extension
-https://github.com/zubkov-andrei/pg_profile/releases/download/0.3.4/pg_profile--0.3.4.tar.gz
+查看当前事务锁等待、持锁信息的SQL
+create view v_locks_monitor as   
+with    
+t_wait as    
+(    
+  select a.mode,a.locktype,a.database,a.relation,a.page,a.tuple,a.classid,a.granted,   
+  a.objid,a.objsubid,a.pid,a.virtualtransaction,a.virtualxid,a.transactionid,a.fastpath,    
+  b.state,b.query,b.xact_start,b.query_start,b.usename,b.datname,b.client_addr,b.client_port,b.application_name   
+    from pg_locks a,pg_stat_activity b where a.pid=b.pid and not a.granted   
+),   
+t_run as   
+(   
+  select a.mode,a.locktype,a.database,a.relation,a.page,a.tuple,a.classid,a.granted,   
+  a.objid,a.objsubid,a.pid,a.virtualtransaction,a.virtualxid,a.transactionid,a.fastpath,   
+  b.state,b.query,b.xact_start,b.query_start,b.usename,b.datname,b.client_addr,b.client_port,b.application_name   
+    from pg_locks a,pg_stat_activity b where a.pid=b.pid and a.granted   
+),   
+t_overlap as   
+(   
+  select r.* from t_wait w join t_run r on   
+  (   
+    r.locktype is not distinct from w.locktype and   
+    r.database is not distinct from w.database and   
+    r.relation is not distinct from w.relation and   
+    r.page is not distinct from w.page and   
+    r.tuple is not distinct from w.tuple and   
+    r.virtualxid is not distinct from w.virtualxid and   
+    r.transactionid is not distinct from w.transactionid and   
+    r.classid is not distinct from w.classid and   
+    r.objid is not distinct from w.objid and   
+    r.objsubid is not distinct from w.objsubid and   
+    r.pid <> w.pid   
+  )    
+),    
+t_unionall as    
+(    
+  select r.* from t_overlap r    
+  union all    
+  select w.* from t_wait w    
+)    
+select locktype,datname,relation::regclass,page,tuple,virtualxid,transactionid::text,classid::regclass,objid,objsubid,   
+string_agg(   
+'Pid: '||case when pid is null then 'NULL' else pid::text end||chr(10)||   
+'Lock_Granted: '||case when granted is null then 'NULL' else granted::text end||' , Mode: '||case when mode is null then 'NULL' else mode::text end||' , FastPath: '||case when fastpath is null then 'NULL' else fastpath::text end||' , VirtualTransaction: '||case when virtualtransaction is null then 'NULL' else virtualtransaction::text end||' , Session_State: '||case when state is null then 'NULL' else state::text end||chr(10)||   
+'Username: '||case when usename is null then 'NULL' else usename::text end||' , Database: '||case when datname is null then 'NULL' else datname::text end||' , Client_Addr: '||case when client_addr is null then 'NULL' else client_addr::text end||' , Client_Port: '||case when client_port is null then 'NULL' else client_port::text end||' , Application_Name: '||case when application_name is null then 'NULL' else application_name::text end||chr(10)||    
+'Xact_Start: '||case when xact_start is null then 'NULL' else xact_start::text end||' , Query_Start: '||case when query_start is null then 'NULL' else query_start::text end||' , Xact_Elapse: '||case when (now()-xact_start) is null then 'NULL' else (now()-xact_start)::text end||' , Query_Elapse: '||case when (now()-query_start) is null then 'NULL' else (now()-query_start)::text end||chr(10)||    
+'SQL (Current SQL in Transaction): '||chr(10)||  
+case when query is null then 'NULL' else query::text end,    
+chr(10)||'--------'||chr(10)    
+order by    
+  (  case mode    
+    when 'INVALID' then 0   
+    when 'AccessShareLock' then 1   
+    when 'RowShareLock' then 2   
+    when 'RowExclusiveLock' then 3   
+    when 'ShareUpdateExclusiveLock' then 4   
+    when 'ShareLock' then 5   
+    when 'ShareRowExclusiveLock' then 6   
+    when 'ExclusiveLock' then 7   
+    when 'AccessExclusiveLock' then 8   
+    else 0   
+  end  ) desc,   
+  (case when granted then 0 else 1 end)  
+) as lock_conflict  
+from t_unionall   
+group by   
+locktype,datname,relation,page,tuple,virtualxid,transactionid::text,classid,objid,objsubid ;  
 
-2 修改postgresql.conf，配置以下参数
--bash-4.2$ cat postgresql.conf |egrep -i '^pg_stat_statements|^track|^shared_preload_libraries'
-shared_preload_libraries = 'pg_stat_statements'
-track_activities = on
-track_counts = on
-track_io_timing = on
-track_functions = 'all'                 # none, pl, all
-pg_stat_statements.max = 10000
-pg_stat_statements.track = all
-systemctl restart postgresql-13
+###  table access method
+https://www.postgresql.fastware.com/blog/postgresql-table-access-methods
+Is it the same as foreign data wrappers? What is the difference?
+Foreign data wrappers are intended to access foreign data, while table access methods are used to access local data.
 
-3 创建extension
-create extension pg_stat_statements;
-create extension dblink;
-create schema profile;
-create extension pg_profile schema profile;
+For example, suppose you have a requirement to use columnar data in your application. With foreign data wrappers, you would need to use to access a remote server containing the
+ columnar data (in this case using cstore_fdw), which would reduce processing performance.
 
-4 创建awr snapshot
-postgres=# select profile.snapshot();
-        snapshot
-------------------------
- (local,OK,00:00:00.37)
-(1 row)
+But with table access methods, it is possible to store columnar tables locally, which speeds up processing. Note though, that PostgreSQL 13 does not support table access methods for columnar tables.
 
-几分钟后，再次创建snapshot
-postgres=# select profile.snapshot();
-        snapshot
-------------------------
- (local,OK,00:00:00.37)
-(1 row)
+In short, foreign data wrappers and table access methods target different needs. The former allows users to access data in a remote server that was never intended to be stored locally, 
+while the latter allows users to store data locally using different supported methods.
 
-postgres=# select profile.show_samples();
-           show_samples
------------------------------------
- (1,"2021-09-15 08:23:56+00",t,,,)
- (2,"2021-09-15 08:32:06+00",t,,,)
-(2 rows)
+Possible implementations of table access methods in PostgreSQL 14 and later include, among others, the following:
 
-5 生成awr html
--bash-4.2$ psql -qtc "select profile.get_report(1,2)" --output awr_report_postgres_1_2.html
-
-用cronjob 创建计划任务
-
-*/30 * * * *  psql -c 'SELECT profile.snapshot()' > /tmp/pg_awr.log  2>&1
-
-# pg_cron配置
-[root@postgres-1 ~]# yum install pg_cron_13
-
-修改postgresql.conf，配置以下参数
-shared_preload_libraries = 'pg_stat_statements,pg_cron'
-cron.database_name = 'postgres'
-重启pg:   systemctl restart postgresql-13
-
-postgres=# create extension pg_cron;
-CREATE EXTENSION
-
-postgres=# select cron.schedule('30 * * * *',$$SELECT profile.snapshot()$$);
- schedule
-----------
-        1
-(1 row)
-
-postgres=# select * from cron.job;
- jobid |  schedule  |          command          | nodename  | nodeport | database | username | active | jobname
--------+------------+---------------------------+-----------+----------+----------+----------+--------+---------
-     1 | 30 * * * * | SELECT profile.snapshot() | localhost |     5432 | postgres | postgres | t      |
-(1 row)
+An alternative to heap, such as zheap
+Columnar tables, such as Zedstore
+In-memory tables
+Indexed tables

@@ -1,5 +1,15 @@
 FDW类似oracle的外部表
 
+查询可使用的extension
+postgres=# select * from pg_available_extensions;
+        name        | default_version | installed_version |                                comment
+--------------------+-----------------+-------------------+------------------------------------------------------------------------
+ earthdistance      | 1.1             |                   | calculate great-circle distances on the surface of the Earth
+ plpgsql            | 1.0             | 1.0               | PL/pgSQL procedural language
+ file_fdw           | 1.0             | 1.0               | foreign-data wrapper for flat file access
+ sqlite_fdw         | 1.0             | 1.0               | SQLite Foreign Data Wrapper
+
+ 
 FDW的安装
 # Install the repository RPM:
 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
@@ -11,6 +21,68 @@ mysql_fdw_13-2.6.0-1.rhel7.x86_64
 redis_fdw_13-1.1-1.rhel7.x86_64
 sqlite_fdw_13-2.0.0-1.rhel7.x86_64
 mongo_fdw13-5.2.7-1.rhel7.x86_64
+	   
+##### postgres_fdw
+前提是外部postgresql的pg_hba.conf文件里添加
+host all all all md5
+
+postgres=# create server postgres_fdw_server foreign data wrapper postgres_fdw
+postgres-# options(host '10.67.36.61',dbname 'zabbix',port '5432');
+CREATE SERVER
+postgres=# create user mapping for chensen
+postgres-# server postgres_fdw_server
+postgres-# options ( user 'postgres',password 'Foxconn123');
+CREATE USER MAPPING
+postgres=# create schema authorization chensen;        没有chensen这个schema的话创建一个
+CREATE SCHEMA
+postgres=# \dn
+  List of schemas
+  Name   |  Owner
+---------+----------
+ chensen | chensen
+ cron    | postgres
+ profile | postgres
+ public  | postgres
+(4 rows)
+
+postgres=# grant usage on foreign server postgres_fdw_server to chensen;
+GRANT
+
+postgres=# \deu+
+                            List of user mappings
+       Server        | User name |                FDW options
+---------------------+-----------+--------------------------------------------
+ postgres_fdw_server | chensen   | ("user" 'postgres', password 'Foxconn123')
+ redis_51164         | chensen   |
+
+用chensen用户操作
+[root@postgres-1 ~]# su - chensen
+Last login: Tue Aug 24 05:06:32 UTC 2021 on pts/1
+[chensen@postgres-1 ~]$ psql
+psql: error: FATAL:  database "chensen" does not exist
+[chensen@postgres-1 ~]$ psql -d postgres
+psql (13.4)
+postgres=> import foreign schema public from server postgres_fdw_server into chensen;      一次导入外部schema public所有的表
+IMPORT FOREIGN SCHEMA
+postgres=> \d
+                        List of relations
+ Schema  |            Name            |     Type      |  Owner
+---------+----------------------------+---------------+----------
+ chensen | acknowledges               | foreign table | chensen
+ chensen | actions                    | foreign table | chensen
+ chensen | alerts                     | foreign table | chensen
+ chensen | auditlog                   | foreign table | chensen
+ chensen | auditlog_details           | foreign table | chensen
+ chensen | autoreg_host               | foreign table | chensen
+ chensen | conditions                 | foreign table | chensen
+ chensen | config                     | foreign table | chensen
+
+
+
+
+
+
+
 	   
 #####   mysql_fdw
 postgres@u1804:~$ psql
@@ -274,6 +346,87 @@ conn_mongo=> select * from test2mongo;
  { "_id" : { "$oid" : "5850b7888dad99b6c35390d7" }, "i" : 1, "datafrom" : "test" }
  { "_id" : { "$oid" : "5850b7888dad99b6c35390d8" }, "i" : 2, "datafrom" : "test" }
 (3 rows) 
+
+# oracle_fdw
+安装比较麻烦，使用现成的docker image
+[root@worker3 ~]# cat oracle_fdw.sh
+docker run -d \
+--name oracle_fdw \
+-e POSTGRES_PASSWORD=chensen \
+-p 5432:5432 \
+toleg/postgres_oracle_fdw:latest
+
+postgres=# create schema oracle_fdw;
+CREATE SCHEMA
+postgres=# create extension oracle_fdw schema oracle_fdw;
+CREATE EXTENSION
+postgres=# create server oracle foreign data wrapper oracle_fdw options (dbserver '//10.67.51.95:1521/POC1');
+CREATE SERVER
+postgres=# create user mapping for postgres server oracle options(user 'SYSTEM',password 'sys123sys');
+CREATE USER MAPPING
+postgres=# create foreign table t1(id int options(key 'true')) server oracle options (schema 'SYSTEM',table 'T1');
+CREATE FOREIGN TABLE
+postgres=# \des+ oracle
+                                                      List of foreign servers
+  Name  |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |             FDW options              | Description
+--------+----------+----------------------+-------------------+------+---------+--------------------------------------+-------------
+ oracle | postgres | oracle_fdw           |                   |      |         | (dbserver '//10.67.51.95:1521/POC1') |
+(1 row)
+postgres=# \deu+
+                    List of user mappings
+ Server | User name |               FDW options
+--------+-----------+-----------------------------------------
+ oracle | postgres  | ("user" 'SYSTEM', password 'sys123sys')
+(1 row)
+postgres=# \d t1
+                    Foreign table "public.t1"
+ Column |  Type   | Collation | Nullable | Default | FDW options
+--------+---------+-----------+----------+---------+--------------
+ id     | integer |           |          |         | (key 'true')
+Server: oracle
+FDW options: (schema 'SYSTEM', "table" 'T1')
+postgres=# explain analyze verbose select * from t1;
+                                                     QUERY PLAN
+--------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on public.t1  (cost=10000.00..20000.00 rows=1000 width=4) (actual time=1.911..2.173 rows=100 loops=1)
+   Output: id
+   Oracle query: SELECT /*e0ceb50f52cc4e6555874e4404a47839*/ r1."ID" FROM "SYSTEM"."T1" r1
+   Oracle plan: SELECT STATEMENT
+   Oracle plan:   INDEX FULL SCAN T1_PK
+ Planning Time: 2.917 ms
+ Execution Time: 2.265 ms
+(7 rows)
+
+postgres=# explain analyze verbose select * from t1 where id >90;
+                                                     QUERY PLAN
+---------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on public.t1  (cost=10000.00..20000.00 rows=1000 width=4) (actual time=19.509..19.559 rows=10 loops=1)
+   Output: id
+   Oracle query: SELECT /*e1af522ce83c804ae715faf3783f1f81*/ r1."ID" FROM "SYSTEM"."T1" r1 WHERE (r1."ID" > 90)
+   Oracle plan: SELECT STATEMENT
+   Oracle plan:   INDEX RANGE SCAN T1_PK (condition "R1"."ID">90)
+ Planning Time: 4.652 ms
+ Execution Time: 19.614 ms
+(7 rows)
+
+postgres=# explain analyze verbose select * from t1 where id =90;
+                                                    QUERY PLAN
+------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on public.t1  (cost=10000.00..20000.00 rows=1000 width=4) (actual time=5.523..5.547 rows=1 loops=1)
+   Output: id
+   Oracle query: SELECT /*564a38773e6889fbcef5b0695ecd36bf*/ r1."ID" FROM "SYSTEM"."T1" r1 WHERE (r1."ID" = 90)
+   Oracle plan: SELECT STATEMENT
+   Oracle plan:   INDEX UNIQUE SCAN T1_PK (condition "R1"."ID"=90)
+ Planning Time: 2.162 ms
+ Execution Time: 5.603 ms
+(7 rows)
+配合物化视图
+create materialized view m_t1 as select * from t1;
+select * from m_t1;
+insert into t1 values(102);
+select * from m_t1;
+refresh materialized view m_t1;
+select * from m_t1;
 
 
 # centos8 上安装pgsql 12
