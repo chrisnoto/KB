@@ -1,0 +1,40 @@
+lxc配置代理
+lxc config set core.proxy_http http://h7108579:pqhkr99ctw@10.36.6.66:3128
+lxc config set core.proxy_https http://h7108579:pqhkr99ctw@10.36.6.66:3128
+
+
+配置remote lxd server
+lxc is a client, and can manage any LXD server (a remote) that you have configured.
+To see the list of currently available servers, run the following
+
+lxc remote list
+The one called local (default), is your local LXD server. The others, such as ubuntu: and images: are repositories of container and VM images. Those two only serve images and are read-only.
+
+What you can do, is
+
+configure your remote LXD server to be accessible remotely over the network
+configure your local lxc client to be able to also manage that remote LXD server of yours.
+On the remote LXD server, run the following. Please change mypassword to something really long and unpredictable.
+
+# lxc config set core.https_address [::]:8443
+# lxc config set core.trust_password Foxconn123
+On the local system, run the following. You will be prompted to type the password that you configured on the LXD server earlier. myserver is just a mnemonic for your remote LXD server.
+
+# lxc remote add myserver lxd-1804
+Having done that, you can now do the following. That is, the same LXD commands, but you prepend myserver: to specify the remote LXD server.
+
+root@lxd-1804:~# lxc remote list
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+|      NAME       |                   URL                    |   PROTOCOL    | AUTH TYPE | PUBLIC | STATIC |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+| images          | https://images.linuxcontainers.org       | simplestreams |           | YES    | NO     |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+| local (default) | unix://                                  | lxd           | tls       | NO     | YES    |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+| myserver        | https://lxd-1804:8443                    | lxd           | tls       | NO     | NO     |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+| ubuntu          | https://cloud-images.ubuntu.com/releases | simplestreams |           | YES    | YES    |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+| ubuntu-daily    | https://cloud-images.ubuntu.com/daily    | simplestreams |           | YES    | YES    |
++-----------------+------------------------------------------+---------------+-----------+--------+--------+
+root@lxd-1804:~# lxc file push ca-certificates.crt myserver:pg01/root/      传host上的文件到pg01 container中

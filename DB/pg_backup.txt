@@ -230,3 +230,149 @@ failed_count       | 0
 last_failed_wal    |
 last_failed_time   |
 stats_reset        | 2021-07-13 08:26:45.98489+00
+
+
+#### pgbackrest
+安装
+yum install postgresql13-server postgresql13-contrib pgbackrest
+
+配置
+[root@pg01 ~]# cat /etc/pgbackrest.conf
+[global]
+repo1-path=/var/lib/pgbackrest
+repo1-retention-full=2
+log-level-console=info
+log-level-file=debug
+
+repo2-path=/repo
+repo2-type=s3
+repo2-s3-endpoint=repo-centos.local
+repo2-s3-bucket=pgbackrest
+repo2-s3-key=admin
+repo2-s3-key-secret=vSTJ456789
+repo2-s3-region=default
+repo2-retention-full=1
+repo2-s3-uri-style=path
+repo2-storage-verify-tls=n
+repo2-storage-port=9000
+
+process-max=2
+start-fast=y
+delta=y
+
+[main]
+pg1-path=/var/lib/pgsql/13/data
+
+
+-bash-4.2$ cat postgresql.conf |egrep -i '^listen|^password_en|^archive_'
+listen_addresses = '*'
+password_encryption = scram-sha-256             # md5 or scram-sha-256
+archive_mode = on
+archive_command = 'pgbackrest --stanza=main archive-push %p'
+
+ 
+# 全备
+pgbackrest --stanza=main --type=full backup
+恢复的话，要把$PGDATA里的数据都删掉
+pgbackrest --stanza=main --delta restore
+
+使用minio全备和恢复
+pgbackrest --stanza=main --repo=2 --type=full backup
+
+-bash-4.2$ pgbackrest --stanza=main --repo=2 --delta restore
+2021-09-28 09:17:48.153 P00   INFO: restore command begin 2.35: --delta --exec-id=5197-e962d863 --log-level-console=info --log-level-file=debug --pg1-path=/var/lib/pgsql/13/data --process-max=2 --repo=2 --repo1-path=/var/lib/pgbackrest --repo2-path=/repo --repo2-s3-bucket=pgbackrest --repo2-s3-endpoint=repo-centos.local --repo2-s3-key=<redacted> --repo2-s3-key-secret=<redacted> --repo2-s3-region=default --repo2-s3-uri-style=path --repo2-storage-port=9000 --no-repo2-storage-verify-tls --repo2-type=s3 --stanza=main
+WARN: --delta or --force specified but unable to find 'PG_VERSION' or 'backup.manifest' in '/var/lib/pgsql/13/data' to confirm that this is a valid $PGDATA directory.  --delta and --force have been disabled and if any files exist in the destination directories the restore will be aborted.
+2021-09-28 09:17:48.252 P00   INFO: repo2: restore backup set 20210928-084538F
+2021-09-28 09:17:51.516 P00   INFO: write updated /var/lib/pgsql/13/data/postgresql.auto.conf
+2021-09-28 09:17:51.528 P00   INFO: restore global/pg_control (performed last to ensure aborted restores cannot be started)
+2021-09-28 09:17:51.530 P00   INFO: restore size = 24MB, file total = 940
+2021-09-28 09:17:51.534 P00   INFO: restore command end: completed successfully (3385ms)
+
+
+****minio with ssl ****
+[root@repo-centos ~]# cd .minio/certs
+[root@repo-centos certs]# certgen -ca -host "repo-centos.local,10.67.51.164,172.17.0.2"
+2021/09/28 16:27:59 wrote public.crt
+2021/09/28 16:27:59 wrote private.key
+[root@repo-centos web]# cat minio.sh
+docker run -d \
+--name myminio \
+-e MINIO_ACCESS_KEY=admin \
+-e MINIO_SECRET_KEY=vSTJ456789 \
+-v /mrepo/minio:/data \
+-v /root/.minio:/root/.minio \
+-p 443:443 \
+-p 9000:9000 \
+minio/minio server /data --console-address ":443"
+
+
+
+# PITR
+-bash-4.2$ pgbackrest --stanza=main --type=diff backup
+2021-09-27 09:33:04.180 P00   INFO: backup command begin 2.35: --exec-id=1000-4e0ae149 --log-level-console=info --log-level-file=debug --pg1-path=/var/lib/pgsql/13/data --repo1-path=/var/lib/pgbackrest --repo1-retention-full=2 --stanza=main --type=diff
+2021-09-27 09:33:04.977 P00   INFO: last backup label = 20210927-090555F, version = 2.35
+2021-09-27 09:33:04.977 P00   INFO: execute non-exclusive pg_start_backup(): backup begins after the next regular checkpoint completes
+2021-09-27 09:33:10.688 P00   INFO: backup start archive = 000000020000000000000009, lsn = 0/9000028
+WARN: a timeline switch has occurred since the 20210927-090555F backup, enabling delta checksum
+      HINT: this is normal after restoring from backup or promoting a standby.
+2021-09-27 09:33:12.243 P00   INFO: execute non-exclusive pg_stop_backup() and wait for all WAL segments to archive
+2021-09-27 09:33:12.548 P00   INFO: backup stop archive = 000000020000000000000009, lsn = 0/9000100
+2021-09-27 09:33:12.554 P00   INFO: check archive for segment(s) 000000020000000000000009:000000020000000000000009
+2021-09-27 09:33:13.036 P00   INFO: new backup label = 20210927-090555F_20210927-093304D
+2021-09-27 09:33:13.131 P00   INFO: diff backup size = 24MB, file total = 939
+2021-09-27 09:33:13.131 P00   INFO: backup command end: completed successfully (8954ms)
+2021-09-27 09:33:13.132 P00   INFO: expire command begin 2.35: --exec-id=1000-4e0ae149 --log-level-console=info --log-level-file=debug --repo1-path=/var/lib/pgbackrest --repo1-retention-full=2 --stanza=main
+2021-09-27 09:33:13.139 P00   INFO: expire command end: completed successfully (8ms)
+-bash-4.2$ psql -c "select * from t1"
+ id
+-----
+   1
+   2
+   3
+  ...
+  100
+-bash-4.2$ psql -c "select current_timestamp"
+       current_timestamp
+-------------------------------
+ 2021-09-27 09:33:46.013798+00
+(1 row)
+
+-bash-4.2$ psql -c "delete from t1 where id>90"
+DELETE 10
+-bash-4.2$ psql -c "select * from t1"
+ id
+----
+  1
+  2
+  3
+  ...
+  90  
+[root@pg01 etc]# systemctl stop postgresql-13
+[root@pg01 etc]# su - postgres
+Last login: Mon Sep 27 09:09:09 UTC 2021
+-bash-4.2$ pgbackrest --stanza=main --delta --type=time "--target=2021-09-27 09:33:46.013798+00" --target-action=promote restore
+2021-09-27 09:35:52.160 P00   INFO: restore command begin 2.35: --delta --exec-id=1056-a9541000 --log-level-console=info --log-level-file=debug --pg1-path=/var/lib/pgsql/13/data --repo1-path=/var/lib/pgbackrest --stanza=main --target="2021-09-27 09:33:46.013798+00" --target-action=promote --type=time
+2021-09-27 09:35:52.248 P00   INFO: repo1: restore backup set 20210927-090555F_20210927-093304D
+2021-09-27 09:35:52.252 P00   INFO: remove invalid files/links/paths from '/var/lib/pgsql/13/data'
+2021-09-27 09:35:53.649 P00   INFO: write updated /var/lib/pgsql/13/data/postgresql.auto.conf
+2021-09-27 09:35:53.661 P00   INFO: restore global/pg_control (performed last to ensure aborted restores cannot be started)
+2021-09-27 09:35:53.664 P00   INFO: restore size = 24MB, file total = 939
+2021-09-27 09:35:53.666 P00   INFO: restore command end: completed successfully (1509ms)
+[root@pg01 etc]# systemctl start postgresql-13
+[root@pg01 etc]# su - postgres
+Last login: Mon Sep 27 09:35:48 UTC 2021
+-bash-4.2$ psql -c "select * from t1 where id>89"
+ id
+-----
+  90
+  91
+  92
+  93
+  94
+  95
+  96
+  97
+  98
+  99
+ 100
+  

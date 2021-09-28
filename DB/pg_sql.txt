@@ -1613,3 +1613,13 @@ An alternative to heap, such as zheap
 Columnar tables, such as Zedstore
 In-memory tables
 Indexed tables
+
+### exists
+dvdrental=# select f.film_id,f.title,f.release_year,f.rating from film f where exists (select * from film_category c where c.film_id=f.film_id and category_id=2) order by rating;
+ film_id |         title          | release_year | rating
+---------+------------------------+--------------+--------
+     569 | Menagerie Rushmore     |         2006 | G
+     901 | Tracy Cider            |         2006 | G
+     402 | Harper Dying           |         2006 | G
+     430 | Hook Chariots          |         2006 | G
+     510 | Lawless Vision         |         2006 | G
