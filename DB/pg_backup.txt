@@ -22,7 +22,7 @@ or use a utility that does everything for you, like Barman.
 
 
 
-postgresql-13主从 streaming复制
+postgresql-13主从 streaming复制 同步模式
 ===========================================================================================================================
 1 概念和原理
 一.物理流复制
@@ -92,7 +92,8 @@ host    replication     repl            postgres-2              trust
 
 3 修改postgresql.conf
 listen_addresses = '*'
-synchronous_standby_names = '*'
+synchronous_standby_names = '*'    同步模式的设置
+synchronous_commit = on    默认设置，可以用select * from pg_settings where name='synchronous_commit';验证
 # - Archiving -
 archive_mode = on              
 archive_command = 'test ! -f /opt/archivedir/%f && cp %p /opt/archivedir/%f'
@@ -113,6 +114,7 @@ primary_slot_name = 'postgres2_slot'
 
 ---------主库操作
 在主库创建replication slot
+***Slots can be created and dropped either via the streaming replication protocol (see Section 53.4) or via SQL functions (see Section 9.27.6).***
 select * from pg_create_physical_replication_slot('postgres2_slot');
 select slot_name,slot_type,active,wal_status from pg_replication_slots;
 
@@ -156,7 +158,7 @@ write_lag        |
 flush_lag        |
 replay_lag       |
 sync_priority    | 1
-sync_state       | sync
+sync_state       | sync    同步方式
 reply_time       | 2021-07-14 07:05:54.037038+00
 
 --------从库观察同步状态
@@ -231,6 +233,12 @@ last_failed_wal    |
 last_failed_time   |
 stats_reset        | 2021-07-13 08:26:45.98489+00
 
+####Rollback from Synchronous to Asynchronous PostgreSQL Replication
+Postgresql.conf注释下面两行
+#synchronous_standby_names = 'pgsql_0_node_0'
+#synchronous_commit = on
+And restart the database service.
+$ systemctl restart postgresql-13
 
 #### pgbackrest
 安装
@@ -277,7 +285,19 @@ pgbackrest --stanza=main --type=full backup
 pgbackrest --stanza=main --delta restore
 
 使用minio全备和恢复
-pgbackrest --stanza=main --repo=2 --type=full backup
+-bash-4.2$ pgbackrest --stanza=main --type=full --repo=2 backup
+2021-09-28 08:45:38.174 P00   INFO: backup command begin 2.35: --delta --exec-id=5087-b0ef3e33 --log-level-console=info --log-level-file=debug --pg1-path=/var/lib/pgsql/13/data --process-max=2 --repo=2 --repo1-path=/var/lib/pgbackrest --repo2-path=/repo --repo1-retention-full=2 --repo2-retention-full=1 --repo2-s3-bucket=pgbackrest --repo2-s3-endpoint=repo-centos.local --repo2-s3-key=<redacted> --repo2-s3-key-secret=<redacted> --repo2-s3-region=default --repo2-s3-uri-style=path --repo2-storage-port=9000 --no-repo2-storage-verify-tls --repo2-type=s3 --stanza=main --start-fast --type=full
+2021-09-28 08:45:38.924 P00   INFO: execute non-exclusive pg_start_backup(): backup begins after the requested immediate checkpoint completes
+2021-09-28 08:45:39.428 P00   INFO: backup start archive = 00000003000000000000000D, lsn = 0/D000028
+2021-09-28 08:45:45.140 P00   INFO: execute non-exclusive pg_stop_backup() and wait for all WAL segments to archive
+2021-09-28 08:45:45.444 P00   INFO: backup stop archive = 00000003000000000000000D, lsn = 0/D000138
+2021-09-28 08:45:45.452 P00   INFO: check archive for segment(s) 00000003000000000000000D:00000003000000000000000D
+2021-09-28 08:45:45.944 P00   INFO: new backup label = 20210928-084538F
+2021-09-28 08:45:46.020 P00   INFO: full backup size = 24MB, file total = 940
+2021-09-28 08:45:46.020 P00   INFO: backup command end: completed successfully (7851ms)
+2021-09-28 08:45:46.020 P00   INFO: expire command begin 2.35: --exec-id=5087-b0ef3e33 --log-level-console=info --log-level-file=debug --repo=2 --repo1-path=/var/lib/pgbackrest --repo2-path=/repo --repo1-retention-full=2 --repo2-retention-full=1 --repo2-s3-bucket=pgbackrest --repo2-s3-endpoint=repo-centos.local --repo2-s3-key=<redacted> --repo2-s3-key-secret=<redacted> --repo2-s3-region=default --repo2-s3-uri-style=path --repo2-storage-port=9000 --no-repo2-storage-verify-tls --repo2-type=s3 --stanza=main
+2021-09-28 08:45:46.061 P00   INFO: repo2: 13-1 remove archive, start = 00000003000000000000000C, stop = 00000003000000000000000C
+2021-09-28 08:45:46.065 P00   INFO: expire command end: completed successfully (45ms)
 
 -bash-4.2$ pgbackrest --stanza=main --repo=2 --delta restore
 2021-09-28 09:17:48.153 P00   INFO: restore command begin 2.35: --delta --exec-id=5197-e962d863 --log-level-console=info --log-level-file=debug --pg1-path=/var/lib/pgsql/13/data --process-max=2 --repo=2 --repo1-path=/var/lib/pgbackrest --repo2-path=/repo --repo2-s3-bucket=pgbackrest --repo2-s3-endpoint=repo-centos.local --repo2-s3-key=<redacted> --repo2-s3-key-secret=<redacted> --repo2-s3-region=default --repo2-s3-uri-style=path --repo2-storage-port=9000 --no-repo2-storage-verify-tls --repo2-type=s3 --stanza=main

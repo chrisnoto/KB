@@ -1,4 +1,16 @@
-0  connect to vCenter
+powercli运行的前提，更改执行策略
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine
+Get-ExecutionPolicy -List
+
+Scope ExecutionPolicy
+        ----- ---------------
+MachinePolicy       Undefined
+   UserPolicy       Undefined
+      Process       Undefined
+  CurrentUser    RemoteSigned
+ LocalMachine    RemoteSigned
+
+0  直连vCenter  connect to vCenter
 PowerCLI C:\> Connect-VIServer -server 10.134.103.125 -user administrator@vsphere.local -password 'Foxconn$123'
 
 Name                           Port  User
@@ -74,3 +86,49 @@ get-vmhost|select Name,ParentId,IsStandalone,Manufacturer,Model,MemoryTotalGB,Me
 ###export the list of vms
 get-vm|Select Name, @{N="IP Address";E={@($_.guest.IPAddress[0])}},vmhost,numcpu,memorygb,usedspacegb,provisionedspacegb,powerstate,version|Export-Csv 'D:\vmguest.csv'
 
+###  直连ESXI
+powercli直连esxi
+PowerCLI C:\> Connect-VIServer 10.67.51.19
+
+Name                           Port  User
+----                           ----  ----
+10.67.51.19                    443   root
+
+设置内存
+PowerCLI C:\> set-vm -VM vSTJA2A301 -MemoryGB 24
+
+Confirmation
+Proceed to configure the following parameters of the virtual machine with name 'vSTJA2A301'?
+New MemoryMB: 24576MB
+[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"): Y
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOff 4        24.000
+
+设置CPU核数
+PowerCLI C:\> set-vm -VM vSTJA2A301 -NumCpu 12
+
+Confirmation
+Proceed to configure the following parameters of the virtual machine with name 'vSTJA2A301'?
+New NumCpu: 12
+[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"): y
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOff 12       24.000
+
+开机
+PowerCLI C:\> Start-VM -VM vSTJA2A301
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOn  12       24.000
+
+打开控制台
+PowerCLI C:\> Open-VMConsoleWindow -vm vSTJA2A301 -server 10.67.51.18
+
+克隆VM，并套用被克隆VM的规格
+$myResourcePool = Get-ResourcePool -Name MyResourcePool1
+$mySpecification = Get-OSCustomizationSpec -Name WindowsSpec
+New-VM -VM MyVM1 -Name MyVM2 -OSCustomizationSpec $mySpecification -ResourcePool $myResourcePool

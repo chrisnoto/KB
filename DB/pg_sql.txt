@@ -588,6 +588,24 @@ postgres=# select txid_current();
 -[ RECORD 1 ]+----
 txid_current | 590
 
+postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn
+--------------------
+ 1/EB7EBC28
+(1 row)
+
+postgres=# select pg_walfile_name_offset(pg_current_wal_lsn());  # wal日志偏移量为8305704
+       pg_walfile_name_offset
+------------------------------------
+ (0000000100000001000000EB,8305704)
+(1 row)
+
+postgres=# select x'7EBC28'::int;          # lsn后6位的十进制即为偏移量
+  int4
+---------
+ 8305704
+(1 row)
+
 全页写
 PG数据页写入是以page为单位，每个page默认大小为8K，而操作系统数据块是4K（操作系统每次写入4k），在断电等情况下，极有可能部分pg数据页只写到4K系统就已经崩溃。
 此时pg数据页中就一半是新写入的数据，一半是还没来得及写入的旧数据，这称为部分写问题。这种数据页可以看作是损坏的，在崩溃恢复时，由于XLOG记录无法在损坏的页面上重放，
@@ -1623,3 +1641,12 @@ dvdrental=# select f.film_id,f.title,f.release_year,f.rating from film f where e
      402 | Harper Dying           |         2006 | G
      430 | Hook Chariots          |         2006 | G
      510 | Lawless Vision         |         2006 | G
+
+If the subquery returns NULL, EXISTS returns true	 
+dvdrental=# select film_id,title from film where exists(select null);
+ film_id |            title
+---------+-----------------------------
+     133 | Chamber Italian
+     384 | Grosse Wonderful
+       8 | Airport Pollock
+	 

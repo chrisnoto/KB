@@ -2,6 +2,48 @@ vsphere 5.5 重設 sso密碼
 D:\Program Files\VMware\Infrastructure\VMware\cis\vmdird> .\vdcadmintool.exe
 cHk0w".#zZxih0qiFPDF
 
+esxi 6.5 设置ssh免密
+首先ssh-copy-id esxi_server
+然后cat .ssh/authorized_keys > /etc/ssh/keys-root/authorized_keys
+
+powercli直连esxi
+PowerCLI C:\> Connect-VIServer 10.67.51.19
+
+Name                           Port  User
+----                           ----  ----
+10.67.51.19                    443   root
+
+设置内存
+PowerCLI C:\> set-vm -VM vSTJA2A301 -MemoryGB 24
+
+Confirmation
+Proceed to configure the following parameters of the virtual machine with name 'vSTJA2A301'?
+New MemoryMB: 24576MB
+[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"): Y
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOff 4        24.000
+
+设置CPU核数
+PowerCLI C:\> set-vm -VM vSTJA2A301 -NumCpu 12
+
+Confirmation
+Proceed to configure the following parameters of the virtual machine with name 'vSTJA2A301'?
+New NumCpu: 12
+[Y] Yes  [A] Yes to All  [N] No  [L] No to All  [S] Suspend  [?] Help (default is "Y"): y
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOff 12       24.000
+
+开机
+PowerCLI C:\> Start-VM -VM vSTJA2A301
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJA2A301           PoweredOn  12       24.000
+
 vsphere 6.5 更新证书
 For vCenter Server 6.x/7.x Appliance: /usr/lib/vmware-vmca/bin/certificate-manager
 For Windows vCenter Server 6.x: C:\Program Files\VMware\vCenter Server\vmcad\certificate-manager

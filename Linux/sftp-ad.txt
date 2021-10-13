@@ -1,4 +1,4 @@
-配置域用户登录sftp服务 on CentOS7
+配置AD域用户登录sftp服务 on CentOS7
 
 实现的功能：
 1 域用户登录sftp服务，但只有在特定的域用户组里才有权限登录 (域用户非linux本地用户)
