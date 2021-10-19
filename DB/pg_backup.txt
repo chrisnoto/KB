@@ -763,7 +763,7 @@ pgbench=# \d
 pg_control version number:            1300
 Catalog version number:               202007201
 Database system identifier:           7019560887058907630
-Database cluster state:               in archive recovery           不是生产模式，需删除recovery.signal文件后重启PG，才能变为in production
+Database cluster state:               in archive recovery           #不是生产模式，需删除recovery.signal文件后重启PG，才能变为in production，这里有个问题
 pg_control last modified:             Tue Oct 19 01:22:39 2021
 Latest checkpoint location:           0/58000100
 Latest checkpoint's REDO location:    0/580000C8
@@ -785,6 +785,95 @@ Latest checkpoint's newestCommitTsXid:0
 Time of latest checkpoint:            Mon Oct 18 05:21:49 2021
 Fake LSN counter for unlogged rels:   0/3E8
 Minimum recovery ending location:     0/58000320
+
+实际操作过程中，如果删除recovery.signal文件后重启PG，restore and recovery就白做了
+-bash-4.2$ mv recovery.signal recovery.signal.bk
+-bash-4.2$ logout
+[root@pga ~]# systemctl restart postgresql-13
+[root@pga ~]# su - postgres
+Last login: Tue Oct 19 07:45:25 UTC 2021
+-bash-4.2$ psql
+psql (13.4)
+Type "help" for help.
+
+postgres=# \l
+                             List of databases
+   Name    |  Owner   | Encoding  | Collate | Ctype |   Access privileges
+-----------+----------+-----------+---------+-------+-----------------------
+ postgres  | postgres | SQL_ASCII | C       | C     |
+ template0 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+ template1 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+(3 rows)
+
+log:    barman恢复后重启postgresql  starting point-in-time recovery to 2021-10-18 05:17:05.751485+00
+2021-10-19 07:45:21.138 UTC [15977] LOG:  starting PostgreSQL 13.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+2021-10-19 07:45:21.140 UTC [15977] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2021-10-19 07:45:21.140 UTC [15977] LOG:  listening on IPv6 address "::", port 5432
+2021-10-19 07:45:21.142 UTC [15977] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2021-10-19 07:45:21.147 UTC [15977] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2021-10-19 07:45:21.159 UTC [15979] LOG:  database system was interrupted; last known up at 2021-10-18 05:16:49 UTC
+2021-10-19 07:45:21.159 UTC [15979] LOG:  creating missing WAL directory "pg_wal/archive_status"
+cp: cannot stat 'barman_wal/00000002.history': No such file or directory
+2021-10-19 07:45:21.255 UTC [15979] LOG:  starting point-in-time recovery to 2021-10-18 05:17:05.751485+00
+2021-10-19 07:45:21.291 UTC [15979] LOG:  restored log file "000000010000000000000057" from archive
+2021-10-19 07:45:21.301 UTC [15979] LOG:  redo starts at 0/57000028
+2021-10-19 07:45:21.303 UTC [15979] LOG:  consistent recovery state reached at 0/57000138
+2021-10-19 07:45:21.306 UTC [15977] LOG:  database system is ready to accept read only connections
+2021-10-19 07:45:21.341 UTC [15979] LOG:  restored log file "000000010000000000000058" from archive
+2021-10-19 07:45:21.345 UTC [15979] LOG:  recovery stopping before commit of transaction 504, time 2021-10-19 01:01:37.105917+00
+2021-10-19 07:45:21.345 UTC [15979] LOG:  pausing at the end of recovery
+2021-10-19 07:45:21.345 UTC [15979] HINT:  Execute pg_wal_replay_resume() to promote.
+.......下面的操作是删除recovery.signal文件后重启PG,database system was shut down in recovery at 2021-10-19 07:46:19 UTC
+2021-10-19 07:46:19.387 UTC [15977] LOG:  received fast shutdown request
+2021-10-19 07:46:19.389 UTC [15977] LOG:  aborting any active transactions
+2021-10-19 07:46:19.395 UTC [15982] LOG:  shutting down
+2021-10-19 07:46:19.447 UTC [15977] LOG:  database system is shut down
+2021-10-19 07:46:19.571 UTC [16043] LOG:  starting PostgreSQL 13.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+2021-10-19 07:46:19.571 UTC [16043] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2021-10-19 07:46:19.572 UTC [16043] LOG:  listening on IPv6 address "::", port 5432
+2021-10-19 07:46:19.575 UTC [16043] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2021-10-19 07:46:19.579 UTC [16043] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2021-10-19 07:46:19.589 UTC [16045] LOG:  database system was shut down in recovery at 2021-10-19 07:46:19 UTC
+2021-10-19 07:46:19.591 UTC [16045] LOG:  database system was not properly shut down; automatic recovery in progress
+2021-10-19 07:46:19.596 UTC [16045] LOG:  redo starts at 0/580000C8
+2021-10-19 07:46:19.840 UTC [16045] LOG:  redo done at 0/58000AD8
+2021-10-19 07:46:19.879 UTC [16043] LOG:  database system is ready to accept connections
+
+正确做法是，不手动删除recovery.signal文件
+在psql中执行
+postgres=# select pg_wal_replay_resume();
+ pg_wal_replay_resume
+----------------------
+
+(1 row)
+
+postgres=# \l
+                             List of databases
+   Name    |  Owner   | Encoding  | Collate | Ctype |   Access privileges
+-----------+----------+-----------+---------+-------+-----------------------
+ pgbench   | postgres | SQL_ASCII | C       | C     |                                   #DB还在
+ postgres  | postgres | SQL_ASCII | C       | C     |
+ template0 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+ template1 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+(4 rows)
+
+日志：
+2021-10-19 08:49:27.947 UTC [16405] LOG:  selected new timeline ID: 2
+2021-10-19 08:49:28.112 UTC [16405] LOG:  archive recovery complete
+cp: cannot stat 'barman_wal/00000001.history': No such file or directory
+2021-10-19 08:49:28.170 UTC [16403] LOG:  database system is ready to accept connections
+-bash-4.2$ ls -lh
+total 201K
+-rw------- 1 postgres postgres 16M Oct 19 08:47 000000010000000000000058
+-rw------- 1 postgres postgres  51 Oct 19 08:49 00000002.history
+-rw------- 1 postgres postgres 16M Oct 19 08:49 000000020000000000000058       timelineid变成2
+-rw------- 1 postgres postgres 16M Oct 19 08:47 000000020000000000000059
+drwx------ 2 postgres postgres   4 Oct 19 08:49 archive_status
+
 
 # 恢复数据到另一台DB
 另一台DB  pgb的前提条件
@@ -874,4 +963,4 @@ Latest checkpoint's newestCommitTsXid:0
 Time of latest checkpoint:            Mon Oct 18 05:16:49 2021
 Fake LSN counter for unlogged rels:   0/3E8
 Minimum recovery ending location:     0/57000138
- 
+如果要变成生产模式，直接  select pg_wal_replay_resume();
