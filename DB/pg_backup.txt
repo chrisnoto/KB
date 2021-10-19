@@ -61,6 +61,23 @@ postgresql-13主从 streaming复制 同步模式
 7. [主库 WALsender 进程]收到备库发送的 r 报文后，检查共享内存中的等待队列 SHMQueue, 根据备库反馈的位点结合 SHMQueue，唤醒那些等待队列中睡眠的 主库 backend 进程（WalSndWaitForWal）。
 8. [主库 backend 进程]被唤醒，当前事务成功提交，SQL 执行完成返回给客户端。
 ===========================================================================================================================
+PostgreSQL V12中没有了recovery.conf
+从向后兼容的观点来看，PostgreSQL v12中最大的变化是recovery.conf文件中的参数放到了postgresql.conf配置文件中。
+
+放弃recovery.conf
+在PG12以前，如果数据目录存在recovery.conf文件，当PG实例启动时将进入恢复模式（recovery或standby）,该文件包含了用于配置恢复的所有参数，例如：
+standby_mode：确定这是正常的归档恢复还是standby模式
+restore_command：此命令恢复已归档的WAL段
+recovery_target*：此参数确定要恢复到的点
+primary_conninfo：如何连接到流复制主服务器
+长期以来，recovery.conf一直被认为是一个缺陷，因为配置参数分布在多个不同的文件中是不合理的，另外还不能使用ALTER SYSTEM命令对参数进行修改。
+
+从PG12开始，由于该文件不存在，由下面两个新文件进行替换：
+recovery.signal：告诉PostgreSQL进入正常的归档恢复
+standby.signal：告诉PostgreSQL进入standby模式
+如果两个文件都存在，则standby.signal优先。
+
+
 2 配置
 # Install the repository RPM:
 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
@@ -683,3 +700,178 @@ Backup 20211016T092814:
 错误  -bash-4.2$ barman backup pga
 ERROR: reuse_backup option is not supported by postgres backup_method
 resue_backup只能和rysnc配合       reuse_backup做增量备份	
+
+恢复
+模拟pga故障
+pga上操作
+postgres=# drop database pgbench;
+DROP DATABASE
+然后停掉PG服务
+
+barman上操作
+-bash-4.2$ barman recover --target-time="2021-10-18 05:17:05.751485+00:00" --remote-ssh-command "ssh postgres@pga" pga 20211018T051648 $PGDATA
+Starting remote restore for server pga using backup 20211018T051648
+Destination directory: /var/lib/pgsql/13/data
+Remote command: ssh postgres@pga
+Doing PITR. Recovery target time: '2021-10-18 05:17:05.751485+00:00'
+Copying the base backup.
+Copying required WAL segments.
+Generating recovery configuration
+Identify dangerous settings in destination directory.
+
+IMPORTANT
+These settings have been modified to prevent data losses
+
+postgresql.conf line 238: archive_command = false
+
+Recovery completed (start time: 2021-10-19 01:10:33.923761, elapsed time: 36 seconds)
+
+Your PostgreSQL server has been successfully prepared for recovery!
+
+pga上操作
+[root@pga ~]# systemctl start postgresql-13
+[root@pga ~]# su - postgres
+Last login: Tue Oct 19 01:13:49 UTC 2021
+-bash-4.2$ psql
+psql (13.4)
+Type "help" for help.
+
+postgres=# \l
+                             List of databases
+   Name    |  Owner   | Encoding  | Collate | Ctype |   Access privileges
+-----------+----------+-----------+---------+-------+-----------------------
+ pgbench   | postgres | SQL_ASCII | C       | C     |
+ postgres  | postgres | SQL_ASCII | C       | C     |
+ template0 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+ template1 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+(4 rows)
+
+postgres=# \c pgbench
+You are now connected to database "pgbench" as user "postgres".
+pgbench=# \d
+              List of relations
+ Schema |       Name       | Type  |  Owner
+--------+------------------+-------+----------
+ public | pgbench_accounts | table | postgres
+ public | pgbench_branches | table | postgres
+ public | pgbench_history  | table | postgres
+ public | pgbench_tellers  | table | postgres
+
+ -bash-4.2$ /usr/pgsql-13/bin/pg_controldata
+pg_control version number:            1300
+Catalog version number:               202007201
+Database system identifier:           7019560887058907630
+Database cluster state:               in archive recovery           不是生产模式，需删除recovery.signal文件后重启PG，才能变为in production
+pg_control last modified:             Tue Oct 19 01:22:39 2021
+Latest checkpoint location:           0/58000100
+Latest checkpoint's REDO location:    0/580000C8
+Latest checkpoint's REDO WAL file:    000000010000000000000058
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:504
+Latest checkpoint's NextOID:          24579
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        479
+Latest checkpoint's oldestXID's DB:   1
+Latest checkpoint's oldestActiveXID:  504
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Mon Oct 18 05:21:49 2021
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/58000320
+
+# 恢复数据到另一台DB
+另一台DB  pgb的前提条件
+1 安装postgresql-13, rsync, openssh-server包
+2 从barman服务器上的barman账号免密登录 ssh postgres@pgb
+-bash-4.2$ barman recover --target-time="2021-10-18 05:17:05.751485+00:00" --remote-ssh-command "ssh postgres@pgb" pga 20211018T051648 $PGDATA
+Starting remote restore for server pga using backup 20211018T051648
+Destination directory: /var/lib/pgsql/13/data
+Remote command: ssh postgres@pgb
+Doing PITR. Recovery target time: '2021-10-18 05:17:05.751485+00:00'
+Copying the base backup.
+Copying required WAL segments.
+Generating recovery configuration
+Identify dangerous settings in destination directory.
+
+IMPORTANT
+These settings have been modified to prevent data losses
+
+postgresql.conf line 238: archive_command = false
+
+Recovery completed (start time: 2021-10-19 02:57:16.605443, elapsed time: 39 seconds)
+
+Your PostgreSQL server has been successfully prepared for recovery!
+
+pgb上检查
+[root@pgb ~]# systemctl start postgresql-13
+[root@pgb ~]# su - postgres
+Last login: Tue Oct 19 02:53:16 UTC 2021
+-bash-4.2$ psql
+psql (13.4)
+Type "help" for help.
+
+postgres=# \l
+                             List of databases
+   Name    |  Owner   | Encoding  | Collate | Ctype |   Access privileges
+-----------+----------+-----------+---------+-------+-----------------------
+ pgbench   | postgres | SQL_ASCII | C       | C     |
+ postgres  | postgres | SQL_ASCII | C       | C     |
+ template0 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+ template1 | postgres | SQL_ASCII | C       | C     | =c/postgres          +
+           |          |           |         |       | postgres=CTc/postgres
+(4 rows)
+
+postgres=# \c pgbench
+You are now connected to database "pgbench" as user "postgres".
+pgbench=# \d
+              List of relations
+ Schema |       Name       | Type  |  Owner
+--------+------------------+-------+----------
+ public | pgbench_accounts | table | postgres
+ public | pgbench_branches | table | postgres
+ public | pgbench_history  | table | postgres
+ public | pgbench_tellers  | table | postgres
+(4 rows)
+
+pgbench=# select * from pgbench_accounts limit 2;
+ aid | bid | abalance |                                        filler
+-----+-----+----------+--------------------------------------------------------------------------------------
+   1 |   1 |        0 |
+   2 |   1 |        0 |
+(2 rows)
+
+-bash-4.2$ /usr/pgsql-13/bin/pg_controldata
+pg_control version number:            1300
+Catalog version number:               202007201
+Database system identifier:           7019560887058907630
+Database cluster state:               in archive recovery      不是生产模式
+pg_control last modified:             Tue Oct 19 02:58:58 2021
+Latest checkpoint location:           0/57000060
+Latest checkpoint's REDO location:    0/57000028
+Latest checkpoint's REDO WAL file:    000000010000000000000057
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:504
+Latest checkpoint's NextOID:          24579
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        479
+Latest checkpoint's oldestXID's DB:   1
+Latest checkpoint's oldestActiveXID:  504
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Mon Oct 18 05:16:49 2021
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/57000138
+ 
