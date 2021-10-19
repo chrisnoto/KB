@@ -396,3 +396,290 @@ Last login: Mon Sep 27 09:35:48 UTC 2021
   99
  100
   
+## pg_receivewal  以streaming方式进行本地/远程备份wal
+This client program will open a replication connection to PostgreSQL and stream WAL, just like streaming replication does. 
+But instead of applying the information to a standby server, it writes it to disk. This way, it creates a copy of the WAL segments in real time. 
+The partial WAL segment that pg_receivewal is currently writing has the extension .partial to distinguish it from completed WAL archives. 
+Once the segment is complete, pg_receivewal will rename it.
+pg_receivewal is an alternative to WAL archiving that avoids the gap between the current and the archived WAL location. It is a bit more complicated to manage and monitor, 
+because it is a separate process and should run on a different machine.
+pg_receivewal默认以异步的方式接收主库的wal，会损失几秒钟的事务
+
+以下命令指定主库的复制槽standy_slot，以sync模式接收主库的wal，如同streaming replication，但是此时不会replay
+注意:如果只有一个机器以同步模式接受主库的wal,如果机器死机，主库会hang住，不会提交任何事务了，要保证同时有两台机器接受主库的wal
+
+-bash-4.2$ pg_receivewal -D wal_remotebk/ -v -S standby_slot --synchronous -h 10.67.39.58 -p 5432 -U repl -W
+Password:
+pg_receivewal: starting log streaming at 2/9000000 (timeline 1)
+pg_receivewal: finished segment at 2/A000000 (timeline 1)
+pg_receivewal: finished segment at 2/B000000 (timeline 1)
+pg_receivewal: finished segment at 2/C000000 (timeline 1)
+pg_receivewal: finished segment at 2/D000000 (timeline 1)
+pg_receivewal: finished segment at 2/E000000 (timeline 1)
+pg_receivewal: finished segment at 2/F000000 (timeline 1)
+
+
+使用restore_command恢复数据库，这里用了nfs挂载
+restore_command = 'cp /walarchive/%f %p || cp /walarchive/%f.partial %p'
+
+重要提示，可以使用pg_receivewal实现多副本redolog的功能，类似oracle的redo log group
+
+
+######  barman
+工作原理
+物理全備+歸檔備份（WAL日誌備份），從而達到任意時間點的恢復。即恢復全備後，通過指定WAL日誌的時間點、LSN等即可恢復到資料庫的任意時間點。
+barman备份方法
+backup_method = postgres  # streaming backup方式   使用了工具pg_basebackup+pg_receivewal
+backup_method = rysnc     # rsync/ssh 方式    barman2.0之前的备份方式，支持增量备份
+
+# 配置过程
+
+一、配置需要备份的远程PG
+1 修改postgresql.conf配置
+listen_addresses = '*'
+port = 5432
+wal_level = replica  #11版本後改爲replica
+archive_mode = on
+archive_command = 'cp %p /var/lib/pgsql/13/data/pg_archive/%f'
+max_wal_senders = 10  #建議大於等於3
+wal_keep_segments = 64
+synchronous_standby_names = '*'
+hot_standby = on
+log_filename = 'postgresql-%Y%m%d_%H%M.log'
+2 修改pg_hba.conf配置
+
+local   all             all                                       trust
+host    all             all               0.0.0.0/0               md5
+host    all             all               ::1/128                 trust
+host    replication     barman            0.0.0.0/0               md5
+host    replication     streaming_barman  0.0.0.0/0               md5
+3 創建pg_archive，並設置用戶組
+
+mkdir /var/lib/pgsql/13/data/pg_archive
+chown postgres:postgres /var/lib/pgsql/11/data/pg_archive -R
+
+4 啓動postgresql
+
+systemctl enable postgresql-13
+systemctl start postgresql-13
+
+5 創建barman和barman_streaming用戶
+
+su postgres
+createuser -s -P barman
+#設置密碼
+createuser -P --replication streaming_barman
+#設置密碼
+
+二、barman安装和配置
+
+在备份服务器上安装barman
+yum install barman barman-cli
+yum install postgresql13-contrib
+
+修改barman的公共配置
+vi /etc/barman.conf
+
+parallel_jobs = 2   #併發數
+immediate_checkpoint = true   #在執行back時是否會自動執行checkpoint
+
+-bash-4.2$ cat /etc/barman.d/pga.conf |egrep -v ';|^$'
+[pga]
+description =  "Example of PostgreSQL Database (Streaming-Only)"
+conninfo = host=pga user=barman dbname=postgres
+streaming_conninfo = host=pga user=streaming_barman
+backup_method = postgres
+streaming_archiver = on
+slot_name = barman
+
+barman账号设置
+su - barman
+-bash-4.2$ cat .bashrc
+export PATH="/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/usr/pgsql-13/bin:/usr/pgsql-13/bin"
+export PGDATA="/var/lib/pgsql/13/data"
+
+配置.pgpass免密
+-bash-4.2$ cat .pgpass
+pga:5432:*:streaming_barman:Foxconn123
+pga:5432:*:barman:123456
+
+barman账号下做免密验证
+-bash-4.2$ psql -c 'select version()' -U barman -h pga postgres
+                                                 version
+---------------------------------------------------------------------------------------------------------
+ PostgreSQL 13.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+(1 row)
+
+-bash-4.2$ psql -c 'select version()' -U streaming_barman -h pga postgres
+                                                 version
+---------------------------------------------------------------------------------------------------------
+ PostgreSQL 13.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+(1 row)
+
+
+运行barman
+-bash-4.2$ barman receive-wal --create-slot pga    创建slot
+-bash-4.2$ barman cron         启用wal archiving,streaming archiver for 待备份的PG服务器
+-bash-4.2$ barman check pga   验证远程服务器pga的各种条件
+
+barman安装错误汇总
+-bash-4.2$ barman check pga
+Server pga:
+        WAL archive: FAILED (please make sure WAL shipping is setup)
+        PostgreSQL: OK
+        superuser or standard user with backup privileges: OK
+        PostgreSQL streaming: OK
+        wal_level: OK
+        replication slot: OK
+        directories: OK
+        retention policy settings: OK
+        backup maximum age: OK (no last_backup_maximum_age provided)
+        compression settings: OK
+        failed backups: OK (there are 0 failed backups)
+        minimum redundancy requirements: OK (have 0 backups, expected at least 0)
+        pg_basebackup: OK
+        pg_basebackup compatible: OK
+        pg_basebackup supports tablespaces mapping: OK
+        systemid coherence: OK (no system Id stored on disk)
+        pg_receivexlog: OK
+        pg_receivexlog compatible: OK
+        receive-wal running: FAILED (See the Barman log file for more details)
+        archiver errors: OK
+碰到上述错误		
+1 打开 wal archiving,streaming archiver for server pga
+-bash-4.2$ barman cron
+Starting WAL archiving for server pga
+Starting streaming archiver for server pga
+  
+
+2 切换pga的wal file
+-bash-4.2$ barman switch-wal --force --archive pga
+The WAL file 000000010000000000000053 has been closed on server 'pga'
+Waiting for the WAL file 000000010000000000000053 from server 'pga' (max: 30 seconds)
+Processing xlog segments from streaming for pga
+        000000010000000000000053
+-bash-4.2$ barman check pga
+Server pga:
+        PostgreSQL: OK
+        superuser or standard user with backup privileges: OK
+        PostgreSQL streaming: OK
+        wal_level: OK
+        replication slot: OK
+        directories: OK
+        retention policy settings: OK
+        backup maximum age: OK (no last_backup_maximum_age provided)
+        compression settings: OK
+        failed backups: OK (there are 0 failed backups)
+        minimum redundancy requirements: OK (have 0 backups, expected at least 0)
+        pg_basebackup: OK
+        pg_basebackup compatible: OK
+        pg_basebackup supports tablespaces mapping: OK
+        systemid coherence: OK (no system Id stored on disk)
+        pg_receivexlog: OK
+        pg_receivexlog compatible: OK
+        receive-wal running: OK
+        archiver errors: OK
+-bash-4.2$ barman replication-status pga
+Status of streaming clients for server 'pga':
+  Current LSN on master: 0/54000148
+  Number of streaming clients: 1
+
+  1. #1 Sync WAL streamer
+     Application name: barman_receive_wal
+     Sync stage      : 3/3 Remote write
+     Communication   : TCP/IP
+     IP Address      : 10.152.219.158 / Port: 53830 / Host: -
+     User name       : streaming_barman
+     Current state   : streaming (sync)
+     Replication slot: barman
+     WAL sender PID  : 1122
+     Started at      : 2021-10-16 09:18:04.610226+00:00
+     Sent LSN   : 0/54000148 (diff: 0 B)
+     Write LSN  : 0/54000148 (diff: 0 B)
+     Flush LSN  : 0/54000148 (diff: 0 B)
+		
+3 如果只是命令找不到路径，需要安装postgresql13-contrib包，并配置环境变量PATH
+declare -x PATH="/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/usr/pgsql-13/bin:/usr/pgsql-13/bin"
+
+# 开始备份
+-bash-4.2$ barman backup pga
+Starting backup using postgres method for server pga in /var/lib/barman/pga/base/20211016T092814
+Backup start at LSN: 0/54000148 (000000010000000000000054, 00000148)
+Starting backup copy via pg_basebackup for 20211016T092814
+Copy done (time: 18 seconds)
+Finalising the backup.
+This is the first backup for server pga
+WAL segments preceding the current backup have been found:
+        000000010000000000000053 from server pga has been removed
+Backup size: 2.8 GiB
+Backup end at LSN: 0/56000000 (000000010000000000000055, 00000000)
+Backup completed (start time: 2021-10-16 09:28:14.274585, elapsed time: 18 seconds)
+Processing xlog segments from streaming for pga
+        000000010000000000000054
+        000000010000000000000055
+
+-bash-4.2$ barman list-backup pga
+pga 20211016T092814 - Sat Oct 16 09:28:32 2021 - Size: 2.8 GiB - WAL Size: 0 B
+target可以为data, wal, full, standalone
+-bash-4.2$ barman list-files --target data pga 20211016T092814
+/var/lib/barman/pga/base/20211016T092814/backup.info
+/var/lib/barman/pga/base/20211016T092814/data/pg_hba.conf
+/var/lib/barman/pga/base/20211016T092814/data/postgresql.auto.conf
+/var/lib/barman/pga/base/20211016T092814/data/postgresql.conf
+/var/lib/barman/pga/base/20211016T092814/data/backup_label
+/var/lib/barman/pga/base/20211016T092814/data/pg_ident.conf
+/var/lib/barman/pga/base/20211016T092814/data/backup_manifest
+/var/lib/barman/pga/base/20211016T092814/data/current_logfiles
+/var/lib/barman/pga/base/20211016T092814/data/PG_VERSION
+/var/lib/barman/pga/base/20211016T092814/data/pg_xact/0000
+/var/lib/barman/pga/base/20211016T092814/data/pg_logical/replorigin_checkpoint
+/var/lib/barman/pga/base/20211016T092814/data/log/postgresql-Sat.log
+/var/lib/barman/pga/base/20211016T092814/data/pg_archive/000000010000000000000014
+/var/lib/barman/pga/base/20211016T092814/data/pg_archive/00000001000000000000000E
+/var/lib/barman/pga/base/20211016T092814/data/pg_archive/000000010000000000000026
+。。。
+/var/lib/barman/pga/base/20211016T092814/data/base/14174/2679
+/var/lib/barman/pga/base/20211016T092814/data/base/14174/2703
+/var/lib/barman/pga/base/20211016T092814/data/base/14174/3456
+/var/lib/barman/pga/base/20211016T092814/data/pg_multixact/offsets/0000
+/var/lib/barman/pga/base/20211016T092814/data/pg_multixact/members/0000
+-bash-4.2$ barman list-files --target wal pga 20211016T092814
+/var/lib/barman/pga/wals/0000000100000000/000000010000000000000055
+
+-bash-4.2$ barman show-backup pga 20211016T092814
+Backup 20211016T092814:
+  Server Name            : pga
+  System Id              : 7019560887058907630
+  Status                 : DONE
+  PostgreSQL Version     : 130004
+  PGDATA directory       : /var/lib/pgsql/13/data
+
+  Base backup information:
+    Disk usage           : 2.8 GiB (2.8 GiB with WALs)
+    Incremental size     : 2.8 GiB (-0.00%)
+    Timeline             : 1
+    Begin WAL            : 000000010000000000000055
+    End WAL              : 000000010000000000000055
+    WAL number           : 1
+    Begin time           : 2021-10-16 09:28:14+00:00
+    End time             : 2021-10-16 09:28:32.392481+00:00
+    Copy time            : 18 seconds
+    Estimated throughput : 159.0 MiB/s
+    Begin Offset         : 40
+    End Offset           : 0
+    Begin LSN           : 0/55000028
+    End LSN             : 0/56000000
+
+  WAL information:
+    No of files          : 0
+    Disk usage           : 0 B
+    Last available       : 000000010000000000000055
+
+  Catalog information:
+    Retention Policy     : not enforced
+    Previous Backup      : - (this is the oldest base backup)
+    Next Backup          : - (this is the latest base backup)
+
+错误  -bash-4.2$ barman backup pga
+ERROR: reuse_backup option is not supported by postgres backup_method
+resue_backup只能和rysnc配合       reuse_backup做增量备份	

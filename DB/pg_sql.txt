@@ -576,35 +576,91 @@ postgres=# select * from  pg_current_wal_flush_lsn();
 -[ RECORD 1 ]------------+-----------
 pg_current_wal_flush_lsn | 1/A21613C0
 
-postgres=# select * from  pg_current_wal_lsn();  一直在变
--[ RECORD 1 ]------+-----------
-pg_current_wal_lsn | 1/A21613C0
-
-postgres=# select pg_walfile_name('1/A21613C0');
--[ RECORD 1 ]---+-------------------------
-pg_walfile_name | 0000000100000001000000A2
-
 postgres=# select txid_current();
 -[ RECORD 1 ]+----
 txid_current | 590
 
+postgres=# select txid_status(10109);  通过txid得到事务的提交状态
+ txid_status
+-------------
+ committed
+(1 row)
+
+
 postgres=# select pg_current_wal_lsn();
  pg_current_wal_lsn
 --------------------
- 1/EB7EBC28
+ 3/89E12DB8
+(1 row)
+LSN在wal日志中的偏移量即LSN低32位中后24位对应的十进制值。
+postgres=# select x'E12DB8'::int as offset,pg_walfile_name_offset(pg_current_wal_lsn());
+  offset  |       pg_walfile_name_offset
+----------+-------------------------------------
+ 14757304 | (000000010000000300000089,14757304)
+(1 row)    
+ # 通过lsn计算出的偏移量与pg_walfile_name_offset结果一致
+
+
+
+000000010000000300000089 walfile文件名组成
+00000001 timeline ID
+00000003 LogID
+00000089 LogSeq
+
+WAL segment file name=timelineId + (uint32)(LSN−1)/16M*256 +(uint32)(LSN−1/16M)%256
+
+
+lsn获取 
+注意转换公式中LSN为十进制，而pg_current_wal_lsn()得到的值是十六进制，需要进行转换
+postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn
+--------------------
+ 3/89B3ED00
+(1 row)
+***此处3代表walfile的第二部分,logid***
+***89代表walfile的后两位***
+*** B3ED00代表偏移量***
+
+postgres=# select x'389E12DB8'::bigint;   转成十进制
+    int8
+-------------
+ 15198137784
 (1 row)
 
-postgres=# select pg_walfile_name_offset(pg_current_wal_lsn());  # wal日志偏移量为8305704
-       pg_walfile_name_offset
-------------------------------------
- (0000000100000001000000EB,8305704)
+
+logid
+LSN / 左边的数字
+postgres=# select ((15198137784 -1)/ (16::bigint * 1024::bigint * 1024::bigint * 256::bigint) ::int8);
+ ?column?
+----------
+        3               #与walfile第二部分logid一致
 (1 row)
 
-postgres=# select x'7EBC28'::int;          # lsn后6位的十进制即为偏移量
-  int4
----------
- 8305704
+logseq获取  套用公式：(uint32)LSN−1 / (16M ∗ 256)
+postgres=# select ((15198137784-1)/(16 * 1024 * 1024)) % 256;
+ ?column?
+----------
+      137
 (1 row)
+
+
+postgres=# select to_hex(137);
+ to_hex
+--------
+ 89
+(1 row)
+
+postgres=# select pg_walfile_name(pg_current_wal_lsn());
+     pg_walfile_name
+--------------------------
+ 000000010000000300000089         与上面验证的89一致
+(1 row)
+
+
+xid和txid的区别
+xid是32位的整型，会被FREEZE，循环使用，xmin,xmax都是XID类型。通过xid可以得到事务结束时间。
+
+txid是64位整型，不会被循环使用，通过epoch可以从xid转换为txid。通过txid可以得到事务的提交状态。
 
 全页写
 PG数据页写入是以page为单位，每个page默认大小为8K，而操作系统数据块是4K（操作系统每次写入4k），在断电等情况下，极有可能部分pg数据页只写到4K系统就已经崩溃。
@@ -748,6 +804,13 @@ Latest checkpoint location:           1/A2160AD8
 Latest checkpoint's REDO location:    1/A2160AA0
 Latest checkpoint's REDO WAL file:    0000000100000001000000A2
 
+通过system identifier计算数据库什么时候创建的
+postgres=# select to_timestamp(((6984324583401825557>>32) & (2^32-1)::bigint));
+      to_timestamp
+------------------------
+ 2021-07-13 08:26:28+00
+(1 row)
+
 用以下几个函数获取control的内容
 https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-CONTROLDATA
 
@@ -799,6 +862,10 @@ Latest checkpoint's TimeLineID:       1
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:709
 
+MVCC的是实现方式大概有两种，关键就在于将旧数据放在什么地方；
+
+  	1. 将多版本的记录都存储在数据库中，垃圾收集器清理不需要的记录。比如：PostgreSQL/Firebird/Interbase ，而SQL Server将其存储在tempdb中。
+  	2. 将最新的记录放在数据库中，通过恢复undo日志，来重建旧版本的数据。比如Oracle、MySQL(innodb)。
 ######### 数据类型 ###########
 # 日期时间类型
 postgres=# show datestyle;

@@ -132,3 +132,34 @@ PowerCLI C:\> Open-VMConsoleWindow -vm vSTJA2A301 -server 10.67.51.18
 $myResourcePool = Get-ResourcePool -Name MyResourcePool1
 $mySpecification = Get-OSCustomizationSpec -Name WindowsSpec
 New-VM -VM MyVM1 -Name MyVM2 -OSCustomizationSpec $mySpecification -ResourcePool $myResourcePool
+
+删除/创建snapshot
+PowerCLI C:\> get-vm -name vSTJLXAgileAP01
+
+Name                 PowerState Num CPUs MemoryGB
+----                 ---------- -------- --------
+vSTJLXAgileAP01      PoweredOn  8        16.055
+
+
+PowerCLI C:\> get-vm -name vSTJLXAgileAP01 |get-snapshot
+
+Name                 Description                    PowerState
+----                 -----------                    ----------
+vSTJLXAgileAP01_2...                                PoweredOff
+
+#删除snapshot
+PowerCLI C:\> get-vm -name vSTJLXAgileAP01 |get-snapshot | % { Remove-Snapshot $_ -confirm:$false }
+PowerCLI C:\> get-vm -name vSTJLXAgileAP01 |get-snapshot
+PowerCLI C:\>
+#创建snapshot
+PowerCLI C:\> New-Snapshot -vm vSTJLXAgileAP01 -Name vSTJLXAgileAP01_20211014
+警告: 参数“VM”已过时。This parameter no longer accepts multiple values.
+
+Name                 Description                    PowerState
+----                 -----------                    ----------
+vSTJLXAgileAP01_2...                                PoweredOff
+PowerCLI C:\> get-vm -name vSTJLXAgileAP01 |get-snapshot
+
+Name                 Description                    PowerState
+----                 -----------                    ----------
+vSTJLXAgileAP01_2...                                PoweredOff
