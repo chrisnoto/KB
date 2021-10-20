@@ -163,3 +163,19 @@ PowerCLI C:\> get-vm -name vSTJLXAgileAP01 |get-snapshot
 Name                 Description                    PowerState
 ----                 -----------                    ----------
 vSTJLXAgileAP01_2...                                PoweredOff
+
+列出所有snapshot
+PowerCLI C:\> get-vm |Get-Snapshot |select VM,Name,Created
+
+VM                 Name                                           Created
+--                 ----                                           -------
+vSTJLXAgileAP01    vSTJLXAgileAP01_20211014                       2021/10/14 16:17:37
+vSTJPLMAGILEWeb    ‎2019‎年‎12‎月‎28‎日‎ ‎下午‎ ‎02‎:‎39‎:‎50     2019/12/28 14:39:56
+vSTJPLMAGILEWeb    虛擬機器快照 2020%252f3%252f24 下午12:10:59    2020/3/24 12:11:05
+vSTJPLMAGILEWeb    20200911                                       2020/9/11 12:03:55
+vSTJRDSEP2021/6/17 VM Snapshot ‎2021‎年‎6‎月‎11‎日‎ ‎13‎:‎36‎:‎54 2021/6/11 13:36:57
+VSTJOASEP05        VM Snapshot ‎2021‎年‎6‎月‎10‎日‎ ‎11‎:‎19‎:‎09 2021/6/10 11:19:11
+vSTJRDSEPtest      VM Snapshot ‎2021‎年‎6‎月‎29‎日‎ ‎15‎:‎26‎:‎53 2021/6/29 15:26:56
+vSTJPSServer01     先決條件完成，補丁完成                         2020/11/28 15:25:09
+导出到csv
+PowerCLI C:\> get-vm |Get-Snapshot |select VM,Name,Created,powerstate |export-csv 'C:\Users\h7108579\Documents\snapshot_bvsan.csv'
