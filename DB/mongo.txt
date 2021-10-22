@@ -145,3 +145,12 @@ root@5a83f9cbb735:/dump/test# bsondump staff.bson | head -10
 {"_id":{"$oid":"61372182aeb931801cbe086e"},"name":"Adam Donachie","team":" BAL","position":" Catcher","details":{"height":{"$numberInt":"74"},"weight":{"$numberInt":"180"},"age":{"$numberDouble":"22.99"}}}
 {"_id":{"$oid":"61372182aeb931801cbe086f"},"name":"Miguel Tejada","team":" BAL","position":" Shortstop","details":{"height":{"$numberInt":"69"},"weight":{"$numberInt":"209"},"age":{"$numberDouble":"30.77"}}}
 {"_id":{"$oid":"61372182aeb931801cbe0870"},"name":"Melvin Mora","team":" BAL","position":" Third Baseman","details":{"height":{"$numberInt":"71"},"weight":{"$numberInt":"200"},"age":{"$numberDouble":"35.07"}}}
+
+db.staff.mapReduce(
+function() {emit(this.name,1);},
+function(key,values) {return Array.avg(values)},
+{
+query:{"details.age":{$gt:26}},
+out:"average"
+}
+)
