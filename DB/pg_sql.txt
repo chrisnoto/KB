@@ -1,3 +1,10 @@
+psql登录方法
+1  psql -U xxx -d xxx
+2  psql 'host=rep01 user=repmgr dbname=repmgr connect_timeout=2'
+psql (13.4)
+Type "help" for help.
+
+repmgr=#
 #########  逻辑概念 ##########
 在 Postgresql中是以下的關係
 Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
@@ -1716,4 +1723,7 @@ dvdrental=# select film_id,title from film where exists(select null);
      133 | Chamber Italian
      384 | Grosse Wonderful
        8 | Airport Pollock
-	 
+
+# pgbench
+/usr/pgsql-13/bin/pgbench -i -s 100 -U postgres -p 5432 -d pgbench  初始化数据库
+pgbench -M prepared -r -c 10 -j 4 -T 100 -U postgres -p 5432 -d pgbench -l  删改数据库	   

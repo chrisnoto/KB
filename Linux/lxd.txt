@@ -68,4 +68,157 @@ root@lxd-1804:~# lxc image list
 |           | 6ae1c6e92017 | no     | Ubuntu 18.04 LTS server (20190627.1) | x86_64 | 177.50MB | Aug 9, 2019 at 3:01am (UTC)   |
 +-----------+--------------+--------+--------------------------------------+--------+----------+-------------------------------+
 
+###########  lxc 桥接网络for production ############
+前提条件： vmware网卡设置为混杂模式
 
+netplan配置网桥
+1 修改netplan yaml文件
+root@u2004:~# cat /etc/netplan/00-installer-config.yaml
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    ens160:
+            dhcp4: false
+            dhcp6: false
+            # addresses:
+            #      - 10.67.50.141/23
+            #  gateway4: 10.67.50.1
+            #   nameservers:
+            #     addresses:
+            #    - 10.67.50.111
+            #   search: []
+  version: 2
+  bridges:
+    br0:
+            interfaces: [ens160]
+            addresses: [10.67.50.141/23]
+            gateway4: 10.67.50.1
+            mtu: 1500
+            nameservers:
+              addresses: [10.67.50.111]
+            parameters:
+              stp: true
+              forward-delay: 4
+            dhcp4: no
+            dhcp6: no
+2 netplan generate       #convert the Netplan YAML into configuration files understood by the backends
+3 netplan apply          #apply configuration files
+查看网桥
+root@u2004:~# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: ens160: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq master br0 state UP group default qlen 1000
+    link/ether 00:50:56:95:27:46 brd ff:ff:ff:ff:ff:ff
+3: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 00:50:56:95:27:46 brd ff:ff:ff:ff:ff:ff
+    inet 10.67.50.141/23 brd 10.67.51.255 scope global br0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::250:56ff:fe95:2746/64 scope link
+       valid_lft forever preferred_lft forever
+
+root@u2004:~# lxd init
+Would you like to use LXD clustering? (yes/no) [default=no]: no
+Do you want to configure a new storage pool? (yes/no) [default=yes]:
+Name of the new storage pool [default=default]:
+Name of the storage backend to use (btrfs, dir, lvm, zfs, ceph) [default=zfs]:
+Create a new ZFS pool? (yes/no) [default=yes]:
+Would you like to use an existing empty block device (e.g. a disk or partition)? (yes/no) [default=no]: yes
+Path to the existing block device: /dev/sdb
+Would you like to connect to a MAAS server? (yes/no) [default=no]:
+Would you like to create a new local network bridge? (yes/no) [default=yes]: no
+Would you like to configure LXD to use an existing bridge or host interface? (yes/no) [default=no]: yes
+Name of the existing bridge or host interface: br0
+Would you like the LXD server to be available over the network? (yes/no) [default=no]: yes
+Address to bind LXD to (not including port) [default=all]: all
+Port to bind LXD to [default=8443]:
+Trust password for new clients:
+Again:
+Invalid input, try again.
+
+Trust password for new clients:
+Again:
+Would you like stale cached images to be updated automatically? (yes/no) [default=yes] yes
+Would you like a YAML "lxd init" preseed to be printed? (yes/no) [default=no]: no
+
+
+
+列出所有在线的image
+root@u2004:~# lxc image list images: centos/8
++----------------------------------+--------------+--------+------------------------------------------+--------------+-----------------+----------+-------------------------------+
+|              ALIAS               | FINGERPRINT  | PUBLIC |               DESCRIPTION                | ARCHITECTURE |      TYPE       |   SIZE   |          UPLOAD DATE          |
++----------------------------------+--------------+--------+------------------------------------------+--------------+-----------------+----------+-------------------------------+
+| centos/8 (3 more)                | 9e42d076be5b | yes    | Centos 8 amd64 (20211019_07:08)          | x86_64       | VIRTUAL-MACHINE | 607.94MB | Oct 19, 2021 at 12:00am (UTC) |
++----------------------------------+--------------+--------+------------------------------------------+--------------+-----------------+----------+-------------------------------+
+| centos/8 (3 more)                | 29c4ad108733 | yes    | Centos 8 amd64 (20211019_07:08)          | x86_64       | CONTAINER       | 129.20MB | Oct 19, 2021 at 12:00am (UTC) |
++----------------------------------+--------------+--------+------------------------------------------+--------------+-----------------+----------+-------------------------------+
+| centos/8-Stream (3 more)         | 3591f7247cac | yes    | Centos 8-Stream amd64 (20211019_07:08)   | x86_64       | VIRTUAL-MACHINE | 623.31MB | Oct 19, 2021 at 12:00am (UTC) |
++----------------------------------+--------------+--------+------------------------------------------+--------------+-----------------+----------+-------------------------------+
+| centos/8-Stream (3 more)         | 9141558bf3b8 | yes    | Centos 8-Stream amd64 (20211019_07:08)   | x86_64       | CONTAINER       | 129.45MB | Oct 19, 2021 at 12:00am (UTC) |
+
+root@u2004:~# lxc config set core.proxy_http http://h7108579:pqhkr99ctw@10.36.6.66:3128
+root@u2004:~# lxc config set core.proxy_https http://h7108579:pqhkr99ctw@10.36.6.66:3128
+lxc launch images:centos/8/amd64 c1
+进入c1 手动配置IP地址
+
+
+共享存储
+新建zfs pool data   这个是基于文件的pool
+root@u2004:~# lxc storage create data zfs size=50GiB
+Storage pool data created
+基于块设备
+lxc storage create ssd zfs source=/dev/sdc
+root@u2004:~# zpool list
+NAME      SIZE  ALLOC   FREE  CKPOINT  EXPANDSZ   FRAG    CAP  DEDUP    HEALTH  ALTROOT
+data     49.5G   614K  49.5G        -         -     0%     0%  1.00x    ONLINE  -
+default  99.5G   517M  99.0G        -         -     0%     0%  1.00x    ONLINE  -
+ssd      99.5G   574K  99.5G        -         -     0%     0%  1.00x    ONLINE  -
+
+在ssd这个池中创建volume vol1
+lxc storage volume create ssd vol1
+挂载vol1到容器c2，设备名为data
+root@u2004:~# lxc storage volume attach ssd vol1 c2 data /opt/data
+root@u2004:~# lxc config device show c2
+data:
+  path: /opt/data
+  pool: ssd
+  source: vol1
+  type: disk
+eth0:
+  ipv4.address: 10.67.50.145
+  name: eth0
+  nictype: bridged
+  parent: br0
+  type: nic
+
+root@u2004:~# lxc storage volume show ssd vol1
+config:
+  volatile.idmap.last: '[{"Isuid":true,"Isgid":false,"Hostid":1000000,"Nsid":0,"Maprange":1000000000},{"Isuid":false,"Isgid":true,"Hostid":1000000,"Nsid":0,"Maprange":1000000000}]'
+  volatile.idmap.next: '[{"Isuid":true,"Isgid":false,"Hostid":1000000,"Nsid":0,"Maprange":1000000000},{"Isuid":false,"Isgid":true,"Hostid":1000000,"Nsid":0,"Maprange":1000000000}]'
+description: ""
+name: vol1
+type: custom
+used_by:
+- /1.0/instances/c2
+location: none
+content_type: filesystem
+
+进入容器c2查看新挂载的volume
+root@u2004:~# lxc exec c2 bash
+[root@c2 ~]# df -hT
+Filesystem              Type      Size  Used Avail Use% Mounted on
+default/containers/c2   zfs        97G  427M   96G   1% /
+none                    tmpfs     492K  4.0K  488K   1% /dev
+udev                    devtmpfs  7.8G     0  7.8G   0% /dev/tty
+tmpfs                   tmpfs     100K     0  100K   0% /dev/lxd
+tmpfs                   tmpfs     100K     0  100K   0% /dev/.lxd-mounts
+tmpfs                   tmpfs     7.9G     0  7.9G   0% /dev/shm
+tmpfs                   tmpfs     7.9G  8.5M  7.9G   1% /run
+tmpfs                   tmpfs     7.9G     0  7.9G   0% /sys/fs/cgroup
+ssd/custom/default_vol1 zfs        97G  128K   97G   1% /opt/data
+[root@c2 ~]# mount |grep zfs
+default/containers/c2 on / type zfs (rw,xattr,posixacl)
+ssd/custom/default_vol1 on /opt/data type zfs (rw,xattr,posixacl)
