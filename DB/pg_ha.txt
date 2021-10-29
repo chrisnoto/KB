@@ -1,0 +1,817 @@
+###############  pgbouncer连接池软件  ############### 
+### 启动容器
+读写分离配置，DATABASES这行指定了用户，所以只有两个池存在
+docker run -d \
+-p 5439:5439 \
+--name=pgbouncer \
+-e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 user=postgres password=postgres dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 user=postgres password=postgres dbname=chensen" \
+-e "PGBOUNCER_LISTEN_PORT=5439" \
+-v /root/userlist.txt:/tmp/userlist.txt \
+pgbouncer/pgbouncer
+
+更好的写法，更多的用户放在auth_file里了
+[root@worker1 ~]# cat pgb2.sh
+docker run -d \
+-p 5439:5439 \
+--name=pgbouncer \
+-e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 dbname=chensen" \
+-e "PGBOUNCER_LISTEN_PORT=5439" \
+-e "PGBOUNCER_AUTH_TYPE=md5" \
+-e "PGBOUNCER_AUTH_FILE=/etc/pgbouncer/userlist.txt" \
+-e "PGBOUNCER_POOL_MODE=transaction" \
+-e "PGBOUNCER_MAX_CLIENT_CONN=500" \
+-e "PGBOUNCER_DEFAULT_POOL_SIZE=30" \
+-v /root/userlist.txt:/etc/pgbouncer/userlist.txt \
+pgbouncer/pgbouncer
+
+最佳做法，只放pgbouncer在auth_file里，其他用户通过auth_query查询到密码
+Create a Postgres user to use as auth_user
+Create the user/password lookup function in Postgres
+Configure pgbouncer.ini
+https://www.enterprisedb.com/postgres-tutorials/pgbouncer-authquery-and-authuser-pro-tips
+
+
+--------------------log-------------------
+[root@worker1 ~]# docker logs -f pgbouncer
+Creating pgbouncer config in /etc/pgbouncer
+#pgbouncer.ini
+
+[databases]
+pg_rw = host = 10.67.39.58 port=5432 dbname=chensen
+pg_ro = host = 10.67.39.59 port=5432 dbname=chensen
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 5439
+auth_file = /etc/pgbouncer/userlist.txt
+auth_type = md5
+pool_mode = transaction
+max_client_conn = 500
+default_pool_size = 30
+ignore_startup_parameters = extra_float_digits
+
+# Log settings
+admin_users = postgres
+
+# Connection sanity checks, timeouts
+
+# TLS settings
+
+# Dangerous timeouts
+
+Starting pgbouncer.
+2021-10-29 06:02:29.469 UTC [1] LOG kernel file descriptor limit: 1048576 (hard: 1048576); max_client_conn: 500, max expected fd use: 932
+2021-10-29 06:02:29.470 UTC [1] LOG listening on 0.0.0.0:5439
+2021-10-29 06:02:29.470 UTC [1] LOG listening on unix:/tmp/.s.PGSQL.5439
+
+--------------------log-------------------
+查看pgbouncer虚拟数据库里的连接池信息
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pgbouncer
+pgbouncer=# show pools;       5个连接，2个在pg_rw sam 这个池里
+ database  |   user    | cl_active | cl_waiting | sv_active | sv_idle | sv_used | sv_tested | sv_login | maxwait | maxwait_us |  pool_mode
+-----------+-----------+-----------+------------+-----------+---------+---------+-----------+----------+---------+------------+-------------
+ pg_ro     | chensen   |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pg_rw     | clm       |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pg_rw     | sam       |         2 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pgbouncer | pgbouncer |         1 |          0 |         0 |       0 |       0 |         0 |        0 |       0 |          0 | statement
+(4 rows)
+
+
+
+主库可写
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_rw
+pg_rw=# create table s1(id int primary key,name text);
+CREATE TABLE
+pg_rw=# insert into s1 values(1,'wang');
+INSERT 0 1
+副库只读	
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_ro
+pg_ro=# insert into s1 values(2,'jun');
+ERROR:  cannot execute INSERT in a read-only transaction
+
+# SCRAM-SHA-256加密算法
+MD5哈希算法构造的密码越来越不安全，所以，PG顺应发展，从10版本开始支持了SCRAM-SHA-256加密算法
+postgres=# select usename,passwd from pg_shadow where usename in('sam','cl','clm','clm2','chensen','postgres');  # 与下面的查询一样
+postgres=# select rolname,rolpassword from pg_authid where rolname in('hank','zabbix');
+ rolname |                                                              rolpassword                                                              
+---------+---------------------------------------------------------------------------------------------------------------------------------------
+ zabbix  | md5435f13d666b53dd9b4b829e237213fd8
+ hank    | SCRAM-SHA-256$4096:yqNGsct76W5ZjPvMxxjzRw==$NmR4QIuHRlhu+I/HP1TQ4OC6stmtgN6Oc7oZa76tKxQ=:kNOwGMU+tSbJ2QQiD1Hb/rCKX7/coQEdkeUjD9+pEhE=
+
+
+#pg_hba.conf没有修改，但是同样可以通过密码登陆，这是pg的一个兼容性特性，即使没写SCRAM-SHA-256，可以自动识别密码为SCRAM-SHA-256加密的，然后验证通过，而且使用老的MD5加密的用户也可以正常登陆
+host  all  all  0.0.0.0/0 md5
+如果修改pg_hba.conf为scram-sha-256，则md5加密的用户无法登陆	
+
+
+postgresql-13主从 streaming复制 同步模式
+===========================================================================================================================
+1 概念和原理
+一.物理流复制
+物理流复制是一种数据库主备同步技术，该特性同步的数据是数据库中物理页面变化数据（WAL），该模式备库的底层数据页面状态和主库完全相同，这样的实现方案让数据库主备以及同步状态都非常稳定。
+二.流复制中的角色
+1. 主库 backend 进程，它负责执行用户的 SQL，在修改数据前会先记录 WAL（Write-Ahead Logging）日志。这些日志中事物提交日志（CommitTransaction）由 backend 进程负责写到磁盘。
+2. 主库 WALsender 进程，负责把 WAL 日志发送给备库的 WALreceiver 进程。
+3. 备库 WALreceiver 进程，负责接收 WALsender 发送的 WAL 日志，并持久化到存储。
+4. 备库 startup 进程，负责恢复 WALsender 写到磁盘上的 WAL 日志，把数据 apply 到数据页面上。
+异步流复制和同步流复制
+一.异步流复制
+默认状态下的流复制是以异步方式工作的，也就是说主库写本地数据和 WAL 日志，WALsender 异步的把数据发送给备库，备库收到数据后再异步的做数据恢复。
+异步模式可以做到较好的性能，它的劣势是：极端情况下，主库如果当机，被库被激活成主库，部分 WAL 没有发送到备库，可能造成数据丢失。
+二.同步流复制
+相对于异步模式，PostgreSQL 还支持同步模式的流复制。同模模式可以细分为三级
+1. REMOTE_WRITE 保证该事务的所有数据被备库收到（备库收到数据并调用 write 写磁盘，但并未持久化到磁盘）
+2. REMOTE_FLUSH 保证该事务的所有数据在备库持久化到磁盘（调用 flush，但只读查询看不到）
+3. REMOTE_APPLY 保证该事务的所有数据在备库被恢复到数据页面（恢复进程读取并解析 WAL，再 APPLY 到数据页面，在备库上执行的只读查询能看到数据的变化）
+三. 同步流复制源码解析
+1. MVCC 机制和数据可见性
+简单的说 PostgreSQL ACID 是基于 MVCC 和 WAL 技术。数据的修改过程可以简单描述为
+1. 首先 backend 开启是一个事务,获得一个事务号 XID;
+2. 在这个事务中对数据的任意修改，都被 XID 标记。
+3. 其他 backend 在扫描数据时，会看到被这个 XID 修改过的数据，根据当前的隔离级别，选择对这些数据是否可见（默认的读已提交隔离级别看不到这些数据）。
+4. 只有当此 XID 最后被标记成 commit （写 WAL commit log 和写 clog）后，其他的 backend 才能看到这个 XID 修改的数据。
+2. 同模流复制的关键点
+总结一下，实现流复制的同步模式，关键点在每个事务提交或回滚时，保证它产生的所有数据变化日志，即 WAL 都“同步”到备库。最后一条 WAL commit log 尤为关键。
+3. 如何实现同步流复制
+铺垫完所有概念和前提技术，我们看看同步模式具体是怎么实现的。以事务提交流程为例：
+1. [主库 backend 进程]调用 RecordTransactionCommit 中写 WAL commit log，获得这条日志在在 WAL 中的位置 XLogRecPtr
+2. [主库 backend 进程]完成写 WAL 后，进入 SyncRepWaitForLSN 等待 WAL 日志“同步”到备库。具体做法是:在共享内存中创建一个等待队列 SHMQueue 记录 XLogRecPtr，并调动 WaitLatch，让出 CPU 等待被唤醒。
+3. [主库 WALsender 进程]相应所有备库的 WALreceiver 拉取 WAL 的请求。把 WAL 发送给所有备库。
+4. [备库 WALreceiver 进程]写 WAL 的偏移（LogstreamResult.Write）和持久化 WAL 偏移（LogstreamResult.Flush）记录下来。
+5. [备库 startup 进程]不断的恢复数据，把当前恢复到的 WAL 位点放在共享内存 xlogctl->lastReplayedEndRecPtr 中。
+6. [备库 WALreceiver 进程]不断通过 r 报文和主库 WALsender 进程同步的状态，即 XLOGWRITELSN XLOGREMOTELSN XLOGAPPLYLSN（XLogWalRcvSendReply）
+7. [主库 WALsender 进程]收到备库发送的 r 报文后，检查共享内存中的等待队列 SHMQueue, 根据备库反馈的位点结合 SHMQueue，唤醒那些等待队列中睡眠的 主库 backend 进程（WalSndWaitForWal）。
+8. [主库 backend 进程]被唤醒，当前事务成功提交，SQL 执行完成返回给客户端。
+===========================================================================================================================
+PostgreSQL V12中没有了recovery.conf
+从向后兼容的观点来看，PostgreSQL v12中最大的变化是recovery.conf文件中的参数放到了postgresql.conf配置文件中。
+
+放弃recovery.conf
+在PG12以前，如果数据目录存在recovery.conf文件，当PG实例启动时将进入恢复模式（recovery或standby）,该文件包含了用于配置恢复的所有参数，例如：
+standby_mode：确定这是正常的归档恢复还是standby模式
+restore_command：此命令恢复已归档的WAL段
+recovery_target*：此参数确定要恢复到的点
+primary_conninfo：如何连接到流复制主服务器
+长期以来，recovery.conf一直被认为是一个缺陷，因为配置参数分布在多个不同的文件中是不合理的，另外还不能使用ALTER SYSTEM命令对参数进行修改。
+
+从PG12开始，由于该文件不存在，由下面两个新文件进行替换：
+recovery.signal：告诉PostgreSQL进入正常的归档恢复
+standby.signal：告诉PostgreSQL进入standby模式
+如果两个文件都存在，则standby.signal优先。
+
+
+2 配置
+# Install the repository RPM:
+sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+
+# Install PostgreSQL:
+sudo yum install -y postgresql13-server
+
+# Optionally initialize the database and enable automatic start:
+sudo /usr/pgsql-13/bin/postgresql-13-setup initdb
+sudo systemctl enable postgresql-13
+sudo systemctl start postgresql-13
+
+环境变量
+export PATH=/usr/pgsql-13/bin:$PATH
+export PGDATA=/var/lib/postgresql/data
+
+cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.67.39.58  postgres-1
+10.67.39.59  postgres-2
+
+------主库操作
+1 初始化数据库
+postgresql-setup --initdb
+
+2 在pg_hba.conf增加一行
+host    replication     repl            postgres-2              trust
+
+3 修改postgresql.conf
+listen_addresses = '*'
+synchronous_standby_names = '*'    同步模式的设置
+synchronous_commit = on    默认设置，可以用select * from pg_settings where name='synchronous_commit';验证
+# - Archiving -
+archive_mode = on              
+archive_command = 'test ! -f /opt/archivedir/%f && cp %p /opt/archivedir/%f'
+
+4 重启postgresql
+5 创建复制用户
+create user repl replication LOGIN CONNECTION LIMIT 30 ENCRYPTED PASSWORD 'Foxconn123';
+
+---------从库操作
+从库只安装数据库软件，不进行数据库初始化
+/usr/pgsql-13/bin/pg_basebackup --pgdata=$PGDATA --format=p --write-recovery-conf --checkpoint=fast --label=mffb --progress --host=postgres-1 --port=5432 --username=repl
+***在PG12之前，-R备份结束之后会自动生成recovery.conf文件，用来做流复制判断主从同步的信息。但是从PG12开始，这个文件已经不需要了。***
+***只需要在参数文件postgresql.conf中配置primary_conninfo参数即可。***
+
+修改potgresql.conf， 这个配置文件从主库复制来
+primary_conninfo = 'host=10.67.39.58 port=5432 user=repl password=Foxconn123'
+primary_slot_name = 'postgres2_slot'
+
+---------主库操作
+在主库创建replication slot
+***Slots can be created and dropped either via the streaming replication protocol (see Section 53.4) or via SQL functions (see Section 9.27.6).***
+select * from pg_create_physical_replication_slot('postgres2_slot');
+select slot_name,slot_type,active,wal_status from pg_replication_slots;
+
+---------从库操作
+systemctl start postgresql-13
+如果从库设置正确的话，可以从log里看到
+2021-07-14 06:07:25.820 UTC [852] LOG:  started streaming WAL from primary at 0/3000000 on timeline 1
+
+---------在主库再次检查
+postgres=# select slot_name,slot_type,active,wal_status from pg_replication_slots;
+   slot_name    | slot_type | active | wal_status
+----------------+-----------+--------+------------
+ standby_slot   | physical  | f      |
+ postgres2_slot | physical  | t      | reserved
+---------观察进程
+从库进程
+-bash-4.2$ ps -ef |grep wal
+postgres   852 17759  0 06:07 ?        00:00:01 postgres: walreceiver streaming 0/302FA60
+主库进程
+-bash-4.2$ ps -ef|grep wal
+postgres  2481 18063  0 06:07 ?        00:00:00 postgres: walsender repl 10.67.39.59(38252) streaming 0/302FA60
+
+--------主库观察同步状态
+postgres=# select * from pg_stat_replication;
+-[ RECORD 1 ]----+------------------------------
+pid              | 2481
+usesysid         | 16384
+usename          | repl
+application_name | walreceiver
+client_addr      | 10.67.39.59
+client_hostname  | postgres-2
+client_port      | 38252
+backend_start    | 2021-07-14 06:07:28.239589+00
+backend_xmin     |
+state            | streaming
+sent_lsn         | 0/4000148
+write_lsn        | 0/4000148
+flush_lsn        | 0/4000148
+replay_lsn       | 0/4000148
+write_lag        |
+flush_lag        |
+replay_lag       |
+sync_priority    | 1
+sync_state       | sync    同步方式
+reply_time       | 2021-07-14 07:05:54.037038+00
+
+--------从库观察同步状态
+postgres=# select * from pg_stat_wal_receiver;
+-[ RECORD 1 ]---------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+pid                   | 852
+status                | streaming
+receive_start_lsn     | 0/3000000
+receive_start_tli     | 1
+written_lsn           | 0/4000148
+flushed_lsn           | 0/4000148
+received_tli          | 1
+last_msg_send_time    | 2021-07-14 07:04:26.345695+00
+last_msg_receipt_time | 2021-07-14 07:04:23.79761+00
+latest_end_lsn        | 0/4000148
+latest_end_time       | 2021-07-14 06:40:52.494625+00
+slot_name             | postgres2_slot
+sender_host           | postgres-1
+sender_port           | 5432
+conninfo              | user=repl passfile=/var/lib/pgsql/.pgpass channel_binding=prefer dbname=replication host=postgres-1 port=5432 fallback_application_name=walreceiver sslmode=prefer sslcompression=0 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres target_session_attrs=any
+
+ ---------测试
+ 在主库create table, 从库观察
+ 
+postgres=# select pg_is_in_recovery();       主库是f代表false ；备库是t，代表true
+ pg_is_in_recovery
+-------------------
+ t
+
+
+切归档
+[root@postgres-1 archivedir]# ls -lh
+total 33M
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
+-rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
+
+postgres=# select pg_switch_wal();
+ pg_switch_wal
+---------------
+ 0/302FA78
+(1 row)
+
+[root@postgres-1 archivedir]# ls -lh
+total 49M
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000001
+-rw-------. 1 postgres postgres 16M Jul 13 09:20 000000010000000000000002
+-rw-------. 1 postgres postgres 316 Jul 13 09:20 000000010000000000000002.00000028.backup
+-rw-------. 1 postgres postgres 16M Jul 14 06:36 000000010000000000000003
+或者
+postgres=# select * from pg_stat_get_archiver();
+-[ RECORD 1 ]------+-----------------------------
+archived_count     | 11
+last_archived_wal  | 000000010000000000000008
+last_archived_time | 2021-07-14 09:07:57.06432+00
+failed_count       | 0
+last_failed_wal    |
+last_failed_time   |
+stats_reset        | 2021-07-13 08:26:45.98489+00
+
+postgres=# select pg_switch_wal();
+-[ RECORD 1 ]-+----------
+pg_switch_wal | 0/901BD78
+
+postgres=# select * from pg_stat_get_archiver();
+-[ RECORD 1 ]------+------------------------------
+archived_count     | 12
+last_archived_wal  | 000000010000000000000009
+last_archived_time | 2021-07-15 06:21:10.562539+00
+failed_count       | 0
+last_failed_wal    |
+last_failed_time   |
+stats_reset        | 2021-07-13 08:26:45.98489+00
+
+####Rollback from Synchronous to Asynchronous PostgreSQL Replication
+Postgresql.conf注释下面两行
+#synchronous_standby_names = 'pgsql_0_node_0'
+#synchronous_commit = on
+And restart the database service.
+$ systemctl restart postgresql-13
+
+###########  repmgr高可用  ########### 
+架构
+-----------------------------
+rep01          primary
+rep02          standby
+repwitness     witness
+-----------------------------
+0 前提准备
+安装  yum install repmgr_13
+配置双向ssh免密登录  
+从rep01上   ssh postgres@rep02
+从rep02上   ssh postgres@rep01
+
+1 配置primary节点
+1.1 初始化DB /usr/pgsql-13/bin/postgresql-13-setup initdb
+systemctl enable --now postgresql-13
+
+1.2 配置postgresql参数
+listen_addresses = '*' 
+max_wal_senders = 10
+max_replication_slots = 10
+wal_level = 'replica'
+wal_log_hints = on
+hot_standby = on
+archive_mode = on
+archive_command = '/bin/true'
+重启PG
+
+1.3 创建repmgr 数据库及用户
+psql:  create user repmgr with password 'repmgr' superuser replication;
+psql:  create database repmgr owner repmgr;
+psql:  ALTER USER repmgr SET search_path TO repmgr, public;
+
+vi postgresql.conf 加入
+shared_preload_libraries = 'repmgr'
+
+1.4 配置repmgr服务
+-bash-4.2$ tail -10 /etc/repmgr/13/repmgr.conf
+
+node_id=1
+node_name='rep01'
+conninfo='host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2'
+data_directory='/var/lib/pgsql/13/data'
+pg_bindir='/usr/pgsql-13/bin'
+config_directory='/var/lib/pgsql/13/data'
+log_level=INFO
+log_facility=STDERR
+log_file='/var/lib/pgsql/13/data/log/repmgr.log'
+
+1.5 配置pg_hba.conf
+-bash-4.2$ cat pg_hba.conf |grep trust
+local repmgr            repmgr                                  trust
+local replication            repmgr                                  trust
+host repmgr            repmgr          0.0.0.0/0                trust
+host repmgr            repmgr          127.0.0.1/32                trust
+host replication            repmgr          0.0.0.0/0                trust
+host replication            repmgr          127.0.0.1/32                trust
+重启PG
+在standby节点rep02验证是否可以访问rep01
+-bash-4.2$ psql 'host=rep01 user=repmgr dbname=repmgr connect_timeout=2'
+psql (13.4)
+Type "help" for help.
+
+repmgr=#
+
+1.6 向repmgr注册primary节点
+-bash-4.2$ /usr/pgsql-13/bin/repmgr primary register
+INFO: connecting to primary database...
+NOTICE: attempting to install extension "repmgr"
+NOTICE: "repmgr" extension successfully installed
+NOTICE: primary node record (ID: 1) registered
+查看状态
+-bash-4.2$ /usr/pgsql-13/bin/repmgr service status
+ ID | Name  | Role    | Status    | Upstream | repmgrd     | PID | Paused? | Upstream last seen
+----+-------+---------+-----------+----------+-------------+-----+---------+--------------------
+ 1  | rep01 | primary | * running |          | not running | n/a | n/a     | n/a
+
+repmgr=# select * from repmgr.nodes;
+ node_id | upstream_node_id | active | node_name |  type   | location | priority |                             conninfo
+   | repluser | slot_name |        config_file
+---------+------------------+--------+-----------+---------+----------+----------+---------------------------------------------------------------
+---+----------+-----------+----------------------------
+       1 |                  | t      | rep01     | primary | default  |      100 | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout
+=2 | repmgr   |           | /etc/repmgr/13/repmgr.conf
+(1 row)
+repmgr=# select * from pg_stat_replication;    此时没有主备流复制
+ pid | usesysid | usename | application_name | client_addr | client_hostname | client_port | backend_start | backend_xmin | state | sent_lsn | wr
+ite_lsn | flush_lsn | replay_lsn | write_lag | flush_lag | replay_lag | sync_priority | sync_state | reply_time
+-----+----------+---------+------------------+-------------+-----------------+-------------+---------------+--------------+-------+----------+---
+--------+-----------+------------+-----------+-----------+------------+---------------+------------+------------
+(0 rows)
+
+2 克隆standby节点
+2.1 配置repmgr服务
+-bash-4.2$ tail -10 /etc/repmgr/13/repmgr.conf
+node_id=2
+node_name='rep02'
+conninfo='host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2'
+data_directory='/var/lib/pgsql/13/data'
+pg_bindir='/usr/pgsql-13/bin'
+config_directory='/var/lib/pgsql/13/data'
+log_level=INFO
+log_facility=STDERR
+log_file='/var/lib/pgsql/13/data/log/repmgr.log'
+
+2.2 standby clone dry run
+/usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr standby clone --dry-run
+
+2.3 正式standby clone
+/usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr standby clone
+
+standby clone做完后就能查看流复制是否工作
+检查备机的流复制状态
+postgres=# select * from pg_stat_wal_receiver;
+-[ RECORD 1 ]---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+pid                   | 642
+status                | streaming
+receive_start_lsn     | 0/4000000
+receive_start_tli     | 1
+written_lsn           | 0/40007E0
+flushed_lsn           | 0/40007E0
+received_tli          | 1
+last_msg_send_time    | 2021-10-22 05:35:42.836854+00
+last_msg_receipt_time | 2021-10-22 05:35:42.837077+00
+latest_end_lsn        | 0/40007E0
+latest_end_time       | 2021-10-22 05:35:42.836854+00
+slot_name             |                             没有用到复制槽
+sender_host           | rep01
+sender_port           | 5432
+
+****************************
+To enable repmgr to use replication slots, set the boolean parameter use_replication_slots in repmgr.conf:
+
+       use_replication_slots=true
+Replication slots must be enabled in postgresql.conf by setting the parameter max_replication_slots to at least the number of expected standbys (changes to this parameter require a server restart).
+
+When cloning a standby, repmgr will automatically generate an appropriate slot name, which is stored in the repmgr.nodes table, and create the slot on the upstream node:
+
+    repmgr=# SELECT node_id, upstream_node_id, active, node_name, type, priority, slot_name
+               FROM repmgr.nodes ORDER BY node_id;
+     node_id | upstream_node_id | active | node_name |  type   | priority |   slot_name
+    ---------+------------------+--------+-----------+---------+----------+---------------
+           1 |                  | t      | node1     | primary |      100 | repmgr_slot_1
+           2 |                1 | t      | node2     | standby |      100 | repmgr_slot_2
+           3 |                1 | t      | node3     | standby |      100 | repmgr_slot_3
+     (3 rows)
+****************************
+
+2.4 启动PG，并向repmgr注册standby节点
+/usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr standby register
+2.5 查看集群状态
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr cluster show
+ ID | Name  | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+-------+---------+-----------+----------+----------+----------+----------+------------------------------------------------------------------
+ 1  | rep01 | primary | * running |          | default  | 100      | 1        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02 | standby |   running | rep01    | default  | 100      | 1        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+conninfo              | user=repmgr passfile=/var/lib/pgsql/.pgpass channel_binding=prefer connect_timeout=2 dbname=replication host=rep01 port=5432 application_name=rep02 fallback_application_name=walreceiver sslmode=prefer sslcompression=0 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres target_session_attrs=any
+
+ 到此 流复制服务配置完成
+
+# 集群主备switchover
+ -bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr standby switchover
+WARNING: following problems with command line parameters detected:
+  database connection parameters not required when executing STANDBY SWITCHOVER
+NOTICE: executing switchover on node "rep02" (ID: 2)
+NOTICE: attempting to pause repmgrd on 2 nodes
+NOTICE: repmgrd not running on node "rep02" (ID: 2), not pausing
+NOTICE: local node "rep02" (ID: 2) will be promoted to primary; current primary "rep01" (ID: 1) will be demoted to standby
+NOTICE: stopping current primary node "rep01" (ID: 1)
+NOTICE: issuing CHECKPOINT on node "rep01" (ID: 1)
+DETAIL: executing server command "/usr/pgsql-13/bin/pg_ctl  -D '/var/lib/pgsql/13/data' -W -m fast stop"
+INFO: checking for primary shutdown; 1 of 60 attempts ("shutdown_check_timeout")
+INFO: checking for primary shutdown; 2 of 60 attempts ("shutdown_check_timeout")
+NOTICE: current primary has been cleanly shut down at location 0/5000028
+NOTICE: promoting standby to primary
+DETAIL: promoting server "rep02" (ID: 2) using pg_promote()
+NOTICE: waiting up to 60 seconds (parameter "promote_check_timeout") for promotion to complete
+NOTICE: STANDBY PROMOTE successful
+DETAIL: server "rep02" (ID: 2) was successfully promoted to primary
+NOTICE: node "rep02" (ID: 2) promoted to primary, node "rep01" (ID: 1) demoted to standby
+NOTICE: switchover was successful
+DETAIL: node "rep02" is now primary and node "rep01" is attached as standby
+NOTICE: STANDBY SWITCHOVER has completed successfully
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr cluster show
+ ID | Name  | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+-------+---------+-----------+----------+----------+----------+----------+------------------------------------------------------------------
+ 1  | rep01 | standby |   running | rep02    | default  | 100      | 1        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02 | primary | * running |          | default  | 100      | 2        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+主备切换log on rep02 
+2021-10-22 05:47:11.361 UTC [642] LOG:  replication terminated by primary server
+2021-10-22 05:47:11.361 UTC [642] DETAIL:  End of WAL reached on timeline 1 at 0/50000A0.
+2021-10-22 05:47:11.361 UTC [642] FATAL:  could not send end-of-streaming message to primary: no COPY in progress
+2021-10-22 05:47:11.362 UTC [638] LOG:  invalid record length at 0/50000A0: wanted 24, got 0
+2021-10-22 05:47:11.369 UTC [742] FATAL:  could not connect to the primary server: could not connect to server: Connection refused
+                Is the server running on host "rep01" (10.152.219.175) and accepting
+                TCP/IP connections on port 5432?
+2021-10-22 05:47:12.488 UTC [638] LOG:  received promote request
+2021-10-22 05:47:12.488 UTC [638] LOG:  redo done at 0/5000028
+2021-10-22 05:47:12.488 UTC [638] LOG:  last completed transaction was at log time 2021-10-22 05:35:40.888136+00
+2021-10-22 05:47:12.494 UTC [638] LOG:  selected new timeline ID: 2          # timeline id变成2
+2021-10-22 05:47:12.658 UTC [638] LOG:  archive recovery complete
+2021-10-22 05:47:12.675 UTC [636] LOG:  database system is ready to accept connections
+
+-bash-4.2$ ls pg_wal
+000000010000000000000005.partial  00000002.history  000000020000000000000005  000000020000000000000006  archive_status
+
+主备切换log on rep01
+2021-10-22 05:47:11.159 UTC [1264] LOG:  received fast shutdown request
+2021-10-22 05:47:11.160 UTC [1264] LOG:  aborting any active transactions
+2021-10-22 05:47:11.160 UTC [1275] FATAL:  terminating connection due to administrator command
+2021-10-22 05:47:11.161 UTC [1515] FATAL:  terminating connection due to administrator command
+2021-10-22 05:47:11.171 UTC [1264] LOG:  background worker "logical replication launcher" (PID 1273) exited with exit code 1
+2021-10-22 05:47:11.173 UTC [1267] LOG:  shutting down
+2021-10-22 05:47:11.175 UTC [1973] FATAL:  the database system is shutting down
+2021-10-22 05:47:11.363 UTC [1264] LOG:  database system is shut down
+2021-10-22 05:47:14.018 UTC [1986] LOG:  starting PostgreSQL 13.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+2021-10-22 05:47:14.018 UTC [1986] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2021-10-22 05:47:14.018 UTC [1986] LOG:  listening on IPv6 address "::", port 5432
+2021-10-22 05:47:14.020 UTC [1986] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2021-10-22 05:47:14.026 UTC [1986] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2021-10-22 05:47:14.036 UTC [1988] LOG:  database system was shut down at 2021-10-22 05:47:11 UTC
+2021-10-22 05:47:14.037 UTC [1988] LOG:  entering standby mode
+2021-10-22 05:47:14.045 UTC [1988] LOG:  consistent recovery state reached at 0/50000A0
+2021-10-22 05:47:14.045 UTC [1988] LOG:  invalid record length at 0/50000A0: wanted 24, got 0
+2021-10-22 05:47:14.049 UTC [1986] LOG:  database system is ready to accept read only connections
+2021-10-22 05:47:14.072 UTC [1992] LOG:  fetching timeline history file for timeline 2 from primary server
+2021-10-22 05:47:14.078 UTC [1992] LOG:  started streaming WAL from primary at 0/5000000 on timeline 1
+2021-10-22 05:47:14.078 UTC [1992] LOG:  replication terminated by primary server
+2021-10-22 05:47:14.078 UTC [1992] DETAIL:  End of WAL reached on timeline 1 at 0/50000A0.
+2021-10-22 05:47:14.080 UTC [1988] LOG:  new target timeline is 2
+2021-10-22 05:47:14.081 UTC [1992] LOG:  restarted WAL streaming at 0/5000000 on timeline 2
+2021-10-22 05:47:14.305 UTC [1988] LOG:  redo starts at 0/50000A0
+
+rep02上的repmgr.events信息
+repmgr=# select * from events;
+ node_id |           event           | successful |        event_timestamp        |                                      details
+---------+---------------------------+------------+-------------------------------+-----------------------------------------------------------------------------------
+       1 | cluster_created           | t          | 2021-10-22 03:40:53.385727+00 |
+       1 | primary_register          | t          | 2021-10-22 03:40:53.404635+00 |
+       1 | repmgrd_start             | t          | 2021-10-22 05:21:33.882816+00 | monitoring cluster primary "rep01" (ID: 1)
+       2 | standby_clone             | t          | 2021-10-22 05:31:39.50342+00  | cloned from host "rep01", port 5432; backup method: pg_basebackup; --force: N
+       2 | standby_register          | t          | 2021-10-22 05:33:39.629399+00 | standby registration succeeded; upstream node ID is 1
+       1 | child_node_new_connect    | t          | 2021-10-22 05:33:45.265582+00 | new standby "rep02" (ID: 2) has connected
+       2 | standby_promote           | t          | 2021-10-22 05:47:13.495569+00 | server "rep02" (ID: 2) was successfully promoted to primary
+       2 | standby_switchover        | t          | 2021-10-22 05:47:14.192874+00 | node "rep02" (ID: 2) promoted to primary, node "rep01" (ID: 1) demoted to standby
+       1 | repmgrd_standby_reconnect | t          | 2021-10-22 05:47:23.178747+00 | node has become a standby, monitoring connection to upstream node 2
+(9 rows)
+
+# witness节点配置
+rep01和rep02需要免密 ssh postgres@repwitness
+
+[root@repwitness ~]# cat /etc/hosts
+127.0.1.1       repwitness
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.152.219.175   rep01
+10.152.219.75    rep02
+10.152.219.3     repwitness
+
+
+1 初始化PG
+/usr/pgsql-13/bin/postgresql-13-setup initdb
+
+2 配置PG
+2.1 配置pg_hba.conf
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+# "local" is for Unix domain socket connections only
+local repmgr            repmgr                                  trust
+local replication            repmgr                                  trust
+local   all             all                                     peer
+# IPv4 local connections:
+host repmgr            repmgr          0.0.0.0/0                trust
+host repmgr            repmgr          127.0.0.1/32                trust
+host replication            repmgr          0.0.0.0/0                trust
+host replication            repmgr          127.0.0.1/32                trust
+host    all             all             127.0.0.1/32            scram-sha-256
+# IPv6 local connections:
+host    all             all             ::1/128                 scram-sha-256
+# Allow replication connections from localhost, by a user with the
+# replication privilege.
+local   replication     all                                     peer
+host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             ::1/128                 scram-sha-256
+
+2.2 配置postgresql.conf
+listen_addresses = '*'          # what IP address(es) to listen on;
+shared_preload_libraries = 'repmgr'     # (change requires restart)
+重启PG
+
+3 配置repmgr服务
+-bash-4.2$ tail -10 /etc/repmgr/13/repmgr.conf
+node_id=4
+node_name='repwitness'
+conninfo='host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2'
+data_directory='/var/lib/pgsql/13/data'
+pg_bindir='/usr/pgsql-13/bin'
+config_directory='/var/lib/pgsql/13/data'
+log_level=INFO
+log_facility=STDERR
+log_file='/var/lib/pgsql/13/data/log/repmgr.log'
+
+
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep02 -U repmgr -d repmgr witness register
+INFO: connecting to witness node "repwitness" (ID: 4)
+INFO: connecting to primary node
+NOTICE: attempting to install extension "repmgr"
+NOTICE: "repmgr" extension successfully installed
+INFO: witness registration complete
+NOTICE: witness node "repwitness" (ID: 4) successfully registered
+-bash-4.2$ /usr/pgsql-13/bin/repmgr cluster show
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | standby |   running | rep02    | default  | 100      | 2        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | * running |          | default  | 100      | 2        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+witness服务配置完成
+
+# 手动故障切换
+1 停主库  此时repo02是主库
+[root@rep02 ~]# systemctl stop postgresql-13
+rep01上查看
+/usr/pgsql-13/bin/repmgr cluster show
+ ID | Name       | Role    | Status        | Upstream | Location | Priority | Timeline | Connection string                                       
+----+------------+---------+---------------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | standby |   running     | ? rep02  | default  | 100      | 2        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | ? unreachable | ?        | default  | 100      |          | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running     | ? rep02  | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+WARNING: following issues were detected
+  - unable to connect to node "rep01" (ID: 1)'s upstream node "rep02" (ID: 2)
+  - unable to determine if node "rep01" (ID: 1) is attached to its upstream node "rep02" (ID: 2)
+  - unable to connect to node "rep02" (ID: 2)
+  - node "rep02" (ID: 2) is registered as an active primary but is unreachable
+  - unable to connect to node "repwitness" (ID: 4)'s upstream node "rep02" (ID: 2)
+
+HINT: execute with --verbose option to see connection error messages
+
+2 手动提升standby
+-bash-4.2$ /usr/pgsql-13/bin/repmgr standby promote
+WARNING: 1 sibling nodes found, but option "--siblings-follow" not specified
+DETAIL: these nodes will remain attached to the current primary:
+  repwitness (node ID: 4, witness server)
+NOTICE: promoting standby to primary
+DETAIL: promoting server "rep01" (ID: 1) using pg_promote()
+NOTICE: waiting up to 60 seconds (parameter "promote_check_timeout") for promotion to complete
+NOTICE: STANDBY PROMOTE successful
+DETAIL: server "rep01" (ID: 1) was successfully promoted to primary
+-bash-4.2$ /usr/pgsql-13/bin/repmgr cluster show
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string                                           
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | primary | * running |          | default  | 100      | 3        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | - failed  | ?        | default  | 100      |          | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | ? rep02  | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+WARNING: following issues were detected
+  - unable to connect to node "rep02" (ID: 2)
+  - unable to connect to node "repwitness" (ID: 4)'s upstream node "rep02" (ID: 2)
+
+HINT: execute with --verbose option to see connection error messages
+
+3 原主库rep02重新加入集群
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr node rejoin --force-rewind
+NOTICE: rejoin target is node "rep01" (ID: 1)
+NOTICE: pg_rewind execution required for this node to attach to rejoin target node 1
+DETAIL: rejoin target server's timeline 3 forked off current database system timeline 2 before current recovery point 0/7000028
+NOTICE: executing pg_rewind
+DETAIL: pg_rewind command is "/usr/pgsql-13/bin/pg_rewind -D '/var/lib/pgsql/13/data' --source-server='host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2'"
+NOTICE: 0 files copied to /var/lib/pgsql/13/data
+NOTICE: setting node 2's upstream to node 1
+WARNING: unable to ping "host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2"
+DETAIL: PQping() returned "PQPING_NO_RESPONSE"
+NOTICE: starting server using "/usr/pgsql-13/bin/pg_ctl  -w -D '/var/lib/pgsql/13/data' start"
+NOTICE: NODE REJOIN successful
+DETAIL: node 2 is now attached to node 1
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr cluster show
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | primary | * running |          | default  | 100      | 3        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | standby |   running | rep01    | default  | 100      | 2        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+# 自动故障切换
+当前主库为rep01
+-bash-4.2$ /usr/pgsql-13/bin/pg_ctl -D /var/lib/pgsql/13/data -m immediate stop
+waiting for server to shut down.... done
+
+rep02上查看，rep02由standby提升为primary了
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr cluster show
+WARNING: the following problems were found in the configuration file:
+  monitoring_interval_secs='5': unknown name/value pair provided; ignoring
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | primary | - failed  | ?        | default  | 100      |          | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | * running |          | default  | 100      | 4        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+主库的恢复        
+在rep01上，node rejoin rewind操作，让rep01变成rep02的从库
+-bash-4.2$  /usr/pgsql-13/bin/repmgr -h rep02 -U repmgr -d repmgr node rejoin --force-rewind
+WARNING: the following problems were found in the configuration file:
+  monitoring_interval_secs='5': unknown name/value pair provided; ignoring
+NOTICE: rejoin target is node "rep02" (ID: 2)
+NOTICE: pg_rewind execution required for this node to attach to rejoin target node 2
+DETAIL: rejoin target server's timeline 4 forked off current database system timeline 3 before current recovery point 0/8000028
+NOTICE: executing pg_rewind
+DETAIL: pg_rewind command is "/usr/pgsql-13/bin/pg_rewind -D '/var/lib/pgsql/13/data' --source-server='host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2'"
+NOTICE: 0 files copied to /var/lib/pgsql/13/data
+NOTICE: setting node 1's upstream to node 2
+WARNING: unable to ping "host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2"
+DETAIL: PQping() returned "PQPING_NO_RESPONSE"
+NOTICE: starting server using "/usr/pgsql-13/bin/pg_ctl  -w -D '/var/lib/pgsql/13/data' start"
+NOTICE: NODE REJOIN successful
+DETAIL: node 1 is now attached to node 2
+-bash-4.2$  /usr/pgsql-13/bin/repmgr -h rep02 -U repmgr -d repmgr cluster show
+WARNING: the following problems were found in the configuration file:
+  monitoring_interval_secs='5': unknown name/value pair provided; ignoring
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string                                           
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | standby |   running | rep02    | default  | 100      | 3        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | * running |          | default  | 100      | 4        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+ 如果直接起主库的话，就会有两个running的主库
+ 从rep01上看
+/usr/pgsql-13/bin/repmgr cluster show
+WARNING: the following problems were found in the configuration file:
+  monitoring_interval_secs='5': unknown name/value pair provided; ignoring
+ ID | Name       | Role    | Status               | Upstream | Location | Priority | Timeline | Connection string                                
+----+------------+---------+----------------------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | primary | * running            |          | default  | 100      | 3        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | standby | ! running as primary |          | default  | 100      | 4        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running            | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+WARNING: following issues were detected
+  - node "rep02" (ID: 2) is registered as standby but running as primary
+从rep02上看
+-bash-4.2$ /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr cluster show
+WARNING: the following problems were found in the configuration file:
+  monitoring_interval_secs='5': unknown name/value pair provided; ignoring
+ ID | Name       | Role    | Status    | Upstream | Location | Priority | Timeline | Connection string
+----+------------+---------+-----------+----------+----------+----------+----------+-----------------------------------------------------------------------
+ 1  | rep01      | primary | ! running |          | default  | 100      | 3        | host=rep01 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 2  | rep02      | primary | * running |          | default  | 100      | 4        | host=rep02 port=5432 dbname=repmgr user=repmgr connect_timeout=2
+ 4  | repwitness | witness | * running | rep02    | default  | 0        | n/a      | host=repwitness port=5432 dbname=repmgr user=repmgr connect_timeout=2
+
+WARNING: following issues were detected
+  - node "rep01" (ID: 1) is running but the repmgr node record is inactive
+  
+简介： PostgreSQL pg_rewind，时间线修复，脑裂修复，flashback - 从库开启读写后，回退为只读从库。异步主从发生角色切换后，主库rewind为新主库的从库
+背景
+1、PG物理流复制的从库，当激活后，可以开启读写，使用pg_rewind可以将从库回退为只读从库的角色。而不需要重建整个从库。
+
+2、当异步主从发生角色切换后，主库的wal目录中可能还有没完全同步到从库的内容，因此老的主库无法直接切换为新主库的从库。使用pg_rewind可以修复老的主库，使之成为新主库的只读从库。而不需要重建整个从库。
+
+3、如果没有pg_rewind，遇到以上情况，需要完全重建从库。或者你可以使用存储层快照，回退回脑裂以前的状态。又或者可以使用文件系统快照，回退回脑裂以前的状态。
+
+原理与修复步骤
+1、使用pg_rewind功能的前提条件：必须开启full page write，必须开启wal hint或者data block checksum。
+
+2、需要被修复的库：从激活点开始，所有的WAL必须存在pg_wal目录中。如果WAL已经被覆盖，只要有归档，拷贝到pg_wal目录即可。
+
+3、新的主库，从激活点开始，产生的所有WAL必须存在pg_wal目录中，或者已归档，并且被修复的库可以使用restore_command访问到这部分WAL。
+
+4、修改(source db)新主库或老主库配置，允许连接。
+
+5、修复时，连接新主库，得到切换点。或连接老主库，同时比对当前要修复的新主库的TL与老主库进行比对，得到切换点。
+
+6、解析需要被修复的库的从切换点到现在所有的WAL。同时连接source db(新主库（或老主库）)，进行回退操作（被修改或删除的BLOCK从source db获取并覆盖，新增的BLOCK，直接抹除。）回退到切换点的状态。
+
+7、修改被修复库(target db)的recovery.conf, postgresql.conf配置。
+
+8、启动target db，连接source db接收WAL，或restore_command配置接收WAL，从切换点开始所有WAL，进行apply。
+
+9、target db现在是source db的从库。 

@@ -381,6 +381,105 @@ postgres=# select * from page_header(get_raw_page('idx_t3_t',0));
  0/C0284A0 |        0 |     0 |    72 |  8176 |    8176 |     8192 |       4 |         0
 (1 row)
 
+## pg_resetwal 利用MVCC多版本原理，篡改下一个事务号找回刚刚删除的数据
+postgres=# select xmin,xmax,id from t1;
+ xmin | xmax | id
+------+------+----
+  497 |    0 |  1
+  497 |    0 |  2
+  497 |    0 |  3
+  498 |    0 |  4
+  499 |    0 |  5
+(5 rows)
+
+postgres=# delete from t1 where id=4;
+DELETE 1
+postgres=# select * from heap_page_items(get_raw_page('t1','main',0));
+ lp | lp_off | lp_flags | lp_len | t_xmin | t_xmax | t_field3 | t_ctid | t_infomask2 | t_infomask | t_hoff | t_bits | t_oid |     t_data
+----+--------+----------+--------+--------+--------+----------+--------+-------------+------------+--------+--------+-------+----------------
+  1 |   8160 |        1 |     30 |    497 |      0 |        0 | (0,1)  |           2 |       2306 |     24 |        |       | \x010000000561
+  2 |   8128 |        1 |     30 |    497 |      0 |        0 | (0,2)  |           2 |       2306 |     24 |        |       | \x020000000562
+  3 |   8096 |        1 |     30 |    497 |      0 |        0 | (0,3)  |           2 |       2306 |     24 |        |       | \x030000000563
+  4 |   8064 |        1 |     30 |    498 |    500 |        0 | (0,4)  |        8194 |        258 |     24 |        |       | \x040000000564
+  5 |   8032 |        1 |     30 |    499 |      0 |        0 | (0,5)  |           2 |       2306 |     24 |        |       | \x050000000565
+(5 rows)
+
+postgres=# select xmin,xmax,id from t1;
+ xmin | xmax | id
+------+------+----
+  497 |    0 |  1
+  497 |    0 |  2
+  497 |    0 |  3
+  499 |    0 |  5
+
+postgres=# select * from t1;
+ id | info
+----+------
+  1 | a
+  2 | b
+  3 | c
+(3 rows)
+
+postgres=# \q
+postgres@u2004:~$ logout
+root@u2004:~# systemctl stop postgresql
+root@u2004:~# su - postgres
+postgres@u2004:~$ /usr/lib/postgresql/12/bin/pg_resetwal -x 499 -D /var/lib/postgresql/12/main/
+Write-ahead log reset
+postgres@u2004:~$ logout
+root@u2004:~# systemctl start postgresql
+root@u2004:~# su - postgres
+postgres@u2004:~$ psql
+psql (12.8 (Ubuntu 12.8-0ubuntu0.20.04.1))
+Type "help" for help.
+
+postgres=# select * from t1;
+ id | info
+----+------
+  1 | a
+  2 | b
+  3 | c
+  4 | d
+
+postgres=# select xmin,xmax,id from t1;
+ xmin | xmax | id
+------+------+----
+  497 |    0 |  1
+  497 |    0 |  2
+  497 |    0 |  3
+  498 |  500 |  4
+
+root@u2004:~# systemctl stop postgresql
+root@u2004:~# su - postgres
+postgres@u2004:~$ /usr/lib/postgresql/12/bin/pg_resetwal -x 500 -D /var/lib/postgresql/12/main/
+Write-ahead log reset
+postgres@u2004:~$ logout
+root@u2004:~# systemctl start postgresql
+root@u2004:~# su - postgres
+postgres@u2004:~$ psql
+psql (12.8 (Ubuntu 12.8-0ubuntu0.20.04.1))
+Type "help" for help.
+
+postgres=# select * from t1;
+ id | info
+----+------
+  1 | a
+  2 | b
+  3 | c
+  4 | d
+  5 | e
+(5 rows)
+
+postgres=# select xmin,xmax,id from t1;
+ xmin | xmax | id
+------+------+----
+  497 |    0 |  1
+  497 |    0 |  2
+  497 |    0 |  3
+  498 |  500 |  4
+  499 |    0 |  5
+(5 rows)
+
 # pg_filedump查看datafile
 安装
 [root@postgres-1 ~]# yum install pg_filedump_13
@@ -1399,6 +1498,64 @@ CREATE TABLE
 postgres=# \copy staff from '/var/lib/pgsql/sample2.csv' with csv header delimiter ',' encoding 'UTF8';
 COPY 1034
 
+
+# Large object
+All large objects are stored in a single system table named pg_largeobject.
+ The real data is stored as a “bytea” (byte array) column. Since some files might be really large, PostgreSQL breaks them up into chunks.
+lo_import函数导入文件
+ postgres=# select lo_import('/tmp/facts.db');
+ lo_import
+-----------
+     25991
+(1 row)
+
+postgres=# \dl
+              Large objects
+  ID   |  Owner   |     Description
+-------+----------+----------------------
+ 16520 | postgres | oracle instantclinet
+(1 row)
+
+移除lo的链接
+postgres=# select lo_unlink(16520);
+ lo_unlink
+-----------
+         1
+(1 row)
+
+postgres=# \dl
+      Large objects
+ ID | Owner | Description
+----+-------+-------------
+(0 rows)
+
+
+postgres=# select count(*) from pg_largeobject;
+ count
+-------
+ 27518
+(1 row)
+
+postgres=# select pg_size_pretty(pg_total_relation_size('pg_largeobject'));
+ pg_size_pretty
+----------------
+ 72 MB
+(1 row)
+
+-bash-4.2$ ls -lh base/14172/2613
+-rw-------. 1 postgres postgres 72M  8月 31 08:07 base/14172/2613
+
+建表导入文件
+postgres=# create table t_file(name text,oid_number oid);
+CREATE TABLE
+postgres=# insert into t_file values('/tmp/facts.db',lo_import('/tmp/facts.db')) returning *;
+     name      | oid_number
+---------------+------------
+ /tmp/facts.db |      25998
+(1 row)
+
+olphane large object will be cleand up by vacuum
+
 # lateral join 实现select嵌套循环
 伪代码
 select name from staff as o1
@@ -1727,3 +1884,451 @@ dvdrental=# select film_id,title from film where exists(select null);
 # pgbench
 /usr/pgsql-13/bin/pgbench -i -s 100 -U postgres -p 5432 -d pgbench  初始化数据库
 pgbench -M prepared -r -c 10 -j 4 -T 100 -U postgres -p 5432 -d pgbench -l  删改数据库	   
+
+#####  查看数据库、表的大小
+只查看表
+pgbench=# select pg_size_pretty(pg_relation_size('pgbench_accounts'));
+ pg_size_pretty
+----------------
+ 1281 MB
+(1 row)
+pgbench=# \d+
+                                 List of relations
+ Schema |       Name       | Type  |  Owner   | Persistence |  Size   | Description
+--------+------------------+-------+----------+-------------+---------+-------------
+ public | pgbench_accounts | table | postgres | permanent   | 1281 MB |
+
+只查看表的index
+pgbench=# select pg_size_pretty(pg_indexes_size('pgbench_accounts'));
+ pg_size_pretty
+----------------
+ 214 MB
+(1 row)
+pgbench=# \di+
+                                             List of relations
+ Schema |         Name          | Type  |  Owner   |      Table       | Persistence |  Size  | Description
+--------+-----------------------+-------+----------+------------------+-------------+--------+-------------
+ public | pgbench_accounts_pkey | index | postgres | pgbench_accounts | permanent   | 214 MB |
+ public | pgbench_branches_pkey | index | postgres | pgbench_branches | permanent   | 16 kB  |
+ public | pgbench_tellers_pkey  | index | postgres | pgbench_tellers  | permanent   | 40 kB  |
+
+查看表包括表的依赖
+pgbench=# select pg_size_pretty(pg_total_relation_size('pgbench_accounts'));
+ pg_size_pretty
+----------------
+ 1495 MB
+(1 row)
+查看表空间大小
+pgbench=# select pg_size_pretty(pg_tablespace_size('pg_default'));
+ pg_size_pretty
+----------------
+ 1535 MB
+(1 row)
+pgbench=# \dbS+
+                                  List of tablespaces
+    Name    |  Owner   | Location | Access privileges | Options |  Size   | Description
+------------+----------+----------+-------------------+---------+---------+-------------
+ pg_default | postgres |          |                   |         | 1535 MB |
+ pg_global  | postgres |          |                   |         | 575 kB  |
+
+查看数据库的大小
+pgbench=# select pg_size_pretty(pg_database_size('pgbench'));
+ pg_size_pretty
+----------------
+ 1504 MB
+(1 row)
+pgbench=# \l+
+                                                               List of databases
+   Name    |  Owner   | Encoding  | Collate | Ctype |   Access privileges   |  Size   | Tablespace |                Description
+-----------+----------+-----------+---------+-------+-----------------------+---------+------------+--------------------------------------------
+ pgbench   | postgres | SQL_ASCII | C       | C     |                       | 1504 MB | pg_default |
+ postgres  | postgres | SQL_ASCII | C       | C     |                       | 8133 kB | pg_default | default administrative connection database
+ repmgr    | repmgr   | SQL_ASCII | C       | C     |                       | 8293 kB | pg_default |
+
+ 查看数据库中所有的表,index的大小并排序
+ SELECT
+    TableName
+    ,pg_size_pretty(pg_table_size(TableName)) AS TableSize
+    ,pg_size_pretty(pg_indexes_size(TableName)) AS IndexSize
+    ,pg_total_relation_size(TableName) AS TotalSize
+FROM 
+(
+     SELECT ('"' || table_schema || '"."' || table_name || '"') AS TableName
+     FROM information_schema.tables
+) AS Tables
+ORDER BY 4 DESC;
+                          tablename                           | tablesize  | indexsize  | totalsize
+--------------------------------------------------------------+------------+------------+------------
+ "public"."t4"                                                | 2489 MB    | 0 bytes    | 2609676288
+ "pg_catalog"."pg_largeobject"                                | 72 MB      | 624 kB     |   75825152
+ "profile"."sample_stat_tables"                               | 7208 kB    | 1280 kB    |    8691712
+ "profile"."sample_statements"                                | 4448 kB    | 944 kB     |    5521408
+ "profile"."sample_kcache"                                    | 2248 kB    | 760 kB     |    3080192
+ "profile"."sample_stat_indexes"                              | 1464 kB    | 504 kB     |    2015232
+ "pg_catalog"."pg_attribute"                                  | 1320 kB    | 488 kB     |    1851392
+ "pg_catalog"."pg_depend"                                     | 680 kB     | 904 kB     |    1622016
+ "pg_catalog"."pg_proc"                                       | 1064 kB    | 432 kB     |    1531904
+ "pg_catalog"."pg_statistic"                                  | 984 kB     | 64 kB      |    1073152
+ "profile"."sample_stat_tables_total"                         | 712 kB     | 192 kB     |     925696
+ "pg_catalog"."pg_rewrite"                                    | 704 kB     | 32 kB      |     753664
+
+# 找出时间长的查询 
+postgres=# select datname,pid,query_start,state,query from pg_stat_activity ;
+ datname  | pid  |          query_start          | state  |                                              query
+----------+------+-------------------------------+--------+--------------------------------------------------------------------------------------------------
+          | 1180 |                               |        |
+ postgres | 1183 | 2021-10-27 01:40:01.020783+00 | idle   | update cron.job_run_details set status = $1, return_message = $2, end_time = $3 where runid = $4
+          | 1184 |                               |        |
+          | 1225 | 2021-10-15 09:19:10.40095+00  | active | START_REPLICATION SLOT "postgres2_slot" 2/5000000 TIMELINE 1
+ postgres | 2401 | 2021-10-27 02:16:38.955905+00 | active | select datname,pid,query_start,state,query from pg_stat_activity ;
+
+查看索引是否存活、有效
+postgres=# select relname,indexrelname,indexrelid from pg_stat_all_indexes where relname='t3';
+ relname | indexrelname | indexrelid
+---------+--------------+------------
+ t3      | idx_t3_t     |      16425
+(1 row)
+
+postgres=# select indexrelid,indislive,indisvalid from pg_index where indexrelid=16425;
+ indexrelid | indislive | indisvalid
+------------+-----------+------------
+      16425 | t         | t
+	  
+查看元组上次vacuum,analyze时间和有多少dead tuple
+postgres=# select relname,last_vacuum,n_dead_tup,last_analyze
+from pg_stat_all_tables where relname='t2';
+ relname |          last_vacuum          | n_dead_tup |         last_analyze
+---------+-------------------------------+------------+-------------------------------
+ t2      | 2021-09-16 02:45:20.079676+00 |          0 | 2021-10-27 02:23:56.784364+00
+
+#  查找自从上次统计以来没有使用的索引 
+postgres=# SELECT
+     relname,
+     indexrelname,
+    idx_scan,
+     idx_tup_read,
+     idx_tup_fetch,
+     pg_size_pretty(pg_relation_size(indexrelname::regclass)) as size
+ FROM
+     pg_stat_all_indexes
+ WHERE
+     schemaname = 'public'
+     AND indexrelname NOT LIKE 'pg_toast_%'
+     AND idx_scan = 0
+     AND idx_tup_read = 0
+     AND idx_tup_fetch = 0
+ ORDER BY
+     pg_relation_size(indexrelname::regclass) DESC;
+ relname | indexrelname | idx_scan | idx_tup_read | idx_tup_fetch |  size
+---------+--------------+----------+--------------+---------------+--------
+ t3      | idx_t3_t     |        0 |            0 |             0 | 152 kB
+ books   | books_pkey   |        0 |            0 |             0 | 16 kB
+ facts   | facts_pkey   |        0 |            0 |             0 | 16 kB
+ 
+### buffercache扩展 
+查看PG Buffer cache里的数据
+postgres=# create extension pg_buffercache;
+CREATE EXTENSION
+
+postgres=# SELECT c.relname, count(*) AS buffers
+  FROM pg_buffercache b INNER JOIN pg_class c
+  ON b.relfilenode = pg_relation_filenode(c.oid) AND
+  b.reldatabase IN (0, (SELECT oid FROM pg_database
+  WHERE datname = current_database()))
+  GROUP BY c.relname
+  ORDER BY 2 DESC
+  LIMIT 10;
+        relname         | buffers
+------------------------+---------
+ sample_stat_tables     |     901
+ sample_statements      |     555
+ sample_kcache          |     281
+ sample_stat_indexes    |     183
+ pg_attribute           |     162
+ pk_sample_stat_tables  |     160
+ pg_proc                |     114
+ pg_statistic           |     101
+ pg_largeobject         |      99
+ pk_sample_statements_n |      96
+(10 rows)
+
+# pgfincore扩展
+查看OS CACHE里的数据
+[root@postgres-1 ~]# yum install pgfincore13 -y
+postgres=# create extension pgfincore;
+CREATE EXTENSION
+
+postgres=# select * from pgfincore('t4');
+      relpath       | segment | os_page_size | rel_os_pages | pages_mem | group_mem | os_pages_free | databit | pages_dirty | group_dirty
+--------------------+---------+--------------+--------------+-----------+-----------+---------------+---------+-------------+-------------
+ base/14172/16427   |       0 |         4096 |       262144 |    262144 |         1 |         52808 |         |           0 |           0
+ base/14172/16427.1 |       1 |         4096 |       262144 |    262144 |         1 |         52808 |         |           0 |           0
+ base/14172/16427.2 |       2 |         4096 |       112656 |    112656 |         1 |         52808 |         |           0 |           0
+(3 rows)
+
+select rpad(c.relname,30,' ') as Object_Name,
+case when c.relkind='r' then 'Table' when c.relkind='i' then 'Index' else 'Other' end as Object_Type, 
+rpad(count(*)::text,5,' ') as "PG_Buffer_Cache_usage(8KB)",
+split_part(pgfincore(c.relname::text)::text,','::text,5) as "OS_Cache_usage(4KB)"
+from pg_class c inner join pg_buffercache b on b.relfilenode=c.relfilenode
+     inner join pg_database d on (b.reldatabase=d.oid and d.datname=current_database() and c.relnamespace=(select oid from pg_namespace where nspname='public'))
+group by c.relname,c.relkind
+order by "PG_Buffer_Cache_usage(8KB)"
+desc limit 10;
+这里可以同时看到表t4在PG BUFFER和OS cache里有多少缓存
+          object_name           | object_type | PG_Buffer_Cache_usage(8KB) | OS_Cache_usage(4KB)
+--------------------------------+-------------+----------------------------+---------------------
+ t4                             | Table       | 12619                      | 262144
+ t4                             | Table       | 12619                      | 262144
+ t4                             | Table       | 12619                      | 112656
+(3 rows)
+
+
+释放OS CACHE里的数据
+postgres=# select * from pgfadvise_dontneed('t4');
+      relpath       | os_page_size | rel_os_pages | os_pages_free
+--------------------+--------------+--------------+---------------
+ base/14172/16427   |         4096 |       262144 |        311367
+ base/14172/16427.1 |         4096 |       262144 |        573544
+ base/14172/16427.2 |         4096 |       112656 |        686170
+(3 rows)
+查询结果
+          object_name           | object_type | PG_Buffer_Cache_usage(8KB) | OS_Cache_usage(4KB)
+--------------------------------+-------------+----------------------------+---------------------
+ t4                             | Table       | 12619                      | 0
+ t4                             | Table       | 12619                      | 0
+ t4                             | Table       | 12619                      | 0
+
+# pg_prewarm扩展
+postgres=# create extension pg_prewarm;
+CREATE EXTENSION
+将表加到pg的buffercache里 ------ 预热
+postgres=# select pg_prewarm('t4','buffer');
+ pg_prewarm
+------------
+     318472
+(1 row)
+
+postgres=# SELECT c.relname, count(*) AS buffers
+             FROM pg_buffercache b INNER JOIN pg_class c
+             ON b.relfilenode = pg_relation_filenode(c.oid) AND
+                b.reldatabase IN (0, (SELECT oid FROM pg_database
+                                      WHERE datname = current_database()))
+             GROUP BY c.relname
+             ORDER BY 2 DESC
+             LIMIT 10;
+        relname        | buffers  (8KB)
+-----------------------+---------
+ t4                    |  126003
+ sample_stat_tables    |     901
+ sample_statements     |     555
+ sample_kcache         |     281
+ sample_stat_indexes   |     183
+ pk_sample_stat_tables |     160
+ pg_proc               |     112
+ pg_attribute          |     103
+ pg_largeobject        |      98
+ pg_statistic          |      96
+
+
+postgres=# select c.relname,pg_size_pretty(count(*) * 8192) as buffered, 
+round(100.0 * count(*) / ( 
+select setting from pg_settings 
+where name='shared_buffers')::integer,1)
+as buffer_percent, 
+round(100.0*count(*)*8192 / pg_table_size(c.oid),1) as percent_of_relation
+from pg_class c inner join pg_buffercache b on b.relfilenode = c.relfilenode inner 
+join pg_database d on ( b.reldatabase =d.oid and d.datname =current_database()) 
+group by c.oid,c.relname order by 3 desc limit 10;
+         relname          | buffered | buffer_percent | percent_of_relation
+--------------------------+----------+----------------+---------------------
+ t4                       | 985 MB   |           96.2 |                39.6
+ sample_stat_tables       | 7208 kB  |            0.7 |               100.0
+ sample_statements        | 4440 kB  |            0.4 |                99.8
+ sample_kcache            | 2248 kB  |            0.2 |               100.0
+ pk_sample_kcache_n       | 760 kB   |            0.1 |               100.0
+ pk_sample_stat_tables    | 1280 kB  |            0.1 |               100.0
+ pk_sample_statements_n   | 760 kB   |            0.1 |                99.0
+ pg_statistic             | 808 kB   |            0.1 |                82.1
+ pg_largeobject           | 784 kB   |            0.1 |                99.0
+ sample_stat_tables_total | 712 kB   |            0.1 |               100.0
+(10 rows)
+
+上述结果里，buffered 表示表格被載入shared_buffers的大小
+buffer_percent 表示這個表格佔用多少shared_buffers 的比例
+percent_of_relation 表示這個表格有多少比例被載入 shared_buffers
+
+
+postgres=# \timing
+Timing is on.
+postgres=# select count(*) from t4;
+  count
+----------
+ 50000000
+(1 row)
+
+Time: 1633.040 ms (00:01.633)
+
+postgres=# explain (analyze,buffers) select count(*) from t4;
+                                                                 QUERY PLAN
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=579887.80..579887.81 rows=1 width=8) (actual time=4471.167..4484.424 rows=1 loops=1)
+   Buffers: shared hit=125998 read=192474     # buffer里hit 125998, 从磁盘读192474
+   I/O Timings: read=695.778
+   ->  Gather  (cost=579887.58..579887.79 rows=2 width=8) (actual time=4470.931..4484.409 rows=3 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=125998 read=192474
+         I/O Timings: read=695.778
+         ->  Partial Aggregate  (cost=578887.58..578887.59 rows=1 width=8) (actual time=4465.660..4465.662 rows=1 loops=3)
+               Buffers: shared hit=125998 read=192474       
+               I/O Timings: read=695.778
+               ->  Parallel Seq Scan on t4  (cost=0.00..526804.47 rows=20833247 width=0) (actual time=0.052..2554.489 rows=16666667 loops=3)
+                     Buffers: shared hit=125998 read=192474
+                     I/O Timings: read=695.778
+ Planning Time: 0.140 ms
+ Execution Time: 4484.615 ms
+
+####  表/索引膨胀
+PostgreSQL的表或索引发生膨胀后，用户可以使用vacuum full或rewrite table(如cluster)的方式重建表。
+
+但是vacuum full或者rewrite都需要持有排它锁，会堵塞读操作。
+
+为了减少锁冲突，社区有一个名为pg_reorg或pg_repack的插件，使用了增量的方式重组数据，最后通过切换FILENODE完成数据重组。
+
+仅仅在切换FILENODE时需要持有排他锁，非常短暂，影响比VACUUM FULL和rewrite的方式小多了。
+
+但是pg_reorg或pg_repack都需要建触发器，记录下增量重组时，原表产生的增量数据。
+
+https://github.com/reorg/pg_repack
+
+因此重组时，触发器会带来一定的开销，对被重组的表，有一定的DML性能影响。
+
+本文将要介绍另一个重组插件，名为pg_squeeze，它使用REDO和logical replication实现增量重组，不需要建立触发器，但是要求表上面有PK或者UK。
+
+pg_squeeze的优点
+相比pg_repack或pg_reorg，pg_squeeze不需要建触发器，所以在重组时对原表的DML几乎没有性能影响。
+
+pg_squeeze支持自动的重组，即通过设置阈值、比较用户表与阈值，自动启动WORKER进程，将数据复制到重组表，最后加锁，切换FILENODE 
+
+
+
+
+
+
+
+
+
+
+
+# 添加主键
+在表上添加一个主键是有意义的，PostgreSQL中，可以通过alter table很方便的添加一个主键，但是当主键索引创建的时候，会花费很长时间，这样会阻塞查询；
+
+DO NOT
+
+ALTER TABLE items ADD PRIMARY KEY (id); 
+INSTEAD
+
+CREATE UNIQUE INDEX CONCURRENTLY items_pk ON items (id); -- 花很长时间，但是不会阻塞读写
+ALTER TABLE items ADD CONSTRAINT items_pk PRIMARY KEY USING INDEX items_pk;  -- 阻塞读写，但是很短
+通过将主键索引的创建，分成两步；这样繁重的创建索引的工作不会影响业务查询；
+
+
+
+### pgbouncer 容器
+读写分离配置，DATABASES这行指定了用户，所以只有两个池存在
+docker run -d \
+-p 5439:5439 \
+--name=pgbouncer \
+-e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 user=postgres password=postgres dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 user=postgres password=postgres dbname=chensen" \
+-e "PGBOUNCER_LISTEN_PORT=5439" \
+-v /root/userlist.txt:/tmp/userlist.txt \
+pgbouncer/pgbouncer
+更好的写法，更多的用户放在auth_file里了
+[root@worker1 ~]# cat pgb2.sh
+docker run -d \
+-p 5439:5439 \
+--name=pgbouncer \
+-e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 dbname=chensen" \
+-e "PGBOUNCER_LISTEN_PORT=5439" \
+-e "PGBOUNCER_AUTH_TYPE=md5" \
+-e "PGBOUNCER_AUTH_FILE=/etc/pgbouncer/userlist.txt" \
+-e "PGBOUNCER_POOL_MODE=transaction" \
+-e "PGBOUNCER_MAX_CLIENT_CONN=500" \
+-e "PGBOUNCER_DEFAULT_POOL_SIZE=30" \
+-v /root/userlist.txt:/etc/pgbouncer/userlist.txt \
+最佳做法，只放pgbouncer在auth_file里，其他用户通过auth_query查询到密码
+Create a Postgres user to use as auth_user
+Create the user/password lookup function in Postgres
+Configure pgbouncer.ini
+https://www.enterprisedb.com/postgres-tutorials/pgbouncer-authquery-and-authuser-pro-tips
+--------------------log-------------------
+[root@worker1 ~]# docker logs -f e2e
+Creating pgbouncer config in /etc/pgbouncer
+#pgbouncer.ini
+
+[databases]
+pg_rw = host = 10.67.39.58 port=5432 user=postgres password=postgres dbname=chensen
+pg_ro = host = 10.67.39.59 port=5432 user=postgres password=postgres dbname=chensen
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 5439
+auth_type = any
+ignore_startup_parameters = extra_float_digits
+
+# Log settings
+admin_users = postgres
+
+# Connection sanity checks, timeouts
+
+# TLS settings
+
+# Dangerous timeouts
+
+Starting pgbouncer.
+2021-10-29 03:30:44.555 UTC [1] LOG kernel file descriptor limit: 1048576 (hard: 1048576); max_client_conn: 100, max expected fd use: 152
+2021-10-29 03:30:44.555 UTC [1] LOG listening on 0.0.0.0:5439
+2021-10-29 03:30:44.556 UTC [1] LOG listening on unix:/tmp/.s.PGSQL.5439
+2021-10-29 03:30:44.556 UTC [1] LOG process up: PgBouncer 1.15.0, libevent 2.1.8-stable (epoll), adns: c-ares 1.15.0, tls: LibreSSL 2.7.5
+2021-10-29 03:31:02.833 UTC [1] LOG C-0x5595bd7b0330: pg_rw/postgres@10.67.50.141:33938 login attempt: db=pg_rw user=postgres tls=no
+2021-10-29 03:31:02.835 UTC [1] LOG S-0x5595bd7e93f0: pg_rw/postgres@10.67.39.58:5432 new connection to server (from 172.17.0.2:46788)
+2021-10-29 03:31:44.556 UTC [1] LOG stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 443 us
+--------------------log-------------------
+查看pgbouncer虚拟数据库里的连接池信息
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pgbouncer
+pgbouncer=# show pools;       5个连接，2个在pg_rw sam 这个池里
+ database  |   user    | cl_active | cl_waiting | sv_active | sv_idle | sv_used | sv_tested | sv_login | maxwait | maxwait_us |  pool_mode
+-----------+-----------+-----------+------------+-----------+---------+---------+-----------+----------+---------+------------+-------------
+ pg_ro     | chensen   |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pg_rw     | clm       |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pg_rw     | sam       |         2 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
+ pgbouncer | pgbouncer |         1 |          0 |         0 |       0 |       0 |         0 |        0 |       0 |          0 | statement
+(4 rows)
+
+
+
+主库可写
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_rw
+pg_rw=# create table s1(id int primary key,name text);
+CREATE TABLE
+pg_rw=# insert into s1 values(1,'wang');
+INSERT 0 1
+副库只读	
+postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_ro
+pg_ro=# insert into s1 values(2,'jun');
+ERROR:  cannot execute INSERT in a read-only transaction
+
+# SCRAM-SHA-256加密算法
+MD5哈希算法构造的密码越来越不安全，所以，PG顺应发展，从10版本开始支持了SCRAM-SHA-256加密算法
+postgres=# select usename,passwd from pg_shadow where usename in('sam','cl','clm','clm2','chensen','postgres');  # 与下面的查询一样
+postgres=# select rolname,rolpassword from pg_authid where rolname in('hank','zabbix');
+ rolname |                                                              rolpassword                                                              
+---------+---------------------------------------------------------------------------------------------------------------------------------------
+ zabbix  | md5435f13d666b53dd9b4b829e237213fd8
+ hank    | SCRAM-SHA-256$4096:yqNGsct76W5ZjPvMxxjzRw==$NmR4QIuHRlhu+I/HP1TQ4OC6stmtgN6Oc7oZa76tKxQ=:kNOwGMU+tSbJ2QQiD1Hb/rCKX7/coQEdkeUjD9+pEhE=
+
+
+#pg_hba.conf没有修改，但是同样可以通过密码登陆，这是pg的一个兼容性特性，即使没写SCRAM-SHA-256，可以自动识别密码为SCRAM-SHA-256加密的，然后验证通过，而且使用老的MD5加密的用户也可以正常登陆
+host  all  all  0.0.0.0/0 md5
+如果修改pg_hba.conf为scram-sha-256，则md5加密的用户无法登陆	

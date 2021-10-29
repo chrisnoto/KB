@@ -222,3 +222,49 @@ ssd/custom/default_vol1 zfs        97G  128K   97G   1% /opt/data
 [root@c2 ~]# mount |grep zfs
 default/containers/c2 on / type zfs (rw,xattr,posixacl)
 ssd/custom/default_vol1 on /opt/data type zfs (rw,xattr,posixacl)
+
+
+# 快照
+创建快照
+lxc snapshot c2 c2-snap-initial-20211025
+查看快照
+root@u2004:~# lxc info c2
+Name: c2
+Location: none
+Remote: unix://
+Architecture: x86_64
+Created: 2021/10/23 07:11 UTC
+Status: Running
+Type: container
+Profiles: default
+Pid: 48836
+Ips:
+  eth0: inet    10.67.50.145    veth47397560
+  eth0: inet6   fe80::216:3eff:feee:e1f0        veth47397560
+  lo:   inet    127.0.0.1
+  lo:   inet6   ::1
+Resources:
+  Processes: 42
+  Disk usage:
+    data: 24.58kB
+    root: 184.14MB
+  CPU usage:
+    CPU usage (in seconds): 195
+  Memory usage:
+    Memory (current): 190.14MB
+    Memory (peak): 222.93MB
+  Network usage:
+    eth0:
+      Bytes received: 317.02MB
+      Bytes sent: 492.79kB
+      Packets received: 2816623
+      Packets sent: 7298
+    lo:
+      Bytes received: 240B
+      Bytes sent: 240B
+      Packets received: 4
+      Packets sent: 4
+Snapshots:
+  c2-snap-initial-20211025 (taken at 2021/10/25 05:44 UTC) (stateless)
+还原快照
+root@u2004:~# lxc restore c2 c2-snap-initial-20211025
