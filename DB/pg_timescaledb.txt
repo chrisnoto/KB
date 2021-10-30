@@ -1,0 +1,301 @@
+###########  zabbix 5.4 + timescaledb-2 安装和配置
+
+安装timescaledb-2插件
+# yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-$(rpm -E %{rhel})-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+# yum install timescaledb-2-postgresql-13
+$ timescaledb-tune --pg-config=/usr/pgsql-13/bin/pg_config
+# systemctl restart postgresql-13
+$ createuser --pwprompt zabbix
+$ createdb -O zabbix -E Unicode -T template0 zabbix
+$ pg_restore -d zabbix /tmp/zabbix.dump
+
+# 原表
+-bash-4.2$ oid2name -d zabbix -i |grep history
+     27408                                                          history
+     29234                                                        history_1
+     27414                                                      history_log
+     29235                                                    history_log_1
+     27427                                                      history_str
+     29236                                                    history_str_1
+     27433                                                     history_text
+     29237                                                   history_text_1
+     27442                                                     history_uint
+     29238                                                   history_uint_1
+....
+
+#使用timescaledb脚本，创建hyphertable
+-bash-4.2$ zcat /tmp/timescaledb.sql.gz | psql zabbix
+NOTICE:  PostgreSQL version 13.4 is valid
+NOTICE:  TimescaleDB extension is detected
+NOTICE:  TimescaleDB version 2.5.0 is valid
+NOTICE:  migrating data to chunks
+DETAIL:  Migration might take a while depending on the amount of data.
+NOTICE:  migrating data to chunks
+DETAIL:  Migration might take a while depending on the amount of data.
+NOTICE:  migrating data to chunks
+DETAIL:  Migration might take a while depending on the amount of data.
+NOTICE:  migrating data to chunks
+DETAIL:  Migration might take a while depending on the amount of data.
+NOTICE:  TimescaleDB is configured successfully
+********************SQL中创建hypertable的语句
+        PERFORM create_hypertable('history', 'clock', chunk_time_interval => 86400, migrate_data => true);       # 一个chunk为一天数据
+        PERFORM create_hypertable('history_uint', 'clock', chunk_time_interval => 86400, migrate_data => true);
+        PERFORM create_hypertable('history_log', 'clock', chunk_time_interval => 86400, migrate_data => true);
+        PERFORM create_hypertable('history_text', 'clock', chunk_time_interval => 86400, migrate_data => true);
+        PERFORM create_hypertable('history_str', 'clock', chunk_time_interval => 86400, migrate_data => true);
+        PERFORM create_hypertable('trends', 'clock', chunk_time_interval => 2592000, migrate_data => true);        # 一个chunk为一月数据
+        PERFORM create_hypertable('trends_uint', 'clock', chunk_time_interval => 2592000, migrate_data => true);
+        UPDATE config SET db_extension='timescaledb',hk_history_global=1,hk_trends_global=1;
+        UPDATE config SET compression_status=1,compress_older='7d';
+        RAISE NOTICE 'TimescaleDB is configured successfully';
+
+********************
+# 已经看到很多chunk了
+-bash-4.2$ oid2name -d zabbix -i |grep chunk|grep hyper
+     33035                                                 _hyper_1_1_chunk
+     33036                                       _hyper_1_1_chunk_history_1
+     31716                                                 _hyper_1_2_chunk
+     31723                                       _hyper_1_2_chunk_history_1
+     31724                                                 _hyper_1_3_chunk
+     31731                                       _hyper_1_3_chunk_history_1
+     31732                                                 _hyper_1_4_chunk
+....
+
+# 查看有哪些hypertable
+zabbix=# SELECT * FROM timescaledb_information.hypertables;
+ hypertable_schema | hypertable_name | owner  | num_dimensions | num_chunks | compression_enabled | is_distributed | replication_factor | data_nodes | tablespaces
+-------------------+-----------------+--------+----------------+------------+---------------------+----------------+--------------------+------------+-------------
+ public            | history         | zabbix |              1 |          8 | t                   | f              |                    |            |
+ public            | history_uint    | zabbix |              1 |          8 | t                   | f              |                    |            |
+ public            | history_log     | zabbix |              1 |          0 | t                   | f              |                    |            |
+ public            | history_text    | zabbix |              1 |          1 | t                   | f              |                    |            |
+ public            | history_str     | zabbix |              1 |          1 | t                   | f              |                    |            |
+ public            | trends          | zabbix |              1 |          5 | t                   | f              |                    |            |
+ public            | trends_uint     | zabbix |              1 |          5 | t                   | f              |                    |            |
+(7 rows)
+# 查看history表的chunks
+zabbix=# select public.show_chunks('history');
+              show_chunks
+----------------------------------------
+ _timescaledb_internal._hyper_1_1_chunk
+ _timescaledb_internal._hyper_1_2_chunk
+ _timescaledb_internal._hyper_1_3_chunk
+ _timescaledb_internal._hyper_1_4_chunk
+ _timescaledb_internal._hyper_1_5_chunk
+ _timescaledb_internal._hyper_1_6_chunk
+ _timescaledb_internal._hyper_1_7_chunk
+ _timescaledb_internal._hyper_1_8_chunk
+(8 rows)
+
+查看history表的chuck细节
+zabbix=# SELECT * FROM timescaledb_information.chunks WHERE hypertable_name = 'history';
+ hypertable_schema | hypertable_name |     chunk_schema      |    chunk_name    | primary_dimension | primary_dimension_type | range_start | range_end | range_start_integer | range_end_integer | is_compressed | chunk_tablespace | data_nodes
+-------------------+-----------------+-----------------------+------------------+-------------------+------------------------+-------------+-----------+---------------------+-------------------+---------------+------------------+------------
+ public            | history         | _timescaledb_internal | _hyper_1_1_chunk | clock             | integer                |             |           |          1635206400 |        1635292800 | t             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_2_chunk | clock             | integer                |             |           |          1635465600 |        1635552000 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_3_chunk | clock             | integer                |             |           |          1635379200 |        1635465600 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_4_chunk | clock             | integer                |             |           |          1634947200 |        1635033600 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_5_chunk | clock             | integer                |             |           |          1635033600 |        1635120000 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_6_chunk | clock             | integer                |             |           |          1635120000 |        1635206400 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_7_chunk | clock             | integer                |             |           |          1635292800 |        1635379200 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_8_chunk | clock             | integer                |             |           |          1635552000 |        1635638400 | f             |                  |
+(8 rows)
+
+根据时间查询chunk, 这里是clock
+zabbix=# select to_timestamp(1635293027);
+      to_timestamp
+------------------------
+ 2021-10-27 00:03:47+00
+(1 row)
+
+zabbix=# select show_chunks('history',newer_than => 1635293027);
+              show_chunks
+----------------------------------------
+ _timescaledb_internal._hyper_1_2_chunk
+ _timescaledb_internal._hyper_1_3_chunk
+ _timescaledb_internal._hyper_1_8_chunk
+(3 rows)
+
+zabbix=# SELECT to_timestamp(clock) FROM _timescaledb_internal._hyper_1_8_chunk LIMIT 3;
+      to_timestamp
+------------------------
+ 2021-10-30 00:03:24+00
+ 2021-10-30 00:03:24+00
+ 2021-10-30 00:03:25+00
+(3 rows)
+
+zabbix=# select show_chunks('history',older_than => 1635293027);
+              show_chunks
+----------------------------------------
+ _timescaledb_internal._hyper_1_1_chunk
+ _timescaledb_internal._hyper_1_4_chunk
+ _timescaledb_internal._hyper_1_5_chunk
+ _timescaledb_internal._hyper_1_6_chunk
+(4 rows)
+
+zabbix=# SELECT to_timestamp(clock) FROM _timescaledb_internal._hyper_1_6_chunk LIMIT 3;
+      to_timestamp
+------------------------
+ 2021-10-25 08:47:44+00
+ 2021-10-25 08:47:45+00
+ 2021-10-25 08:47:45+00
+(3 rows)
+
+查看chuck表大小
+zabbix=# select * from chunks_detailed_size('history');
+     chunk_schema      |    chunk_name    | table_bytes | index_bytes | toast_bytes | total_bytes | node_name
+-----------------------+------------------+-------------+-------------+-------------+-------------+-----------
+ _timescaledb_internal | _hyper_1_2_chunk |     3416064 |     2662400 |           0 |     6078464 |
+ _timescaledb_internal | _hyper_1_3_chunk |     3416064 |     2588672 |           0 |     6004736 |
+ _timescaledb_internal | _hyper_1_4_chunk |     3301376 |     2555904 |           0 |     5857280 |
+ _timescaledb_internal | _hyper_1_5_chunk |     3416064 |     2531328 |           0 |     5947392 |
+ _timescaledb_internal | _hyper_1_6_chunk |     3416064 |     2514944 |           0 |     5931008 |
+ _timescaledb_internal | _hyper_1_7_chunk |     3416064 |     2400256 |           0 |     5816320 |
+ _timescaledb_internal | _hyper_1_8_chunk |      778240 |      507904 |           0 |     1286144 |
+ _timescaledb_internal | _hyper_1_1_chunk |       65536 |       24576 |      425984 |      516096 |
+(8 rows)
+查看history表的大小
+zabbix=# select pg_size_pretty(table_bytes) as table_size,pg_size_pretty(index_bytes) as index_size,pg_size_pretty(toast_bytes) as toast_size,pg_size_pretty(total_bytes) as total_size from hypertable_detailed_size('history');
+ table_size | index_size | toast_size | total_size
+------------+------------+------------+------------
+ 21 MB      | 16 MB      | 416 kB     | 37 MB
+
+
+压缩chunk
+zabbix=# select compress_chunk('_timescaledb_internal._hyper_1_1_chunk');
+             compress_chunk
+----------------------------------------
+ _timescaledb_internal._hyper_1_1_chunk
+(1 row)
+.......
+-[ RECORD 8 ]------------------+----------------------
+chunk_schema                   | _timescaledb_internal
+chunk_name                     | _hyper_1_1_chunk
+compression_status             | Compressed
+before_compression_table_bytes | 3416064
+before_compression_index_bytes | 2777088
+before_compression_toast_bytes | 0
+before_compression_total_bytes | 6193152
+after_compression_table_bytes  | 65536
+after_compression_index_bytes  | 16384
+after_compression_toast_bytes  | 425984
+after_compression_total_bytes  | 507904
+node_name                      |
+
+
+
+压缩后原 _hyper_1_1_chunk 大小为0
+zabbix=# select pg_relation_size('_timescaledb_internal._hyper_1_1_chunk');
+ pg_relation_size
+------------------
+                0
+(1 row)
+zabbix=# set search_path to _timescaledb_internal;
+SET
+zabbix=# \d
+                           List of relations
+        Schema         |            Name             | Type  |  Owner
+-----------------------+-----------------------------+-------+----------
+ _timescaledb_internal | _compressed_hypertable_10   | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_11   | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_12   | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_13   | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_14   | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_8    | table | zabbix
+ _timescaledb_internal | _compressed_hypertable_9    | table | zabbix
+ _timescaledb_internal | _hyper_1_1_chunk            | table | zabbix
+ _timescaledb_internal | _hyper_1_2_chunk            | table | zabbix
+ _timescaledb_internal | _hyper_1_3_chunk            | table | zabbix
+.....
+ _timescaledb_internal | bgw_job_stat                | table | postgres
+ _timescaledb_internal | bgw_policy_chunk_stats      | table | postgres
+ _timescaledb_internal | compress_hyper_8_27_chunk   | table | zabbix
+ _timescaledb_internal | compressed_chunk_stats      | view  | postgres
+ _timescaledb_internal | hypertable_chunk_local_size | view  | postgres
+(40 rows)
+
+通过explain可以看到 _hyper_1_1_chunk 压缩后 数据放到了 compress_hyper_8_27_chunk
+zabbix=# explain select count(*) from history;
+                                                   QUERY PLAN
+-----------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=6959.03..6959.04 rows=1 width=8)
+   ->  Gather  (cost=6958.82..6959.03 rows=2 width=8)
+         Workers Planned: 2
+         ->  Partial Aggregate  (cost=5958.82..5958.83 rows=1 width=8)
+               ->  Parallel Append  (cost=0.00..5514.00 rows=177927 width=0)
+                     ->  Custom Scan (DecompressChunk) on _hyper_1_1_chunk  (cost=0.12..5.46 rows=46000 width=0)
+                           ->  Parallel Seq Scan on compress_hyper_8_27_chunk  (cost=0.00..5.46 rows=46 width=4)    # 这里
+                     ->  Parallel Seq Scan on _hyper_1_2_chunk  (cost=0.00..743.35 rows=33035 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_3_chunk  (cost=0.00..743.35 rows=33035 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_5_chunk  (cost=0.00..743.35 rows=33035 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_6_chunk  (cost=0.00..743.35 rows=33035 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_7_chunk  (cost=0.00..743.35 rows=33035 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_4_chunk  (cost=0.00..718.11 rows=31911 width=0)
+                     ->  Parallel Seq Scan on _hyper_1_8_chunk  (cost=0.00..184.03 rows=8103 width=0)
+(14 rows)
+
+压缩后大小为40kB
+zabbix=# select pg_size_pretty(pg_relation_size('_timescaledb_internal.compress_hyper_8_27_chunk'));
+ pg_size_pretty
+----------------
+ 40 kB
+(1 row)
+
+查看	
+
+查看压缩任务
+zabbix=# SELECT * FROM timescaledb_information.jobs;
+ job_id |     application_name      | schedule_interval | max_runtime | max_retries | retry_period |      proc_schema      |     proc_name      |  owner   | scheduled |                     config                     |          next_start           | hypertable_schema | h
+ypertable_name
+--------+---------------------------+-------------------+-------------+-------------+--------------+-----------------------+--------------------+----------+-----------+------------------------------------------------+-------------------------------+-------------------+--
+---------------
+      1 | Telemetry Reporter [1]    | 24:00:00          | 00:01:40    |          -1 | 01:00:00     | _timescaledb_internal | policy_telemetry   | postgres | t         |                                                | 2021-10-30 08:46:15.187675+00 |                   |
+   1006 | Compression Policy [1006] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 7, "compress_after": 612000} | 2021-10-30 12:26:03.791419+00 | public            | t
+rends_uint
+   1000 | Compression Policy [1000] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 1, "compress_after": 612000} | 2021-10-30 12:26:03.807164+00 | public            | h
+istory
+   1001 | Compression Policy [1001] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 2, "compress_after": 612000} | 2021-10-30 12:26:03.8262+00   | public            | h
+istory_uint
+   1002 | Compression Policy [1002] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 5, "compress_after": 612000} | 2021-10-30 12:26:03.851741+00 | public            | h
+istory_str
+   1003 | Compression Policy [1003] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 4, "compress_after": 612000} | 2021-10-30 12:26:03.868407+00 | public            | h
+istory_text
+   1005 | Compression Policy [1005] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 6, "compress_after": 612000} | 2021-10-30 12:26:03.914944+00 | public            | t
+rends
+   1004 | Compression Policy [1004] | 1 day             | 00:00:00    |          -1 | 01:00:00     | _timescaledb_internal | policy_compression | zabbix   | t         | {"hypertable_id": 3, "compress_after": 612000} | 2021-10-30 12:26:03.933253+00 | public            | h
+istory_log
+
+# time_bucket函数
+查看itemid=10073的监控指标每5分钟的平均值
+zabbix=# select time_bucket('300',clock) as five_min,avg(value) from history where itemid=10073 group by five_min order by five_min limit 10;
+  five_min  |        avg
+------------+--------------------
+ 1634949900 | 0.6498569713761893
+ 1634950200 | 0.6498569025011809
+ 1634950500 | 0.6498579033543198
+ 1634950800 | 0.6498616420345298
+ 1634951100 | 0.6498640946037003
+ 1634951400 |  0.649850038873476
+ 1634951700 | 0.6520572575130209
+ 1634952000 |  0.649848264986644
+ 1634952300 | 0.6498570006136769
+ 1634952600 | 0.6498655667358046
+
+# first函数
+查看每个itemid最早的一笔记录 
+zabbix=# select itemid,first(value,clock) from history group by itemid;
+ itemid |         first
+--------+-----------------------
+  10073 |    0.6498569713761893
+  10074 |                     0
+  10075 |                     0
+  10076 |   0.08331538591753834
+  10077 |                     0
+  10078 |   0.13330488936035287
+  23252 |                     0
+  23253 |   0.16917611233293858
+  23255 |                     0
+  23256 |   0.06889424733034792
+  23257 |   0.18606224627875506
+ 
+ 

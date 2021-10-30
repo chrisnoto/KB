@@ -25,9 +25,20 @@ docker run -d \
 pgbouncer/pgbouncer
 
 最佳做法，只放pgbouncer在auth_file里，其他用户通过auth_query查询到密码
-Create a Postgres user to use as auth_user
-Create the user/password lookup function in Postgres
-Configure pgbouncer.ini
+# Create a Postgres user to use as auth_user
+Direct access to pg_shadow requires admin rights. It’s preferable to use a non-superuser that calls a SECURITY DEFINER function instead.
+# Create the user/password lookup function in Postgres
+CREATE OR REPLACE FUNCTION user_search(uname TEXT) RETURNS TABLE (usename name, passwd text) as
+$$
+  SELECT usename, passwd FROM pg_shadow WHERE usename=$1;
+$$
+LANGUAGE sql SECURITY DEFINER;
+# Configure pgbouncer.ini
+[pgbouncer]
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+auth_user = pgbouncer
+auth_query = SELECT usename, passwd FROM user_search($1)
 https://www.enterprisedb.com/postgres-tutorials/pgbouncer-authquery-and-authuser-pro-tips
 
 

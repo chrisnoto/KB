@@ -1,10 +1,17 @@
 psql登录方法
 1  psql -U xxx -d xxx
 2  psql 'host=rep01 user=repmgr dbname=repmgr connect_timeout=2'
-psql (13.4)
-Type "help" for help.
+3  psql postgres://[USERNAME]:[PASSWORD]@[HOSTNAME]:[PORT]/[DATABASENAME]?sslmode=require
 
-repmgr=#
+postgres@u2004:~$ psql -U chensen -h 10.67.39.58 -d chensen
+
+postgres@u2004:~$ psql 'host=10.67.39.58 user=chensen dbname=chensen connect_timeout=2'
+
+postgres@u2004:~$ psql postgres://chensen:chensen@10.67.39.58:5432/chensen
+
+postgres@u2004:~$ psql postgres://chensen@10.67.39.58:5432/chensen
+Password for user chensen:
+
 #########  逻辑概念 ##########
 在 Postgresql中是以下的關係
 Computer -> Cluter -> Catalog -> Schema -> Database Object (Table/View 等等)
@@ -2235,100 +2242,3 @@ ALTER TABLE items ADD CONSTRAINT items_pk PRIMARY KEY USING INDEX items_pk;  -- 
 
 
 
-### pgbouncer 容器
-读写分离配置，DATABASES这行指定了用户，所以只有两个池存在
-docker run -d \
--p 5439:5439 \
---name=pgbouncer \
--e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 user=postgres password=postgres dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 user=postgres password=postgres dbname=chensen" \
--e "PGBOUNCER_LISTEN_PORT=5439" \
--v /root/userlist.txt:/tmp/userlist.txt \
-pgbouncer/pgbouncer
-更好的写法，更多的用户放在auth_file里了
-[root@worker1 ~]# cat pgb2.sh
-docker run -d \
--p 5439:5439 \
---name=pgbouncer \
--e "DATABASES=pg_rw = host = 10.67.39.58 port=5432 dbname=chensen,pg_ro = host = 10.67.39.59 port=5432 dbname=chensen" \
--e "PGBOUNCER_LISTEN_PORT=5439" \
--e "PGBOUNCER_AUTH_TYPE=md5" \
--e "PGBOUNCER_AUTH_FILE=/etc/pgbouncer/userlist.txt" \
--e "PGBOUNCER_POOL_MODE=transaction" \
--e "PGBOUNCER_MAX_CLIENT_CONN=500" \
--e "PGBOUNCER_DEFAULT_POOL_SIZE=30" \
--v /root/userlist.txt:/etc/pgbouncer/userlist.txt \
-最佳做法，只放pgbouncer在auth_file里，其他用户通过auth_query查询到密码
-Create a Postgres user to use as auth_user
-Create the user/password lookup function in Postgres
-Configure pgbouncer.ini
-https://www.enterprisedb.com/postgres-tutorials/pgbouncer-authquery-and-authuser-pro-tips
---------------------log-------------------
-[root@worker1 ~]# docker logs -f e2e
-Creating pgbouncer config in /etc/pgbouncer
-#pgbouncer.ini
-
-[databases]
-pg_rw = host = 10.67.39.58 port=5432 user=postgres password=postgres dbname=chensen
-pg_ro = host = 10.67.39.59 port=5432 user=postgres password=postgres dbname=chensen
-
-[pgbouncer]
-listen_addr = 0.0.0.0
-listen_port = 5439
-auth_type = any
-ignore_startup_parameters = extra_float_digits
-
-# Log settings
-admin_users = postgres
-
-# Connection sanity checks, timeouts
-
-# TLS settings
-
-# Dangerous timeouts
-
-Starting pgbouncer.
-2021-10-29 03:30:44.555 UTC [1] LOG kernel file descriptor limit: 1048576 (hard: 1048576); max_client_conn: 100, max expected fd use: 152
-2021-10-29 03:30:44.555 UTC [1] LOG listening on 0.0.0.0:5439
-2021-10-29 03:30:44.556 UTC [1] LOG listening on unix:/tmp/.s.PGSQL.5439
-2021-10-29 03:30:44.556 UTC [1] LOG process up: PgBouncer 1.15.0, libevent 2.1.8-stable (epoll), adns: c-ares 1.15.0, tls: LibreSSL 2.7.5
-2021-10-29 03:31:02.833 UTC [1] LOG C-0x5595bd7b0330: pg_rw/postgres@10.67.50.141:33938 login attempt: db=pg_rw user=postgres tls=no
-2021-10-29 03:31:02.835 UTC [1] LOG S-0x5595bd7e93f0: pg_rw/postgres@10.67.39.58:5432 new connection to server (from 172.17.0.2:46788)
-2021-10-29 03:31:44.556 UTC [1] LOG stats: 0 xacts/s, 0 queries/s, in 0 B/s, out 0 B/s, xact 0 us, query 0 us, wait 443 us
---------------------log-------------------
-查看pgbouncer虚拟数据库里的连接池信息
-postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pgbouncer
-pgbouncer=# show pools;       5个连接，2个在pg_rw sam 这个池里
- database  |   user    | cl_active | cl_waiting | sv_active | sv_idle | sv_used | sv_tested | sv_login | maxwait | maxwait_us |  pool_mode
------------+-----------+-----------+------------+-----------+---------+---------+-----------+----------+---------+------------+-------------
- pg_ro     | chensen   |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
- pg_rw     | clm       |         1 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
- pg_rw     | sam       |         2 |          0 |         0 |       0 |       1 |         0 |        0 |       0 |          0 | transaction
- pgbouncer | pgbouncer |         1 |          0 |         0 |       0 |       0 |         0 |        0 |       0 |          0 | statement
-(4 rows)
-
-
-
-主库可写
-postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_rw
-pg_rw=# create table s1(id int primary key,name text);
-CREATE TABLE
-pg_rw=# insert into s1 values(1,'wang');
-INSERT 0 1
-副库只读	
-postgres@u2004:~$ psql -U postgres -h 10.67.36.62 -p 5439 -d pg_ro
-pg_ro=# insert into s1 values(2,'jun');
-ERROR:  cannot execute INSERT in a read-only transaction
-
-# SCRAM-SHA-256加密算法
-MD5哈希算法构造的密码越来越不安全，所以，PG顺应发展，从10版本开始支持了SCRAM-SHA-256加密算法
-postgres=# select usename,passwd from pg_shadow where usename in('sam','cl','clm','clm2','chensen','postgres');  # 与下面的查询一样
-postgres=# select rolname,rolpassword from pg_authid where rolname in('hank','zabbix');
- rolname |                                                              rolpassword                                                              
----------+---------------------------------------------------------------------------------------------------------------------------------------
- zabbix  | md5435f13d666b53dd9b4b829e237213fd8
- hank    | SCRAM-SHA-256$4096:yqNGsct76W5ZjPvMxxjzRw==$NmR4QIuHRlhu+I/HP1TQ4OC6stmtgN6Oc7oZa76tKxQ=:kNOwGMU+tSbJ2QQiD1Hb/rCKX7/coQEdkeUjD9+pEhE=
-
-
-#pg_hba.conf没有修改，但是同样可以通过密码登陆，这是pg的一个兼容性特性，即使没写SCRAM-SHA-256，可以自动识别密码为SCRAM-SHA-256加密的，然后验证通过，而且使用老的MD5加密的用户也可以正常登陆
-host  all  all  0.0.0.0/0 md5
-如果修改pg_hba.conf为scram-sha-256，则md5加密的用户无法登陆	
