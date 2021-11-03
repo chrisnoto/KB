@@ -335,6 +335,8 @@ max_prepared_transactions must be set to a non-zero value on all data nodes (if 
 enable_partitionwise_aggregate should be set to on on the access node for good query performance. Otherwise, queries will not be pushed down to the data nodes.
 jit should be set to off on the access node as JIT currently doesn't work well with distributed queries. JIT can still be enabled on the data nodes
 
+docker run -i -t timescale/timescaledb:latest-pg10 postgres -cmax_wal_size=2GB  # 可以直接在run的时候加上参数，不过在改参数的时候也有弊端
+
 3 依次将dns,dns2节点加入为data_node，这里dns是写错的节点名称 -_-!!
 
 postgres=# select add_data_node('dns',host=>'10.67.36.59');
@@ -526,6 +528,27 @@ hypertable_schema |                        hypertable_name                      
  prom_data         | go_memstats_frees_total                                        | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
  prom_data         | go_threads                                                     | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
 
+数据大部分都存在chuck上，可以从三个节点分别看到
+access node
+postgres=# \l+ postgres
+                                                                List of databases
+   Name   |  Owner   | Encoding |  Collate   |   Ctype    | Access privileges |  Size  | Tablespace |                Description
+----------+----------+----------+------------+------------+-------------------+--------+------------+--------------------------------------------
+ postgres | postgres | UTF8     | en_US.utf8 | en_US.utf8 |                   | 135 MB | pg_default | default administrative connection database
+dn1
+postgres=# \l+ postgres
+                                                                List of databases
+   Name   |  Owner   | Encoding |  Collate   |   Ctype    | Access privileges |  Size  | Tablespace |                Description
+----------+----------+----------+------------+------------+-------------------+--------+------------+--------------------------------------------
+ postgres | postgres | UTF8     | en_US.utf8 | en_US.utf8 |                   | 568 MB | pg_default | default administrative connection database
+dn2
+postgres=# \l+ postgres
+                                                                List of databases
+   Name   |  Owner   | Encoding |  Collate   |   Ctype    | Access privileges |  Size  | Tablespace |                Description
+----------+----------+----------+------------+------------+-------------------+--------+------------+--------------------------------------------
+ postgres | postgres | UTF8     | en_US.utf8 | en_US.utf8 |                   | 782 MB | pg_default | default administrative connection database
+ 
+ 
 # 在原有集群的基础上新增节点
 Expanding the cluster
 When adding nodes to a TimescaleDB cluster that is already being written to by Promscale, you should run the add_prom_node(node_name) function after running the standard add_data_node() function. For example:
