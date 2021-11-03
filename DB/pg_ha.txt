@@ -114,7 +114,141 @@ postgres=# select rolname,rolpassword from pg_authid where rolname in('hank','za
 host  all  all  0.0.0.0/0 md5
 如果修改pg_hba.conf为scram-sha-256，则md5加密的用户无法登陆	
 
+### pgbouncer应用到zabbix
+[root@worker1 ~]# cat pgb2.sh
+docker run -d \
+-p 5439:5439 \
+--name=pgbouncer \
+-e "DATABASES=zabbix = host = 10.67.39.58 port=5432 dbname=zabbix" \
+-e "PGBOUNCER_LISTEN_PORT=5439" \
+-e "PGBOUNCER_AUTH_TYPE=md5" \
+-e "PGBOUNCER_AUTH_FILE=/etc/pgbouncer/userlist.txt" \
+-e "PGBOUNCER_POOL_MODE=transaction" \
+-e "PGBOUNCER_MAX_CLIENT_CONN=500" \
+-e "PGBOUNCER_DEFAULT_POOL_SIZE=30" \
+-v /root/userlist.txt:/etc/pgbouncer/userlist.txt \
+pgbouncer/pgbouncer
 
+查看pgbouncer的log
+Creating pgbouncer config in /etc/pgbouncer
+#pgbouncer.ini
+
+[databases]
+zabbix = host = 10.67.39.58 port=5432 dbname=zabbix
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 5439
+auth_file = /etc/pgbouncer/userlist.txt
+auth_type = md5
+pool_mode = transaction
+max_client_conn = 500
+default_pool_size = 30
+ignore_startup_parameters = extra_float_digits
+
+# Log settings
+admin_users = postgres
+
+# Connection sanity checks, timeouts
+
+# TLS settings
+
+# Dangerous timeouts
+
+Starting pgbouncer.
+
+
+验证pgbouncer
+postgres@u2004:~$  psql -U zabbix -h 10.67.36.62 -p 5439 -d zabbix
+Password for user zabbix:
+
+更改zabbix的db设置
+docker run --name zabbix-server-timescalesb -d \
+-e TZ='Asia/Shanghai' \
+-e ZBX_SERVER_NAME='zabbixserver' \
+-e DB_SERVER_HOST="10.67.36.62" \
+-e DB_SERVER_PORT="5439" \
+-e POSTGRES_USER="zabbix" \
+-e POSTGRES_PASSWORD="Foxconn123" \
+-e POSTGRES_DB="zabbix" \
+-e DB_SERVER_SCHEMA="public" \
+-e POSTGRES_USE_IMPLICIT_SEARCH_PATH="true" \
+-p 10051:10051 \
+zabbix/zabbix-server-pgsql:centos-5.4.7      #5.4.0 没有POSTGRES_USE_IMPLICIT_SEARCH_PATH这个参数，所以pgbounce报错unsupported startup parameter: options=--search_path=public
+
+docker run --name zabbix-web-nginx-timescaledb -d \
+-e TZ='Asia/Shanghai' \
+-e PHP_TZ='Asia/Shanghai' \
+-e ZBX_SERVER_NAME='zabbixserver' \
+-e POSTGRES_USER="zabbix" \
+-e POSTGRES_PASSWORD="Foxconn123" \
+-e DB_SERVER_HOST="10.67.36.62" \
+-e DB_SERVER_PORT="5439" \
+-e POSTGRES_DB="zabbix" \
+-e DB_SERVER_SCHEMA="public" \
+-e POSTGRES_USE_IMPLICIT_SEARCH_PATH="true" \
+--link zabbix-server-timescalesb:zabbix-server \
+-p 28080:8080 \
+zabbix/zabbix-web-nginx-pgsql:centos-5.4.7
+
+在pgbouncer上查看连接
+pgbouncer=# show clients;
+ type |   user   | database  | state  |     addr     | port  | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+----------+-----------+--------+--------------+-------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ C    | postgres | pgbouncer | active | 10.67.50.141 | 35494 | 172.17.0.2 |       5439 | 2021-11-02 07:15:26 UTC | 2021-11-02 07:17:00 UTC |   88 |  855789 |            0 | 0x55d94e7ea540 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40744 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 06:45:08 UTC |    0 |       0 |            0 | 0x55d94e7ea9a0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40742 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 06:45:07 UTC |    0 |       0 |            0 | 0x55d94e7eabd0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40766 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:18 UTC |    0 |       0 |            0 | 0x55d94e7ec3e0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40770 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:38 UTC |    0 |       0 |            0 | 0x55d94e7ec840 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40776 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:27 UTC |    0 |       0 |            0 | 0x55d94e7ecca0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40778 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:52 UTC |    0 |       0 |            0 | 0x55d94e7ed100 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40784 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:42 UTC |    0 |       0 |            0 | 0x55d94e7ed790 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40748 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:00 UTC |    0 |       0 |            0 | 0x55d94e7eb030 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40790 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:49 UTC |    0 |       0 |            0 | 0x55d94e7ede20 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40788 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:05 UTC |    0 |       0 |            0 | 0x55d94e7edbf0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40768 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:16 UTC |    0 |       0 |            0 | 0x55d94e7ec610 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40772 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:40 UTC |    0 |       0 |            0 | 0x55d94e7eca70 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40782 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:38 UTC |    0 |       0 |            0 | 0x55d94e7ed560 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40780 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:39 UTC |    0 |       0 |            0 | 0x55d94e7ed330 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40786 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 05:36:43 UTC |    0 |       0 |            0 | 0x55d94e7ed9c0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40754 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:57 UTC |    0 |       0 |            0 | 0x55d94e7eb260 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40732 | 172.17.0.2 |       5439 | 2021-11-02 05:36:17 UTC | 2021-11-02 07:16:29 UTC |    0 |       0 |            0 | 0x55d94e7ea310 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40758 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:55 UTC |    0 |       0 |            0 | 0x55d94e7ebb20 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40750 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:56 UTC |    0 |       0 |            0 | 0x55d94e7eb6c0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40760 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:19 UTC |    0 |       0 |            0 | 0x55d94e7ebf80 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40764 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:57 UTC |    0 |       0 |            0 | 0x55d94e7ec1b0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40774 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:17:00 UTC |    0 |       0 |            0 | 0x55d94e7eced0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40752 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:58 UTC |    0 |       0 |            0 | 0x55d94e7eb490 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40756 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:59 UTC |    0 |       0 |            0 | 0x55d94e7eb8f0 |      |          0 |
+ C    | zabbix   | zabbix    | active | 10.67.36.61  | 40762 | 172.17.0.2 |       5439 | 2021-11-02 05:36:18 UTC | 2021-11-02 07:16:55 UTC |    0 |       0 |            0 | 0x55d94e7ebd50 |      |          0 |
+(26 rows)
+
+pgbouncer=# show servers;
+ type |  user  | database | state |    addr     | port | local_addr | local_port |      connect_time       |      request_time       | wait | wait_us | close_needed |      ptr       | link | remote_pid | tls
+------+--------+----------+-------+-------------+------+------------+------------+-------------------------+-------------------------+------+---------+--------------+----------------+------+------------+-----
+ S    | zabbix | zabbix   | idle  | 10.67.39.58 | 5432 | 172.17.0.2 |      53538 | 2021-11-02 06:42:58 UTC | 2021-11-02 07:17:14 UTC |    0 |       0 |            0 | 0x55d94e84ea70 |      |       9374 |
+ S    | zabbix | zabbix   | idle  | 10.67.39.58 | 5432 | 172.17.0.2 |      57462 | 2021-11-02 07:11:15 UTC | 2021-11-02 07:16:57 UTC |    0 |       0 |            0 | 0x55d94e84e840 |      |      11254 |
+ S    | zabbix | zabbix   | idle  | 10.67.39.58 | 5432 | 172.17.0.2 |      52686 | 2021-11-02 06:36:51 UTC | 2021-11-02 07:16:56 UTC |    0 |       0 |            0 | 0x55d94e84e610 |      |       8958 |
+ S    | zabbix | zabbix   | used  | 10.67.39.58 | 5432 | 172.17.0.2 |      57460 | 2021-11-02 07:11:15 UTC | 2021-11-02 07:16:23 UTC |    0 |       0 |            0 | 0x55d94e84db20 |      |      11253 |
+ S    | zabbix | zabbix   | used  | 10.67.39.58 | 5432 | 172.17.0.2 |      57456 | 2021-11-02 07:11:15 UTC | 2021-11-02 07:11:44 UTC |    0 |       0 |            0 | 0x55d94e84dd50 |      |      11251 |
+ S    | zabbix | zabbix   | used  | 10.67.39.58 | 5432 | 172.17.0.2 |      57458 | 2021-11-02 07:11:15 UTC | 2021-11-02 07:11:43 UTC |    0 |       0 |            0 | 0x55d94e84d8f0 |      |      11252 |
+(6 rows)
+
+在pg上查看连接
+zabbix=# select datname,pid,usename,application_name,client_addr,client_port,state,backend_xid,backend_xmin,backend_type from pg_stat_activity where datname='zabbix';
+ datname |  pid  | usename  |            application_name             | client_addr | client_port | state  | backend_xid | backend_xmin |              backend_type
+---------+-------+----------+-----------------------------------------+-------------+-------------+--------+-------------+--------------+-----------------------------------------
+ zabbix  | 23462 | postgres | TimescaleDB Background Worker Scheduler |             |             | idle   |             |              | TimescaleDB Background Worker Scheduler
+ zabbix  |  8958 | zabbix   |                                         | 10.67.36.62 |       52686 | idle   |             |              | client backend
+ zabbix  | 26124 | postgres | psql                                    |             |          -1 | active |             |       804702 | client backend
+ zabbix  | 11251 | zabbix   |                                         | 10.67.36.62 |       57456 | idle   |             |              | client backend
+ zabbix  |  9374 | zabbix   | psql                                    | 10.67.36.62 |       53538 | idle   |             |              | client backend
+ zabbix  | 11252 | zabbix   |                                         | 10.67.36.62 |       57458 | idle   |             |              | client backend
+ zabbix  | 11253 | zabbix   | psql                                    | 10.67.36.62 |       57460 | idle   |             |              | client backend
+ zabbix  | 11254 | zabbix   | psql                                    | 10.67.36.62 |       57462 | idle   |             |              | client backend
+(8 rows)
+
+################################################
 postgresql-13主从 streaming复制 同步模式
 ===========================================================================================================================
 1 概念和原理
@@ -170,7 +304,12 @@ recovery.signal：告诉PostgreSQL进入正常的归档恢复
 standby.signal：告诉PostgreSQL进入standby模式
 如果两个文件都存在，则standby.signal优先。
 
+暂停和恢复从库的wal replay
+select pg_wal_replay_pause();
 
+TAKING logical BACKUP FROM SLAVE
+
+select pg_wal_replay_resume();
 2 配置
 # Install the repository RPM:
 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm

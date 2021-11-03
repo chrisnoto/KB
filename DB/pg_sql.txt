@@ -808,6 +808,44 @@ rmgr: Heap        len (rec/tot):     93/    93, tx:        593, lsn: 1/A3000608,
 rmgr: Heap        len (rec/tot):     78/    78, tx:        594, lsn: 1/A30006C8, prev 1/A3000690, desc: HOT_UPDATE off 4 xmax 594 flags 0x60 ; new off 8 xmax 0, blkref #0: rel 1663/14172/16472 blk 0
 rmgr: Heap        len (rec/tot):     54/    54, tx:        595, lsn: 1/A3000778, prev 1/A3000740, desc: DELETE off 5 flags 0x00 KEYS_UPDATED , blkref #0: rel 1663/14172/16472 blk 0
 
+以ready結尾的，表示可以歸檔但還沒有歸檔，done結尾的表示已經歸檔
+7  .ready
+.ready是同名wal段文件在archive_status目錄內的標記文件，代表該wal段文件可被歸檔。wal段文件在數據目錄中的存儲文件數量是有上限的，一般通過wal_keep_segments參數來約束，
+因此數據庫引擎在wal段文件個數達到上限後會在archive_status目錄內增加可移除的wal段文件的標記文件，文件名是原wal段文件名後增加.ready後綴，等待歸檔工具進行歸檔。
+
+8  .done
+.done是同名wal段文件在archive_status目錄內的標記文件，代表該wal段文件已被歸檔，可以被清理。數據庫引擎默認通過archive_command命令對.ready文件進行歸檔，
+歸檔成功與否取決於archive_command命令返回true還是false，當archive_command返回true時，代表與.ready文件同名的wal段文件已被歸檔，引擎再將該文件的擴展名重命名為.done，
+等待數據庫引擎在下一次的checkpoint時進一步清理原wal段文件。
+
+PG的归档很灵活，archive_command指定外部shell命令来进行归档。首先来看WAL归档如何初始化。通常情况下，归档的事件链从WAL写开始XLogWrite()。
+当写满一个WAL段文件，通过向archive_status目录插入一个.ready文件来通知归档进程需要处理这个段文件了（XLogArchiveNotifySeg->XLogArchiveNotify）。
+例如，如果0000000100000001000000C6文件需要归档，那么.ready文件为0000000100000001000000C6.ready。这个.ready文件作为归档进程的通知文件。
+创建这个文件的同时，也会向归档进程发起一个信号来唤醒它。此时归档进程唤醒了开始处理所有.ready文件。
+#archive_command失败的问题 2021-11-1  
+-bash-4.2$ tail -f ../../log/postgresql-Mon.log
+2021-11-01 03:14:11.959 UTC [29822] LOG:  archive command failed with exit code 1
+2021-11-01 03:14:11.959 UTC [29822] DETAIL:  The failed archive command was: test ! -f /opt/archivedir/0000000100000003000000EA && cp pg_wal/0000000100000003000000EA /opt/archivedir/0000000100000003000000EA
+postgres-1机器里archive_status目录中.backup和.ready文件同时存在
+-rw-------. 1 postgres postgres 0 10月 30 21:40 0000000100000003000000EA.done
+-rw-------. 1 postgres postgres 0 10月 30 21:40 0000000100000003000000EA.ready
+-rw-------. 1 postgres postgres 0 11月  1 01:27 0000000100000003000000EB.ready
+-rw-------. 1 postgres postgres 0 11月  1 01:27 0000000100000003000000EC.ready
+-rw-------. 1 postgres postgres 0 11月  1 01:40 0000000100000003000000ED.ready
+-rw-------. 1 postgres postgres 0 11月  1 01:43 0000000100000003000000EE.ready
+-rw-------. 1 postgres postgres 0 11月  1 02:40 0000000100000003000000EF.ready
+-rw-------. 1 postgres postgres 0 11月  1 03:01 0000000100000003000000F0.ready
+解决步骤：
+验证了test ! -f /opt/archivedir/0000000100000003000000EA, 发现/opt/archivedir/0000000100000003000000EA存在/opt/archivedir目录中，所以后续cp命令不会执行
+删除该文件后，一切正常
+
+# max_wal_size参数没有起作用
+-bash-4.2$ du -sh pg_wal
+1.7G    pg_wal
+-bash-4.2$ grep 1G postgresql.conf
+max_wal_size = 1GB
+
+
 ######## FSM ########
 VACUUM performs processing while referring to the Visibility Map, and updates the Free Space Map
 Free Space Map stores information about free space in a relation

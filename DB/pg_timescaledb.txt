@@ -9,19 +9,6 @@ $ createuser --pwprompt zabbix
 $ createdb -O zabbix -E Unicode -T template0 zabbix
 $ pg_restore -d zabbix /tmp/zabbix.dump
 
-# 原表
--bash-4.2$ oid2name -d zabbix -i |grep history
-     27408                                                          history
-     29234                                                        history_1
-     27414                                                      history_log
-     29235                                                    history_log_1
-     27427                                                      history_str
-     29236                                                    history_str_1
-     27433                                                     history_text
-     29237                                                   history_text_1
-     27442                                                     history_uint
-     29238                                                   history_uint_1
-....
 
 #使用timescaledb脚本，创建hyphertable
 -bash-4.2$ zcat /tmp/timescaledb.sql.gz | psql zabbix
@@ -73,6 +60,20 @@ zabbix=# SELECT * FROM timescaledb_information.hypertables;
  public            | trends          | zabbix |              1 |          5 | t                   | f              |                    |            |
  public            | trends_uint     | zabbix |              1 |          5 | t                   | f              |                    |            |
 (7 rows)
+
+# 查看有哪些chunks
+zabbix=# select * from timescaledb_information.chunks ;
+ hypertable_schema | hypertable_name |     chunk_schema      |    chunk_name     | primary_dimension | primary_dimension_type | range_start | range_end | range_start_integer | range_end_integer | is_compressed | chunk_tablespace | data_nodes
+-------------------+-----------------+-----------------------+-------------------+-------------------+------------------------+-------------+-----------+---------------------+-------------------+---------------+------------------+------------
+ public            | history         | _timescaledb_internal | _hyper_1_1_chunk  | clock             | integer                |             |           |          1635206400 |        1635292800 | t             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_2_chunk  | clock             | integer                |             |           |          1635465600 |        1635552000 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_3_chunk  | clock             | integer                |             |           |          1635379200 |        1635465600 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_4_chunk  | clock             | integer                |             |           |          1634947200 |        1635033600 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_5_chunk  | clock             | integer                |             |           |          1635033600 |        1635120000 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_6_chunk  | clock             | integer                |             |           |          1635120000 |        1635206400 | f             |                  |
+ public            | history         | _timescaledb_internal | _hyper_1_7_chunk  | clock             | integer                |             |           |          1635292800 |        1635379200 | f             |                  |
+
+
 # 查看history表的chunks
 zabbix=# select public.show_chunks('history');
               show_chunks
@@ -101,13 +102,21 @@ zabbix=# SELECT * FROM timescaledb_information.chunks WHERE hypertable_name = 'h
  public            | history         | _timescaledb_internal | _hyper_1_8_chunk | clock             | integer                |             |           |          1635552000 |        1635638400 | f             |                  |
 (8 rows)
 
-根据时间查询chunk, 这里是clock
+zabbix db里的clock字段存储的是秒数
+可以秒数转日期，也可以日期转秒数
 zabbix=# select to_timestamp(1635293027);
       to_timestamp
 ------------------------
  2021-10-27 00:03:47+00
 (1 row)
 
+zabbix=# SELECT EXTRACT(EPOCH FROM TIMESTAMP '2021-10-31 06:00:00');
+ date_part
+------------
+ 1635660000
+(1 row)
+
+使用newer和older来查询chunks
 zabbix=# select show_chunks('history',newer_than => 1635293027);
               show_chunks
 ----------------------------------------
@@ -116,13 +125,6 @@ zabbix=# select show_chunks('history',newer_than => 1635293027);
  _timescaledb_internal._hyper_1_8_chunk
 (3 rows)
 
-zabbix=# SELECT to_timestamp(clock) FROM _timescaledb_internal._hyper_1_8_chunk LIMIT 3;
-      to_timestamp
-------------------------
- 2021-10-30 00:03:24+00
- 2021-10-30 00:03:24+00
- 2021-10-30 00:03:25+00
-(3 rows)
 
 zabbix=# select show_chunks('history',older_than => 1635293027);
               show_chunks
@@ -132,14 +134,6 @@ zabbix=# select show_chunks('history',older_than => 1635293027);
  _timescaledb_internal._hyper_1_5_chunk
  _timescaledb_internal._hyper_1_6_chunk
 (4 rows)
-
-zabbix=# SELECT to_timestamp(clock) FROM _timescaledb_internal._hyper_1_6_chunk LIMIT 3;
-      to_timestamp
-------------------------
- 2021-10-25 08:47:44+00
- 2021-10-25 08:47:45+00
- 2021-10-25 08:47:45+00
-(3 rows)
 
 查看chuck表大小
 zabbix=# select * from chunks_detailed_size('history');
@@ -154,7 +148,7 @@ zabbix=# select * from chunks_detailed_size('history');
  _timescaledb_internal | _hyper_1_8_chunk |      778240 |      507904 |           0 |     1286144 |
  _timescaledb_internal | _hyper_1_1_chunk |       65536 |       24576 |      425984 |      516096 |
 (8 rows)
-查看history表的大小
+查看history超表的大小
 zabbix=# select pg_size_pretty(table_bytes) as table_size,pg_size_pretty(index_bytes) as index_size,pg_size_pretty(toast_bytes) as toast_size,pg_size_pretty(total_bytes) as total_size from hypertable_detailed_size('history');
  table_size | index_size | toast_size | total_size
 ------------+------------+------------+------------
@@ -196,22 +190,12 @@ zabbix=# \d
                            List of relations
         Schema         |            Name             | Type  |  Owner
 -----------------------+-----------------------------+-------+----------
- _timescaledb_internal | _compressed_hypertable_10   | table | zabbix
- _timescaledb_internal | _compressed_hypertable_11   | table | zabbix
- _timescaledb_internal | _compressed_hypertable_12   | table | zabbix
- _timescaledb_internal | _compressed_hypertable_13   | table | zabbix
- _timescaledb_internal | _compressed_hypertable_14   | table | zabbix
- _timescaledb_internal | _compressed_hypertable_8    | table | zabbix
- _timescaledb_internal | _compressed_hypertable_9    | table | zabbix
+.......
  _timescaledb_internal | _hyper_1_1_chunk            | table | zabbix
  _timescaledb_internal | _hyper_1_2_chunk            | table | zabbix
  _timescaledb_internal | _hyper_1_3_chunk            | table | zabbix
 .....
- _timescaledb_internal | bgw_job_stat                | table | postgres
- _timescaledb_internal | bgw_policy_chunk_stats      | table | postgres
  _timescaledb_internal | compress_hyper_8_27_chunk   | table | zabbix
- _timescaledb_internal | compressed_chunk_stats      | view  | postgres
- _timescaledb_internal | hypertable_chunk_local_size | view  | postgres
 (40 rows)
 
 通过explain可以看到 _hyper_1_1_chunk 压缩后 数据放到了 compress_hyper_8_27_chunk
@@ -241,7 +225,6 @@ zabbix=# select pg_size_pretty(pg_relation_size('_timescaledb_internal.compress_
  40 kB
 (1 row)
 
-查看	
 
 查看压缩任务
 zabbix=# SELECT * FROM timescaledb_information.jobs;
@@ -298,4 +281,255 @@ zabbix=# select itemid,first(value,clock) from history group by itemid;
   23256 |   0.06889424733034792
   23257 |   0.18606224627875506
  
- 
+# 备份   这里超表没有备份，需要单独copy备份
+-bash-4.2$ ts-dump --db-URI=postgres://postgres:postgres@10.67.39.58:5432/zabbix --dump-dir=tsdump/
+2021/11/01 08:45:04 Jobs:  have stopped, continuing
+ pg_dump version: pg_dump (PostgreSQL) 13.4
+
+2021/11/01 08:45:06 pg_dump: warning: there are circular foreign-key constraints on this table:
+2021/11/01 08:45:06 pg_dump:   hypertable
+2021/11/01 08:45:06 pg_dump: You might not be able to restore the dump without using --disable-triggers or temporarily dropping the constraints.
+2021/11/01 08:45:06 pg_dump: Consider using a full dump instead of a --data-only dump to avoid this problem.
+2021/11/01 08:45:06 pg_dump: warning: there are circular foreign-key constraints on this table:
+2021/11/01 08:45:06 pg_dump:   chunk
+2021/11/01 08:45:06 pg_dump: You might not be able to restore the dump without using --disable-triggers or temporarily dropping the constraints.
+2021/11/01 08:45:06 pg_dump: Consider using a full dump instead of a --data-only dump to avoid this problem.
+2021/11/01 08:45:07 pg_dump: NOTICE:  hypertable data are in the chunks, no data will be copied
+2021/11/01 08:45:07 DETAIL:  Data for hypertables are stored in the chunks of a hypertable so COPY TO of a hypertable will not copy any data.
+2021/11/01 08:45:07 HINT:  Use "COPY (SELECT * FROM <hypertable>) TO ..." to copy all data in hypertable, or copy each chunk individually.
+2021/11/01 08:45:07 pg_dump: NOTICE:  hypertable data are in the chunks, no data will be copied
+......
+
+
+####################  prometheus + promscale + timescaledb2 POC
+容器快速搭建环境
+docker network create --driver bridge pnet
+
+docker run --name timescaledb -e POSTGRES_PASSWORD=secret -d -p 5432:5432 --network=pnet timescaledev/promscale-extension:latest-ts2-pg13 postgres -csynchronous_commit=off
+
+docker run --name promscale -d -p 9201:9201 --network=pnet timescale/promscale:0.6 -db-password=secret -db-port=5432 -db-name=postgres -db-host=timescaledb -db-ssl-mode=allow
+此步完成后，会自动在PG里建promscale extension
+
+编辑prometheus.yml，加入
+remote_write:
+        - url: "http://10.67.36.58:9201/write"
+remote_read:
+    - url: "http://10.67.36.58:9201/read"
+
+重启prometheus
+root@u1804:/var/snap/prometheus/current# systemctl restart snap.prometheus.prometheus.service
+
+postgres=# SELECT count(*) FROM timescaledb_information.hypertables;
+ count
+-------
+   767
+(1 row) 
+
+####################### prometheus + promscale + 多节点timescaledb2   ####################
+容器快速搭建环境
+1 分别运行3个timescaledb容器
+docker run --name timescaledb -e POSTGRES_PASSWORD=secret -d -p 5432:5432 timescaledev/promscale-extension:latest-ts2-pg13 postgres -csynchronous_commit=off
+
+2 每个节点做根据下面要求修改postgresql.conf，并stop/start container
+max_prepared_transactions must be set to a non-zero value on all data nodes (if not already set, 150 is recommended).
+enable_partitionwise_aggregate should be set to on on the access node for good query performance. Otherwise, queries will not be pushed down to the data nodes.
+jit should be set to off on the access node as JIT currently doesn't work well with distributed queries. JIT can still be enabled on the data nodes
+
+3 依次将dns,dns2节点加入为data_node，这里dns是写错的节点名称 -_-!!
+
+postgres=# select add_data_node('dns',host=>'10.67.36.59');
+NOTICE:  database "postgres" already exists on data node, skipping
+NOTICE:  extension "timescaledb" already exists on data node, skipping
+DETAIL:  TimescaleDB extension version on 10.67.36.59:5432 was 2.3.1.
+             add_data_node
+---------------------------------------
+ (dns,10.67.36.59,5432,postgres,t,f,f)
+(1 row)
+
+postgres=# select add_data_node('dns2',host=>'10.67.36.57');
+NOTICE:  database "postgres" already exists on data node, skipping
+NOTICE:  extension "timescaledb" already exists on data node, skipping
+DETAIL:  TimescaleDB extension version on 10.67.36.57:5432 was 2.3.1.
+             add_data_node
+----------------------------------------
+ (dns2,10.67.36.57,5432,postgres,t,f,f)
+(1 row)
+
+postgres=# select * from timescaledb_information.data_nodes;
+ node_name |  owner   |                   options
+-----------+----------+----------------------------------------------
+ dns       | postgres | {host=10.67.36.59,port=5432,dbname=postgres}
+ dns2      | postgres | {host=10.67.36.57,port=5432,dbname=postgres}
+(2 rows)
+
+底层在查询是应该是借助了FDW
+postgres=# \des+
+                                                             List of foreign servers
+ Name |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |                     FDW options                      | Description
+------+----------+----------------------+-------------------+------+---------+------------------------------------------------------+-------------
+ dns  | postgres | timescaledb_fdw      |                   |      |         | (host '10.67.36.59', port '5432', dbname 'postgres') |
+ dns2 | postgres | timescaledb_fdw      |                   |      |         | (host '10.67.36.57', port '5432', dbname 'postgres') |
+(2 rows)
+
+4 运行promscale容器
+docker run --name promscale_3ts -d -p 9201:9201 timescale/promscale:0.6 -db-password=secret -db-port=5432 -db-name=postgres -db-host=10.67.36.60 -db-ssl-mode=allow
+
+5 在access node上测试分布式hypertable
+postgres=# CREATE TABLE conditions (
+postgres(#   time        TIMESTAMPTZ       NOT NULL,
+postgres(#   location    TEXT              NOT NULL,
+postgres(#   temperature DOUBLE PRECISION  NULL,
+postgres(#   humidity    DOUBLE PRECISION  NULL
+postgres(# );
+CREATE TABLE
+
+postgres=# SELECT create_distributed_hypertable('conditions', 'time', 'location');  #单副本
+ create_distributed_hypertable
+-------------------------------
+ (1,public,conditions,t)
+(1 row)
+
+postgres=# SELECT * FROM timescaledb_information.hypertables;
+ hypertable_schema | hypertable_name |  owner   | num_dimensions | num_chunks | compression_enabled | is_distributed | replication_factor | data_nodes | tablespaces
+-------------------+-----------------+----------+----------------+------------+---------------------+----------------+--------------------+------------+-------------
+ public            | conditions      | postgres |              2 |          2 | f                   | t              |                  1 | {dns,dns2} |
+(1 row)
+
+插入数据后查询
+postgres=# SELECT chunk_name, data_nodes
+postgres-# FROM timescaledb_information.chunks
+postgres-# WHERE hypertable_name = 'conditions';
+      chunk_name       | data_nodes
+-----------------------+------------
+ _dist_hyper_1_1_chunk | {dns}
+ _dist_hyper_1_2_chunk | {dns2}
+(2 rows)
+
+通过执行计划看到查询下推到两个data node
+postgres=# explain (verbose) select * from conditions;
+                                                                              QUERY PLAN
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (AsyncAppend)  (cost=100.00..1873158.09 rows=41839260 width=56)
+   Output: conditions."time", conditions.location, conditions.temperature, conditions.humidity
+   ->  Append  (cost=100.00..1873158.09 rows=41839260 width=56)
+         ->  Custom Scan (DataNodeScan) on public.conditions conditions_1  (cost=100.00..831980.90 rows=20919630 width=56)
+               Output: conditions_1."time", conditions_1.location, conditions_1.temperature, conditions_1.humidity
+               Data node: dns
+               Chunks: _dist_hyper_1_1_chunk
+               Remote SQL: SELECT "time", location, temperature, humidity FROM public.conditions WHERE _timescaledb_internal.chunks_in(public.conditions.*, ARRAY[1])
+         ->  Custom Scan (DataNodeScan) on public.conditions conditions_2  (cost=100.00..831980.90 rows=20919630 width=56)
+               Output: conditions_2."time", conditions_2.location, conditions_2.temperature, conditions_2.humidity
+               Data node: dns2
+               Chunks: _dist_hyper_1_2_chunk
+               Remote SQL: SELECT "time", location, temperature, humidity FROM public.conditions WHERE _timescaledb_internal.chunks_in(public.conditions.*, ARRAY[1])
+
+分别查看两个chunk
+postgres=# \d+ _timescaledb_internal._dist_hyper_1_1_chunk
+                                  Foreign table "_timescaledb_internal._dist_hyper_1_1_chunk"
+   Column    |           Type           | Collation | Nullable | Default | FDW options | Storage  | Stats target | Description
+-------------+--------------------------+-----------+----------+---------+-------------+----------+--------------+-------------
+ time        | timestamp with time zone |           | not null |         |             | plain    |              |
+ location    | text                     |           | not null |         |             | extended |              |
+ temperature | double precision         |           |          |         |             | plain    |              |
+ humidity    | double precision         |           |          |         |             | plain    |              |
+Check constraints:
+    "constraint_1" CHECK ("time" >= '2021-10-28 00:00:00+00'::timestamp with time zone AND "time" < '2021-11-04 00:00:00+00'::timestamp with time zone)
+    "constraint_2" CHECK (_timescaledb_internal.get_partition_hash(location) < 1073741823)
+Server: dns
+Inherits: conditions
+
+postgres=# \d+ _timescaledb_internal._dist_hyper_1_2_chunk
+                                  Foreign table "_timescaledb_internal._dist_hyper_1_2_chunk"
+   Column    |           Type           | Collation | Nullable | Default | FDW options | Storage  | Stats target | Description
+-------------+--------------------------+-----------+----------+---------+-------------+----------+--------------+-------------
+ time        | timestamp with time zone |           | not null |         |             | plain    |              |
+ location    | text                     |           | not null |         |             | extended |              |
+ temperature | double precision         |           |          |         |             | plain    |              |
+ humidity    | double precision         |           |          |         |             | plain    |              |
+Check constraints:
+    "constraint_1" CHECK ("time" >= '2021-10-28 00:00:00+00'::timestamp with time zone AND "time" < '2021-11-04 00:00:00+00'::timestamp with time zone)
+    "constraint_3" CHECK (_timescaledb_internal.get_partition_hash(location) >= 1073741823)
+Server: dns2
+Inherits: conditions
+
+创建两副本的分布式超表
+CREATE TABLE conditions_rep2 (
+  time        TIMESTAMPTZ       NOT NULL,
+  location    TEXT              NOT NULL,
+  temperature DOUBLE PRECISION  NULL,
+  humidity    DOUBLE PRECISION  NULL
+);
+postgres=# SELECT create_distributed_hypertable('conditions_rep2', 'time', 'location',
+postgres(#     replication_factor => 2);
+ create_distributed_hypertable
+-------------------------------
+ (2,public,conditions_rep2,t)
+(1 row)
+
+INSERT INTO conditions_rep2
+  VALUES
+    (NOW(), 'office', 70.0, 50.3),
+    (NOW(), 'basement', 66.5, 61.0),
+	(NOW(), 'office', 71.3, 50.0),
+    (NOW(), 'garage', 66.5, 60.0),
+	(NOW(), 'office', 70.0, 50.0),
+    (NOW(), 'basement', 66.5, 60.0),
+	(NOW(), 'office', 70.2, 50.0),
+    (NOW(), 'basement', 66.5, 60.0),
+	(NOW(), 'garage', 70.9, 50.0),
+    (NOW(), 'basement', 66.5, 60.5),
+	(NOW(), 'office', 70.0, 51.0),
+    (NOW(), 'basement', 66.5, 60.0),
+    (NOW(), 'garage', 77.6, 65.2);
+
+#查看chunk分布	 单副本和两副本都能看到
+postgres=# select hypertable_schema,hypertable_name,chunk_schema,chunk_name,is_compressed,data_nodes from timescaledb_information.chunks ;
+ hypertable_schema | hypertable_name |     chunk_schema      |      chunk_name       | is_compressed | data_nodes
+-------------------+-----------------+-----------------------+-----------------------+---------------+------------
+ public            | conditions      | _timescaledb_internal | _dist_hyper_1_1_chunk | f             | {dns}
+ public            | conditions      | _timescaledb_internal | _dist_hyper_1_2_chunk | f             | {dns2}
+ public            | conditions_rep2 | _timescaledb_internal | _dist_hyper_2_3_chunk | f             | {dns,dns2}
+ public            | conditions_rep2 | _timescaledb_internal | _dist_hyper_2_4_chunk | f             | {dns,dns2}
+	
+6 prometheus配置prom_scale
+编辑prometheus.yml，加入
+remote_write:
+        - url: "http://10.67.36.62:9201/write"
+remote_read:
+    - url: "http://10.67.36.62:9201/read"
+
+重启prometheus
+root@u1804:/var/snap/prometheus/current# systemctl restart snap.prometheus.prometheus.service
+
+查看所有的hypertable
+select hypertable_schema,hypertable_name,chunk_schema,chunk_name,is_compressed,data_nodes from timescaledb_information.chunks ;
+hypertable_schema |                        hypertable_name                         |  owner   | num_dimensions | num_chunks | compression_enabled | is_distributed | replication_factor | data_nodes | tablespaces
+-------------------+----------------------------------------------------------------+----------+----------------+------------+---------------------+----------------+--------------------+------------+-------------
+ public            | conditions                                                     | postgres |              2 |          2 | f                   | t              |                  1 | {dns,dns2} |
+ public            | conditions_rep2                                                | postgres |              2 |          2 | f                   | t              |                  2 | {dns,dns2} |
+ prom_data         | node_cpu_seconds_total                                         | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_next_gc_bytes                                      | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_heap_objects                                       | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_mspan_inuse_bytes                                  | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_lookups_total                                      | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_stack_sys_bytes                                    | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | node_boot_time_seconds                                         | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | node_context_switches_total                                    | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | node_cpu_guest_seconds_total                                   | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_sys_bytes                                          | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_mspan_sys_bytes                                    | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_alloc_bytes                                        | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_mcache_inuse_bytes                                 | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_mcache_sys_bytes                                   | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_buck_hash_sys_bytes                                | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | node_arp_entries                                               | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_memstats_frees_total                                        | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+ prom_data         | go_threads                                                     | postgres |              1 |          1 | t                   | t              |                  1 | {dns,dns2} |
+
+# 在原有集群的基础上新增节点
+Expanding the cluster
+When adding nodes to a TimescaleDB cluster that is already being written to by Promscale, you should run the add_prom_node(node_name) function after running the standard add_data_node() function. For example:
+
+SELECT add_data_node('example_node_name', host => 'example_host_address')
+SELECT add_prom_node('example_node_name');
+Note: add_prom_node should be run by the same database user, as the one writing data from Promscale. 
