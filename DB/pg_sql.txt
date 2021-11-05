@@ -1300,6 +1300,12 @@ from your terminal.
  5050
 (1 row)
 
+# 显示所有的trigger
+SELECT  event_object_table AS table_name ,trigger_name         
+FROM information_schema.triggers  
+GROUP BY table_name , trigger_name 
+ORDER BY table_name ,trigger_name;
+
 # 数据库之外创建用户和数据库
 createuser --pwprompt zabbix
 createdb -O zabbix -E Unicode -T template0 zabbix
@@ -2279,4 +2285,36 @@ ALTER TABLE items ADD CONSTRAINT items_pk PRIMARY KEY USING INDEX items_pk;  -- 
 通过将主键索引的创建，分成两步；这样繁重的创建索引的工作不会影响业务查询；
 
 
+######################################
+rule 转换 例子
+数据来源是2个字段表示的经纬度，要求实时转换为geometry类型。
 
+创建来源表结构
+
+postgres=# create table nt(id int, c1 numeric, c2 numeric);  
+CREATE TABLE  
+创建目标表结构
+
+postgres=# create table nt_geo (id int, geo geometry);  
+CREATE TABLE  
+对来源表创建规则或触发器，例如
+
+postgres=# create rule r1 as on insert to nt do instead insert into nt_geo values (NEW.id, ST_MakePoint(NEW.c1,NEW.c2));  
+CREATE RULE  
+使用来源数据结构，将数据插入来源数据表
+
+postgres=# insert into nt values (1,1,1);  
+INSERT 0 1  
+数据会自动写入目标表，来源表只是个转换入口，不会落数据
+
+postgres=# select * from nt;  
+ id | c1 | c2   
+----+----+----  
+(0 rows)  
+  
+postgres=# select * from nt_geo ;  
+ id |                    geo                       
+----+--------------------------------------------  
+  1 | 0101000000000000000000F03F000000000000F03F  
+(1 row)  
+cool !!!使用这种方法，我们不需要先入库在转换，也不需要在入库前写程序进行转换。

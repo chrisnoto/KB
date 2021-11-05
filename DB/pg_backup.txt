@@ -857,3 +857,385 @@ incoming目录是archive_command 发过来的日志, wals目录是 pg_receivwal�
 133M    incoming/
 133M    wals
 
+######### pgloader
+迁移 sqlite 到 PG
+-bash-4.2$ cat inv
+load database
+  from sqlite:///var/lib/pgsql/inv.db
+  into postgresql:///inv
+
+with include drop,create tables,create indexes,reset sequences
+
+  set work_mem to '16MB',maintenance_work_mem to '512MB';
+
+
+-bash-4.2$ pgloader --verbose inv
+2021-11-04T06:12:23.044000Z NOTICE Starting pgloader, log system is ready.
+2021-11-04T06:12:23.113000Z LOG pgloader version "3.6.2"
+2021-11-04T06:12:23.267000Z LOG Migrating from #<SQLITE-CONNECTION sqlite:///var/lib/pgsql/inv.db {1006667FF3}>
+2021-11-04T06:12:23.268000Z LOG Migrating into #<PGSQL-CONNECTION pgsql://postgres@UNIX:5432/inv {10066687C3}>
+2021-11-04T06:12:23.506000Z NOTICE Prepare PostgreSQL database.
+2021-11-04T06:12:23.864000Z NOTICE COPY server
+2021-11-04T06:12:23.969000Z NOTICE DONE copying server
+2021-11-04T06:12:24.023000Z NOTICE CREATE UNIQUE INDEX idx_24591_sqlite_autoindex_server_1 ON server (id);
+2021-11-04T06:12:24.097000Z NOTICE Completing PostgreSQL database.
+2021-11-04T06:12:24.097000Z NOTICE Reset sequences
+2021-11-04T06:12:24.226000Z NOTICE ALTER TABLE server ADD PRIMARY KEY USING INDEX idx_24591_sqlite_autoindex_server_1;
+2021-11-04T06:12:24.253000Z LOG report summary reset
+             table name     errors       read   imported      bytes      total time       read      write
+-----------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+                  fetch          0          0          0                     0.001s
+        fetch meta data          0          2          2                     0.176s
+         Create Schemas          0          0          0                     0.002s
+       Create SQL Types          0          0          0                     0.028s
+          Create tables          0          2          2                     0.083s
+         Set Table OIDs          0          1          1                     0.036s
+-----------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+                 server          0         43         43     0.9 kB          0.105s     0.018s     0.001s
+-----------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+COPY Threads Completion          0          4          4                     0.110s
+ Index Build Completion          0          1          1                     0.059s
+         Create Indexes          0          1          1                     0.008s
+        Reset Sequences          0          0          0                     0.078s
+           Primary Keys          0          1          1                     0.009s
+    Create Foreign Keys          0          0          0                     0.000s
+        Create Triggers          0          0          0                     0.001s
+       Install Comments          0          0          0                     0.000s
+-----------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+      Total import time          ?         43         43     0.9 kB          0.265s
+	  
+迁移 sqlite 到 PG  primary.sqlite
+-bash-4.2$ cat primary
+load database
+  from sqlite:///var/lib/pgsql/primary.sqlite
+  into postgresql:///yum
+
+with include drop,create tables,create indexes,reset sequences
+
+
+set work_mem to '16MB',maintenance_work_mem to '512MB';
+	  
+-bash-4.2$ pgloader primary
+2021-11-04T08:35:45.117000Z LOG pgloader version "3.6.2"
+2021-11-04T08:35:45.280000Z LOG Migrating from #<SQLITE-CONNECTION sqlite:///var/lib/pgsql/primary.sqlite {10065D0723}>
+2021-11-04T08:35:45.282000Z LOG Migrating into #<PGSQL-CONNECTION pgsql://postgres@UNIX:5432/yum {10065D0EF3}>
+2021-11-04T08:35:49.272000Z LOG report summary reset
+             table name     errors       rows      bytes      total time
+-----------------------  ---------  ---------  ---------  --------------
+                  fetch          0          0                     0.000s
+        fetch meta data          0         26                     0.079s
+         Create Schemas          0          0                     0.002s
+       Create SQL Types          0          0                     0.010s
+          Create tables          0         22                     0.107s
+         Set Table OIDs          0         11                     0.016s
+-----------------------  ---------  ---------  ---------  --------------
+                db_info          0          1     0.1 kB          0.137s
+               packages          0       2024     1.2 MB          0.676s
+                  files          0       5973   197.8 kB          0.244s
+               provides          0     203386    10.0 MB          2.745s
+               requires          0      24485     1.1 MB          0.814s
+              conflicts          0        309     9.5 kB          0.475s
+               suggests          0         19     0.6 kB          0.525s
+             recommends          0        119     3.8 kB          0.598s
+              obsoletes          0        603    19.7 kB          0.023s
+               enhances          0          1     0.0 kB          0.010s
+            supplements          0        198    14.0 kB          0.056s
+-----------------------  ---------  ---------  ---------  --------------
+COPY Threads Completion          0          4                     2.797s
+         Create Indexes          0         15                     1.284s
+ Index Build Completion          0         15                     0.640s
+        Reset Sequences          0          0                     0.080s
+           Primary Keys          0          1                     0.008s
+    Create Foreign Keys          0          0                     0.000s
+        Create Triggers          0          0                     0.001s
+       Install Comments          0          0                     0.000s
+-----------------------  ---------  ---------  ---------  --------------
+      Total import time          ?     237118    12.5 MB          4.810s
+迁移zabbix_proxy.sqlite时，double precision死活过不去，type里面含空格，貌似bug	
+-bash-4.2$ cat zabbix
+load database
+  from sqlite:///var/lib/pgsql/zproxy.sqlite
+  into postgresql:///zabbix
+
+with include drop,create tables,create indexes,reset sequences
+
+cast type "double precision" to float8 using float-to-string
+
+set work_mem to '16MB',maintenance_work_mem to '512MB';
+
+## to mysql
+-bash-4.2$ pgloader --verbose mysql://test:Test_123456789@10.67.48.209/snipeit postgresql:///snipeit
+2021-11-05T01:22:58.066000Z NOTICE Starting pgloader, log system is ready.
+2021-11-05T01:22:58.121000Z LOG pgloader version "3.6.2"
+2021-11-05T01:22:58.393000Z LOG Migrating from #<MYSQL-CONNECTION mysql://test@10.67.48.209:3306/snipeit {1005A2C963}>
+2021-11-05T01:22:58.394000Z LOG Migrating into #<PGSQL-CONNECTION pgsql://postgres@UNIX:5432/snipeit {1005C76AE3}>
+2021-11-05T01:23:01.254000Z NOTICE Prepare PostgreSQL database.
+2021-11-05T01:23:01.595000Z NOTICE COPY snipeit.accessories
+2021-11-05T01:23:01.610000Z NOTICE COPY snipeit.accessories_users
+2021-11-05T01:23:01.614000Z NOTICE COPY snipeit.action_logs
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.assets
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.asset_logs
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.asset_maintenances
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.asset_uploads
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.categories
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.checkout_requests
+2021-11-05T01:23:01.628000Z NOTICE COPY snipeit.companies
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.components
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.components_assets
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.consumables
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.consumables_users
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.custom_fields
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.custom_fieldsets
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.custom_field_custom_fieldset
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.departments
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.depreciations
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.groups
+2021-11-05T01:23:01.629000Z NOTICE COPY snipeit.imports
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.licenses
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.license_seats
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.locations
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.login_attempts
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.manufacturers
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.migrations
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.models
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.models_custom_fields
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.oauth_access_tokens
+2021-11-05T01:23:01.630000Z NOTICE COPY snipeit.oauth_auth_codes
+2021-11-05T01:23:01.636000Z NOTICE COPY snipeit.oauth_clients
+2021-11-05T01:23:01.636000Z NOTICE COPY snipeit.oauth_personal_access_clients
+2021-11-05T01:23:01.637000Z NOTICE COPY snipeit.oauth_refresh_tokens
+2021-11-05T01:23:01.637000Z NOTICE COPY snipeit.password_resets
+2021-11-05T01:23:01.638000Z NOTICE COPY snipeit.permission_groups
+2021-11-05T01:23:01.639000Z NOTICE COPY snipeit.requested_assets
+2021-11-05T01:23:01.639000Z NOTICE COPY snipeit.requests
+2021-11-05T01:23:01.640000Z NOTICE COPY snipeit.settings
+2021-11-05T01:23:01.640000Z NOTICE COPY snipeit.status_labels
+2021-11-05T01:23:01.641000Z NOTICE COPY snipeit.suppliers
+2021-11-05T01:23:01.641000Z NOTICE COPY snipeit.throttle
+2021-11-05T01:23:01.648000Z NOTICE COPY snipeit.users
+2021-11-05T01:23:01.649000Z NOTICE COPY snipeit.users_groups
+2021-11-05T01:23:01.699000Z NOTICE DONE copying snipeit.accessories_users
+2021-11-05T01:23:01.703000Z NOTICE DONE copying snipeit.accessories
+2021-11-05T01:23:01.748000Z NOTICE CREATE UNIQUE INDEX idx_25242_primary ON snipeit.accessories (id);
+2021-11-05T01:23:01.791000Z NOTICE CREATE UNIQUE INDEX idx_25250_primary ON snipeit.accessories_users (id);
+2021-11-05T01:23:01.825000Z NOTICE DONE copying snipeit.action_logs
+2021-11-05T01:23:01.870000Z NOTICE DONE copying snipeit.assets
+2021-11-05T01:23:01.895000Z NOTICE DONE copying snipeit.asset_logs
+2021-11-05T01:23:01.900000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_location_id_index ON snipeit.assets (deleted_at, location_id);
+2021-11-05T01:23:01.912000Z NOTICE DONE copying snipeit.categories
+2021-11-05T01:23:01.929000Z NOTICE DONE copying snipeit.checkout_requests
+2021-11-05T01:23:01.944000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_rtd_location_id_index ON snipeit.assets (deleted_at, rtd_location_id);
+2021-11-05T01:23:01.962000Z NOTICE DONE copying snipeit.companies
+2021-11-05T01:23:01.977000Z NOTICE DONE copying snipeit.components
+2021-11-05T01:23:01.981000Z NOTICE CREATE INDEX idx_25256_action_logs_target_id_target_type_index ON snipeit.action_logs (target_id, target_type);
+2021-11-05T01:23:01.998000Z NOTICE CREATE UNIQUE INDEX idx_25324_primary ON snipeit.companies (id);
+2021-11-05T01:23:02.014000Z NOTICE DONE copying snipeit.components_assets
+2021-11-05T01:23:02.018000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_model_id_index ON snipeit.assets (deleted_at, model_id);
+2021-11-05T01:23:02.044000Z NOTICE DONE copying snipeit.consumables
+2021-11-05T01:23:02.060000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_status_id_index ON snipeit.assets (deleted_at, status_id);
+2021-11-05T01:23:02.063000Z NOTICE CREATE INDEX idx_25256_action_logs_item_type_item_id_action_type_index ON snipeit.action_logs (item_type, item_id, action_type);
+2021-11-05T01:23:02.065000Z NOTICE CREATE UNIQUE INDEX idx_25256_primary ON snipeit.action_logs (id);
+2021-11-05T01:23:02.078000Z NOTICE CREATE INDEX idx_25256_action_logs_target_type_target_id_action_type_index ON snipeit.action_logs (target_type, target_id, action_type);
+2021-11-05T01:23:02.095000Z NOTICE DONE copying snipeit.consumables_users
+2021-11-05T01:23:02.101000Z NOTICE CREATE INDEX idx_25256_action_logs_thread_id_index ON snipeit.action_logs (thread_id);
+2021-11-05T01:23:02.115000Z NOTICE CREATE UNIQUE INDEX idx_25344_primary ON snipeit.consumables (id);
+2021-11-05T01:23:02.115000Z NOTICE CREATE UNIQUE INDEX idx_25330_primary ON snipeit.components (id);
+2021-11-05T01:23:02.124000Z NOTICE CREATE INDEX idx_25256_action_logs_created_at_index ON snipeit.action_logs (created_at);
+2021-11-05T01:23:02.125000Z NOTICE DONE copying snipeit.custom_fields
+2021-11-05T01:23:02.133000Z NOTICE DONE copying snipeit.asset_maintenances
+2021-11-05T01:23:02.159000Z NOTICE CREATE UNIQUE INDEX idx_25324_companies_name_unique ON snipeit.companies (name);
+2021-11-05T01:23:02.170000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_name_index ON snipeit.assets (deleted_at, name);
+2021-11-05T01:23:02.171000Z NOTICE CREATE INDEX idx_25265_assets_assigned_type_assigned_to_index ON snipeit.assets (assigned_type, assigned_to);
+2021-11-05T01:23:02.172000Z NOTICE DONE copying snipeit.asset_uploads
+2021-11-05T01:23:02.176000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_asset_tag_index ON snipeit.assets (deleted_at, asset_tag);
+2021-11-05T01:23:02.177000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_supplier_id_index ON snipeit.assets (deleted_at, supplier_id);
+2021-11-05T01:23:02.190000Z NOTICE CREATE INDEX idx_25265_assets_deleted_at_assigned_type_assigned_to_index ON snipeit.assets (deleted_at, assigned_type, assigned_to);
+2021-11-05T01:23:02.193000Z NOTICE CREATE UNIQUE INDEX idx_25317_primary ON snipeit.checkout_requests (id);
+2021-11-05T01:23:02.219000Z NOTICE CREATE INDEX idx_25265_assets_rtd_location_id_index ON snipeit.assets (rtd_location_id);
+2021-11-05T01:23:02.228000Z NOTICE DONE copying snipeit.departments
+2021-11-05T01:23:02.229000Z NOTICE CREATE INDEX idx_25317_checkout_requests_user_id_requestable_id_requestable_type ON snipeit.checkout_requests (user_id, requestable_id, requestable_type);
+2021-11-05T01:23:02.230000Z WARNING PostgreSQL warning: identifier "idx_25317_checkout_requests_user_id_requestable_id_requestable_type" will be truncated to "idx_25317_checkout_requests_user_id_requestable_id_requestable_"
+2021-11-05T01:23:02.239000Z NOTICE DONE copying snipeit.custom_field_custom_fieldset
+2021-11-05T01:23:02.248000Z NOTICE CREATE UNIQUE INDEX idx_25337_primary ON snipeit.components_assets (id);
+2021-11-05T01:23:02.252000Z NOTICE DONE copying snipeit.custom_fieldsets
+2021-11-05T01:23:02.261000Z NOTICE CREATE UNIQUE INDEX idx_25265_primary ON snipeit.assets (id);
+2021-11-05T01:23:02.267000Z NOTICE CREATE INDEX idx_25265_assets_created_at_index ON snipeit.assets (created_at);
+2021-11-05T01:23:02.275000Z NOTICE CREATE UNIQUE INDEX idx_25280_primary ON snipeit.asset_logs (id);
+2021-11-05T01:23:02.276000Z NOTICE CREATE UNIQUE INDEX idx_25358_primary ON snipeit.custom_fields (id);
+2021-11-05T01:23:02.279000Z NOTICE CREATE UNIQUE INDEX idx_25304_primary ON snipeit.categories (id);
+2021-11-05T01:23:02.294000Z NOTICE CREATE UNIQUE INDEX idx_25298_primary ON snipeit.asset_uploads (id);
+2021-11-05T01:23:02.300000Z NOTICE DONE copying snipeit.depreciations
+2021-11-05T01:23:02.306000Z NOTICE CREATE UNIQUE INDEX idx_25369_primary ON snipeit.custom_fieldsets (id);
+2021-11-05T01:23:02.308000Z NOTICE CREATE UNIQUE INDEX idx_25352_primary ON snipeit.consumables_users (id);
+2021-11-05T01:23:02.309000Z NOTICE CREATE UNIQUE INDEX idx_25378_primary ON snipeit.departments (id);
+2021-11-05T01:23:02.311000Z NOTICE DONE copying snipeit.imports
+2021-11-05T01:23:02.314000Z NOTICE DONE copying snipeit.groups
+2021-11-05T01:23:02.325000Z NOTICE CREATE UNIQUE INDEX idx_25289_primary ON snipeit.asset_maintenances (id);
+2021-11-05T01:23:02.327000Z NOTICE DONE copying snipeit.licenses
+2021-11-05T01:23:02.344000Z NOTICE CREATE UNIQUE INDEX idx_25384_primary ON snipeit.depreciations (id);
+2021-11-05T01:23:02.361000Z NOTICE DONE copying snipeit.locations
+2021-11-05T01:23:02.369000Z NOTICE DONE copying snipeit.login_attempts
+2021-11-05T01:23:02.376000Z NOTICE DONE copying snipeit.license_seats
+2021-11-05T01:23:02.381000Z NOTICE CREATE UNIQUE INDEX idx_25399_primary ON snipeit.imports (id);
+2021-11-05T01:23:02.382000Z NOTICE CREATE UNIQUE INDEX idx_25390_primary ON snipeit.groups (id);
+2021-11-05T01:23:02.402000Z NOTICE DONE copying snipeit.manufacturers
+2021-11-05T01:23:02.404000Z NOTICE CREATE UNIQUE INDEX idx_25408_primary ON snipeit.licenses (id);
+2021-11-05T01:23:02.423000Z NOTICE DONE copying snipeit.models_custom_fields
+2021-11-05T01:23:02.429000Z NOTICE CREATE UNIQUE INDEX idx_25428_primary ON snipeit.locations (id);
+2021-11-05T01:23:02.437000Z NOTICE CREATE UNIQUE INDEX idx_25434_primary ON snipeit.login_attempts (id);
+2021-11-05T01:23:02.437000Z NOTICE CREATE UNIQUE INDEX idx_25419_primary ON snipeit.license_seats (id);
+2021-11-05T01:23:02.438000Z NOTICE CREATE UNIQUE INDEX idx_25440_primary ON snipeit.manufacturers (id);
+2021-11-05T01:23:02.448000Z NOTICE DONE copying snipeit.oauth_access_tokens
+2021-11-05T01:23:02.459000Z NOTICE DONE copying snipeit.models
+2021-11-05T01:23:02.472000Z NOTICE CREATE UNIQUE INDEX idx_25463_primary ON snipeit.models_custom_fields (id);
+2021-11-05T01:23:02.480000Z NOTICE DONE copying snipeit.migrations
+2021-11-05T01:23:02.481000Z NOTICE CREATE INDEX idx_25470_oauth_access_tokens_user_id_index ON snipeit.oauth_access_tokens (user_id);
+2021-11-05T01:23:02.481000Z NOTICE DONE copying snipeit.oauth_auth_codes
+2021-11-05T01:23:02.495000Z NOTICE CREATE UNIQUE INDEX idx_25452_primary ON snipeit.models (id);
+2021-11-05T01:23:02.500000Z NOTICE DONE copying snipeit.oauth_clients
+2021-11-05T01:23:02.520000Z NOTICE DONE copying snipeit.oauth_refresh_tokens
+2021-11-05T01:23:02.521000Z NOTICE CREATE UNIQUE INDEX idx_25470_primary ON snipeit.oauth_access_tokens (id);
+2021-11-05T01:23:02.526000Z NOTICE DONE copying snipeit.password_resets
+2021-11-05T01:23:02.549000Z NOTICE CREATE UNIQUE INDEX idx_25484_primary ON snipeit.oauth_clients (id);
+2021-11-05T01:23:02.550000Z NOTICE CREATE UNIQUE INDEX idx_25446_primary ON snipeit.migrations (id);
+2021-11-05T01:23:02.562000Z NOTICE CREATE UNIQUE INDEX idx_25476_primary ON snipeit.oauth_auth_codes (id);
+2021-11-05T01:23:02.570000Z NOTICE CREATE INDEX idx_25497_oauth_refresh_tokens_access_token_id_index ON snipeit.oauth_refresh_tokens (access_token_id);
+2021-11-05T01:23:02.571000Z NOTICE DONE copying snipeit.permission_groups
+2021-11-05T01:23:02.580000Z NOTICE CREATE UNIQUE INDEX idx_25497_primary ON snipeit.oauth_refresh_tokens (id);
+2021-11-05T01:23:02.581000Z NOTICE CREATE INDEX idx_25500_password_resets_token_index ON snipeit.password_resets (token);
+2021-11-05T01:23:02.582000Z NOTICE DONE copying snipeit.requests
+2021-11-05T01:23:02.591000Z NOTICE DONE copying snipeit.oauth_personal_access_clients
+2021-11-05T01:23:02.605000Z NOTICE DONE copying snipeit.requested_assets
+2021-11-05T01:23:02.611000Z NOTICE CREATE INDEX idx_25484_oauth_clients_user_id_index ON snipeit.oauth_clients (user_id);
+2021-11-05T01:23:02.615000Z NOTICE CREATE INDEX idx_25500_password_resets_email_index ON snipeit.password_resets (email);
+2021-11-05T01:23:02.632000Z NOTICE CREATE UNIQUE INDEX idx_25505_primary ON snipeit.permission_groups (id);
+2021-11-05T01:23:02.633000Z NOTICE CREATE UNIQUE INDEX idx_25493_primary ON snipeit.oauth_personal_access_clients (id);
+2021-11-05T01:23:02.646000Z NOTICE DONE copying snipeit.status_labels
+2021-11-05T01:23:02.658000Z NOTICE CREATE UNIQUE INDEX idx_25514_primary ON snipeit.requested_assets (id);
+2021-11-05T01:23:02.661000Z NOTICE CREATE INDEX idx_25493_oauth_personal_access_clients_client_id_index ON snipeit.oauth_personal_access_clients (client_id);
+2021-11-05T01:23:02.662000Z NOTICE DONE copying snipeit.throttle
+2021-11-05T01:23:02.667000Z NOTICE DONE copying snipeit.suppliers
+2021-11-05T01:23:02.679000Z NOTICE CREATE UNIQUE INDEX idx_25520_primary ON snipeit.requests (id);
+2021-11-05T01:23:02.701000Z NOTICE DONE copying snipeit.settings
+2021-11-05T01:23:02.719000Z NOTICE CREATE UNIQUE INDEX idx_25614_primary ON snipeit.suppliers (id);
+2021-11-05T01:23:02.721000Z NOTICE CREATE UNIQUE INDEX idx_25620_primary ON snipeit.throttle (id);
+2021-11-05T01:23:02.724000Z NOTICE CREATE UNIQUE INDEX idx_25600_primary ON snipeit.status_labels (id);
+2021-11-05T01:23:02.745000Z NOTICE DONE copying snipeit.users_groups
+2021-11-05T01:23:02.749000Z NOTICE CREATE UNIQUE INDEX idx_25529_primary ON snipeit.settings (id);
+2021-11-05T01:23:02.753000Z NOTICE CREATE INDEX idx_25620_throttle_user_id_index ON snipeit.throttle (user_id);
+2021-11-05T01:23:02.760000Z NOTICE DONE copying snipeit.users
+2021-11-05T01:23:02.785000Z NOTICE CREATE UNIQUE INDEX idx_25642_primary ON snipeit.users_groups (user_id, group_id);
+2021-11-05T01:23:02.786000Z NOTICE CREATE UNIQUE INDEX idx_25629_primary ON snipeit.users (id);
+2021-11-05T01:23:02.792000Z NOTICE CREATE INDEX idx_25629_users_activation_code_index ON snipeit.users (activation_code);
+2021-11-05T01:23:02.793000Z NOTICE CREATE INDEX idx_25629_users_reset_password_code_index ON snipeit.users (reset_password_code);
+2021-11-05T01:23:02.823000Z NOTICE Completing PostgreSQL database.
+2021-11-05T01:23:02.823000Z NOTICE Reset sequences
+2021-11-05T01:23:03.005000Z NOTICE ALTER TABLE snipeit.accessories_users ADD PRIMARY KEY USING INDEX idx_25250_primary;
+2021-11-05T01:23:03.011000Z NOTICE ALTER TABLE snipeit.accessories ADD PRIMARY KEY USING INDEX idx_25242_primary;
+2021-11-05T01:23:03.013000Z NOTICE ALTER TABLE snipeit.action_logs ADD PRIMARY KEY USING INDEX idx_25256_primary;
+2021-11-05T01:23:03.015000Z NOTICE ALTER TABLE snipeit.assets ADD PRIMARY KEY USING INDEX idx_25265_primary;
+2021-11-05T01:23:03.018000Z NOTICE ALTER TABLE snipeit.asset_logs ADD PRIMARY KEY USING INDEX idx_25280_primary;
+2021-11-05T01:23:03.020000Z NOTICE ALTER TABLE snipeit.categories ADD PRIMARY KEY USING INDEX idx_25304_primary;
+2021-11-05T01:23:03.022000Z NOTICE ALTER TABLE snipeit.checkout_requests ADD PRIMARY KEY USING INDEX idx_25317_primary;
+2021-11-05T01:23:03.024000Z NOTICE ALTER TABLE snipeit.companies ADD PRIMARY KEY USING INDEX idx_25324_primary;
+2021-11-05T01:23:03.026000Z NOTICE ALTER TABLE snipeit.components ADD PRIMARY KEY USING INDEX idx_25330_primary;
+2021-11-05T01:23:03.029000Z NOTICE ALTER TABLE snipeit.components_assets ADD PRIMARY KEY USING INDEX idx_25337_primary;
+2021-11-05T01:23:03.031000Z NOTICE ALTER TABLE snipeit.consumables ADD PRIMARY KEY USING INDEX idx_25344_primary;
+2021-11-05T01:23:03.033000Z NOTICE ALTER TABLE snipeit.consumables_users ADD PRIMARY KEY USING INDEX idx_25352_primary;
+2021-11-05T01:23:03.035000Z NOTICE ALTER TABLE snipeit.custom_fields ADD PRIMARY KEY USING INDEX idx_25358_primary;
+2021-11-05T01:23:03.037000Z NOTICE ALTER TABLE snipeit.asset_maintenances ADD PRIMARY KEY USING INDEX idx_25289_primary;
+2021-11-05T01:23:03.039000Z NOTICE ALTER TABLE snipeit.asset_uploads ADD PRIMARY KEY USING INDEX idx_25298_primary;
+2021-11-05T01:23:03.041000Z NOTICE ALTER TABLE snipeit.departments ADD PRIMARY KEY USING INDEX idx_25378_primary;
+2021-11-05T01:23:03.043000Z NOTICE ALTER TABLE snipeit.custom_fieldsets ADD PRIMARY KEY USING INDEX idx_25369_primary;
+2021-11-05T01:23:03.045000Z NOTICE ALTER TABLE snipeit.depreciations ADD PRIMARY KEY USING INDEX idx_25384_primary;
+2021-11-05T01:23:03.047000Z NOTICE ALTER TABLE snipeit.imports ADD PRIMARY KEY USING INDEX idx_25399_primary;
+2021-11-05T01:23:03.049000Z NOTICE ALTER TABLE snipeit.groups ADD PRIMARY KEY USING INDEX idx_25390_primary;
+2021-11-05T01:23:03.051000Z NOTICE ALTER TABLE snipeit.licenses ADD PRIMARY KEY USING INDEX idx_25408_primary;
+2021-11-05T01:23:03.053000Z NOTICE ALTER TABLE snipeit.locations ADD PRIMARY KEY USING INDEX idx_25428_primary;
+2021-11-05T01:23:03.055000Z NOTICE ALTER TABLE snipeit.login_attempts ADD PRIMARY KEY USING INDEX idx_25434_primary;
+2021-11-05T01:23:03.057000Z NOTICE ALTER TABLE snipeit.license_seats ADD PRIMARY KEY USING INDEX idx_25419_primary;
+2021-11-05T01:23:03.059000Z NOTICE ALTER TABLE snipeit.manufacturers ADD PRIMARY KEY USING INDEX idx_25440_primary;
+2021-11-05T01:23:03.061000Z NOTICE ALTER TABLE snipeit.models_custom_fields ADD PRIMARY KEY USING INDEX idx_25463_primary;
+2021-11-05T01:23:03.063000Z NOTICE ALTER TABLE snipeit.oauth_access_tokens ADD PRIMARY KEY USING INDEX idx_25470_primary;
+2021-11-05T01:23:03.066000Z NOTICE ALTER TABLE snipeit.models ADD PRIMARY KEY USING INDEX idx_25452_primary;
+2021-11-05T01:23:03.068000Z NOTICE ALTER TABLE snipeit.migrations ADD PRIMARY KEY USING INDEX idx_25446_primary;
+2021-11-05T01:23:03.070000Z NOTICE ALTER TABLE snipeit.oauth_auth_codes ADD PRIMARY KEY USING INDEX idx_25476_primary;
+2021-11-05T01:23:03.072000Z NOTICE ALTER TABLE snipeit.oauth_clients ADD PRIMARY KEY USING INDEX idx_25484_primary;
+2021-11-05T01:23:03.074000Z NOTICE ALTER TABLE snipeit.oauth_refresh_tokens ADD PRIMARY KEY USING INDEX idx_25497_primary;
+2021-11-05T01:23:03.077000Z NOTICE ALTER TABLE snipeit.permission_groups ADD PRIMARY KEY USING INDEX idx_25505_primary;
+2021-11-05T01:23:03.078000Z NOTICE ALTER TABLE snipeit.requests ADD PRIMARY KEY USING INDEX idx_25520_primary;
+2021-11-05T01:23:03.081000Z NOTICE ALTER TABLE snipeit.oauth_personal_access_clients ADD PRIMARY KEY USING INDEX idx_25493_primary;
+2021-11-05T01:23:03.083000Z NOTICE ALTER TABLE snipeit.requested_assets ADD PRIMARY KEY USING INDEX idx_25514_primary;
+2021-11-05T01:23:03.085000Z NOTICE ALTER TABLE snipeit.status_labels ADD PRIMARY KEY USING INDEX idx_25600_primary;
+2021-11-05T01:23:03.087000Z NOTICE ALTER TABLE snipeit.throttle ADD PRIMARY KEY USING INDEX idx_25620_primary;
+2021-11-05T01:23:03.089000Z NOTICE ALTER TABLE snipeit.suppliers ADD PRIMARY KEY USING INDEX idx_25614_primary;
+2021-11-05T01:23:03.091000Z NOTICE ALTER TABLE snipeit.settings ADD PRIMARY KEY USING INDEX idx_25529_primary;
+2021-11-05T01:23:03.094000Z NOTICE ALTER TABLE snipeit.users_groups ADD PRIMARY KEY USING INDEX idx_25642_primary;
+2021-11-05T01:23:03.096000Z NOTICE ALTER TABLE snipeit.users ADD PRIMARY KEY USING INDEX idx_25629_primary;
+2021-11-05T01:23:03.113000Z NOTICE ALTER DATABASE "snipeit" SET search_path TO public, snipeit;
+2021-11-05T01:23:03.131000Z LOG report summary reset
+                           table name     errors       read   imported      bytes      total time       read      write
+-------------------------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+                      fetch meta data          0        113        113                     0.302s
+                       Create Schemas          0          0          0                     0.006s
+                     Create SQL Types          0          0          0                     0.016s
+                        Create tables          0         88         88                     0.216s
+                       Set Table OIDs          0         44         44                     0.008s
+-------------------------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+                  snipeit.accessories          0        154        154    17.9 kB          0.106s     0.040s     0.002s
+            snipeit.accessories_users          0          8          8     0.3 kB          0.084s     0.020s
+                       snipeit.assets          0       2030       2030   466.6 kB          0.239s     0.148s     0.087s
+                  snipeit.action_logs          0       2855       2855   329.1 kB          0.189s     0.131s     0.050s
+                   snipeit.asset_logs          0          0          0                     0.129s     0.025s
+           snipeit.asset_maintenances          0          0          0                     0.354s     0.012s
+                   snipeit.categories          0         80         80     7.3 kB          0.121s     0.005s     0.001s
+                snipeit.asset_uploads          0          0          0                     0.379s     0.003s
+            snipeit.checkout_requests          0          0          0                     0.134s     0.002s
+                    snipeit.companies          0          1          1     0.1 kB          0.165s     0.003s
+                   snipeit.components          0          0          0                     0.180s     0.002s
+            snipeit.components_assets          0          0          0                     0.215s     0.005s
+                  snipeit.consumables          0         91         91    11.2 kB          0.243s     0.005s     0.001s
+            snipeit.consumables_users          0         18         18     0.9 kB          0.291s     0.003s
+                snipeit.custom_fields          0          3          3     0.3 kB          0.320s     0.003s
+ snipeit.custom_field_custom_fieldset          0          6          6     0.0 kB          0.430s     0.002s
+             snipeit.custom_fieldsets          0          2          2     0.1 kB          0.444s     0.006s
+                snipeit.depreciations          0          0          0                     0.490s     0.002s
+                      snipeit.imports          0          0          0                     0.500s     0.002s
+                snipeit.license_seats          0          0          0                     0.563s     0.002s
+                  snipeit.departments          0          0          0                     0.415s     0.003s
+               snipeit.login_attempts          0        221        221    38.0 kB          0.553s     0.006s     0.007s
+                       snipeit.groups          0          1          1     1.9 kB          0.498s     0.004s
+                     snipeit.licenses          0          0          0                     0.507s     0.003s
+                   snipeit.migrations          0        278        278    14.2 kB          0.655s     0.007s     0.002s
+                    snipeit.locations          0          4          4     0.4 kB          0.537s     0.004s
+                snipeit.manufacturers          0         58         58     4.3 kB          0.575s     0.005s
+         snipeit.models_custom_fields          0          0          0                     0.587s     0.006s
+                       snipeit.models          0        178        178    18.0 kB          0.625s     0.026s     0.002s
+             snipeit.oauth_auth_codes          0          0          0                     0.645s     0.002s
+snipeit.oauth_personal_access_clients          0          3          3     0.1 kB          0.753s     0.003s
+              snipeit.password_resets          0          1          1     0.1 kB          0.685s     0.003s
+             snipeit.requested_assets          0          0          0                     0.761s     0.002s
+                     snipeit.settings          0          2          2     1.0 kB          0.855s     0.005s
+                    snipeit.suppliers          0          1          1     0.1 kB          0.816s     0.003s
+                        snipeit.users          0         73         73    24.7 kB          0.906s     0.006s     0.003s
+          snipeit.oauth_access_tokens          0          0          0                     0.586s     0.006s
+                snipeit.oauth_clients          0          6          6     0.8 kB          0.633s     0.004s
+         snipeit.oauth_refresh_tokens          0          0          0                     0.649s     0.003s
+            snipeit.permission_groups          0          0          0                     0.698s     0.002s
+                     snipeit.requests          0          0          0                     0.707s     0.003s
+                snipeit.status_labels          0          4          4     0.4 kB          0.766s     0.003s
+                     snipeit.throttle          0          0          0                     0.781s     0.002s
+                 snipeit.users_groups          0          3          3     0.0 kB          0.862s     0.002s
+-------------------------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+              COPY Threads Completion          0          4          4                     1.119s
+                       Create Indexes          0         69         69                     0.960s
+               Index Build Completion          0         69         69                     0.034s
+                      Reset Sequences          0         38         38                     0.132s
+                         Primary Keys          0         42         42                     0.093s
+                  Create Foreign Keys          0          0          0                     0.000s
+                      Create Triggers          0          2          2                     0.012s
+                      Set Search Path          0          1          1                     0.002s
+                     Install Comments          0          0          0                     0.000s
+-------------------------------------  ---------  ---------  ---------  ---------  --------------  ---------  ---------
+                    Total import time          ?       6081       6081   937.9 kB          2.352s
+ 
