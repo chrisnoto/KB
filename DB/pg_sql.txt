@@ -822,6 +822,7 @@ PG的归档很灵活，archive_command指定外部shell命令来进行归档。�
 当写满一个WAL段文件，通过向archive_status目录插入一个.ready文件来通知归档进程需要处理这个段文件了（XLogArchiveNotifySeg->XLogArchiveNotify）。
 例如，如果0000000100000001000000C6文件需要归档，那么.ready文件为0000000100000001000000C6.ready。这个.ready文件作为归档进程的通知文件。
 创建这个文件的同时，也会向归档进程发起一个信号来唤醒它。此时归档进程唤醒了开始处理所有.ready文件。
+
 #archive_command失败的问题 2021-11-1  
 -bash-4.2$ tail -f ../../log/postgresql-Mon.log
 2021-11-01 03:14:11.959 UTC [29822] LOG:  archive command failed with exit code 1
@@ -2220,11 +2221,12 @@ postgres=# select count(*) from t4;
 
 Time: 1633.040 ms (00:01.633)
 
+# buffer里hit 125998, 从磁盘读192474
 postgres=# explain (analyze,buffers) select count(*) from t4;
                                                                  QUERY PLAN
 ---------------------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate  (cost=579887.80..579887.81 rows=1 width=8) (actual time=4471.167..4484.424 rows=1 loops=1)
-   Buffers: shared hit=125998 read=192474     # buffer里hit 125998, 从磁盘读192474
+   Buffers: shared hit=125998 read=192474     
    I/O Timings: read=695.778
    ->  Gather  (cost=579887.58..579887.79 rows=2 width=8) (actual time=4470.931..4484.409 rows=3 loops=1)
          Workers Planned: 2
@@ -2262,15 +2264,109 @@ pg_squeeze的优点
 
 pg_squeeze支持自动的重组，即通过设置阈值、比较用户表与阈值，自动启动WORKER进程，将数据复制到重组表，最后加锁，切换FILENODE 
 
+# 遗忘的复制插槽会导致wal膨胀。 但是幸运的是，我们可以通过pg_replication_slots监视插槽的状态
+postgres=# select * from pg_replication_slots ;
+-[ RECORD 1 ]-------+---------------
+slot_name           | standby_slot
+plugin              |
+slot_type           | physical
+datoid              |
+database            |
+temporary           | f
+active              | t
+active_pid          | 31805
+xmin                |
+catalog_xmin        |
+restart_lsn         | 3/A5A60000
+confirmed_flush_lsn |
+wal_status          | extended
+safe_wal_size       |
+-[ RECORD 2 ]-------+---------------
+slot_name           | postgres2_slot
+plugin              |
+slot_type           | physical
+datoid              |
+database            |
+temporary           | f
+active              | t
+active_pid          | 21862
+xmin                |
+catalog_xmin        |
+restart_lsn         | 4/769EF8C8
+confirmed_flush_lsn |
+wal_status          | reserved
+safe_wal_size       |
+
+postgres-1这台机的wal膨胀的时候，wal文件有240个，大小达到3.8G
+原因是因为复制槽standby_slot，这个复制槽曾经被pg_receivewal用过
+*******
+-bash-4.2$ pg_receivewal -D wal_remotebk/ -v -S standby_slot --synchronous -h 10.67.39.58 -p 5432 -U repl -W
+Password:
+pg_receivewal: starting log streaming at 2/9000000 (timeline 1)
+pg_receivewal: finished segment at 2/A000000 (timeline 1)
+pg_receivewal: finished segment at 2/B000000 (timeline 1)
+pg_receivewal: finished segment at 2/C000000 (timeline 1)
+pg_receivewal: finished segment at 2/D000000 (timeline 1)
+pg_receivewal: finished segment at 2/E000000 (timeline 1)
+pg_receivewal: finished segment at 2/F000000 (timeline 1)
+
+*******
+-bash-4.2$ ls -lh pg_wal
+總計 3.8G
+-rw-------. 1 postgres postgres 16M 10月 16 09:40 00000001000000030000008A
+-rw-------. 1 postgres postgres 16M 10月 16 14:40 00000001000000030000008B
+-bash-4.2$ ls -lh pg_wal |wc -l
+240
+
+解决：首先在postgres-2上恢复pg_receivewal的运行，然后删除这个复制槽
+postgres=# select pg_drop_replication_slot('standby_slot');
+ pg_drop_replication_slot
+--------------------------
+
+(1 row)
 
 
+wal膨胀消失后
+-bash-4.2$ ls -lh pg_wal
+總計 513M
+-rw-------. 1 postgres postgres 319 11月  6 05:59 000000010000000400000075.00000028.backup
+-rw-------. 1 postgres postgres 16M 11月  6 07:32 000000010000000400000076
+-rw-------. 1 postgres postgres 16M 10月 24 16:40 000000010000000400000077
+
+-bash-4.2$ ll |wc -l
+35
+
+# pg_archivecleanup命令
+
+pg_archivecleanup is for use with streaming replication. It removes WAL archives no longer needed for the standby to catch up.
+ It has no idea how long you keep your base backups around
+pg_archivecleanup can also be used as a standalone program to clean WAL file archives
+
+# 清除 archived wal files
+
+运行一段时间后有18G的归档日志
+-bash-4.2$ du -sh /opt/archivedir/
+18G     /opt/archivedir/
+
+先做basebackup备份，然后运行pg_archivecleanup
+-bash-4.2$ pg_basebackup -D backups
+
+看到000000010000000400000078.00000028.backup这个文件，这个文件是一个backup label文件，里面有label信息
+-bash-4.2$ ls -lh pg_wal
+總計 513M
+-rw-------. 1 postgres postgres 16M 11月  6 07:50 000000010000000400000078
+-rw-------. 1 postgres postgres 340 11月  6 07:50 000000010000000400000078.00000028.backup
+-rw-------. 1 postgres postgres 16M 11月  6 07:53 000000010000000400000079
 
 
+-bash-4.2$ pg_archivecleanup -d /opt/archivedir/ 000000010000000400000078.00000028.backup
+pg_archivecleanup: keeping WAL file "/opt/archivedir//000000010000000400000078" and later
+pg_archivecleanup: removing file "/opt/archivedir//000000010000000000000001"
+pg_archivecleanup: removing file "/opt/archivedir//000000010000000000000002"
 
-
-
-
-
+清除完后，还剩33M
+-bash-4.2$ du -sh /opt/archivedir/
+33M     /opt/archivedir/
 
 # 添加主键
 在表上添加一个主键是有意义的，PostgreSQL中，可以通过alter table很方便的添加一个主键，但是当主键索引创建的时候，会花费很长时间，这样会阻塞查询；

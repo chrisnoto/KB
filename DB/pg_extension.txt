@@ -124,3 +124,23 @@ postgres=# select * from cron.job;
 -------+------------+---------------------------+----------+----------+----------+----------+--------+---------
      1 | 30 * * * * | SELECT profile.snapshot() |          |     5432 | postgres | postgres | t      |
 (1 row)
+
+postgres=# select * from cron.job;
+-[ RECORD 1 ]-----------------------
+jobid    | 1
+schedule | 40 * * * *
+command  | SELECT profile.snapshot()
+nodename |
+nodeport | 5432
+database | postgres
+username | postgres
+active   | t
+jobname  |
+
+取消job
+postgres=# select cron.unschedule(1);
+-[ RECORD 1 ]-
+unschedule | t
+
+postgres=# select * from cron.job;
+(0 rows)

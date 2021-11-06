@@ -565,6 +565,26 @@ Note: add_prom_node should be run by the same database user, as the one writing 
 
 
 #######################  执行计划分析  ##########
+https://www.pgmustard.com/docs/explain/buffers-shared-read
+
+PostgreSQL中的所有索引是二级索引/辅助索引
+在普通索引扫描中，每行检索都需要从索引和堆中取数据，访问的索引条目通常存储在一起，而堆访问部分涉及到对堆的大量随机访问，这可能很慢
+index only扫描，如果没有产生VM，或者VM中有行对事务不可见，则回表   heap fetches；如果所有的行在VM中都对事务可见，则不会访问堆表，速度很快
+位图扫描尝试通过按排序的顺序进行堆访问来减少成本
+Bitmap scans fall between sequential scans and index scans. These are typically used when we would read too much data from an index scan, but too little to perform a sequential scan.
+Index Scan Node finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table
+Seq Scan Node finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).
+
+读懂执行计划
+Buffers: shared hit is the number of blocks retrieved from the PostgreSQL cache. 在缓存中命中
+Buffers: shared read is the number of blocks PostgreSQL reads from the disk   从磁盘读
+temp read  written  在临时表里读写
+heap fetch  回表
+Sort Method: quicksort Memory: 102702kB – the entire sorting was executed in RAM
+Sort Method: external merge Disk a temporary file on the disk with a capacity of 4592 kB is used when sorting
+增加work_mem可以让排序尽量发生在内存里 如SET work_mem TO '200MB';
+
+------------------------------------例子 hypertable-------------------------------
 chunk其中一个索引为 "_hyper_1_51_chunk_history_clock_idx" btree (clock DESC)
 zabbix=# \d+ _timescaledb_internal._hyper_1_51_chunk
                                  Table "_timescaledb_internal._hyper_1_51_chunk"
@@ -682,7 +702,7 @@ Bitmap index scan ：首先獲取索引資料併為所有 TID 建立 bitmap 。�
 Bitmap heap scan ：從頁的 bitmap 中讀取值，然後針對頁和偏移掃描資料。最後檢查可見性和條件並返回 tuple 。
 
 下面查詢使用bitmap 掃描，因為他選擇的記錄很多（比如 too much for index scan ）但不是大量（ too little for sequential scan ）。
-## index only有回表， heap fetches挺多，时间慢
+## index only有回表， heap fetches挺多，可能是visitility map过期，时间慢
 zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from history where itemid=10073 and clock < 1636092000;
                                                                                                           QUERY PLAN
 
@@ -771,7 +791,7 @@ zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from histor
  Execution Time: 11.868 ms
 
 
-## bitmap scan  IO放大       1440条数据，扫描了600-800多数据块
+## bitmap scan  IO放大       1440条数据，扫描了600-800多数据块   
 zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock,value from history where itemid=10073 and clock < 1636092000;
                                                                                                           QUERY PLAN
 
@@ -899,7 +919,8 @@ zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock,value from 
  Execution Time: 29.013 ms
 (119 rows)
 
-# index scan    排序在硬盘读写了临时文件。  当条件为clock > 1635919200的时候，并没有在硬盘上读写临时文件
+# index scan    排序在硬盘读写了临时表。  当条件为clock > 1635919200的时候，并没有在硬盘上读写临时表
+
 zabbix=# explain (analyze,verbose,buffers,costs) select * from history where clock < 1636092000 order by clock desc;
                                                                                                QUERY PLAN
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
