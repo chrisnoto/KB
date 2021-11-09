@@ -567,18 +567,84 @@ Note: add_prom_node should be run by the same database user, as the one writing 
 #######################  执行计划分析  ##########
 https://www.pgmustard.com/docs/explain/buffers-shared-read
 
+
 PostgreSQL中的所有索引是二级索引/辅助索引
-在普通索引扫描中，每行检索都需要从索引和堆中取数据，访问的索引条目通常存储在一起，而堆访问部分涉及到对堆的大量随机访问，这可能很慢
-index only扫描，如果没有产生VM，或者VM中有行对事务不可见，则回表   heap fetches；如果所有的行在VM中都对事务可见，则不会访问堆表，速度很快
-位图扫描尝试通过按排序的顺序进行堆访问来减少成本
+# 扫描方式
+1 顺序扫描
+顺序访问的成本比随机访问的成本小
+
+2 普通索引扫描     在普通索引扫描中，每行检索都需要从索引和堆中取数据，访问的索引条目通常存储在一起，而堆访问部分涉及到对堆的大量随机访问，这可能很慢
+
+3 index only扫描，如果没有产生VM，或者VM中有行对事务不可见，则回表   heap fetches；如果所有的行在VM中都对事务可见，则不会访问堆表，速度很快
+
+4 位图扫描  多个单列索引用在组合查询SQL中，经常会看看到bitmap scan  位图扫描尝试通过按排序的顺序进行堆访问来减少成本
+
+位图扫描是索引掃描和順序掃描的混合體。為了解決索引掃描的缺點並充分利用其優點。正如上面所說，對於索引資料結構中的資料，需要找到heap 頁中對應的資料。因此需要獲取一次索引頁，然後獲取 heap 頁，
+從而造成大量隨機 IO 。 Bitmap 掃描方法平衡了不使用隨機 IO 的索引掃描優點。
+(1) 位图索引扫描:
+
+首先从索引数据结构中获取所有索引数据，并创建所有TID的位图。为了简单理解，可以认为此位图包含所有页的哈希值(基于page no哈希)，每个页面条目包含该页面中所有偏移量的数组。
+
+(2) 位图堆扫描:   
+顾名思义，它读取页的位图，然后扫描与存储页和偏移量对应的堆中的数据。最后，它检查可见性和谓词等，并根据所有这些检查的结果返回元组。
+
+BITMAP SCAN是对于每个查询条件，在对应索引中找到符合条件的堆表PAGE，每个索引构造一个bitmap串。在这个bitmap串中，每一个BIT位对应一个HEAP PAGE，
+代表这个HEAP PAGE中有符合该条件的行(只要任意一行符合条件则该PAGE的BIT位就会被标位1)。根据条件的多少，组成了多个bitmap
++---------------------------------------------+    
+|100000000001000000010000000000000111100000000| bitmap 1     条件 c1=10
+|000001000001000100010000000001000010000000010| bitmap 2     条件 c2=20
+ &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&    
+|000000000001000000010000000000000010000000000| Combined bitmap    
++-----------+-------+--------------+----------+    
+            |       |              |    
+            v       v              v    
+Used to scan the heap only for matching pages:    
++---------------------------------------------+    
+|___________X_______X______________X__________|    
++---------------------------------------------+
+
+例如我们在c1列上创建了一个索引,我们使用c1=10的查询就会创建bitmap1这样一个bitmap串,然后c2=20创建bitmap2这样的bitmap串,
+然后对这两个bitmap串进行and操作,得到了combined bitmap这样一个bitmap串,但此时我们注意到前面的执行计划最后还有一步Recheck Cond,
+这是干嘛的呢?正如我们前文所说,每一个BIT位对应一个HEAP PAGE,我们需要去每一个page上去recheck得到需要的行,这就是Recheck Cond的作用.
+
+下面查詢使用bitmap 掃描，因為他選擇的記錄很多（比如 too much for index scan ）但不是大量（ too little for sequential scan ）。
+
+缺点： bitmap scan，先扫索引，然后按HEAP BLOCK ID扫描HEAP BLOCK。输出整个数据块的数据，因此需要recheck。bitmap scan的特性，决定了它可能存在放大(因为一个BLOCK里面哪怕只有一条记录是复合条件的，也会返回整个BLOCK)。
+
+5 ctid扫描
+postgres=#  select ctid from t1_brin where id=200;
+  ctid
+--------
+ (1,93)
+(1 row)
+
+postgres=# explain select * from t1_brin where ctid='(1,93)';
+                       QUERY PLAN
+--------------------------------------------------------
+ Tid Scan on t1_brin  (cost=0.00..1.11 rows=1 width=45)
+   TID Cond: (ctid = '(1,93)'::tid)
+(2 rows)
+
+
 Bitmap scans fall between sequential scans and index scans. These are typically used when we would read too much data from an index scan, but too little to perform a sequential scan.
 Index Scan Node finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table
 Seq Scan Node finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).
 
 读懂执行计划
-Buffers: shared hit is the number of blocks retrieved from the PostgreSQL cache. 在缓存中命中
-Buffers: shared read is the number of blocks PostgreSQL reads from the disk   从磁盘读
-temp read  written  在临时表里读写
+https://www.xmmup.com/pg
+There are three prefixes:
+  Shared blocks contain data from normal tables and indexes.
+  Local blocks contain data from temporary tables and indexes (yes, this is quite confusing given that there is also a prefix “Temp”).
+  Temp blocks contain short-term data used to calculate hashes, sorts, Materialize operations, and similar cases.
+******* 
+“Materialize”operations persist the data they receive in memory, to allow for multiple accesses, counting each access as a loop.
+*******  
+There are four suffixes:
+  Hit means that the block was found in the cache, so no full read was necessary.
+  Read blocks were missed in the cache and had to be read from the normal source of the data.
+  Dirtied blocks have been modified by the query.
+  Written blocks have been evicted from the cache.
+Loop 循环  
 heap fetch  回表
 Sort Method: quicksort Memory: 102702kB – the entire sorting was executed in RAM
 Sort Method: external merge Disk a temporary file on the disk with a capacity of 4592 kB is used when sorting
@@ -692,16 +758,7 @@ zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from histor
  Execution Time: 2.733 ms
 (25 rows)
 #############
-Bitmap Scan
 
-是索引掃描和順序掃描的混合體。為了解決索引掃描的缺點並充分利用其優點。正如上面所說，對於索引資料結構中的資料，需要找到heap 頁中對應的資料。因此需要獲取一次索引頁，然後獲取 heap 頁，
-從而造成大量隨機 IO 。 Bitmap 掃描方法平衡了不使用隨機 IO 的索引掃描優點。
-
-Bitmap index scan ：首先獲取索引資料併為所有 TID 建立 bitmap 。為了理解方法，可以認為 bitmap 包含所有頁的雜湊（基於頁號），每個頁的 entry 包含頁內所有偏移的陣列。
-
-Bitmap heap scan ：從頁的 bitmap 中讀取值，然後針對頁和偏移掃描資料。最後檢查可見性和條件並返回 tuple 。
-
-下面查詢使用bitmap 掃描，因為他選擇的記錄很多（比如 too much for index scan ）但不是大量（ too little for sequential scan ）。
 ## index only有回表， heap fetches挺多，可能是visitility map过期，时间慢
 zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from history where itemid=10073 and clock < 1636092000;
                                                                                                           QUERY PLAN

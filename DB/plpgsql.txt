@@ -13,14 +13,69 @@ select row_to_json(ta) from (select name,team,position,(select row_to_json(ti) f
 5. Raising notices, warnings, and INFO messages
 
 6. Raising exceptions
+RAISE EXCEPTION 'Maximum of GenreId is : %', id  USING HINT = 'Test For Raising exception.';
 
 7. Traversing values in a table using a FOR loop
+procedure_demo=# CREATE OR REPLACE PROCEDURE genre_traverse() LANGUAGE plpgsql AS $$
+procedure_demo$# DECLARE
+procedure_demo$# genre_rec record;
+procedure_demo$# BEGIN
+procedure_demo$# for genre_rec in (select "GenreId","Name" from public."Genre" order by "GenreId")
+procedure_demo$#   loop
+procedure_demo$# RAISE NOTICE 'Genre Id is : % , Name is : %', genre_rec."GenreId",genre_rec."Name";
+procedure_demo$#   end loop;
+procedure_demo$# END;
+procedure_demo$# $$ ;
 
 8. Using SECURITY INVOKER
+SECURITY INVOKER indicates that the procedure is to be executed with the privileges of the user that calls it. That is the default. 
+procedure_demo=#  CREATE OR REPLACE PROCEDURE genre_traverse() LANGUAGE plpgsql SECURITY INVOKER
+procedure_demo-# AS $$
+procedure_demo$# DECLARE
+procedure_demo$# genre_rec record;
+procedure_demo$# BEGIN
+procedure_demo$# for genre_rec in (select "GenreId","Name" from public."Genre" order by "GenreId")
+procedure_demo$#   loop
+procedure_demo$# RAISE NOTICE 'Genre Id is : % , Name is : %', genre_rec."GenreId",genre_rec."Name";
+procedure_demo$#   end loop;
+procedure_demo$# END;
+procedure_demo$# $$ ;
 
 9. Using SECURITY DEFINER
+SECURITY DEFINER specifies that the procedure is to be executed with the privileges of the user that owns it. 
+A SECURITY DEFINER procedure cannot execute transaction control statements (for example, COMMIT and ROLLBACK, depending on the language).
+
+In this example we have created a stored procedure with the user “postgres” and called it by using a “test” user who does not 
+have access to the table.
+procedure_demo=# CREATE OR REPLACE PROCEDURE genre_traverse() LANGUAGE plpgsql SECURITY DEFINER
+procedure_demo-# AS $$
+procedure_demo$# DECLARE
+procedure_demo$# genre_rec record;
+procedure_demo$# BEGIN
+procedure_demo$# for genre_rec in (select "GenreId","Name" from public."Genre" order by "GenreId")
+procedure_demo$#   loop
+procedure_demo$# RAISE NOTICE 'Genre Id is : % , Name is : %', genre_rec."GenreId",genre_rec."Name";
+procedure_demo$#   end loop;
+procedure_demo$# END;
+procedure_demo$# $$ ;
 
 10. Setting configuration parameters
+The effects of a SET LOCAL command for a variable are restricted to the procedure inside which the command is executed; 
+the configuration parameter's prior value is restored after exiting the procedure. However, a simple SET command (without LOCAL) 
+overrides the SET clause, much as it would do for a previous SET LOCAL command. The effects of the configuration will persist 
+after procedure exit, unless the current transaction is rolled back.
+procedure_demo=# CREATE OR REPLACE PROCEDURE datestyle_change() LANGUAGE plpgsql SET datestyle TO postgres, dmy
+
+procedure_demo-# AS $$
+
+procedure_demo$# BEGIN
+
+procedure_demo$# RAISE NOTICE 'Current Date is : % ', now();
+
+procedure_demo$# END;
+
+procedure_demo$# $$ ;
+
 --------------------------------------------
     for loop    select into    raise notice
 do $$

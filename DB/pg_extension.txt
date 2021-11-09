@@ -144,3 +144,60 @@ unschedule | t
 
 postgres=# select * from cron.job;
 (0 rows)
+
+# pg_repack 插件
+pg_repack is a PostgreSQL extension which lets you remove bloat from tables and indexes, and optionally restore the physical order of clustered indexes. 
+Unlike CLUSTER and VACUUM FULL it works online, without holding an exclusive lock on the processed tables during processing. pg_repack is efficient to boot, with performance comparable to using CLUSTER directly.
+Notes:
+Only superusers can use the utility.
+The target table must have a PRIMARY KEY or at least a UNIQUE index on a NOT NULL column.
+Performing a full-table repack requires free disk space about twice as large as the target table(s) and its indexes. For example, if the total size of the tables and indexes to be reorganized is 2GB,
+ an additional 4GB of disk space is required.
+yum install pg_repack_13
+进入目标数据库  create extension pg_repack
+-bash-4.2$ pg_repack -d postgres --table profile.last_stat_tables
+INFO: repacking table "profile.last_stat_tables"
+-bash-4.2$
+打开调试，看看repack做了哪些操作
+-bash-4.2$ pg_repack -d postgres --table profile.sample_stat_user_functions -E DEBUG
+DEBUG: No workers to disconnect.
+INFO: repacking table "profile.sample_stat_user_functions"
+DEBUG: ---- repack_one_table ----
+DEBUG: target_name       : profile.sample_stat_user_functions
+DEBUG: target_oid        : 17165
+DEBUG: target_toast      : 0
+DEBUG: target_tidx       : 0
+DEBUG: pkid              : 17168
+DEBUG: ckid              : 0
+DEBUG: create_pktype     : CREATE TYPE repack.pk_17165 AS (server_id integer, sample_id integer, datid oid, funcid oid)
+DEBUG: create_log        : CREATE TABLE repack.log_17165 (id bigserial PRIMARY KEY, pk repack.pk_17165, row profile.sample_stat_user_functions)
+DEBUG: create_trigger    : CREATE TRIGGER repack_trigger AFTER INSERT OR DELETE OR UPDATE ON profile.sample_stat_user_functions FOR EACH ROW EXECUTE PROCEDURE repack.repack_trigger('INSERT INTO repack.log_17165(pk, row) VALUES( CASE WHEN $1 IS NULL THEN NULL ELSE (ROW($1.server_id, $1.sample_id, $1.datid, $1.funcid)::repack.pk_17165) END, $2)')
+DEBUG: enable_trigger    : ALTER TABLE profile.sample_stat_user_functions ENABLE ALWAYS TRIGGER repack_trigger
+DEBUG: create_table      : CREATE TABLE repack.table_17165 WITH (oids = false) TABLESPACE pg_default AS SELECT server_id,sample_id,datid,funcid,calls,total_time,self_time,trg_fn FROM ONLY profile.sample_stat_user_functions WITH NO DATA
+DEBUG: copy_data         : INSERT INTO repack.table_17165 SELECT server_id,sample_id,datid,funcid,calls,total_time,self_time,trg_fn FROM ONLY profile.sample_stat_user_functions
+DEBUG: alter_col_storage : (skipped)
+DEBUG: drop_columns      : (skipped)
+DEBUG: delete_log        : DELETE FROM repack.log_17165
+DEBUG: lock_table        : LOCK TABLE profile.sample_stat_user_functions IN ACCESS EXCLUSIVE MODE
+DEBUG: sql_peek          : SELECT * FROM repack.log_17165 ORDER BY id LIMIT $1
+DEBUG: sql_insert        : INSERT INTO repack.table_17165 VALUES ($1.*)
+DEBUG: sql_delete        : DELETE FROM repack.table_17165 WHERE (server_id, sample_id, datid, funcid) = ($1.server_id, $1.sample_id, $1.datid, $1.funcid)
+DEBUG: sql_update        : UPDATE repack.table_17165 SET (server_id, sample_id, datid, funcid, calls, total_time, self_time, trg_fn) = ($2.server_id, $2.sample_id, $2.datid, $2.funcid, $2.calls, $2.total_time, $2.self_time, $2.trg_fn) WHERE (server_id, sample_id, datid, funcid) = ($1.server_id, $1.sample_id, $1.datid, $1.funcid)
+DEBUG: sql_pop           : DELETE FROM repack.log_17165 WHERE id IN (
+DEBUG: ---- setup ----
+DEBUG: index[0].target_oid      : 17168
+DEBUG: index[0].create_index    : CREATE UNIQUE INDEX index_17168 ON repack.table_17165 USING btree (server_id, sample_id, datid, funcid)
+DEBUG: LOCK TABLE profile.sample_stat_user_functions IN ACCESS SHARE MODE
+DEBUG: No competing DDL to cancel.
+DEBUG: Waiting on ACCESS SHARE lock...
+DEBUG: ---- copy tuples ----
+DEBUG: No competing DDL to cancel.
+DEBUG: ---- create indexes ----
+DEBUG: Have 1 indexes and num_workers=0
+DEBUG: set up index_jobs [0]
+DEBUG: target_oid   : 17168
+DEBUG: create_index : CREATE UNIQUE INDEX index_17168 ON repack.table_17165 USING btree (server_id, sample_id, datid, funcid)
+DEBUG: ---- swap ----
+DEBUG: ---- drop ----
+DEBUG: ---- analyze ----
+DEBUG: No workers to disconnect.
