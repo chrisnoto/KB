@@ -201,3 +201,62 @@ DEBUG: ---- swap ----
 DEBUG: ---- drop ----
 DEBUG: ---- analyze ----
 DEBUG: No workers to disconnect.
+
+# pgstattuple插件  查看表的物理长度、"死亡"元组的百分比以及其他信息
+postgres=# create extension pgstattuple;
+CREATE EXTENSION
+postgres=# select * from pg_relpages('profile.sample_kcache_total');   查看page数
+ pg_relpages
+-------------
+          14
+
+postgres=# select * from pgstattuple('profile.sample_kcache_total');
+ table_len | tuple_count | tuple_len | tuple_percent | dead_tuple_count | dead_tuple_len | dead_tuple_percent | free_space | free_percent
+-----------+-------------+-----------+---------------+------------------+----------------+--------------------+------------+--------------
+    221184 |         456 |    109440 |         49.48 |                6 |           1440 |               0.65 |     105692 |        47.78
+postgres=# select * from pgstatindex('idx_t3_t');
+ version | tree_level | index_size | root_block_no | internal_pages | leaf_pages | empty_pages | deleted_pages | avg_leaf_density | leaf_fragmentation
+---------+------------+------------+---------------+----------------+------------+-------------+---------------+------------------+--------------------
+       4 |          1 |     106496 |             3 |              1 |         11 |           0 |             0 |            88.32 |                  0
+(1 row)
+
+# pg_squeeze插件
+安装 yum install pg_squeeze_13
+Apply the following settings to postgresql.conf:
+
+wal_level = logical
+max_replication_slots = 1 # ... or add 1 to the current value.
+shared_preload_libraries = 'pg_squeeze' # ... or add the library to the existing ones.
+
+Start the PG cluster.
+As a superuser, run
+CREATE EXTENSION pg_squeeze;
+
+1 立即一次性的squeeze表
+postgres=# select * from pgstattuple('profile.sample_kcache_total');
+ table_len | tuple_count | tuple_len | tuple_percent | dead_tuple_count | dead_tuple_len | dead_tuple_percent | free_space | free_percent
+-----------+-------------+-----------+---------------+------------------+----------------+--------------------+------------+--------------
+    221184 |         456 |    109440 |         49.48 |                6 |           1440 |               0.65 |     105692 |        47.78
+(1 row)
+
+postgres=# select squeeze.squeeze_table('profile','sample_kcache_total',null,null,null);
+ squeeze_table
+---------------
+
+(1 row)
+
+postgres=# select * from pgstattuple('profile.sample_kcache_total');
+ table_len | tuple_count | tuple_len | tuple_percent | dead_tuple_count | dead_tuple_len | dead_tuple_percent | free_space | free_percent
+-----------+-------------+-----------+---------------+------------------+----------------+--------------------+------------+--------------
+    114688 |         456 |    109440 |         95.42 |                0 |              0 |                  0 |       3032 |         2.64
+(1 row)
+
+2 添加计划任务
+postgres=# insert into squeeze.tables (tabschema,tabname,schedule,free_space_extra) values('profile','sample_kcache_total',('{40}','{7}',null,null,null),'10');
+INSERT 0 1
+postgres=# select * from squeeze.tables;
+ id | tabschema |       tabname       | clustering_index | rel_tablespace | ind_tablespaces | free_space_extra | min_size | vacuum_max_age | max_retry | skip_analyze |   schedule
+----+-----------+---------------------+------------------+----------------+-----------------+------------------+----------+----------------+-----------+--------------+---------------
+  1 | profile   | sample_kcache_total |                  |                |                 |               10 |        8 | 01:00:00       |         0 | f            | ({40},{7},,,)
+(1 row)
+	

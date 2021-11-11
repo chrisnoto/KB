@@ -249,6 +249,13 @@ lrwxrwxrwx. 1 postgres postgres 7 Sep 11 03:23 16719 -> /data01
 
 
 修改用户表空间的位置：  手动新建目录，拷贝原表空间的数据，用ln -s命令做新的链接(要停postgres)
+
+移动数据库到指定的tablespace     有时会遇到db被访问的错误
+postgres=# alter database dvdrental set tablespace mtbs01;
+WARNING:  you may need to manually restart any running background workers after this command
+ERROR:  database "dvdrental" is being accessed by other users
+DETAIL:  There is 1 other session using the database.
+
 #####  查看page ########
 postgresql的表为堆表,表是page/block的集合，而page是row/tuple/item的集合
 一个page为8k，一个表太大的话就会产生数据分片，一个分片最大1G，block/page数量为131072
@@ -1823,6 +1830,17 @@ PostgreSQL的B-tree索引与Oracle的B-tree索引区别比较大，主要是以�
 3.PostgreSQL中可以对同一列建立两个相同的索引，而Oracle不能；
 4.PostgreSQL中可以使用concurrently关键字达到创建索引时不阻塞表的DML的功能，Oracle也有online参数实现类似的功能。
 
+################ 内存
+# work_mem
+Work Memory: This is the amount of memory reserved for either a single sort or hash table operation in a query and it is controlled by work_mem parameter
+ A sort operation could be one of an ORDER BY, DISTINCT, or Merge join 
+ and a hash table operation could be due to a hash-join, hash-based aggregation, or an IN subquery
+
+# Maintenance Work Memory
+Maintenance Work Memory: This is the maximum amount of memory allocation of RAM consumed for maintenance operations. A maintenance operation could be one of the VACUUM, CREATE INDEX, or adding a FOREIGN KEY to a table. 
+
+
+
 #查看锁
 在一个session里
 postgres=# begin;
@@ -2454,3 +2472,777 @@ postgres=# select * from nt_geo ;
   1 | 0101000000000000000000F03F000000000000F03F  
 (1 row)  
 cool !!!使用这种方法，我们不需要先入库在转换，也不需要在入库前写程序进行转换。
+
+
+###################### 索引 ##################
+brin索引
+特点：索引特别小，易维护，不占空间，适合序列类型的数据，范围值
+
+create table t1_brin(id int,info text,crt_time timestamp);
+insert into t1_brin select generate_series(1,1000000),md5(random()::text),clock_timestamp();
+postgres=# create index idx_t1_brin_3 on t1_brin using brin(id) with (pages_per_range=16);
+CREATE INDEX
+postgres=# \d+ t1_brin
+                                             Table "public.t1_brin"
+  Column  |            Type             | Collation | Nullable | Default | Storage  | Stats target | Description
+----------+-----------------------------+-----------+----------+---------+----------+--------------+-------------
+ id       | integer                     |           |          |         | plain    |              |
+ info     | text                        |           |          |         | extended |              |
+ crt_time | timestamp without time zone |           |          |         | plain    |              |
+Indexes:
+    "idx_t1_brin_1" brin (id) WITH (pages_per_range='1')
+    "idx_t1_brin_2" btree (id)
+    "idx_t1_brin_3" brin (id) WITH (pages_per_range='16')     值越大，index size越小
+Access method: heap
+
+postgres=# \di+
+                                    List of relations
+ Schema |     Name      | Type  |  Owner   |  Table  | Persistence |  Size  | Description
+--------+---------------+-------+----------+---------+-------------+--------+-------------
+ public | idx_t1_brin_1 | index | postgres | t1_brin | permanent   | 272 kB |
+ public | idx_t1_brin_2 | index | postgres | t1_brin | permanent   | 21 MB  |
+ public | idx_t1_brin_3 | index | postgres | t1_brin | permanent   | 56 kB  |
+
+postgres=# explain (analyze,verbose,timing,costs,buffers) select * from t1_brin where id between 1000 and 300000;
+                                                           QUERY PLAN
+---------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on public.t1_brin  (cost=80.05..13938.88 rows=299794 width=45) (actual time=0.875..75.420 rows=299001 loops=1)
+   Output: id, info, crt_time
+   Recheck Cond: ((t1_brin.id >= 1000) AND (t1_brin.id <= 300000))
+   Rows Removed by Index Recheck: 2311
+   Heap Blocks: lossy=2816
+   Buffers: shared hit=2819
+   ->  Bitmap Index Scan on idx_t1_brin_3  (cost=0.00..5.10 rows=300855 width=0) (actual time=0.492..0.493 rows=28160 loops=1)
+         Index Cond: ((t1_brin.id >= 1000) AND (t1_brin.id <= 300000))
+         Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.260 ms
+ Execution Time: 105.905 ms
+(13 rows)
+
+ The number of lossy blocks a bitmap heap scan visited.
+尺寸太大以至于不能放到work_mem里的行位图
+If a row bitmap is too big to fit into working memory (work_mem), some parts of it are made "lossy" – i.e. they refer to whole pages rather than specific rows
+
+# 观察brin索引存储的内容
+brin_page_type返回给定的BRIN 索引页面的页面类型，如果页面不是有效的BRIN页面， 则会抛出错误
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 0));
+ brin_page_type
+----------------
+ meta
+(1 row)
+
+brin_metapage_info返回有关BRIN 索引元页的分类信息
+postgres=# select * from brin_metapage_info(get_raw_page('idx_t1_brin_3',0));
+   magic    | version | pagesperrange | lastrevmappage
+------------+---------+---------------+----------------
+ 0xA8109CFA |       1 |            16 |              1
+
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 1));
+ brin_page_type
+----------------
+ revmap
+(1 row)
+brin_revmap_data返回BRIN 索引范围映射页面中的元组标识符列表
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 2));
+ brin_page_type
+----------------
+ regular
+(1 row)
+brin_page_items返回存储在BRIN 数据页面中的数据                  第一个regular类型的索引页
+postgres=# select * from brin_page_items(get_raw_page('idx_t1_brin_3',2),'idx_t1_brin_3');
+ itemoffset | blknum | attnum | allnulls | hasnulls | placeholder |       value
+------------+--------+--------+----------+----------+-------------+--------------------
+          1 |      0 |      1 | f        | f        | f           | {1 .. 1712}        16*107  16个页，每页107个tuple
+          2 |     16 |      1 | f        | f        | f           | {1713 .. 3424}
+          3 |     32 |      1 | f        | f        | f           | {3425 .. 5136}
+          4 |     48 |      1 | f        | f        | f           | {5137 .. 6848}
+          5 |     64 |      1 | f        | f        | f           | {6849 .. 8560}
+......
+        407 |   6496 |      1 | f        | f        | f           | {695073 .. 696784}
+        408 |   6512 |      1 | f        | f        | f           | {696785 .. 698496}
+(408 rows)
+brin_page_items返回存储在BRIN 数据页面中的数据                  第二个regular类型的索引页
+postgres=# select * from brin_page_items(get_raw_page('idx_t1_brin_3',3),'idx_t1_brin_3');
+ itemoffset | blknum | attnum | allnulls | hasnulls | placeholder |        value
+------------+--------+--------+----------+----------+-------------+---------------------
+          1 |   6528 |      1 | f        | f        | f           | {698497 .. 700208}
+          2 |   6544 |      1 | f        | f        | f           | {700209 .. 701920}
+          3 |   6560 |      1 | f        | f        | f           | {701921 .. 703632}
+          4 |   6576 |      1 | f        | f        | f           | {703633 .. 705344}
+
+        176 |   9328 |      1 | f        | f        | f           | {998097 .. 999808}
+        177 |   9344 |      1 | f        | f        | f           | {999809 .. 1000000}         range到1000000了，
+(177 rows)
+
+postgres=# select (177+408)*1712;    该索引共有585行，指向了约1000000个tuple
+ ?column?
+----------
+  1001520
+
+#  B-tree 索引
+https://www.codeprj.com/zh/blog/a7c2e41.html
+
+PostgreSQL 的B-Tree索引頁分為幾種類別
+meta page -> root page -> [branch pages,...] -> leaf pages,....
+
+以下是3级结构   meta page -> root page -> branch page -> branch page -> leaf page
+meta page    
+root page         #  btpo_flags=2    btpo=3 代表第3层   
+branch page    #  btpo_flags=0 代表 branch page    btpo = 2 代表第2層   
+branch page    #  btpo_flags=0 代表 branch page    btpo = 1 代表第1層 
+leaf page         #  btpo_flags=1 代表 leaf page   btpo = 0 代表第0層   
+    
+如果即是leaf又是root則  btpo_flags=3。   0级   
+其中meta page和root page是必須有的，meta page需要一個頁來存儲，表示指向root page的page id。
+
+隨着記錄數的增加，一個root page可能存不下所有的heap item，就會有leaf page，甚至branch page，甚至多層的branch page。
+
+一共有幾層branch 和 leaf，就用btree page元數據的 level 來表示
+一共有0级，1级，2级，。。。。等结构
+如果表的记录数在一个索引page能存下（约285条记录），索引只需要meta page和root page，不需要branch和leaf page   此时为0级
+
+# 观察btree索引存储的内容
+  bt_metap返回关于一个B-树索引的元页的信息
+dvdrental=# SELECT * FROM bt_metap('idx_unq_rental_rental_date_inventory_id_customer_id');
+ magic  | version | root | level | fastroot | fastlevel | oldest_xact | last_cleanup_num_tuples | allequalimage
+--------+---------+------+-------+----------+-----------+-------------+-------------------------+---------------
+ 340322 |       4 |    3 |     1 |        3 |         1 |           0 |                      -1 | t
+(1 row)                    (level 1是1级   meta -> root -> leaf)
+
+  bt_page_stats返回关于B-树索引单一页面的摘要信息
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',3);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     3 | r    |         62 |          0 |            16 |      8192 |      6900 |         0 |         0 |    1 |          2
+        (root)      有62个叶子节点
+叶子page   # btpo_prev和btpo_next分別表示該頁的相鄰頁
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',1);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags         
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     1 | l    |        262 |          0 |            23 |      8192 |       820 |         0 |         2 |    0 |          1
+(1 row)                                                                             （page 0 是 meta page）
+		
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',4);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     4 | l    |        262 |          0 |            23 |      8192 |       820 |         2 |         5 |    0 |          1
+(1 row)  (leaf)
+
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',6);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     6 | l    |        262 |          0 |            23 |      8192 |       820 |         5 |         7 |    0 |          1
+(1 row)
+
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',8);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     8 | l    |        262 |          0 |            23 |      8192 |       820 |         7 |         9 |    0 |          1
+(1 row)
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',63);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+    63 | l    |        123 |          0 |            24 |      8192 |      4704 |        62 |         0 |    0 |          1
+(1 row)
+  
+	    (leaf)
+  bt_page_items返回关于B-树索引页面上所有项的详细信息
+postgres=# SELECT * FROM bt_page_items('idx_t3_t', 2);
+ itemoffset |   ctid    | itemlen | nulls | vars |                                  data                                   | dead |  htid   |                                         tids
+------------+-----------+---------+-------+------+-------------------------------------------------------------------------+------+---------+--------------------------------------------------------------------------------------
+          1 | (24,1)    |      24 | f     | t    | 1d 43 68 72 69 73 20 43 61 70 75 61 6e 6f 00 00                         |      |         |
+          2 | (24,8200) |      72 | f     | t    | 19 42 6f 6f 6e 65 20 4c 6f 67 61 6e 00 00 00 00                         | f    | (0,66)  | {"(0,66)","(6,100)","(12,135)","(19,3)","(25,37)","(31,72)","(37,106)","(43,142)"}
+          3 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 41 75 73 6d 75 73 00 00 00 00                         | f    | (4,60)  | {"(4,60)","(10,94)","(16,128)","(22,162)","(29,32)","(35,66)","(41,101)","(47,136)"}
+          4 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 45 6c 64 72 65 64 00 00 00 00                         | f    | (5,104) | {"(5,104)","(11,139)","(18,7)","(24,41)","(30,76)","(36,110)","(42,147)","(49,16)"}
+          5 | (24,8200) |      72 | f     | t    | 1d 42 72 61 64 65 6e 20 4c 6f 6f 70 65 72 00 00                         | f    | (6,27)  | {"(6,27)","(12,62)","(18,96)","(24,130)","(30,165)","(37,33)","(43,69)","(49,105)"}
+          6 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 48 61 6c 73 65 79 00 00 00 00                         | f    | (1,30)  | {"(1,30)","(7,65)","(13,99)","(19,133)","(26,1)","(32,36)","(38,71)","(44,106)"}
+          7 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 48 61 77 70 65 00 00 00 00 00                         | f    | (4,1)   | {"(4,1)","(10,35)","(16,69)","(22,103)","(28,138)","(35,7)","(41,42)","(47,77)"}
+          8 | (24,8200) |      72 | f     | t    | 1f 42 72 61 64 20 48 65 6e 6e 65 73 73 65 79 00                         | f    | (5,166) | {"(5,166)","(12,35)","(18,69)","(24,103)","(30,138)","(37,6)","(43,42)","(49,78)"}
+          9 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 4c 69 64 67 65 00 00 00 00 00                         | f    | (4,85)  | {"(4,85)","(10,119)","(16,153)","(23,23)","(29,57)","(35,91)","(41,126)","(47,161)"}
+         10 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 50 65 6e 6e 79 00 00 00 00 00                         | f    | (4,113) | {"(4,113)","(10,147)","(17,17)","(23,51)","(29,85)","(35,119)","(41,154)","(48,25)"}
+分别查看一下"(0,66)","(6,100)"指向的tuple是什么
+postgres=# select * from t3 where ctid='(0,66)';
+ id  |      t
+-----+-------------
+ 221 | Boone Logan
+(1 row)
+
+postgres=# select * from t3 where ctid='(6,100)';
+  id  |      t
+------+-------------
+ 1252 | Boone Logan
+(1 row)
+
+postgres=# \d+ t3
+                                                Table "public.t3"
+ Column |  Type   | Collation | Nullable |            Default             | Storage  | Stats target | Description
+--------+---------+-----------+----------+--------------------------------+----------+--------------+-------------
+ id     | integer |           | not null | nextval('t3_id_seq'::regclass) | plain    |              |
+ t      | text    |           |          |                                | extended |              |
+Indexes:
+    "idx_t3_t" btree (t)
+Access method: heap
+
+postgres=# explain (analyze,verbose,buffers,costs) select * from t3 where t='Boone Logan';
+                                                   QUERY PLAN
+-----------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on public.t3  (cost=1.45..10.03 rows=8 width=17) (actual time=0.055..0.128 rows=8 loops=1)
+   Output: id, t
+   Recheck Cond: (t3.t = 'Boone Logan'::text)
+   Heap Blocks: exact=8
+   Buffers: shared hit=10
+   ->  Bitmap Index Scan on idx_t3_t  (cost=0.00..1.45 rows=8 width=0) (actual time=0.037..0.038 rows=8 loops=1)
+         Index Cond: (t3.t = 'Boone Logan'::text)
+         Buffers: shared hit=2        # 应该是1个meta page,1个root page,1个leaf page
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.397 ms
+ Execution Time: 0.198 ms
+(12 rows)
+
+	 
+以下查詢，命中了2條記錄，並且走的是index only scan。  该索引 level为2
+讀了22個INDEX PAGE,
+1 meta page + 7 * (1 root + 1 branch + 1 leaf) = 22
+也就是說，每個value都掃了root,branch,leaf。
+postgres=# explain (analyze,verbose,timing,costs,buffers) select id from tbl1 where id in (1,2,3,4,5,6,7);    
+                                                         QUERY PLAN                                                              
+-----------------------------------------------------------------------------------------------------------------------------    
+ Index Only Scan using tbl1_pkey on public.tbl1  (cost=0.43..10.13 rows=7 width=4) (actual time=0.039..0.046 rows=2 loops=1)    
+   Output: id    
+   Index Cond: (tbl1.id = ANY ('{1,2,3,4,5,6,7}'::integer[]))    
+   Heap Fetches: 0    
+   Buffers: shared hit=22    
+ Planning time: 0.232 ms    
+ Execution time: 0.086 ms    
+(7 rows)    	 
+#######################  执行计划分析  ##########
+https://www.pgmustard.com/docs/explain/buffers-shared-read
+
+
+PostgreSQL中的所有索引是二级索引/辅助索引
+# 扫描方式
+1 顺序扫描
+顺序访问的成本比随机访问的成本小
+
+2 普通索引扫描     在普通索引扫描中，每行检索都需要从索引和堆中取数据，访问的索引条目通常存储在一起，而堆访问部分涉及到对堆的大量随机访问，这可能很慢
+
+3 index only扫描，如果没有产生VM，或者VM中有行对事务不可见，则回表   heap fetches；如果所有的行在VM中都对事务可见，则不会访问堆表，速度很快
+
+4 位图扫描  多个单列索引用在组合查询SQL中，经常会看看到bitmap scan  位图扫描尝试通过按排序的顺序进行堆访问来减少成本
+
+位图扫描是索引掃描和順序掃描的混合體。為了解決索引掃描的缺點並充分利用其優點。正如上面所說，對於索引資料結構中的資料，需要找到heap 頁中對應的資料。因此需要獲取一次索引頁，然後獲取 heap 頁，
+從而造成大量隨機 IO 。 Bitmap 掃描方法平衡了不使用隨機 IO 的索引掃描優點。
+(1) 位图索引扫描:
+
+首先从索引数据结构中获取所有索引数据，并创建所有TID的位图。为了简单理解，可以认为此位图包含所有页的哈希值(基于page no哈希)，每个页面条目包含该页面中所有偏移量的数组。
+
+(2) 位图堆扫描:   
+顾名思义，它读取页的位图，然后扫描与存储页和偏移量对应的堆中的数据。最后，它检查可见性和谓词等，并根据所有这些检查的结果返回元组。
+
+BITMAP SCAN是对于每个查询条件，在对应索引中找到符合条件的堆表PAGE，每个索引构造一个bitmap串。在这个bitmap串中，每一个BIT位对应一个HEAP PAGE，
+代表这个HEAP PAGE中有符合该条件的行(只要任意一行符合条件则该PAGE的BIT位就会被标位1)。根据条件的多少，组成了多个bitmap
++---------------------------------------------+    
+|100000000001000000010000000000000111100000000| bitmap 1     条件 c1=10
+|000001000001000100010000000001000010000000010| bitmap 2     条件 c2=20
+ &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&    
+|000000000001000000010000000000000010000000000| Combined bitmap    
++-----------+-------+--------------+----------+    
+            |       |              |    
+            v       v              v    
+Used to scan the heap only for matching pages:    
++---------------------------------------------+    
+|___________X_______X______________X__________|    
++---------------------------------------------+
+
+例如我们在c1列上创建了一个索引,我们使用c1=10的查询就会创建bitmap1这样一个bitmap串,然后c2=20创建bitmap2这样的bitmap串,
+然后对这两个bitmap串进行and操作,得到了combined bitmap这样一个bitmap串,但此时我们注意到前面的执行计划最后还有一步Recheck Cond,
+这是干嘛的呢?正如我们前文所说,每一个BIT位对应一个HEAP PAGE,我们需要去每一个page上去recheck得到需要的行,这就是Recheck Cond的作用.
+
+下面查詢使用bitmap 掃描，因為他選擇的記錄很多（比如 too much for index scan ）但不是大量（ too little for sequential scan ）。
+
+缺点： bitmap scan，先扫索引，然后按HEAP BLOCK ID扫描HEAP BLOCK。输出整个数据块的数据，因此需要recheck。bitmap scan的特性，决定了它可能存在放大(因为一个BLOCK里面哪怕只有一条记录是复合条件的，也会返回整个BLOCK)。
+
+5 ctid扫描
+postgres=#  select ctid from t1_brin where id=200;
+  ctid
+--------
+ (1,93)
+(1 row)
+
+postgres=# explain select * from t1_brin where ctid='(1,93)';
+                       QUERY PLAN
+--------------------------------------------------------
+ Tid Scan on t1_brin  (cost=0.00..1.11 rows=1 width=45)
+   TID Cond: (ctid = '(1,93)'::tid)
+(2 rows)
+
+
+Bitmap scans fall between sequential scans and index scans. These are typically used when we would read too much data from an index scan, but too little to perform a sequential scan.
+Index Scan Node finds relevant records based on an Index. Index Scans perform 2 read operations: one to read the index and another to read the actual value from the table
+Seq Scan Node finds relevant records by sequentially scanning the input record set. When reading from a table, Seq Scans (unlike Index Scans) perform a single read operation (only the table is read).
+
+读懂执行计划
+https://www.xmmup.com/pg
+There are three prefixes:
+  Shared blocks contain data from normal tables and indexes.
+  Local blocks contain data from temporary tables and indexes (yes, this is quite confusing given that there is also a prefix “Temp”).
+  Temp blocks contain short-term data used to calculate hashes, sorts, Materialize operations, and similar cases.
+******* 
+“Materialize”operations persist the data they receive in memory, to allow for multiple accesses, counting each access as a loop.
+*******  
+There are four suffixes:
+  Hit means that the block was found in the cache, so no full read was necessary.
+  Read blocks were missed in the cache and had to be read from the normal source of the data.
+  Dirtied blocks have been modified by the query.
+  Written blocks have been evicted from the cache.
+Loop 循环  
+heap fetch  回表
+Sort Method: quicksort Memory: 102702kB – the entire sorting was executed in RAM
+Sort Method: external merge Disk a temporary file on the disk with a capacity of 4592 kB is used when sorting
+增加work_mem可以让排序尽量发生在内存里 如SET work_mem TO '200MB';
+
+------------------------------------例子 hypertable-------------------------------
+chunk其中一个索引为 "_hyper_1_51_chunk_history_clock_idx" btree (clock DESC)
+zabbix=# \d+ _timescaledb_internal._hyper_1_51_chunk
+                                 Table "_timescaledb_internal._hyper_1_51_chunk"
+ Column |       Type       | Collation | Nullable |        Default        | Storage | Stats target | Description
+--------+------------------+-----------+----------+-----------------------+---------+--------------+-------------
+ itemid | bigint           |           | not null |                       | plain   |              |
+ clock  | integer          |           | not null | 0                     | plain   |              |
+ value  | double precision |           | not null | '0'::double precision | plain   |              |
+ ns     | integer          |           | not null | 0                     | plain   |              |
+Indexes:
+    "_hyper_1_51_chunk_history_1" btree (itemid, clock)
+    "_hyper_1_51_chunk_history_clock_idx" btree (clock DESC)
+Check constraints:
+    "constraint_50" CHECK (clock >= 1636070400 AND clock < 1636156800)
+Inherits: history
+Access method: heap
+
+1 使用order by clock desc走索引  缓存里有11096个heap页，从磁盘读了470个heap页，I/O Timings: read=6.996
+zabbix=# explain (analyze,verbose,buffers,costs) select * from history where clock > 1635919200 order by clock DESC;
+                                                                                            QUERY PLAN
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (ChunkAppend) on public.history  (cost=0.29..6698.00 rows=231575 width=24) (actual time=0.068..124.847 rows=232042 loops=1)
+   Output: history.itemid, history.clock, history.value, history.ns
+   Order: history.clock DESC
+   Startup Exclusion: false
+   Runtime Exclusion: false
+   Buffers: shared hit=11096 read=470
+   I/O Timings: read=6.996
+   ->  Index Scan using _hyper_1_51_chunk_history_clock_idx on _timescaledb_internal._hyper_1_51_chunk  (cost=0.29..1084.29 rows=37501 width=24) (actual time=0.065..14.643 rows=38000 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock, _hyper_1_51_chunk.value, _hyper_1_51_chunk.ns
+         Index Cond: (_hyper_1_51_chunk.clock > 1635919200)
+         Buffers: shared hit=4012 read=74
+         I/O Timings: read=1.236
+   ->  Index Scan using _hyper_1_47_chunk_history_clock_idx on _timescaledb_internal._hyper_1_47_chunk  (cost=0.29..3216.21 rows=111078 width=24) (actual time=0.038..38.402 rows=110882 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock, _hyper_1_47_chunk.value, _hyper_1_47_chunk.ns
+         Index Cond: (_hyper_1_47_chunk.clock > 1635919200)
+         Buffers: shared hit=3812 read=396
+         I/O Timings: read=5.760
+   ->  Index Scan using _hyper_1_43_chunk_history_clock_idx on _timescaledb_internal._hyper_1_43_chunk  (cost=0.29..2397.50 rows=82996 width=24) (actual time=0.042..25.523 rows=83160 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock, _hyper_1_43_chunk.value, _hyper_1_43_chunk.ns
+         Index Cond: (_hyper_1_43_chunk.clock > 1635919200)
+         Buffers: shared hit=3272
+ Planning:
+   Buffers: shared hit=73
+ Planning Time: 1.516 ms
+ Execution Time: 147.930 ms
+(25 rows)
+
+
+
+
+3 全表扫描，缓存里有1960个heap页，没有从磁盘读，没有IO Timing
+zabbix=# explain (analyze,verbose,buffers,costs) select * from history where clock > 1635919200;
+                                                                      QUERY PLAN
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Append  (cost=0.00..6404.77 rows=234301 width=24) (actual time=2.442..93.491 rows=235586 loops=1)
+   Buffers: shared hit=1960
+   ->  Seq Scan on _timescaledb_internal._hyper_1_43_chunk  (cost=0.00..2199.94 rows=82755 width=24) (actual time=2.441..18.987 rows=83160 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock, _hyper_1_43_chunk.value, _hyper_1_43_chunk.ns
+         Filter: (_hyper_1_43_chunk.clock > 1635919200)
+         Rows Removed by Filter: 27722
+         Buffers: shared hit=821
+   ->  Seq Scan on _timescaledb_internal._hyper_1_47_chunk  (cost=0.00..2211.09 rows=110247 width=24) (actual time=0.017..21.549 rows=110882 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock, _hyper_1_47_chunk.value, _hyper_1_47_chunk.ns
+         Filter: (_hyper_1_47_chunk.clock > 1635919200)
+         Buffers: shared hit=833
+   ->  Seq Scan on _timescaledb_internal._hyper_1_51_chunk  (cost=0.00..822.24 rows=41299 width=24) (actual time=0.020..8.364 rows=41544 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock, _hyper_1_51_chunk.value, _hyper_1_51_chunk.ns
+         Filter: (_hyper_1_51_chunk.clock > 1635919200)
+         Buffers: shared hit=306
+ Planning:
+   Buffers: shared hit=65
+ Planning Time: 0.956 ms
+ Execution Time: 116.730 ms
+(19 rows)
+
+2 index only    只扫描了28个索引页，回表了9个heap页
+zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from history where itemid=10073 and clock > 1635919200 order by clock DESC;
+                                                                                           QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (ChunkAppend) on public.history  (cost=0.29..82.86 rows=3042 width=12) (actual time=0.041..2.162 rows=3057 loops=1)
+   Output: history.itemid, history.clock
+   Order: history.clock DESC
+   Startup Exclusion: false
+   Runtime Exclusion: false
+   Buffers: shared hit=28
+   ->  Index Only Scan Backward using _hyper_1_51_chunk_history_1 on _timescaledb_internal._hyper_1_51_chunk  (cost=0.29..17.59 rows=535 width=12) (actual time=0.039..0.304 rows=537 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock
+         Index Cond: ((_hyper_1_51_chunk.itemid = 10073) AND (_hyper_1_51_chunk.clock > 1635919200))
+         Heap Fetches: 9
+         Buffers: shared hit=10
+   ->  Index Only Scan Backward using _hyper_1_47_chunk_history_1 on _timescaledb_internal._hyper_1_47_chunk  (cost=0.42..36.76 rows=1432 width=12) (actual time=0.027..0.553 rows=1440 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock
+         Index Cond: ((_hyper_1_47_chunk.itemid = 10073) AND (_hyper_1_47_chunk.clock > 1635919200))
+         Heap Fetches: 0
+         Buffers: shared hit=10
+   ->  Index Only Scan Backward using _hyper_1_43_chunk_history_1 on _timescaledb_internal._hyper_1_43_chunk  (cost=0.42..28.52 rows=1075 width=12) (actual time=0.031..0.396 rows=1080 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock
+         Index Cond: ((_hyper_1_43_chunk.itemid = 10073) AND (_hyper_1_43_chunk.clock > 1635919200))
+         Heap Fetches: 0
+         Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=65
+ Planning Time: 1.353 ms
+ Execution Time: 2.733 ms
+(25 rows)
+#############
+
+## index only有回表， heap fetches挺多，可能是visitility map过期，时间慢
+zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock from history where itemid=10073 and clock < 1636092000;
+                                                                                                          QUERY PLAN
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------
+ Append  (cost=0.42..1566.38 rows=19371 width=12) (actual time=0.042..9.852 rows=18774 loops=1)
+   Buffers: shared hit=1283
+   ->  Index Only Scan using _hyper_1_43_chunk_history_1 on _timescaledb_internal._hyper_1_43_chunk  (cost=0.42..150.23 rows=1441 width=12) (actual time=0.041..0.609 rows=1440 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock
+         Index Cond: ((_hyper_1_43_chunk.itemid = 10073) AND (_hyper_1_43_chunk.clock < 1636092000))
+         Heap Fetches: 186
+         Buffers: shared hit=143
+   ->  Index Only Scan using _hyper_1_8_chunk_history_1 on _timescaledb_internal._hyper_1_8_chunk  (cost=0.42..168.69 rows=1360 width=12) (actual time=0.043..0.557 rows=1356 loops=1)
+         Output: _hyper_1_8_chunk.itemid, _hyper_1_8_chunk.clock
+         Index Cond: ((_hyper_1_8_chunk.itemid = 10073) AND (_hyper_1_8_chunk.clock < 1636092000))
+         Heap Fetches: 222
+         Buffers: shared hit=149
+   ->  Index Only Scan using _hyper_1_36_chunk_history_1 on _timescaledb_internal._hyper_1_36_chunk  (cost=0.42..49.52 rows=1410 width=12) (actual time=0.029..0.406 rows=1440 loops=1)
+         Output: _hyper_1_36_chunk.itemid, _hyper_1_36_chunk.clock
+         Index Cond: ((_hyper_1_36_chunk.itemid = 10073) AND (_hyper_1_36_chunk.clock < 1636092000))
+         Heap Fetches: 68
+         Buffers: shared hit=59
+   ->  Custom Scan (DecompressChunk) on _timescaledb_internal._hyper_1_1_chunk  (cost=1.43..2.86 rows=2000 width=12) (actual time=0.111..0.363 rows=1440 loops=1)
+         Output: _hyper_1_1_chunk.itemid, _hyper_1_1_chunk.clock
+         Filter: (_hyper_1_1_chunk.clock < 1636092000)
+         Buffers: shared hit=31
+         ->  Index Scan using compress_hyper_8_27_chunk__compressed_hypertable_8_itemid__ts_m on _timescaledb_internal.compress_hyper_8_27_chunk  (cost=0.14..2.86 rows=2 width=52) (actual time=0.015..0.0
+18 rows=2 loops=1)
+               Output: compress_hyper_8_27_chunk._ts_meta_count, compress_hyper_8_27_chunk.itemid, compress_hyper_8_27_chunk.clock
+               Index Cond: (compress_hyper_8_27_chunk.itemid = 10073)
+               Filter: (compress_hyper_8_27_chunk._ts_meta_min_1 < 1636092000)
+               Buffers: shared hit=2
+   ->  Index Only Scan using _hyper_1_4_chunk_history_1 on _timescaledb_internal._hyper_1_4_chunk  (cost=0.41..37.04 rows=1391 width=12) (actual time=0.042..0.319 rows=1391 loops=1)
+         Output: _hyper_1_4_chunk.itemid, _hyper_1_4_chunk.clock
+         Index Cond: ((_hyper_1_4_chunk.itemid = 10073) AND (_hyper_1_4_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=12
+   ->  Index Only Scan using _hyper_1_39_chunk_history_1 on _timescaledb_internal._hyper_1_39_chunk  (cost=0.42..39.82 rows=1255 width=12) (actual time=0.028..0.330 rows=1267 loops=1)
+         Output: _hyper_1_39_chunk.itemid, _hyper_1_39_chunk.clock
+         Index Cond: ((_hyper_1_39_chunk.itemid = 10073) AND (_hyper_1_39_chunk.clock < 1636092000))
+         Heap Fetches: 36
+         Buffers: shared hit=37
+   ->  Index Only Scan using _hyper_1_6_chunk_history_1 on _timescaledb_internal._hyper_1_6_chunk  (cost=0.41..38.02 rows=1440 width=12) (actual time=0.041..0.349 rows=1440 loops=1)
+         Output: _hyper_1_6_chunk.itemid, _hyper_1_6_chunk.clock
+         Index Cond: ((_hyper_1_6_chunk.itemid = 10073) AND (_hyper_1_6_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=10
+   ->  Index Only Scan using _hyper_1_2_chunk_history_1 on _timescaledb_internal._hyper_1_2_chunk  (cost=0.41..39.12 rows=1440 width=12) (actual time=0.038..0.354 rows=1440 loops=1)
+         Output: _hyper_1_2_chunk.itemid, _hyper_1_2_chunk.clock
+         Index Cond: ((_hyper_1_2_chunk.itemid = 10073) AND (_hyper_1_2_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=12
+   ->  Index Only Scan using _hyper_1_3_chunk_history_1 on _timescaledb_internal._hyper_1_3_chunk  (cost=0.41..39.12 rows=1440 width=12) (actual time=0.047..0.341 rows=1440 loops=1)
+         Output: _hyper_1_3_chunk.itemid, _hyper_1_3_chunk.clock
+         Index Cond: ((_hyper_1_3_chunk.itemid = 10073) AND (_hyper_1_3_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=10
+   ->  Index Only Scan using _hyper_1_47_chunk_history_1 on _timescaledb_internal._hyper_1_47_chunk  (cost=0.42..625.40 rows=1442 width=12) (actual time=0.023..1.406 rows=1440 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock
+         Index Cond: ((_hyper_1_47_chunk.itemid = 10073) AND (_hyper_1_47_chunk.clock < 1636092000))
+         Heap Fetches: 986
+         Buffers: shared hit=723
+   ->  Index Only Scan using _hyper_1_51_chunk_history_1 on _timescaledb_internal._hyper_1_51_chunk  (cost=0.29..38.43 rows=367 width=12) (actual time=0.043..0.131 rows=360 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock
+         Index Cond: ((_hyper_1_51_chunk.itemid = 10073) AND (_hyper_1_51_chunk.clock < 1636092000))
+         Heap Fetches: 5
+         Buffers: shared hit=9
+   ->  Index Only Scan using _hyper_1_35_chunk_history_1 on _timescaledb_internal._hyper_1_35_chunk  (cost=0.42..165.40 rows=1505 width=12) (actual time=0.034..0.428 rows=1440 loops=1)
+         Output: _hyper_1_35_chunk.itemid, _hyper_1_35_chunk.clock
+         Index Cond: ((_hyper_1_35_chunk.itemid = 10073) AND (_hyper_1_35_chunk.clock < 1636092000))
+         Heap Fetches: 109
+         Buffers: shared hit=67
+   ->  Index Only Scan using _hyper_1_5_chunk_history_1 on _timescaledb_internal._hyper_1_5_chunk  (cost=0.41..38.02 rows=1440 width=12) (actual time=0.032..0.333 rows=1440 loops=1)
+         Output: _hyper_1_5_chunk.itemid, _hyper_1_5_chunk.clock
+         Index Cond: ((_hyper_1_5_chunk.itemid = 10073) AND (_hyper_1_5_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=11
+   ->  Index Only Scan using _hyper_1_7_chunk_history_1 on _timescaledb_internal._hyper_1_7_chunk  (cost=0.29..37.89 rows=1440 width=12) (actual time=0.023..0.345 rows=1440 loops=1)
+         Output: _hyper_1_7_chunk.itemid, _hyper_1_7_chunk.clock
+         Index Cond: ((_hyper_1_7_chunk.itemid = 10073) AND (_hyper_1_7_chunk.clock < 1636092000))
+         Heap Fetches: 0
+         Buffers: shared hit=10
+ Planning:
+   Buffers: shared hit=2123 dirtied=2
+ Planning Time: 8.455 ms
+ Execution Time: 11.868 ms
+
+
+## bitmap scan  IO放大       1440条数据，扫描了600-800多数据块   
+zabbix=# explain (analyze,verbose,buffers,costs) select itemid,clock,value from history where itemid=10073 and clock < 1636092000;
+                                                                                                          QUERY PLAN
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------
+ Append  (cost=22.89..7796.28 rows=19378 width=20) (actual time=0.304..26.915 rows=18774 loops=1)
+   Buffers: shared hit=7187
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_43_chunk  (cost=22.89..815.02 rows=1441 width=20) (actual time=0.303..2.458 rows=1440 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock, _hyper_1_43_chunk.value
+         Recheck Cond: ((_hyper_1_43_chunk.itemid = 10073) AND (_hyper_1_43_chunk.clock < 1636092000))
+         Heap Blocks: exact=805
+         Buffers: shared hit=813
+         ->  Bitmap Index Scan on _hyper_1_43_chunk_history_1  (cost=0.00..22.53 rows=1441 width=0) (actual time=0.179..0.180 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_43_chunk.itemid = 10073) AND (_hyper_1_43_chunk.clock < 1636092000))
+               Buffers: shared hit=8
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_8_chunk  (cost=22.06..729.76 rows=1360 width=20) (actual time=0.246..2.073 rows=1356 loops=1)
+         Output: _hyper_1_8_chunk.itemid, _hyper_1_8_chunk.clock, _hyper_1_8_chunk.value
+         Recheck Cond: ((_hyper_1_8_chunk.itemid = 10073) AND (_hyper_1_8_chunk.clock < 1636092000))
+         Heap Blocks: exact=620
+         Buffers: shared hit=629
+         ->  Bitmap Index Scan on _hyper_1_8_chunk_history_1  (cost=0.00..21.72 rows=1360 width=0) (actual time=0.172..0.173 rows=1356 loops=1)
+               Index Cond: ((_hyper_1_8_chunk.itemid = 10073) AND (_hyper_1_8_chunk.clock < 1636092000))
+               Buffers: shared hit=9
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_36_chunk  (cost=22.57..804.55 rows=1410 width=20) (actual time=0.255..2.101 rows=1440 loops=1)
+         Output: _hyper_1_36_chunk.itemid, _hyper_1_36_chunk.clock, _hyper_1_36_chunk.value
+         Recheck Cond: ((_hyper_1_36_chunk.itemid = 10073) AND (_hyper_1_36_chunk.clock < 1636092000))
+         Heap Blocks: exact=712
+         Buffers: shared hit=720
+         ->  Bitmap Index Scan on _hyper_1_36_chunk_history_1  (cost=0.00..22.22 rows=1410 width=0) (actual time=0.173..0.174 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_36_chunk.itemid = 10073) AND (_hyper_1_36_chunk.clock < 1636092000))
+               Buffers: shared hit=8
+   ->  Custom Scan (DecompressChunk) on _timescaledb_internal._hyper_1_1_chunk  (cost=1.43..2.86 rows=2000 width=20) (actual time=0.073..0.434 rows=1440 loops=1)
+         Output: _hyper_1_1_chunk.itemid, _hyper_1_1_chunk.clock, _hyper_1_1_chunk.value
+         Filter: (_hyper_1_1_chunk.clock < 1636092000)
+         Buffers: shared hit=10
+         ->  Index Scan using compress_hyper_8_27_chunk__compressed_hypertable_8_itemid__ts_m on _timescaledb_internal.compress_hyper_8_27_chunk  (cost=0.14..2.86 rows=2 width=84) (actual time=0.019..0.0
+23 rows=2 loops=1)
+               Output: compress_hyper_8_27_chunk._ts_meta_count, compress_hyper_8_27_chunk.itemid, compress_hyper_8_27_chunk.clock, compress_hyper_8_27_chunk.value
+               Index Cond: (compress_hyper_8_27_chunk.itemid = 10073)
+               Filter: (compress_hyper_8_27_chunk._ts_meta_min_1 < 1636092000)
+               Buffers: shared hit=2
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_4_chunk  (cost=23.47..443.34 rows=1391 width=20) (actual time=0.178..1.471 rows=1391 loops=1)
+         Output: _hyper_1_4_chunk.itemid, _hyper_1_4_chunk.clock, _hyper_1_4_chunk.value
+         Recheck Cond: ((_hyper_1_4_chunk.itemid = 10073) AND (_hyper_1_4_chunk.clock < 1636092000))
+         Heap Blocks: exact=399
+         Buffers: shared hit=410
+         ->  Bitmap Index Scan on _hyper_1_4_chunk_history_1  (cost=0.00..23.12 rows=1391 width=0) (actual time=0.132..0.132 rows=1391 loops=1)
+               Index Cond: ((_hyper_1_4_chunk.itemid = 10073) AND (_hyper_1_4_chunk.clock < 1636092000))
+               Buffers: shared hit=11
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_39_chunk  (cost=19.88..712.03 rows=1255 width=20) (actual time=0.244..1.822 rows=1267 loops=1)
+         Output: _hyper_1_39_chunk.itemid, _hyper_1_39_chunk.clock, _hyper_1_39_chunk.value
+         Recheck Cond: ((_hyper_1_39_chunk.itemid = 10073) AND (_hyper_1_39_chunk.clock < 1636092000))
+         Heap Blocks: exact=700
+         Buffers: shared hit=707
+         ->  Bitmap Index Scan on _hyper_1_39_chunk_history_1  (cost=0.00..19.57 rows=1255 width=0) (actual time=0.163..0.163 rows=1267 loops=1)
+               Index Cond: ((_hyper_1_39_chunk.itemid = 10073) AND (_hyper_1_39_chunk.clock < 1636092000))
+               Buffers: shared hit=7
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_6_chunk  (cost=23.98..458.58 rows=1440 width=20) (actual time=0.180..1.604 rows=1440 loops=1)
+         Output: _hyper_1_6_chunk.itemid, _hyper_1_6_chunk.clock, _hyper_1_6_chunk.value
+         Recheck Cond: ((_hyper_1_6_chunk.itemid = 10073) AND (_hyper_1_6_chunk.clock < 1636092000))
+         Heap Blocks: exact=412
+         Buffers: shared hit=421
+         ->  Bitmap Index Scan on _hyper_1_6_chunk_history_1  (cost=0.00..23.62 rows=1440 width=0) (actual time=0.133..0.133 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_6_chunk.itemid = 10073) AND (_hyper_1_6_chunk.clock < 1636092000))
+               Buffers: shared hit=9
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_2_chunk  (cost=25.07..459.68 rows=1440 width=20) (actual time=0.189..1.672 rows=1440 loops=1)
+         Output: _hyper_1_2_chunk.itemid, _hyper_1_2_chunk.clock, _hyper_1_2_chunk.value
+         Recheck Cond: ((_hyper_1_2_chunk.itemid = 10073) AND (_hyper_1_2_chunk.clock < 1636092000))
+         Heap Blocks: exact=412
+         Buffers: shared hit=423
+         ->  Bitmap Index Scan on _hyper_1_2_chunk_history_1  (cost=0.00..24.71 rows=1440 width=0) (actual time=0.143..0.144 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_2_chunk.itemid = 10073) AND (_hyper_1_2_chunk.clock < 1636092000))
+               Buffers: shared hit=11
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_3_chunk  (cost=25.07..459.68 rows=1440 width=20) (actual time=0.214..1.725 rows=1440 loops=1)
+         Output: _hyper_1_3_chunk.itemid, _hyper_1_3_chunk.clock, _hyper_1_3_chunk.value
+         Recheck Cond: ((_hyper_1_3_chunk.itemid = 10073) AND (_hyper_1_3_chunk.clock < 1636092000))
+         Heap Blocks: exact=413
+         Buffers: shared hit=422
+         ->  Bitmap Index Scan on _hyper_1_3_chunk_history_1  (cost=0.00..24.71 rows=1440 width=0) (actual time=0.160..0.160 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_3_chunk.itemid = 10073) AND (_hyper_1_3_chunk.clock < 1636092000))
+               Buffers: shared hit=9
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_47_chunk  (cost=22.90..820.36 rows=1442 width=20) (actual time=0.280..2.217 rows=1440 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock, _hyper_1_47_chunk.value
+         Recheck Cond: ((_hyper_1_47_chunk.itemid = 10073) AND (_hyper_1_47_chunk.clock < 1636092000))
+         Heap Blocks: exact=817
+         Buffers: shared hit=826
+         ->  Bitmap Index Scan on _hyper_1_47_chunk_history_1  (cost=0.00..22.54 rows=1442 width=0) (actual time=0.186..0.186 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_47_chunk.itemid = 10073) AND (_hyper_1_47_chunk.clock < 1636092000))
+               Buffers: shared hit=9
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_51_chunk  (cost=6.32..245.80 rows=374 width=20) (actual time=0.070..0.546 rows=360 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock, _hyper_1_51_chunk.value
+         Recheck Cond: ((_hyper_1_51_chunk.itemid = 10073) AND (_hyper_1_51_chunk.clock < 1636092000))
+         Heap Blocks: exact=201
+         Buffers: shared hit=204
+         ->  Bitmap Index Scan on _hyper_1_51_chunk_history_1  (cost=0.00..6.23 rows=374 width=0) (actual time=0.046..0.046 rows=360 loops=1)
+               Index Cond: ((_hyper_1_51_chunk.itemid = 10073) AND (_hyper_1_51_chunk.clock < 1636092000))
+               Buffers: shared hit=3
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_35_chunk  (cost=23.54..830.72 rows=1505 width=20) (actual time=0.250..1.988 rows=1440 loops=1)
+         Output: _hyper_1_35_chunk.itemid, _hyper_1_35_chunk.clock, _hyper_1_35_chunk.value
+         Recheck Cond: ((_hyper_1_35_chunk.itemid = 10073) AND (_hyper_1_35_chunk.clock < 1636092000))
+         Heap Blocks: exact=754
+         Buffers: shared hit=762
+         ->  Bitmap Index Scan on _hyper_1_35_chunk_history_1  (cost=0.00..23.17 rows=1505 width=0) (actual time=0.163..0.163 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_35_chunk.itemid = 10073) AND (_hyper_1_35_chunk.clock < 1636092000))
+               Buffers: shared hit=8
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_5_chunk  (cost=23.98..458.58 rows=1440 width=20) (actual time=0.195..1.496 rows=1440 loops=1)
+         Output: _hyper_1_5_chunk.itemid, _hyper_1_5_chunk.clock, _hyper_1_5_chunk.value
+         Recheck Cond: ((_hyper_1_5_chunk.itemid = 10073) AND (_hyper_1_5_chunk.clock < 1636092000))
+         Heap Blocks: exact=410
+         Buffers: shared hit=420
+         ->  Bitmap Index Scan on _hyper_1_5_chunk_history_1  (cost=0.00..23.62 rows=1440 width=0) (actual time=0.147..0.147 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_5_chunk.itemid = 10073) AND (_hyper_1_5_chunk.clock < 1636092000))
+               Buffers: shared hit=10
+   ->  Bitmap Heap Scan on _timescaledb_internal._hyper_1_7_chunk  (cost=23.85..458.45 rows=1440 width=20) (actual time=0.220..1.565 rows=1440 loops=1)
+         Output: _hyper_1_7_chunk.itemid, _hyper_1_7_chunk.clock, _hyper_1_7_chunk.value
+         Recheck Cond: ((_hyper_1_7_chunk.itemid = 10073) AND (_hyper_1_7_chunk.clock < 1636092000))
+         Heap Blocks: exact=411
+         Buffers: shared hit=420
+         ->  Bitmap Index Scan on _hyper_1_7_chunk_history_1  (cost=0.00..23.49 rows=1440 width=0) (actual time=0.163..0.163 rows=1440 loops=1)
+               Index Cond: ((_hyper_1_7_chunk.itemid = 10073) AND (_hyper_1_7_chunk.clock < 1636092000))
+               Buffers: shared hit=9
+ Planning:
+   Buffers: shared hit=288
+ Planning Time: 2.718 ms
+ Execution Time: 29.013 ms
+(119 rows)
+
+# index scan    排序在硬盘读写了临时表。  当条件为clock > 1635919200的时候，并没有在硬盘上读写临时表
+
+zabbix=# explain (analyze,verbose,buffers,costs) select * from history where clock < 1636092000 order by clock desc;
+                                                                                               QUERY PLAN
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Custom Scan (ChunkAppend) on public.history  (cost=0.29..24907.44 rows=1074654 width=24) (actual time=0.021..752.715 rows=1054101 loops=1)
+   Output: history.itemid, history.clock, history.value, history.ns
+   Order: history.clock DESC
+   Startup Exclusion: false
+   Runtime Exclusion: false
+   Buffers: shared hit=89889, temp read=2264 written=2272
+   ->  Index Scan using _hyper_1_51_chunk_history_clock_idx on _timescaledb_internal._hyper_1_51_chunk  (cost=0.29..825.25 rows=28486 width=24) (actual time=0.019..8.893 rows=27720 loops=1)
+         Output: _hyper_1_51_chunk.itemid, _hyper_1_51_chunk.clock, _hyper_1_51_chunk.value, _hyper_1_51_chunk.ns
+         Index Cond: (_hyper_1_51_chunk.clock < 1636092000)
+         Buffers: shared hit=2066
+   ->  Index Scan using _hyper_1_47_chunk_history_clock_idx on _timescaledb_internal._hyper_1_47_chunk  (cost=0.29..3201.63 rows=110247 width=24) (actual time=0.018..38.496 rows=110882 loops=1)
+         Output: _hyper_1_47_chunk.itemid, _hyper_1_47_chunk.clock, _hyper_1_47_chunk.value, _hyper_1_47_chunk.ns
+         Index Cond: (_hyper_1_47_chunk.clock < 1636092000)
+         Buffers: shared hit=4208
+   ->  Index Scan using _hyper_1_43_chunk_history_clock_idx on _timescaledb_internal._hyper_1_43_chunk  (cost=0.29..3191.02 rows=110315 width=24) (actual time=0.022..30.728 rows=110882 loops=1)
+         Output: _hyper_1_43_chunk.itemid, _hyper_1_43_chunk.clock, _hyper_1_43_chunk.value, _hyper_1_43_chunk.ns
+         Index Cond: (_hyper_1_43_chunk.clock < 1636092000)
+         Buffers: shared hit=4298
+   ->  Index Scan using _hyper_1_39_chunk_history_clock_idx on _timescaledb_internal._hyper_1_39_chunk  (cost=0.29..2810.50 rows=97364 width=24) (actual time=0.031..28.651 rows=97613 loops=1)
+         Output: _hyper_1_39_chunk.itemid, _hyper_1_39_chunk.clock, _hyper_1_39_chunk.value, _hyper_1_39_chunk.ns
+         Index Cond: (_hyper_1_39_chunk.clock < 1636092000)
+         Buffers: shared hit=8560
+   ->  Index Scan using _hyper_1_36_chunk_history_clock_idx on _timescaledb_internal._hyper_1_36_chunk  (cost=0.29..3189.70 rows=110580 width=24) (actual time=0.024..39.719 rows=110887 loops=1)
+         Output: _hyper_1_36_chunk.itemid, _hyper_1_36_chunk.clock, _hyper_1_36_chunk.value, _hyper_1_36_chunk.ns
+         Index Cond: (_hyper_1_36_chunk.clock < 1636092000)
+         Buffers: shared hit=43893
+   ->  Index Scan using _hyper_1_35_chunk_history_clock_idx on _timescaledb_internal._hyper_1_35_chunk  (cost=0.29..3165.47 rows=110798 width=24) (actual time=0.039..37.363 rows=110880 loops=1)
+         Output: _hyper_1_35_chunk.itemid, _hyper_1_35_chunk.clock, _hyper_1_35_chunk.value, _hyper_1_35_chunk.ns
+         Index Cond: (_hyper_1_35_chunk.clock < 1636092000)
+         Buffers: shared hit=23302
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=52.922..69.530 rows=94028 loops=1)
+         Output: _hyper_1_8_chunk.itemid, _hyper_1_8_chunk.clock, _hyper_1_8_chunk.value, _hyper_1_8_chunk.ns
+         Sort Key: _hyper_1_8_chunk.clock DESC
+         Sort Method: external merge  Disk: 3504kB
+         Buffers: shared hit=693, temp read=438 written=439
+         ->  Seq Scan on _timescaledb_internal._hyper_1_8_chunk  (cost=0.00..1866.48 rows=93876 width=24) (actual time=0.023..16.876 rows=94028 loops=1)
+               Output: _hyper_1_8_chunk.itemid, _hyper_1_8_chunk.clock, _hyper_1_8_chunk.value, _hyper_1_8_chunk.ns
+               Filter: (_hyper_1_8_chunk.clock < 1636092000)
+               Buffers: shared hit=693
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=31.515..41.179 rows=56160 loops=1)
+         Output: _hyper_1_2_chunk.itemid, _hyper_1_2_chunk.clock, _hyper_1_2_chunk.value, _hyper_1_2_chunk.ns
+         Sort Key: _hyper_1_2_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=413, temp read=262 written=263
+         ->  Seq Scan on _timescaledb_internal._hyper_1_2_chunk  (cost=0.00..1114.90 rows=56151 width=24) (actual time=0.027..10.435 rows=56160 loops=1)
+               Output: _hyper_1_2_chunk.itemid, _hyper_1_2_chunk.clock, _hyper_1_2_chunk.value, _hyper_1_2_chunk.ns
+               Filter: (_hyper_1_2_chunk.clock < 1636092000)
+               Buffers: shared hit=413
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=31.522..41.480 rows=56160 loops=1)
+         Output: _hyper_1_3_chunk.itemid, _hyper_1_3_chunk.clock, _hyper_1_3_chunk.value, _hyper_1_3_chunk.ns
+         Sort Key: _hyper_1_3_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=413, temp read=262 written=263
+         ->  Seq Scan on _timescaledb_internal._hyper_1_3_chunk  (cost=0.00..1114.90 rows=56151 width=24) (actual time=0.021..10.315 rows=56160 loops=1)
+               Output: _hyper_1_3_chunk.itemid, _hyper_1_3_chunk.clock, _hyper_1_3_chunk.value, _hyper_1_3_chunk.ns
+               Filter: (_hyper_1_3_chunk.clock < 1636092000)
+               Buffers: shared hit=413
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=30.802..40.198 rows=56160 loops=1)
+         Output: _hyper_1_7_chunk.itemid, _hyper_1_7_chunk.clock, _hyper_1_7_chunk.value, _hyper_1_7_chunk.ns
+         Sort Key: _hyper_1_7_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=413, temp read=262 written=263
+         ->  Seq Scan on _timescaledb_internal._hyper_1_7_chunk  (cost=0.00..1114.90 rows=56151 width=24) (actual time=0.020..10.136 rows=56160 loops=1)
+               Output: _hyper_1_7_chunk.itemid, _hyper_1_7_chunk.clock, _hyper_1_7_chunk.value, _hyper_1_7_chunk.ns
+               Filter: (_hyper_1_7_chunk.clock < 1636092000)
+               Buffers: shared hit=413
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=38.721..48.860 rows=56160 loops=1)
+         Output: _hyper_1_1_chunk.itemid, _hyper_1_1_chunk.clock, _hyper_1_1_chunk.value, _hyper_1_1_chunk.ns
+         Sort Key: _hyper_1_1_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=405, temp read=262 written=263
+         ->  Custom Scan (DecompressChunk) on _timescaledb_internal._hyper_1_1_chunk  (cost=0.08..5.97 rows=78000 width=24) (actual time=0.121..13.597 rows=56160 loops=1)
+               Output: _hyper_1_1_chunk.itemid, _hyper_1_1_chunk.clock, _hyper_1_1_chunk.value, _hyper_1_1_chunk.ns
+               Filter: (_hyper_1_1_chunk.clock < 1636092000)
+               Buffers: shared hit=405
+               ->  Seq Scan on _timescaledb_internal.compress_hyper_8_27_chunk  (cost=0.00..5.97 rows=78 width=124) (actual time=0.020..0.137 rows=78 loops=1)
+                     Output: compress_hyper_8_27_chunk._ts_meta_count, compress_hyper_8_27_chunk.itemid, compress_hyper_8_27_chunk.clock, compress_hyper_8_27_chunk.value, compress_hyper_8_27_chunk.ns
+                     Filter: (compress_hyper_8_27_chunk._ts_meta_min_1 < 1636092000)
+                     Buffers: shared hit=5
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=30.719..40.610 rows=56160 loops=1)
+         Output: _hyper_1_6_chunk.itemid, _hyper_1_6_chunk.clock, _hyper_1_6_chunk.value, _hyper_1_6_chunk.ns
+         Sort Key: _hyper_1_6_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=413, temp read=262 written=263
+         ->  Seq Scan on _timescaledb_internal._hyper_1_6_chunk  (cost=0.00..1114.90 rows=56151 width=24) (actual time=0.018..10.170 rows=56160 loops=1)
+               Output: _hyper_1_6_chunk.itemid, _hyper_1_6_chunk.clock, _hyper_1_6_chunk.value, _hyper_1_6_chunk.ns
+               Filter: (_hyper_1_6_chunk.clock < 1636092000)
+               Buffers: shared hit=413
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=30.275..39.714 rows=56160 loops=1)
+         Output: _hyper_1_5_chunk.itemid, _hyper_1_5_chunk.clock, _hyper_1_5_chunk.value, _hyper_1_5_chunk.ns
+         Sort Key: _hyper_1_5_chunk.clock DESC
+         Sort Method: external merge  Disk: 2096kB
+         Buffers: shared hit=413, temp read=262 written=263
+         ->  Seq Scan on _timescaledb_internal._hyper_1_5_chunk  (cost=0.00..1114.90 rows=56151 width=24) (actual time=0.018..10.176 rows=56160 loops=1)
+               Output: _hyper_1_5_chunk.itemid, _hyper_1_5_chunk.clock, _hyper_1_5_chunk.value, _hyper_1_5_chunk.ns
+               Filter: (_hyper_1_5_chunk.clock < 1636092000)
+               Buffers: shared hit=413
+   ->  Sort  (cost=0.00..0.00 rows=0 width=0) (actual time=30.233..39.467 rows=54249 loops=1)
+         Output: _hyper_1_4_chunk.itemid, _hyper_1_4_chunk.clock, _hyper_1_4_chunk.value, _hyper_1_4_chunk.ns
+         Sort Key: _hyper_1_4_chunk.clock DESC
+         Sort Method: external merge  Disk: 2032kB
+         Buffers: shared hit=399, temp read=254 written=255
+         ->  Seq Scan on _timescaledb_internal._hyper_1_4_chunk  (cost=0.00..1076.93 rows=54233 width=24) (actual time=0.016..9.800 rows=54249 loops=1)
+               Output: _hyper_1_4_chunk.itemid, _hyper_1_4_chunk.clock, _hyper_1_4_chunk.value, _hyper_1_4_chunk.ns
+               Filter: (_hyper_1_4_chunk.clock < 1636092000)
+               Buffers: shared hit=399
+ Planning:
+   Buffers: shared hit=411 dirtied=6
+ Planning Time: 4.424 ms
+ Execution Time: 864.554 ms
+(110 rows)

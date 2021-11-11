@@ -563,7 +563,250 @@ SELECT add_data_node('example_node_name', host => 'example_host_address')
 SELECT add_prom_node('example_node_name');
 Note: add_prom_node should be run by the same database user, as the one writing data from Promscale. 
 
+###################### 索引 ##################
+brin索引
+特点：索引特别小，易维护，不占空间，适合序列类型的数据，范围值
 
+create table t1_brin(id int,info text,crt_time timestamp);
+insert into t1_brin select generate_series(1,1000000),md5(random()::text),clock_timestamp();
+postgres=# create index idx_t1_brin_3 on t1_brin using brin(id) with (pages_per_range=16);
+CREATE INDEX
+postgres=# \d+ t1_brin
+                                             Table "public.t1_brin"
+  Column  |            Type             | Collation | Nullable | Default | Storage  | Stats target | Description
+----------+-----------------------------+-----------+----------+---------+----------+--------------+-------------
+ id       | integer                     |           |          |         | plain    |              |
+ info     | text                        |           |          |         | extended |              |
+ crt_time | timestamp without time zone |           |          |         | plain    |              |
+Indexes:
+    "idx_t1_brin_1" brin (id) WITH (pages_per_range='1')
+    "idx_t1_brin_2" btree (id)
+    "idx_t1_brin_3" brin (id) WITH (pages_per_range='16')     值越大，index size越小
+Access method: heap
+
+postgres=# \di+
+                                    List of relations
+ Schema |     Name      | Type  |  Owner   |  Table  | Persistence |  Size  | Description
+--------+---------------+-------+----------+---------+-------------+--------+-------------
+ public | idx_t1_brin_1 | index | postgres | t1_brin | permanent   | 272 kB |
+ public | idx_t1_brin_2 | index | postgres | t1_brin | permanent   | 21 MB  |
+ public | idx_t1_brin_3 | index | postgres | t1_brin | permanent   | 56 kB  |
+
+postgres=# explain (analyze,verbose,timing,costs,buffers) select * from t1_brin where id between 1000 and 300000;
+                                                           QUERY PLAN
+---------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on public.t1_brin  (cost=80.05..13938.88 rows=299794 width=45) (actual time=0.875..75.420 rows=299001 loops=1)
+   Output: id, info, crt_time
+   Recheck Cond: ((t1_brin.id >= 1000) AND (t1_brin.id <= 300000))
+   Rows Removed by Index Recheck: 2311
+   Heap Blocks: lossy=2816
+   Buffers: shared hit=2819
+   ->  Bitmap Index Scan on idx_t1_brin_3  (cost=0.00..5.10 rows=300855 width=0) (actual time=0.492..0.493 rows=28160 loops=1)
+         Index Cond: ((t1_brin.id >= 1000) AND (t1_brin.id <= 300000))
+         Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.260 ms
+ Execution Time: 105.905 ms
+(13 rows)
+
+ The number of lossy blocks a bitmap heap scan visited.
+尺寸太大以至于不能放到work_mem里的行位图
+If a row bitmap is too big to fit into working memory (work_mem), some parts of it are made "lossy" – i.e. they refer to whole pages rather than specific rows
+
+# 观察brin索引存储的内容
+brin_page_type返回给定的BRIN 索引页面的页面类型，如果页面不是有效的BRIN页面， 则会抛出错误
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 0));
+ brin_page_type
+----------------
+ meta
+(1 row)
+
+brin_metapage_info返回有关BRIN 索引元页的分类信息
+postgres=# select * from brin_metapage_info(get_raw_page('idx_t1_brin_3',0));
+   magic    | version | pagesperrange | lastrevmappage
+------------+---------+---------------+----------------
+ 0xA8109CFA |       1 |            16 |              1
+
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 1));
+ brin_page_type
+----------------
+ revmap
+(1 row)
+brin_revmap_data返回BRIN 索引范围映射页面中的元组标识符列表
+postgres=# SELECT brin_page_type(get_raw_page('idx_t1_brin_3', 2));
+ brin_page_type
+----------------
+ regular
+(1 row)
+brin_page_items返回存储在BRIN 数据页面中的数据                  第一个regular类型的索引页
+postgres=# select * from brin_page_items(get_raw_page('idx_t1_brin_3',2),'idx_t1_brin_3');
+ itemoffset | blknum | attnum | allnulls | hasnulls | placeholder |       value
+------------+--------+--------+----------+----------+-------------+--------------------
+          1 |      0 |      1 | f        | f        | f           | {1 .. 1712}        16*107  16个页，每页107个tuple
+          2 |     16 |      1 | f        | f        | f           | {1713 .. 3424}
+          3 |     32 |      1 | f        | f        | f           | {3425 .. 5136}
+          4 |     48 |      1 | f        | f        | f           | {5137 .. 6848}
+          5 |     64 |      1 | f        | f        | f           | {6849 .. 8560}
+......
+        407 |   6496 |      1 | f        | f        | f           | {695073 .. 696784}
+        408 |   6512 |      1 | f        | f        | f           | {696785 .. 698496}
+(408 rows)
+brin_page_items返回存储在BRIN 数据页面中的数据                  第二个regular类型的索引页
+postgres=# select * from brin_page_items(get_raw_page('idx_t1_brin_3',3),'idx_t1_brin_3');
+ itemoffset | blknum | attnum | allnulls | hasnulls | placeholder |        value
+------------+--------+--------+----------+----------+-------------+---------------------
+          1 |   6528 |      1 | f        | f        | f           | {698497 .. 700208}
+          2 |   6544 |      1 | f        | f        | f           | {700209 .. 701920}
+          3 |   6560 |      1 | f        | f        | f           | {701921 .. 703632}
+          4 |   6576 |      1 | f        | f        | f           | {703633 .. 705344}
+
+        176 |   9328 |      1 | f        | f        | f           | {998097 .. 999808}
+        177 |   9344 |      1 | f        | f        | f           | {999809 .. 1000000}         range到1000000了，
+(177 rows)
+
+postgres=# select (177+408)*1712;    该索引共有585行，指向了约1000000个tuple
+ ?column?
+----------
+  1001520
+
+#  B-tree 索引
+https://www.codeprj.com/zh/blog/a7c2e41.html
+
+PostgreSQL 的B-Tree索引頁分為幾種類別
+meta page -> root page -> [branch pages,...] -> leaf pages,....
+
+以下是3级结构   meta page -> root page -> branch page -> branch page -> leaf page
+meta page    
+root page         #  btpo_flags=2    btpo=3 代表第3层   
+branch page    #  btpo_flags=0 代表 branch page    btpo = 2 代表第2層   
+branch page    #  btpo_flags=0 代表 branch page    btpo = 1 代表第1層 
+leaf page         #  btpo_flags=1 代表 leaf page   btpo = 0 代表第0層   
+    
+如果即是leaf又是root則  btpo_flags=3。   0级   
+其中meta page和root page是必須有的，meta page需要一個頁來存儲，表示指向root page的page id。
+
+隨着記錄數的增加，一個root page可能存不下所有的heap item，就會有leaf page，甚至branch page，甚至多層的branch page。
+
+一共有幾層branch 和 leaf，就用btree page元數據的 level 來表示
+一共有0级，1级，2级，。。。。等结构
+如果表的记录数在一个索引page能存下（约285条记录），索引只需要meta page和root page，不需要branch和leaf page   此时为0级
+
+# 观察btree索引存储的内容
+  bt_metap返回关于一个B-树索引的元页的信息
+dvdrental=# SELECT * FROM bt_metap('idx_unq_rental_rental_date_inventory_id_customer_id');
+ magic  | version | root | level | fastroot | fastlevel | oldest_xact | last_cleanup_num_tuples | allequalimage
+--------+---------+------+-------+----------+-----------+-------------+-------------------------+---------------
+ 340322 |       4 |    3 |     1 |        3 |         1 |           0 |                      -1 | t
+(1 row)                    (level 1是1级   meta -> root -> leaf)
+
+  bt_page_stats返回关于B-树索引单一页面的摘要信息
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',3);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     3 | r    |         62 |          0 |            16 |      8192 |      6900 |         0 |         0 |    1 |          2
+        (root)      有62个叶子节点
+叶子page   # btpo_prev和btpo_next分別表示該頁的相鄰頁
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',1);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags         
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     1 | l    |        262 |          0 |            23 |      8192 |       820 |         0 |         2 |    0 |          1
+(1 row)                                                                             （page 0 是 meta page）
+		
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',4);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     4 | l    |        262 |          0 |            23 |      8192 |       820 |         2 |         5 |    0 |          1
+(1 row)  (leaf)
+
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',6);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     6 | l    |        262 |          0 |            23 |      8192 |       820 |         5 |         7 |    0 |          1
+(1 row)
+
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',8);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+     8 | l    |        262 |          0 |            23 |      8192 |       820 |         7 |         9 |    0 |          1
+(1 row)
+dvdrental=# select * from bt_page_stats('idx_unq_rental_rental_date_inventory_id_customer_id',63);
+ blkno | type | live_items | dead_items | avg_item_size | page_size | free_size | btpo_prev | btpo_next | btpo | btpo_flags
+-------+------+------------+------------+---------------+-----------+-----------+-----------+-----------+------+------------
+    63 | l    |        123 |          0 |            24 |      8192 |      4704 |        62 |         0 |    0 |          1
+(1 row)
+  
+	    (leaf)
+  bt_page_items返回关于B-树索引页面上所有项的详细信息
+postgres=# SELECT * FROM bt_page_items('idx_t3_t', 2);
+ itemoffset |   ctid    | itemlen | nulls | vars |                                  data                                   | dead |  htid   |                                         tids
+------------+-----------+---------+-------+------+-------------------------------------------------------------------------+------+---------+--------------------------------------------------------------------------------------
+          1 | (24,1)    |      24 | f     | t    | 1d 43 68 72 69 73 20 43 61 70 75 61 6e 6f 00 00                         |      |         |
+          2 | (24,8200) |      72 | f     | t    | 19 42 6f 6f 6e 65 20 4c 6f 67 61 6e 00 00 00 00                         | f    | (0,66)  | {"(0,66)","(6,100)","(12,135)","(19,3)","(25,37)","(31,72)","(37,106)","(43,142)"}
+          3 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 41 75 73 6d 75 73 00 00 00 00                         | f    | (4,60)  | {"(4,60)","(10,94)","(16,128)","(22,162)","(29,32)","(35,66)","(41,101)","(47,136)"}
+          4 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 45 6c 64 72 65 64 00 00 00 00                         | f    | (5,104) | {"(5,104)","(11,139)","(18,7)","(24,41)","(30,76)","(36,110)","(42,147)","(49,16)"}
+          5 | (24,8200) |      72 | f     | t    | 1d 42 72 61 64 65 6e 20 4c 6f 6f 70 65 72 00 00                         | f    | (6,27)  | {"(6,27)","(12,62)","(18,96)","(24,130)","(30,165)","(37,33)","(43,69)","(49,105)"}
+          6 | (24,8200) |      72 | f     | t    | 19 42 72 61 64 20 48 61 6c 73 65 79 00 00 00 00                         | f    | (1,30)  | {"(1,30)","(7,65)","(13,99)","(19,133)","(26,1)","(32,36)","(38,71)","(44,106)"}
+          7 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 48 61 77 70 65 00 00 00 00 00                         | f    | (4,1)   | {"(4,1)","(10,35)","(16,69)","(22,103)","(28,138)","(35,7)","(41,42)","(47,77)"}
+          8 | (24,8200) |      72 | f     | t    | 1f 42 72 61 64 20 48 65 6e 6e 65 73 73 65 79 00                         | f    | (5,166) | {"(5,166)","(12,35)","(18,69)","(24,103)","(30,138)","(37,6)","(43,42)","(49,78)"}
+          9 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 4c 69 64 67 65 00 00 00 00 00                         | f    | (4,85)  | {"(4,85)","(10,119)","(16,153)","(23,23)","(29,57)","(35,91)","(41,126)","(47,161)"}
+         10 | (24,8200) |      72 | f     | t    | 17 42 72 61 64 20 50 65 6e 6e 79 00 00 00 00 00                         | f    | (4,113) | {"(4,113)","(10,147)","(17,17)","(23,51)","(29,85)","(35,119)","(41,154)","(48,25)"}
+分别查看一下"(0,66)","(6,100)"指向的tuple是什么
+postgres=# select * from t3 where ctid='(0,66)';
+ id  |      t
+-----+-------------
+ 221 | Boone Logan
+(1 row)
+
+postgres=# select * from t3 where ctid='(6,100)';
+  id  |      t
+------+-------------
+ 1252 | Boone Logan
+(1 row)
+
+postgres=# \d+ t3
+                                                Table "public.t3"
+ Column |  Type   | Collation | Nullable |            Default             | Storage  | Stats target | Description
+--------+---------+-----------+----------+--------------------------------+----------+--------------+-------------
+ id     | integer |           | not null | nextval('t3_id_seq'::regclass) | plain    |              |
+ t      | text    |           |          |                                | extended |              |
+Indexes:
+    "idx_t3_t" btree (t)
+Access method: heap
+
+postgres=# explain (analyze,verbose,buffers,costs) select * from t3 where t='Boone Logan';
+                                                   QUERY PLAN
+-----------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on public.t3  (cost=1.45..10.03 rows=8 width=17) (actual time=0.055..0.128 rows=8 loops=1)
+   Output: id, t
+   Recheck Cond: (t3.t = 'Boone Logan'::text)
+   Heap Blocks: exact=8
+   Buffers: shared hit=10
+   ->  Bitmap Index Scan on idx_t3_t  (cost=0.00..1.45 rows=8 width=0) (actual time=0.037..0.038 rows=8 loops=1)
+         Index Cond: (t3.t = 'Boone Logan'::text)
+         Buffers: shared hit=2        # 应该是1个meta page,1个root page,1个leaf page
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.397 ms
+ Execution Time: 0.198 ms
+(12 rows)
+
+	 
+以下查詢，命中了2條記錄，並且走的是index only scan。  该索引 level为2
+讀了22個INDEX PAGE,
+1 meta page + 7 * (1 root + 1 branch + 1 leaf) = 22
+也就是說，每個value都掃了root,branch,leaf。
+postgres=# explain (analyze,verbose,timing,costs,buffers) select id from tbl1 where id in (1,2,3,4,5,6,7);    
+                                                         QUERY PLAN                                                              
+-----------------------------------------------------------------------------------------------------------------------------    
+ Index Only Scan using tbl1_pkey on public.tbl1  (cost=0.43..10.13 rows=7 width=4) (actual time=0.039..0.046 rows=2 loops=1)    
+   Output: id    
+   Index Cond: (tbl1.id = ANY ('{1,2,3,4,5,6,7}'::integer[]))    
+   Heap Fetches: 0    
+   Buffers: shared hit=22    
+ Planning time: 0.232 ms    
+ Execution time: 0.086 ms    
+(7 rows)    	 
 #######################  执行计划分析  ##########
 https://www.pgmustard.com/docs/explain/buffers-shared-read
 
