@@ -1,0 +1,194 @@
+At the Read Committed isolation level, a snapshot is created at the beginning of each transaction statement. 
+This snapshot is active while the statement is being performed.
+
+At the Repeatable Read and Serializable levels, the snapshot is created once, at the beginning of the first transaction statement. 
+Such a snapshot remains active up to the end of the transaction.
+
+A snapshot is not a physical copy of the data, but only a few numbers:
+- the current transaction id at the time of the snapshot creation
+(it determines that very point in time),
+- the list of active transactions at this moment.
+Snapshot creation time determines isolation level
+
+Read committed — used by default
+snapshot is built at the beginning of each statement
+Repeatable read
+snapshot is built at the beginning of the first statement in the transaction
+
+session A
+postgres=# begin transaction isolation level repeatable read;
+BEGIN
+postgres=*# select txid_current();
+ txid_current
+--------------
+      1498393
+(1 row)
+
+postgres=*# select txid_current();
+ txid_current
+--------------
+      1498393
+(1 row)
+
+postgres=*# select pg_export_snapshot();
+ pg_export_snapshot
+---------------------
+ 00000009-000E6FB3-1
+(1 row)
+
+
+session C
+postgres=# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+  4 |  21 | d
+(4 rows)
+
+postgres=# begin transaction isolation level repeatable read;
+BEGIN
+postgres=*# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+  4 |  21 | d
+(4 rows)
+
+postgres=!# set transaction snapshot '00000009-000E6FB3-1';
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+postgres=!# select * from t6;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+postgres=!# commit;
+ROLLBACK
+postgres=# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+  4 |  21 | d
+(4 rows)
+
+postgres=# begin transaction isolation level repeatable read;
+BEGIN
+postgres=*# set transaction snapshot '00000009-000E6FB3-1';
+SET
+postgres=*# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+(3 rows)
+
+postgres=*# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+(3 rows)
+
+postgres=*# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+(3 rows)
+
+postgres=*# commit;
+COMMIT
+postgres=# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  20 | a
+  2 |  21 | b
+  3 |  19 | c
+  4 |  21 | d
+(4 rows)
+
+
+postgres=# select pid,locktype,relation::regclass,page,tuple,transactionid,mode,granted,fastpath from pg_locks where pid=21742;
+  pid  |   locktype    | relation | page | tuple | transactionid |       mode       | granted | fastpath
+-------+---------------+----------+------+-------+---------------+------------------+---------+----------
+ 21742 | relation      | t6_pkey  |      |       |               | AccessShareLock  | t       | t
+ 21742 | relation      | t6_pkey  |      |       |               | RowExclusiveLock | t       | t
+ 21742 | relation      | t6       |      |       |               | AccessShareLock  | t       | t
+ 21742 | relation      | t6       |      |       |               | RowExclusiveLock | t       | t
+ 21742 | virtualxid    |          |      |       |               | ExclusiveLock    | t       | t
+ 21742 | transactionid |          |      |       |       1508364 | ExclusiveLock    | t       | f
+
+ postgres=# select pid,locktype,relation::regclass,page,tuple,transactionid,mode,granted,fastpath from pg_locks where pid=19341;
+  pid  |   locktype    | relation | page | tuple | transactionid |       mode       | granted | fastpath
+-------+---------------+----------+------+-------+---------------+------------------+---------+----------
+ 19341 | relation      | t6_pkey  |      |       |               | AccessShareLock  | t       | t
+ 19341 | relation      | t6_pkey  |      |       |               | RowExclusiveLock | t       | t
+ 19341 | relation      | t6       |      |       |               | AccessShareLock  | t       | t
+ 19341 | relation      | t6       |      |       |               | RowExclusiveLock | t       | t
+ 19341 | virtualxid    |          |      |       |               | ExclusiveLock    | t       | t
+ 19341 | transactionid |          |      |       |       1508762 | ExclusiveLock    | t       | f
+ 19341 | tuple         | t6       |    0 |     1 |               | ExclusiveLock    | t       | f
+ 19341 | transactionid |          |      |       |       1508364 | ShareLock        | f       | f
+
+postgres=# select * from pgrowlocks('t6');
+ locked_row | locker  | multi |   xids    |       modes       |  pids
+------------+---------+-------+-----------+-------------------+---------
+ (0,1)      | 1508364 | f     | {1508364} | {"No Key Update"} | {21742}
+ (0,2)      | 1508364 | f     | {1508364} | {"No Key Update"} | {21742}
+
+(1 row)
+
+postgres=# select * from pgrowlocks('t6');
+ locked_row | locker  | multi |   xids    |       modes       |  pids
+------------+---------+-------+-----------+-------------------+---------
+ (0,3)      | 1508762 | f     | {1508762} | {"No Key Update"} | {19341}
+ (0,6)      | 1508762 | f     | {1508762} | {"No Key Update"} | {19341}
+ (0,9)      | 1508762 | f     | {1508762} | {"No Key Update"} | {19341}
+ (0,10)     | 1508762 | f     | {1508762} | {"No Key Update"} | {19341}
+ 
+ postgres=# select pid,locktype,relation::regclass,page,tuple,transactionid,mode,granted,fastpath from pg_locks;
+  pid  |   locktype    | relation | page | tuple | transactionid |       mode       | granted | fastpath
+-------+---------------+----------+------+-------+---------------+------------------+---------+----------
+ 19451 | relation      | pg_locks |      |       |               | AccessShareLock  | t       | t
+ 19451 | virtualxid    |          |      |       |               | ExclusiveLock    | t       | t
+ 19341 | relation      | t6_pkey  |      |       |               | RowExclusiveLock | t       | t
+ 19341 | relation      | t6       |      |       |               | RowExclusiveLock | t       | t
+ 19341 | virtualxid    |          |      |       |               | ExclusiveLock    | t       | t
+ 32554 | relation      | t6_pkey  |      |       |               | RowExclusiveLock | t       | t
+ 32554 | relation      | t6       |      |       |               | RowExclusiveLock | t       | t
+ 32554 | virtualxid    |          |      |       |               | ExclusiveLock    | t       | t
+ 19341 | transactionid |          |      |       |       1509457 | ExclusiveLock    | t       | f
+ 32554 | tuple         | t6       |    0 |     8 |               | ExclusiveLock    | t       | f
+ 21388 | object        |          |      |       |               | ExclusiveLock    | t       | f
+ 32554 | transactionid |          |      |       |       1509457 | ShareLock        | f       | f        这个是锁等待的进程
+ 32554 | transactionid |          |      |       |       1509675 | ExclusiveLock    | t       | f
+ 21389 | object        |          |      |       |               | ExclusiveLock    | t       | f
+(14 rows)
+
+postgres=# SELECT pg_terminate_backend(32554);
+ pg_terminate_backend
+----------------------
+ t
+(1 row)
+
+
+Be aware that snapshots are still tied to the life cycle of their associated transaction, and giving them IDs doesn't change anything.
+ Once the exporting transaction commits or rolls back, new transactions trying to access an exported snapshot will see:
+
+db=> set transaction snapshot '000ED905-1';
+ERROR:  invalid snapshot identifier: "000ED905-1"
+Transactions that have already SET TRANSACTION SNAPSHOT will continue to function properly; the resources necessary to use the snapshot are retained 
+until it's no longer referenced by an active transaction, but the identifier goes away when the exporting transaction completes.
+
+pg_dump通常工作在并发模式，所有worker进程必须看到数据在数据库里是同一状态，以确保备份的数据是一致的。
+因此，它会使用到snapshot export/import来确保备份的是某个快照里的数据
+pg_dump uses this feature if you specify --jobs=N. In this mode, it establishes a connection, exports the snapshot ID, then establishes N more connections
+ to actually retrieve data. This gets you a 100% consistent dump of an active database
+
+-bash-4.2$ pg_dump -d postgres --snapshot=00000007-00087156-1 --schema=public -Fc >public.dump
+pg_dump -d postgres --snapshot=00000007-00087156-1 --schema=public >public.sql 

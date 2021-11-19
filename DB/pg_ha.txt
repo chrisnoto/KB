@@ -489,6 +489,57 @@ Postgresql.conf注释下面两行
 And restart the database service.
 $ systemctl restart postgresql-13
 
+#逻辑复制
+逻辑复制槽with test_decoding插件
+postgres=# select * from pg_create_logical_replication_slot('logical_slot','test_decoding');
+  slot_name   |    lsn
+--------------+------------
+ logical_slot | 5/1F24AAB0
+(1 row)
+
+postgres=# select * from t6;
+ id | age | name
+----+-----+------
+  1 |  30 | aa
+  3 |  30 | c
+  4 |  30 | d
+  7 |  33 | g
+(4 rows)
+
+postgres=# insert into t6 values(8,45,'hh');
+INSERT 0 1
+
+postgres=# select * from pg_logical_slot_get_changes('logical_slot',null,null);
+    lsn     |   xid   |                                  data
+------------+---------+------------------------------------------------------------------------
+ 5/1F26BB90 | 1647821 | BEGIN 1647821
+ 5/1F26BB90 | 1647821 | table public.t6: INSERT: id[integer]:8 age[integer]:45 name[text]:'hh'
+ 5/1F26BD20 | 1647821 | COMMIT 1647821
+(3 rows)
+
+postgres=# select * from pg_replication_slots;
+-[ RECORD 1 ]-------+---------------
+....
+-[ RECORD 2 ]-------+---------------
+slot_name           | logical_slot
+plugin              | test_decoding
+slot_type           | logical
+datoid              | 14172
+database            | postgres
+temporary           | f
+active              | f
+active_pid          |
+xmin                |
+catalog_xmin        | 1647771
+restart_lsn         | 5/1F254B50
+confirmed_flush_lsn | 5/1F290648
+wal_status          | reserved
+safe_wal_size       |
+
+postgres=# select * from pg_drop_replication_slot('logical_slot');
+-[ RECORD 1 ]------------+-
+pg_drop_replication_slot |
+
 ###########  repmgr高可用  ########### 
 架构
 -----------------------------

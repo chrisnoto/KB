@@ -199,6 +199,23 @@ restore_command = 'cp /walarchive/%f %p || cp /walarchive/%f.partial %p'
 
 重要提示，可以使用pg_receivewal实现多副本redolog的功能，类似oracle的redo log group
 
+# pg_recvlogical 逻辑解码DML    DDL不显示，只显示了BEGIN 1781045  COMMIT 1781045
+-bash-4.2$ pg_recvlogical  -h 10.67.39.58 -p 5432 -d postgres --slot extract1 --create-slot -U repl -W
+Password:
+-bash-4.2$ pg_recvlogical  -h 10.67.39.58 -p 5432 -d postgres --slot extract1  -U repl --start -f -
+Password:
+BEGIN 1780631
+table public.dbs: INSERT: key[text]:'couchdb' value[text]:'distributied DB'
+table audit.logged_actions: INSERT: event_id[bigint]:6 schema_name[text]:'public' table_name[text]:'dbs' relid[oid]:16472 session_user_name[text]:'postgres' action_tstamp_tx[timestamp with time zone]:'2021-11-17 06:45:58.259535+00' action_tstamp_stm[timestamp with time zone]:'2021-11-17 06:45:58.259535+00' action_tstamp_clk[timestamp with time zone]:'2021-11-17 06:45:58.260158+00' transaction_id[bigint]:1780631 application_name[text]:'psql' client_addr[inet]:null client_port[integer]:null client_query[text]:'insert into dbs values(''couchdb'',''distributied DB'');' action[text]:'I' row_data[public.hstore]:'"key"=>"couchdb", "value"=>"distributied DB"' changed_fields[public.hstore]:null statement_only[boolean]:false
+COMMIT 1780631
+BEGIN 1780756
+table public.tax1: INSERT: salary[numeric]:9990 taxindex[numeric]:0.11 tax[numeric]:1098.90
+COMMIT 1780756
+BEGIN 1780774
+table public.tax1: INSERT: salary[numeric]:15000 taxindex[numeric]:0.11 tax[numeric]:1650.00
+COMMIT 1780774
+BEGIN 1781045
+COMMIT 1781045
 
 ###########  barman  ###########
 工作原理

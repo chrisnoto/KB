@@ -580,3 +580,74 @@ mysql> show variables like '%flush%commit';
 +--------------------------------+-------+
 1 row in set (0.00 sec)
 　　默认MySQL的刷盘策略是1，最安全的，但是安全的同时，自然也就会带来一定的性能压力。在写压力巨大的情况下，根据具体的业务场景，牺牲安全性的将其调为0或2。
+
+MariaDB [(none)]> show variables like '%slow_query_log_file';
++---------------------+----------------------------+
+| Variable_name       | Value                      |
++---------------------+----------------------------+
+| slow_query_log_file | /data/mysql/mysql-slow.log |
++---------------------+----------------------------+
+1 row in set (0.001 sec)
+
+MariaDB [(none)]> show variables like '%slow_query_log_time';
+Empty set (0.001 sec)
+
+MariaDB [(none)]> show variables like 'log_queries_not_using_indexes'
+    ->
+    -> ;
++-------------------------------+-------+
+| Variable_name                 | Value |
++-------------------------------+-------+
+| log_queries_not_using_indexes | OFF   |
++-------------------------------+-------+
+1 row in set (0.001 sec)
+
+MariaDB [(none)]> set global log_queries_not_using_indexes=1;
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [(none)]> set global slow_query_log_time=4;
+ERROR 1193 (HY000): Unknown system variable 'slow_query_log_time'
+MariaDB [(none)]> show global status like '%Slow_queries%';
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| Slow_queries  | 372   |
++---------------+-------+
+1 row in set (0.001 sec)
+
+MariaDB [(none)]> Bye
+[root@vstjzabdb01 ~]# mysqld
+mysqld              mysqld_multi        mysqld_safe         mysqld_safe_helper  mysqldump           mysqldumpslow
+[root@vstjzabdb01 ~]# mysqldumpslow -s at -t 10 /data/mysql/mysql-slow.log
+
+Reading mysql slow query log from /data/mysql/mysql-slow.log
+Count: 1  Time=6920.28s (6920s)  Lock=0.00s (0s)  Rows_sent=82605578.0 (82605578), Rows_examined=82605578.0 (82605578), Rows_affected=0.0 (0), root[root]@localhost
+  SELECT /*!N SQL_NO_CACHE */ `itemid`, `clock`, `value`, `ns` FROM `history_text`
+
+Count: 1  Time=3505.83s (3505s)  Lock=0.00s (0s)  Rows_sent=1937475838.0 (1937475838), Rows_examined=1937475838.0 (1937475838), Rows_affected=0.0 (0), root[root]@localho                                                                                                      st
+  SELECT /*!N SQL_NO_CACHE */ `itemid`, `clock`, `value`, `ns` FROM `history`
+
+Count: 1  Time=3026.10s (3026s)  Lock=0.00s (0s)  Rows_sent=1575703337.0 (1575703337), Rows_examined=1575703337.0 (1575703337), Rows_affected=0.0 (0), root[root]@localho                                                                                                      st
+  SELECT /*!N SQL_NO_CACHE */ `itemid`, `clock`, `value`, `ns` FROM `history_uint`
+
+Count: 1  Time=2882.25s (2882s)  Lock=0.00s (0s)  Rows_sent=1.0 (1), Rows_examined=1527026728.0 (1527026728), Rows_affected=0.0 (0), root[root]@localhost
+  select count(*) from history_uint
+
+Count: 1  Time=567.14s (567s)  Lock=0.00s (0s)  Rows_sent=118196840.0 (118196840), Rows_examined=118196840.0 (118196840), Rows_affected=0.0 (0), root[root]@localhost
+  SELECT /*!N SQL_NO_CACHE */ `itemid`, `clock`, `num`, `value_min`, `value_avg`, `value_max` FROM `trends_uint`
+
+Count: 1  Time=383.66s (383s)  Lock=0.00s (0s)  Rows_sent=76167430.0 (76167430), Rows_examined=76167430.0 (76167430), Rows_affected=0.0 (0), root[root]@localhost
+  SELECT /*!N SQL_NO_CACHE */ `itemid`, `clock`, `num`, `value_min`, `value_avg`, `value_max` FROM `trends`
+
+Count: 2  Time=343.62s (687s)  Lock=0.00s (0s)  Rows_sent=0.0 (0), Rows_examined=12.0 (24), Rows_affected=12.0 (24), zabbix[zabbix]@2hosts
+  update item_discovery set lastcheck=N where itemid in (N,N,N,N,N,N,N,N,N,N,N,N)
+
+Count: 2  Time=288.48s (576s)  Lock=0.00s (0s)  Rows_sent=0.0 (0), Rows_examined=0.0 (0), Rows_affected=1.0 (2), zabbix[zabbix]@2hosts
+  insert into history_uint (itemid,clock,ns,value) values (N,N,N,N)
+
+Count: 2  Time=288.44s (576s)  Lock=0.00s (0s)  Rows_sent=0.0 (0), Rows_examined=0.0 (0), Rows_affected=2.0 (4), zabbix[zabbix]@2hosts
+  insert into history_uint (itemid,clock,ns,value) values (N,N,N,N),(N,N,N,N)
+
+Count: 5  Time=247.65s (1238s)  Lock=0.00s (0s)  Rows_sent=44.8 (224), Rows_examined=998.0 (4990), Rows_affected=1247566.4 (6237832), root[root]@localhost
+  CALL partition_maintenance_all('S')
+
