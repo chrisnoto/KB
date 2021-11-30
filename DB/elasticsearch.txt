@@ -13,6 +13,51 @@ log with timestamp格式不会解析log内容的
 编辑111.json去掉头和尾
 2 在kibana中 home-> upload a file 
 
+###########  elasticsearch 7 新功能之 remote cluster query ########
+1 create a single node cluster
+2 in kibana, add it as remote cluster    alias:myes
+3 query with remote cluster
+[root@stjes1 ~]# curl http://10.67.51.147:9200/myes:tutorial/_search?pretty
+{
+  "took" : 552,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "_clusters" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0
+  },
+  "hits" : {
+    "total" : 2,
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "myes:tutorial",
+        "_type" : "helloworld",
+        "_id" : "1",
+        "_score" : 1.0,
+        "_source" : {
+          "message" : "Hello World!"
+        }
+      },
+      {
+        "_index" : "myes:tutorial",
+        "_type" : "helloworld",
+        "_id" : "2",
+        "_score" : 1.0,
+        "_source" : {
+          "message" : "Hello sans!"
+        }
+      }
+    ]
+  }
+}
+
 
 
 ############# elasticsearch查询 ############

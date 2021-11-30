@@ -278,3 +278,6 @@ Plugins.Oracle.Sessions.POC1.Uri=tcp://10.67.51.95:1521
 Plugins.Oracle.Sessions.POC1.User=SYSTEM
 Plugins.Oracle.Sessions.POC1.Password=sys123sys
 Plugins.Oracle.Sessions.POC1.Service=POC1
+
+########### zabbix-proxy容器########
+它自身的agent要指向docker0的IP  172.17.0.1

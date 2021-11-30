@@ -19,6 +19,21 @@ pg_basebackup –xlog-method=stream
 
 or use a utility that does everything for you, like Barman.
 
+######  pg_basebackup底层步骤
+Backup by the pg_basebackup utility
+connects to the server via replication protocol
+performs checkpoint
+switches to the next WAL file
+copies the data files to the specified directory
+switches to the next WAL file
+copies all WAL files generated between switches
+
+# pg_basebackup + archive_command configured
+To create a backup with configured continuous archiving, the same utility
+pg_basebackup is used, only with a different set of parameters. The only
+difference is that WAL files are not saved to the backup, as they already
+present in the archive
+
 #### pgbackrest
 安装
 yum install postgresql13-server postgresql13-contrib pgbackrest

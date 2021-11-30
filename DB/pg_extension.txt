@@ -259,4 +259,13 @@ postgres=# select * from squeeze.tables;
 ----+-----------+---------------------+------------------+----------------+-----------------+------------------+----------+----------------+-----------+--------------+---------------
   1 | profile   | sample_kcache_total |                  |                |                 |               10 |        8 | 01:00:00       |         0 | f            | ({40},{7},,,)
 (1 row)
-	
+
+
+Extensions included in the PostgreSQL distribution
+pg_stat_statements 			query statistics
+pgstattuple 				row versions statistics
+pg_buffercache 				buffer cache status
+Other extensions
+pg_stat_plans 				query plan statistics
+pg_stat_kcache				CPU and I/O statistics
+pg_qualstats 				predicate statistics	

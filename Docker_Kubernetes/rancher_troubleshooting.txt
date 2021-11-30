@@ -42,3 +42,29 @@ k8s_POD_cattle-node-agent-b5l2p_cattle-system_26d483f0-b0d5-11e8-92ae-000c29fba2
 k8s_POD_canal-42wmd_kube-system_26d49727-b0d5-11e8-92ae-000c29fba296_1
 第二天发现以上容器跑起来了，估计容器部署时间久。但是etcd容器状态是 Restarting (0) 7 hours ago  该etcd容器无法加入etcd集群
 最后还是删除master3
+
+# metrics-server的imagePullPolicy是always,所以即使上传image到worker node上，也无济于事。此时需要用patch命令给metrics-server改变pull policy
+[root@rancher ~]# kubectl patch Deployment/metrics-server -n kube-system -p '{"spec": {"template": {"spec":{"containers":[{"name":"metrics-server","imagePullPolicy":"IfNotPresent"}]}}}}'
+deployment.extensions/metrics-server patched
+
+# 从json中解析出所有嵌套的key值
+[root@rancher ~]# kubectl get po -o json | jq -r '[paths | join(".")]'
+[
+  "apiVersion",
+  "items",
+  "items.0",
+  "items.0.apiVersion",
+  "items.0.kind",
+  "items.0.metadata",
+  "items.0.metadata.annotations",
+  "items.0.metadata.annotations.cni.projectcalico.org/podIP",
+  
+[root@rancher ~]# kubectl get po -o json | jq -r '[paths | join(".")]' |grep -i terminated.reason
+  "items.4.status.containerStatuses.0.lastState.terminated.reason",
+  "items.8.status.containerStatuses.0.lastState.terminated.reason",
+[root@rancher ~]# kubectl get po -o json | jq '.items[4]|.metadata.name,.status.containerStatuses[0].lastState.terminated.reason'
+"maxscale-5dc999bd8c-d6dll"
+"Error"
+[root@rancher ~]# kubectl get po -o json | jq '.items[8]|.metadata.name,.status.containerStatuses[0].lastState.terminated.reason'
+"zabbix-web-nginx-mysql-5988c594ff-8gbsm"
+"OOMKilled"

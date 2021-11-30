@@ -1,3 +1,478 @@
+######## kubectl with jq ########
+[root@rancher curator]# kubectl get nodes -o json |   jq -r '.items | sort_by(.status.capacity.memory)[]|[.metadata.name,.status.capacity.memory,.status.allocatable.memory] | @csv'
+"vstjk8s04","32778804Ki","30935604Ki"
+"vstjk8s05","32778804Ki","30935604Ki"
+"vstjk8s06","32778804Ki","30935604Ki"
+"vstjk8s07","32778804Ki","30935604Ki"
+"vstjk8s01","8009120Ki","6165920Ki"
+"vstjk8s02","8009120Ki","6165920Ki"
+"vstjk8s03","8009120Ki","6165920Ki"
+[root@rancher curator]# kubectl get pods --sort-by='.status.containerStatuses[0].restartCount'  #按重启次数排序
+NAME                                      READY   STATUS    RESTARTS   AGE
+adminer-574458b9bd-wf225                  1/1     Running   0          10d
+logstash-847f7d5d4c-29t4g                 1/1     Running   0          272d
+logstash-847f7d5d4c-gzx6g                 1/1     Running   0          59d
+logstash-847f7d5d4c-zpmnj                 1/1     Running   0          59d
+reloader-8446ffcb4d-xfsw9                 1/1     Running   0          59d
+zabbix-java-gateway-5857bcfd9c-9gsbq      1/1     Running   0          59d
+zabbix-server-mysql-5f5f75b4cf-f9w84      2/2     Running   0          59d
+maxscale-5dc999bd8c-d6dll                 1/1     Running   1          357d
+zabbix-web-nginx-mysql-5988c594ff-8gbsm   1/1     Running   8          59d
+每个节点上运行了多少pods，并排序
+[root@rancher curator]# kubectl get pods -ojson -A | jq '.items | group_by(.spec.nodeName) | map({"nodeName": .[0].spec.nodeName, "count": length}) | sort_by(.count) |reverse'
+[
+  {
+    "nodeName": "vstjk8s07",
+    "count": 13
+  },
+  {
+    "nodeName": "vstjk8s06",
+    "count": 4
+  },
+  {
+    "nodeName": "vstjk8s05",
+    "count": 3
+  },
+############ jq高级用法  ###########
+json复合结构
+root@node-1:~# ceph osd df tree -f json-pretty |head -100
+
+{
+    "nodes": [
+        {
+            "id": 2,
+            "name": "osd.2",
+            "type": "osd",
+            "type_id": 0,
+            "crush_weight": 0.819992,
+            "depth": 2,
+            "reweight": 1.000000,
+            "kb": 878080100,
+            "kb_used": 723590320,
+            "kb_avail": 154489780,
+            "utilization": 82.405958,
+            "var": 1.451218
+        },
+        {
+            "id": 3,
+            "name": "osd.3",
+            "type": "osd",
+            "type_id": 0,
+            "crush_weight": 0.819992,
+            "depth": 2,
+            "reweight": 1.000000,
+            "kb": 878080100,
+            "kb_used": 586823280,
+            "kb_avail": 291256820,
+            "utilization": 66.830268,
+            "var": 1.176921
+        },
+        {
+            "id": 7,
+            "name": "osd.7",
+            "type": "osd",
+            "type_id": 0,
+            "crush_weight": 0.819992,
+            "depth": 2,
+            "reweight": 1.000000,
+            "kb": 877438364,
+            "kb_used": 603572592,
+            "kb_avail": 273865772,
+            "utilization": 68.788033,
+            "var": 1.211398
+        },
+########## select ###############
+root@node-1:~# ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,utilization}|select(.type=="root")]'
+[
+  {
+    "utilization": 0,
+    "type": "root",
+    "name": "default",
+    "id": -1
+  }
+]
+root@node-1:~# ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,utilization}|select(.type=="host")]'
+[
+  {
+    "utilization": 71.191706,
+    "type": "host",
+    "name": "node-6",
+    "id": -3
+  },
+  {
+    "utilization": 47.907671,
+    "type": "host",
+    "name": "node-18",
+    "id": -2
+  }
+]		
+######### jq取最大值###########
+root@node-1:~# ceph osd df tree -f json-pretty |jq  '.nodes |max_by(.utilization)'
+{
+  "var": 1.453523,
+  "utilization": 82.536505,
+  "kb_avail": 153343476,
+  "kb_used": 724736624,
+  "id": 38,
+  "name": "osd.38",
+  "type": "osd",
+  "type_id": 0,
+  "crush_weight": 0.819992,
+  "depth": 2,
+  "reweight": 1,
+  "kb": 878080100
+}
+########## jq select $$$$$$$$$$$
+root@node-1:~# ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,utilization}|select(.utilization>80)]'
+[
+  {
+    "utilization": 82.405767,
+    "id": 2
+  },
+  {
+    "utilization": 82.537001,
+    "id": 38
+  }
+]
+
+########## jq sort ##########
+root@node-1:~# ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,utilization}|select(.utilization>75)]|sort_by(.utilization)'
+[
+  {
+    "utilization": 75.471885,
+    "id": 19
+  },
+  {
+    "utilization": 75.938506,
+    "id": 23
+  },
+  {
+    "utilization": 76.170029,
+    "id": 32
+  },
+  {
+    "utilization": 76.67636,
+    "id": 14
+  },
+  {
+    "utilization": 77.007705,
+    "id": 0
+  },
+####### jq sort reverse limit ######
+
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,utilization}|select(.utilization>75)]|sort_by(.utilization)|limit(3;.[])'
+{
+  "id": 19,
+  "utilization": 75.471573
+}
+{
+  "id": 23,
+  "utilization": 75.938421
+}
+{
+  "id": 32,
+  "utilization": 76.170615
+}
+# reverse
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,utilization}|select(.utilization>75)]|sort_by(.utilization)|reverse|limit(3;.[])'
+{
+  "id": 38,
+  "utilization": 82.536803
+}
+{
+  "id": 2,
+  "utilization": 82.405792
+}
+{
+  "id": 33,
+  "utilization": 77.952287
+}  
+
+# map功能
+[root@repo-centos ~]# echo '{"a":1,"b":2,"c":3}' | jq 'map(.) | add'
+6
+[root@repo-centos ~]# echo '{"a":1,"b":2,"c":3}' | jq 'map(.+4) | add'
+18
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,kb}|select(.type=="host")]'
+[
+  {
+    "id": -3,
+    "name": "node-6",
+    "type": "host",
+    "kb": 9656314156
+  },
+  {
+    "id": -5,
+    "name": "node-13",
+    "type": "host",
+    "kb": 21465861428
+  },
+  {
+    "id": -6,
+    "name": "node-14",
+    "type": "host",
+    "kb": 0
+  },
+  {
+    "id": -4,
+    "name": "node-5",
+    "type": "host",
+    "kb": 0
+  },
+  {
+    "id": -2,
+    "name": "node-18",
+    "type": "host",
+    "kb": 21470192884
+  }
+]
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,kb}|select(.type=="host")]|map(.kb)|add'
+52592368468
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,kb}|select(.type=="osd")]|map(.kb)|add'
+65761003024
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]|{id,name,type,kb}|select(.type=="host")]|map(select(.kb>0))'
+[
+  {
+    "id": -3,
+    "name": "node-6",
+    "type": "host",
+    "kb": 9656314156
+  },
+  {
+    "id": -5,
+    "name": "node-13",
+    "type": "host",
+    "kb": 21465861428
+  },
+  {
+    "id": -2,
+    "name": "node-18",
+    "type": "host",
+    "kb": 21470192884
+  }
+]
+
+[root@repo-centos ~]# ssh 10.21.0.5 ceph osd df tree -f json-pretty |jq  '[.nodes[]]|map(select(.utilization>80))'
+[
+  {
+    "id": 2,
+    "name": "osd.2",
+    "type": "osd",
+    "type_id": 0,
+    "crush_weight": 0.819992,
+    "depth": 2,
+    "reweight": 1,
+    "kb": 878080100,
+    "kb_used": 723596844,
+    "kb_avail": 154483256,
+    "utilization": 82.406701,
+    "var": 1.451212
+  },
+  {
+    "id": 38,
+    "name": "osd.38",
+    "type": "osd",
+    "type_id": 0,
+    "crush_weight": 0.819992,
+    "depth": 2,
+    "reweight": 1,
+    "kb": 878080100,
+    "kb_used": 724759776,
+    "kb_avail": 153320324,
+    "utilization": 82.539141,
+    "var": 1.453544
+  }
+]
+############### jc 配合 jq ####################
+# 从json中解析出所有嵌套的key值
+[root@rancher ~]# kubectl get po -o json | jq -r 'paths | map(tostring) | join(".")'
+[root@rancher ~]# kubectl get po -o json | jq -r '[paths | join(".")]'
+[
+  "apiVersion",
+  "items",
+  "items.0",
+  "items.0.apiVersion",
+  "items.0.kind",
+  "items.0.metadata",
+  "items.0.metadata.annotations",
+  "items.0.metadata.annotations.cni.projectcalico.org/podIP",
+#  json array -> ndjson
+[root@repo-centos ~]# df -h |jc --df -p | jq -c '.[]'
+{"filesystem":"/dev/mapper/centos-root","size":"88G","used":26,"mounted_on":"/","available":63,"use_percent":29}
+{"filesystem":"devtmpfs","size":"3.9G","used":0,"mounted_on":"/dev","available":3,"use_percent":0}
+{"filesystem":"tmpfs","size":"5.0G","used":0,"mounted_on":"/dev/shm","available":5,"use_percent":0}
+{"filesystem":"tmpfs","size":"3.9G","used":306,"mounted_on":"/run","available":3,"use_percent":8}
+
+#  ndjson -> json array
+[root@repo-centos ~]# head -5 2.json
+ {"name":"Adam Donachie","team":" BAL","position":" Catcher","details":{"height":74,"weight":180,"age":22.99}}
+ {"name":"Paul Bako","team":" BAL","position":" Catcher","details":{"height":74,"weight":215,"age":34.69}}
+ {"name":"Ramon Hernandez","team":" BAL","position":" Catcher","details":{"height":72,"weight":210,"age":30.78}}
+ {"name":"Kevin Millar","team":" BAL","position":" First Baseman","details":{"height":72,"weight":210,"age":35.43}}
+ {"name":"Chris Gomez","team":" BAL","position":" First Baseman","details":{"height":73,"weight":188,"age":35.71}}
+[root@repo-centos ~]# head -5 2.json |jq -s '.'
+[
+  {
+    "name": "Adam Donachie",
+    "team": " BAL",
+    "position": " Catcher",
+    "details": {
+      "height": 74,
+      "weight": 180,
+      "age": 22.99
+    }
+  },
+  {
+    "name": "Paul Bako",
+    "team": " BAL",
+    "position": " Catcher",
+    "details": {
+      "height": 74,
+      "weight": 215,
+      "age": 34.69
+    }
+  },
+# map  直接取array中每个.details.height的值
+[root@repo-centos ~]# head -5 2.json |jq -s '.|map(.details.height)'
+[
+  74,
+  74,
+  72,
+  72,
+  73
+]  
+  
+[root@repo-centos b]# ps auwx |jc --ps -p | jq '.|max_by(.vsz)'
+{
+  "user": "mongod",
+  "pid": 13449,
+  "vsz": 1626676,
+  "rss": 70308,
+  "tty": null,
+  "stat": "SLl",
+  "start": "Sep13",
+  "time": "447:56",
+  "command": "/usr/bin/mongod -f /etc/mongod.conf",
+  "cpu_percent": 0.4,
+  "mem_percent": 0.8
+}
+[root@repo-centos b]# ps auwx |grep mongod
+mongod   13449  0.4  0.8 1626676 70308 ?       SLl  Sep13 447:56 /usr/bin/mongod -f /etc/mongod.conf
+[root@repo-centos b]# cat /etc/passwd | jc --passwd -p | jq '.[]|select(.uid>1000)'
+{
+  "username": "naifa",
+  "password": "x",
+  "uid": 1001,
+  "gid": 1001,
+  "comment": "",
+  "home": "/home/naifa",
+  "shell": "/bin/bash"
+}
+{
+  "username": "dbadmin",
+  "password": "x",
+  "uid": 1002,
+  "gid": 1002,
+  "comment": "",
+  "home": "/home/dbadmin",
+  "shell": "/bin/bash"
+}
+[root@repo-centos ~]# df -hT |jc --df -p | jq '.[]|select(.use_percent>60)'
+{
+  "filesystem": "/dev/mapper/data-repo",
+  "type": "xfs",
+  "size": "1.2T",
+  "used": 838,
+  "mounted_on": "/mrepo",
+  "available": 363,
+  "use_percent": 70
+}
+
+[root@repo-centos ~]# df -hT |jc --df -p | jq '.|max_by(.use_percent)'
+{
+  "filesystem": "/dev/mapper/data-repo",
+  "type": "xfs",
+  "size": "1.2T",
+  "used": 838,
+  "mounted_on": "/mrepo",
+  "available": 363,
+  "use_percent": 70
+}
+
+[root@repo-centos mrepo]# du -sk * | jc --du -p | jq '.|max_by(.size)'
+{
+  "size": 629940624,
+  "name": "ubuntu"
+}
+
+[root@repo-centos b]# ls -l |jc --ls -p | jq '.|max_by(.size)'
+{
+  "filename": "",
+  "flags": "-rw-r--r--",
+  "links": 1,
+  "owner": "root",
+  "group": "root",
+  "size": 38918940,
+  "date": "2020-04-22 16:53:09 boost169-doc-1.69.0-4.el8.noarch.rpm",
+  "epoch": null,
+  "epoch_utc": null
+}
+[root@repo-centos b]# ll boost169-doc-1.69.0-4.el8.noarch.rpm
+-rw-r--r-- 1 root root 38918940 2020-04-22 16:53:09 boost169-doc-1.69.0-4.el8.noarch.rpm
+
+[root@repo-centos b]# cat /etc/passwd | jc --passwd -p | jq '[.[]|{username,shell}]|group_by(.shell)'
+[
+  [
+    {
+      "username": "root",
+      "shell": "/bin/bash"
+    },
+    {
+      "username": "chensen",
+      "shell": "/bin/bash"
+    },
+    {
+      "username": "naifa",
+      "shell": "/bin/bash"
+    },
+    {
+      "username": "dbadmin",
+      "shell": "/bin/bash"
+    }
+  ],
+  [
+    {
+      "username": "mongod",
+      "shell": "/bin/false"
+    }
+  ],
+  [
+    {
+      "username": "sync",
+      "shell": "/bin/sync"
+    }
+  ],
+  [
+    {
+      "username": "halt",
+      "shell": "/sbin/halt"
+    }
+  ],
+
+#####  ini -> json with jc command  
+[root@repo-centos etc]# cat my.cnf |jc --ini -p
+{
+  "mysqld": {
+    "datadir": "/var/lib/mysql",
+    "socket": "/var/lib/mysql/mysql.sock",
+    "symbolic-links": "0"
+  },
+  "mysqld_safe": {
+    "log-error": "/var/log/mariadb/mariadb.log",
+    "pid-file": "/var/run/mariadb/mariadb.pid",
+    "!includedir /etc/my.cnf.d": ""
+  }
+}  
 ############ jq解析 yaml #########
 jq 取key
 [root@rancher ~]# jq keys 164.json

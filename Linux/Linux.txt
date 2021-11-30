@@ -1,5 +1,68 @@
 =========================================================== 命 令 ===========================================================
+####  IPV6地址
+[root@repo-centos ~]# ping -6 fe80::250:56ff:fe86:58dd%ens160
+PING fe80::250:56ff:fe86:58dd%ens160(fe80::250:56ff:fe86:58dd%ens160) 56 data bytes
+64 bytes from fe80::250:56ff:fe86:58dd%ens160: icmp_seq=1 ttl=64 time=0.232 ms
+64 bytes from fe80::250:56ff:fe86:58dd%ens160: icmp_seq=2 ttl=64 time=0.235 ms
 
+[root@repo-centos ~]# ping -6 fe80::250:56ff:fe86:58dd -I ens160
+PING fe80::250:56ff:fe86:58dd(fe80::250:56ff:fe86:58dd) from fe80::b642:8d12:55d2:bf0%ens160 ens160: 56 data bytes
+64 bytes from fe80::250:56ff:fe86:58dd%ens160: icmp_seq=1 ttl=64 time=0.306 ms
+64 bytes from fe80::250:56ff:fe86:58dd%ens160: icmp_seq=2 ttl=64 time=0.244 ms
+
+[root@repo-centos ~]# ssh -6 fe80::250:56ff:fe86:58dd%ens160
+The authenticity of host 'fe80::250:56ff:fe86:58dd%ens160 (fe80::250:56ff:fe86:58dd%ens160)' can't be established.
+ECDSA key fingerprint is SHA256:xwBx2luM0A4W/L2ioKFBAVDoJmZcUklK0xyjt9P77TY.
+ECDSA key fingerprint is MD5:95:f7:13:75:6f:9c:7e:fd:61:aa:4f:e7:5f:28:1a:0b.
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added 'fe80::250:56ff:fe86:58dd%ens160' (ECDSA) to the list of known hosts.
+Last login: Tue Nov 30 11:13:07 2021 from 10.67.51.164
+Welcome to Tianjin Jump Server 10.67.50.63
+[root@vstjlinuxtrans1 ~]#
+
+rocky Linux 8.5支持的在线仓库
+[root@rk1 ~]# dnf search release
+Last metadata expiration check: 3:16:35 ago on Tue Nov 23 05:17:55 2021.
+====================================================== Name & Summary Matched: release =======================================================
+centos-release-configmanagement.noarch : Release file for ConfigManagement SIG repository
+centos-release-nfv-extras.noarch : Release file to establish repo config for NFV network extras repo
+centos-release-nfv-openvswitch.noarch : Common release file to establish shared metadata for CentOS NFV SIG
+centos-release-storage-common.noarch : Common release file to establish shared metadata for CentOS Storage SIG
+centos-release-virt-common.noarch : Common release file to establish shared metadata for CentOS Virt SIG
+elrepo-release.noarch : ELRepo.org Community Enterprise Linux Repository release file
+rocky-release.noarch : Rocky Linux release files
+=========================================================== Name Matched: release ============================================================
+centos-release-advanced-virtualization.noarch : Advanced Virtualization packages from the CentOS Virtualization SIG repository
+centos-release-ansible-29.noarch : Ansible 2.9 packages from the CentOS ConfigManagement SIG repository
+centos-release-ceph-nautilus.noarch : Ceph Nautilus packages from the CentOS Storage SIG repository
+centos-release-ceph-octopus.noarch : Ceph Octopus packages from the CentOS Storage SIG repository
+centos-release-ceph-pacific.noarch : Ceph Pacific packages from the CentOS Storage SIG repository
+centos-release-gluster6.noarch : Gluster 6 packages from the CentOS Storage SIG repository
+centos-release-gluster7.noarch : Gluster 7 packages from the CentOS Storage SIG repository
+centos-release-gluster8.noarch : Gluster 8 packages from the CentOS Storage SIG repository
+centos-release-gluster9.noarch : Gluster 9 packages from the CentOS Storage SIG repository
+centos-release-kmods.noarch : CentOS Kmods SIG repository configs
+centos-release-kmods-rebuild.noarch : CentOS Kmods SIG rebuild repo configs
+centos-release-messaging.noarch : Config to enable the repository for the Messaging SIG
+centos-release-nfs-ganesha28.noarch : NFS-Ganesha 2.8 packages from the CentOS Storage SIG repository
+centos-release-nfs-ganesha30.noarch : NFS-Ganesha 3 packages from the CentOS Storage SIG repository
+centos-release-nfv-common.noarch : Common package to contain NFV SIG
+centos-release-openstack-train.noarch : OpenStack from the CentOS Cloud SIG repo configs
+centos-release-openstack-ussuri.noarch : OpenStack from the CentOS Cloud SIG repo configs
+centos-release-openstack-victoria.noarch : OpenStack from the CentOS Cloud SIG repo configs
+centos-release-opstools.noarch : Config to enable the repository for OpsTools SIG
+centos-release-ovirt44.noarch : oVirt 4.4 packages from the CentOS Virtualization SIG repository
+centos-release-qpid-proton.noarch : Config to enable the Messaging SIG QPID Proton packages
+centos-release-rabbitmq-38.noarch : Config to enable the repository for the Messaging SIG RabbitMQ Server
+centos-release-samba411.noarch : Samba 4.11 packages from the CentOS Storage SIG repository
+centos-release-samba412.noarch : Samba 4.12 packages from the CentOS Storage SIG repository
+centos-release-samba413.noarch : Samba 4.13 packages from the CentOS Storage SIG repository
+centos-release-samba414.noarch : Samba 4.14 packages from the CentOS Storage SIG repository
+centos-release-samba415.noarch : Samba 4.15 packages from the CentOS Storage SIG repository
+epel-release.noarch : Extra Packages for Enterprise Linux repository configuration
+rpmfusion-free-release.noarch : RPM Fusion (free) Repository Configuration
+========================================================== Summary Matched: release ==========================================================
+postgresql-upgrade.x86_64 : Support for upgrading from the previous major release of PostgreSQL
 ########################### user administration ####################
 gpasswd -d user1 group1      delete user1 from group1 (redhat)
 groupmod -R user1 group1    (SUSE)

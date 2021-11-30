@@ -801,3 +801,13 @@ zabbix=# explain (analyze,verbose,buffers,costs) select * from history where clo
  Planning Time: 4.424 ms
  Execution Time: 864.554 ms
 (110 rows)
+
+
+# 常量折叠
+demo=# explain SELECT *
+          FROM generate_series(1, 10) AS x
+          WHERE x = 7 + 1;
+                           QUERY PLAN
+----------------------------------------------------------------------
+Function Scan on generate_series x (cost=0.00..0.13 rows=1 width=4)
+  Filter: (x = 8)

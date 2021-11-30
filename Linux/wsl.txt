@@ -1,0 +1,13 @@
+ 在WSL里增加win路径
+ export PATH=$PATH:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32
+ 
+ WSL环境里mount文件服务器
+ mount -t drvfs '\\cesbg.foxconn\tjfs' /mnt/share
+ 
+ 重启wsl
+ get-service lxssmanager | restart-service
+ 
+ 注销/移除wsl
+ wsl --unregister Ubuntu-18.04
+ 
+ 
