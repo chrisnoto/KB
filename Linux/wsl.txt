@@ -10,4 +10,3 @@
  注销/移除wsl
  wsl --unregister Ubuntu-18.04
  
- 

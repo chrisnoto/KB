@@ -1,0 +1,103 @@
+#!/bin/bash
+#1. 判断主备库
+#     select open_mode from v$database
+#
+#       1. PRIMARY
+#       2. PHYSICAL STANDBY
+#       如果是主库，
+#
+
+user="sys"
+pass="sys123sys"
+
+function green(){ echo -e "\033[32m $1 \033[0m"; }
+
+function red(){ echo -e "\033[31m\033[01m\033[05m $1 \033[0m"; }
+
+function add_ora_grp(){
+green "starting add groups for Oracle..."
+for u in oinstall dba oper
+do
+grep -qw $u /etc/group
+[ $? -gt 0 ] && groupadd $u
+done
+}
+
+export ORACLE_HOME=/home/oracle/product/11.2.4/dbhome_1
+export PATH=$PATH:$HOME/bin:$ORACLE_HOME/bin
+
+
+
+instance_total=`ps -ef |grep -i ora_smon|grep -v 'grep' |awk '{print substr($NF,10)}'`
+
+for oracle_sid in ${instance_total}
+do
+export ORACLE_SID=$oracle_sid
+services_local=`lsnrctl services |grep -B1 $instance |awk -F '"' '/Service/{$print $2}' |grep -v 'XDB'`
+
+db_role=`sqlplus  -s ${user}/${pass} as sysdba <<EOF
+set heading off;
+select database_role from v\\\$database;
+EOF`
+
+if [ db_role == "PRIMARY" ] then
+
+standby_dbs=`sqlplus -s ${user}/${pass} as sysdba <<EOF
+select db_unique_name from v$archive_dest_status where status='VALID' and database_mode='OPEN_READ-ONLY';
+EOF`
+
+cat > ./expect_rsa <<EOF
+#!/usr/bin/expect
+set timeout 10
+set host [lindex \$argv 0]
+set username [lindex \$argv 1]
+set password [lindex \$argv 2]
+spawn ssh-copy-id \$username@\$host
+ expect {
+ "(yes/no)?"
+  {
+    send "yes\n"
+    expect "*assword:" { send "\$password\n"}
+  }
+ "*assword:"
+  {
+    send "\$password\n"
+  }
+}
+expect "100%"
+expect eof
+EOF
+
+
+
+for sty_unique_name in ${standby_dbs}
+do
+sty_ip=`tnsping ${sty_unique_name} |perl -ne 'print "$1\n" if /HOST\s=\s(\S+)\)/'`
+
+
+chmod +x ./expect_rsa
+chown dbadmin:dbadmin ./expect_rsa
+su - dbadmin -c "ssh-keygen -q -f '/home/dbadmin/.ssh/id_rsa' -N ''  <<< y"
+su -m - dbadmin -c "./expect_rsa ${standby_ip} dbadmin Foxconn123#@\!"
+
+services_sty=ssh ${sty_ip} 'lsnrctl services |grep -B1 $instance |awk -F '"' '/Service/{$print $2}' |grep -v 'XDB''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+done

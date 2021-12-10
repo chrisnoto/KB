@@ -152,6 +152,12 @@ git log --branches --not --remotes
 git push origin test
 git config --global credential.helper 'cache --timeout=7200'
 
+# git 查看代码改动
+git log pg_sql.txt
+git show --stat a3bae39adf30e149ee30a78b1bffa8cb1c854d2f
+git show --stat a3bae39adf30e149ee30a78b1bffa8cb1c854d2f -p
+
+
 fork：在github页面，点击fork按钮。将别人的仓库复制一份到自己的仓库。
 clone：将github中的仓库克隆到自己本地电脑中
 git clone 本地沒有repository時，將遠程repository整個下載過來，包括裏面的日誌信息，git項目里
@@ -327,3 +333,19 @@ cp -r /var/tmp/sosreport/etc ${srvname}
 git add .
 git commit -m "initial server configuration files"
 git push
+
+######## etckeeper#######
+ git remote add origin https://gitlab.ces.efoxconn.com/H7108579/etckeeper.git
+[root@repo-centos etc]# git config -l
+user.name=sen.chen@mail.foxconn.com
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+remote.origin.url=https://gitlab.ces.efoxconn.com/H7108579/etckeeper.git
+
+etckeeper init
+etckeeper commit -m ""
+git checkout -b `uname -n`
+
+git push -u origin `uname -n`

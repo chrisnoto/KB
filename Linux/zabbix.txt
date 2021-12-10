@@ -281,3 +281,33 @@ Plugins.Oracle.Sessions.POC1.Service=POC1
 
 ########### zabbix-proxy容器########
 它自身的agent要指向docker0的IP  172.17.0.1
+
+############# 查询snmp unavailable机器
+MariaDB [zabbix]> select hostid,host,status,snmp_available from hosts where snmp_available=2;
++--------+------------------+--------+----------------+
+| hostid | host             | status | snmp_available |
++--------+------------------+--------+----------------+
+|  10729 | vSTJL5QASCMDB02  |      0 |              2 |
+|  10730 | vSTJEPDVEDM02    |      0 |              2 |
+|  10733 | vSTJEPDVEDM01    |      0 |              2 |
+|  10739 | VSTJFACEDB01     |      0 |              2 |
+|  10750 | STJLXAgileDB02   |      0 |              2 |
+|  10784 | STJEPD5IMAGE01   |      0 |              2 |
+|  10859 | vSTJCAeRrprtDB1  |      0 |              2 |
+|  10956 | VSTJFACEDB02     |      0 |              2 |
+|  11034 | STJB2BDB01       |      0 |              2 |
+|  11267 | vSTJB2BHISTORYDB |      0 |              2 |
+|  11406 | VSTJCASDB001     |      0 |              2 |
+|  11598 | F20VCPD03        |      0 |              2 |
++--------+------------------+--------+----------------+
+
+############# 查询agent unavailable机器
+MariaDB [zabbix]> select hostid,host,status,available from hosts where available=2;
++--------+-------------+--------+-----------+
+| hostid | host        | status | available |
++--------+-------------+--------+-----------+
+|  10305 | vstjzabdb01 |      0 |         2 |
+|  10306 | vstjzabdb02 |      0 |         2 |
+|  10307 | vstjzabdb03 |      0 |         2 |
++--------+-------------+--------+-----------+
+3 rows in set (0.001 sec)
