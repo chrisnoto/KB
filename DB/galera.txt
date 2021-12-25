@@ -76,3 +76,116 @@ innodb_log_group_home_dir = /data/mysql
 ##########1st galera node initiate galera cluster
 # galera_new_cluster
 other nodes do normal systemctl start
+
+
+
+
+
+
+
+
+####### galera集群配置slave########
+Configuring the Cluster
+Before we set up replication, we need to ensure that the cluster is configured properly. This involves the following steps:
+Set log_slave_updates=ON on all nodes in the cluster.
+Set server_id to the same value on all nodes in the cluster
+Configuring Wsrep GTID Mode
+If you want to use GTID replication, then you also need to configure some things to enable wsrep GTID mode. For example:
+
+wsrep_gtid_mode=ON needs to be set on all nodes in the cluster.
+wsrep_gtid_domain_id needs to be set to the same value on all nodes in the cluster, so that each cluster node uses the same domain when assigning GTIDs for Galera Cluster's write sets.
+log_slave_updates needs to be enabled on all nodes in the cluster. See MDEV-9855 about that.
+log_bin needs to be set to the same path on all nodes in the cluster. See MDEV-9856 about that.
+
+And as an extra safety measure:
+gtid_domain_id should be set to a different value on all nodes in a given cluster, and each of these values should be different than the configured wsrep_gtid_domain_id value.
+ This is to prevent a node from using the same domain used for Galera Cluster's write sets when assigning GTIDs for non-Galera transactions, 
+ such as DDL executed with wsrep_sst_method=RSU set or DML executed with wsrep_on=OFF set.
+ 
+0 创建复制用户 repl, 授予权限
+create user 'rep'@'%' identified by 'vSTJ456';
+grant replication slave on *.* to rep;
+flush privileges;
+
+1 更改server.cnf
+zbxdb01 
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 1
+
+zbxdb02
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 2
+
+zbxdb03
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 3
+
+
+2 在三台节点上同时关闭mariadb服务
+3 最后关闭mariadb服务的这台，初始化集群 galera_new_cluster
+4 其他两台systemctl start mariadb
+5 检查binlog
+
+6 安装并配置slave，并重启
+#Replication slave to Galera Cluster
+server-id       = 02
+relay-log-index = /data/mysql/slave-relay-bin.index
+relay-log       = /data/mysql/slave-relay-bin
+gtid_domain_id  = 99
+
+log-bin         = /data/mysql/slave-bin
+log-bin-index   = /data/mysql/slave-bin.index
+binlog_format   = mixed
+
+7 在galera集群中任意一台，此处是zbxdb01
+mariabackup --backup --target-dir=/data/backup/ --user=root --password=vSTJ456
+ mariabackup --prepare --target-dir=/data/backup/      # apply redo log，使备份数据达到数据一致性
+8 rysnc bakcup到slave机器
+rsync -avrP /data/backup/ 10.67.51.162:/data/backup 
+9  还原到slave上,并启动mariadb
+ mv /data/mysql/* /root/mysql
+ systemctl stop mariadb
+ mariabackup --copy-back --target-dir=/data/backup/
+ chown -R mysql:mysql /data/mysql
+systemctl start mariadb
+ 
+10 change master
+查看slave position
+[root@vstjzabdb01 backup]# cat xtrabackup_binlog_info
+master-bin.000004       320845928       0-1-87049
+
+MariaDB [(none)]> set global gtid_slave_pos = "0-1-87049";
+Query OK, 0 rows affected (0.027 sec)
+
+MariaDB [(none)]> change master to
+    -> master_host="10.67.51.113",
+    -> master_port=3306,
+    -> master_user="rep",
+    -> master_password="vSTJ456",
+    -> master_use_gtid=slave_pos;
+Query OK, 0 rows affected (0.021 sec)
+
+MariaDB [(none)]> start slave;
+Query OK, 0 rows affected (0.009 sec)
+
+# slave 切换成 master 
+galera机器   flush tabkes with read lock
+slave机器：
+stop slave;
+reset master;
+galera机器   unlock tables;

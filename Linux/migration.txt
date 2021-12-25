@@ -1,0 +1,48 @@
+# yum server 51.164迁移   in progress
+1 新建VM使用ningx转发原yum服务，对外提供yum服务
+新建VM 51.163
+51.163上用nginx转发51.164的yum http地址
+切换51.163 51.164的IP
+2 新VM上同步yum数据
+3 新VM上启动所有同步yum源的容器，正式上线，旧yum源下线
+
+ansible k8s -m copy -a "src=/root/authkey dest=~/authkey"
+ansible k8s -m shell -a "cat ~/authkey >> ~/.ssh/authorized_keys"
+
+# k8s07  Done
+直接cordon k8s07，下线k8s07， 后续再新建k8s07重新加入k8s集群
+编辑cluster-prod.yaml,移除k8s07的部分，然后rke up --update-only cluster-prod.yaml
+
+# k8s01/2/3     Done
+使用powercli export/import OVF
+
+
+# zabbix db   Done   
+gelera cluster 主从复制 
+
+
+# rancher    Done
+使用veeam quick migration
+
+
+# jump server Done
+使用powercli export/import OVF
+
+# vstjsnipeitap01  不用迁移  36.60上跑着docker
+
+
+# vstjsnipeitdb02  Done
+使用powercli export/import OVF
+
+# vcenter5.5   Done
+使用powercli export/import OVF
+
+# logstash  Done
+直接下线
+
+
+# 51.131  上网VM         Done
+使用powercli export/import OVF
+
+
+

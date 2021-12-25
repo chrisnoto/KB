@@ -1,0 +1,45 @@
+# ubuntu 可以用 systemd-timesyncd服务同步时间，只作为客户端
+Centos的systemd移除了这个服务，不可配置
+root@xrdp1910:~# timedatectl timesync-status
+       Server: 10.67.50.111 (10.67.50.111)
+Poll interval: 32s (min: 32s; max 34min 8s)
+         Leap: normal
+      Version: 3
+      Stratum: 4
+    Reference: A433258
+    Precision: 1us (-23)
+Root distance: 245.613ms (max: 5s)
+       Offset: +58.544650s
+        Delay: 1.444ms
+       Jitter: 0
+ Packet count: 1
+    Frequency: +0.000ppm
+root@xrdp1910:~# grep NTP /etc/systemd/timesyncd.conf
+NTP=10.67.50.111
+#FallbackNTP=ntp.ubuntu.com
+root@xrdp1910:~# systemctl status systemd-timesyncd
+● systemd-timesyncd.service - Network Time Synchronization
+   Loaded: loaded (/lib/systemd/system/systemd-timesyncd.service; enabled; vendor preset: enabled)
+  Drop-In: /usr/lib/systemd/system/systemd-timesyncd.service.d
+           └─disable-with-time-daemon.conf
+   Active: active (running) since Sat 2021-12-25 10:40:19 CST; 1min 59s ago
+     Docs: man:systemd-timesyncd.service(8)
+ Main PID: 13038 (systemd-timesyn)
+   Status: "Synchronized to time server for the first time 10.67.50.111:123 (10.67.50.111)."
+    Tasks: 2 (limit: 4915)
+   Memory: 1.5M
+   CGroup: /system.slice/systemd-timesyncd.service
+           └─13038 /lib/systemd/systemd-timesyncd
+
+12月 25 10:40:18 xrdp1910 systemd[1]: Starting Network Time Synchronization...
+12月 25 10:40:19 xrdp1910 systemd[1]: Started Network Time Synchronization.
+12月 25 10:41:17 xrdp1910 systemd-timesyncd[13038]: Synchronized to time server for the first time 10.67.50.111:123 (10.67.50.111).
+
+root@xrdp1910:/etc/systemd# timedatectl
+               Local time: 六 2021-12-25 10:44:34 CST
+           Universal time: 六 2021-12-25 02:44:34 UTC
+                 RTC time: 六 2021-12-25 02:44:33
+                Time zone: Asia/Shanghai (CST, +0800)
+System clock synchronized: yes
+              NTP service: active
+

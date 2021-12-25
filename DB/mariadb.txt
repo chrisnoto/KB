@@ -1,3 +1,12 @@
+### 安装指定版本的mariadb
+[mariadb]
+name = MariaDB-10.3.18
+#baseurl=http://yum.mariadb.org/10.3.18/centos7-amd64
+baseurl=http://archive.mariadb.org/mariadb-10.3.18/yum/centos7-amd64
+gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
+gpgcheck=0
+
+
 ####### empty database ########
 change master to master_host = '10.67.38.253', master_user = 'repl', master_password = 'copy', master_port = 3306, master_use_gtid = slave_pos;
 start slave;
@@ -210,3 +219,43 @@ Repeat the process on all nodes to retrieve the last committed value. The node w
 $ galera_new_cluster
 Change the value of wsrep_cluster_address on rest of the nodes to mention IP addresses, then restart mariadb service one node at a time. The cluster should be up and running and data sync 
 should commit all the changes. Check the last committed value on all nodes after a while to ensure nodes are now in sync. 
+
+
+#######
+zbxdb01 
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 1
+
+zbxdb02
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 2
+
+zbxdb03
+wsrep_gtid_mode = on
+wsrep_gtid_domain_id =0
+server-id =01
+log_slave_updates = on
+log-bin = /data/mysql/master-bin
+log-bin-index = /data/mysql/master-bin.index
+gtid_domain_id = 3
+
+slave
+#Replication slave to Galera Cluster
+server-id       = 02
+relay-log-index = /data/mysql/slave-relay-bin.index
+relay-log       = /data/mysql/slave-relay-bin
+gtid_domain_id  = 99
+
+log-bin         = /data/mysql/slave-bin
+log-bin-index   = /data/mysql/slave-bin.index
+binlog_format   = mixed

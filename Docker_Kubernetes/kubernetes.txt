@@ -747,3 +747,24 @@ kubectl scale statefulsets <stateful-set-name> --replicas=<new-replicas>
 kubectl edit statefulsets <stateful-set-name>
 
 #############
+
+Copy secrets between namespaces
+$ kubectl get secret <secret-name> — namespace=<source-namespace> — export -o yaml |\ kubectl apply — namespace=<destination-namespace> -f -
+Copy configmaps between namespaces
+$ kubectl get configmap <configmap-name> — namespace=<source-namespace> — export -o yaml |\ kubectl apply — namespace=<destination-namespace> -f -
+Copy secrets between kubernetes clusters
+First log in to the source kubernetes cluster.
+Then run below command to export required secret to a yaml file,
+$ kubectl get secret <secret-name> -n <source-namespace> — export -o yaml > <secret-name>.yml
+You can view the content of the file using below command,
+$ cat <secret-name>.yml
+Now you can easily deploy exported secret to another kubernetes cluster,
+$ kubectl apply — namespace=<destination-namespace> –f <secret-name>.yml
+Copy configmaps between kubernetes clusters
+First log in to the source kubernetes cluster.
+Then run below command to export required configmap to a yaml file,
+$ kubectl get configmap <configmap-name> -n <source-namespace> — export -o yaml > <configmap-name>.yml
+You can view the content of the file using below command,
+$ cat <configmap-name>.yml
+Now you can easily deploy exported configmap to another kubernetes cluster,
+$ kubectl apply — namespace=<destination-namespace> –f <configmap-name>.yml

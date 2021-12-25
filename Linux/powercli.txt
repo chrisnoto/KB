@@ -127,7 +127,7 @@ vSTJA2A301           PoweredOn  12       24.000
 
 打开控制台
 PowerCLI C:\> Open-VMConsoleWindow -vm vSTJA2A301 -server 10.67.51.18
-
+Open-VMConsoleWindow -vm vSTJK8S03 -server 10.67.51.81
 克隆VM，并套用被克隆VM的规格
 $myResourcePool = Get-ResourcePool -Name MyResourcePool1
 $mySpecification = Get-OSCustomizationSpec -Name WindowsSpec
@@ -179,3 +179,20 @@ vSTJRDSEPtest      VM Snapshot ‎2021‎年‎6‎月‎29‎日‎ ‎15‎:�
 vSTJPSServer01     先決條件完成，補丁完成                         2020/11/28 15:25:09
 导出到csv
 PowerCLI C:\> get-vm |Get-Snapshot |select VM,Name,Created,powerstate |export-csv 'C:\Users\h7108579\Documents\snapshot_bvsan.csv'
+
+##### 导出 导入VM
+10.67.50.93跳板机上操作
+# shut down VM
+Connect-VIServer 10.67.49.210
+Shutdown-VMGuest -VM 'vSTJK8S03'
+# export OVF
+Export-VApp -VM 'vSTJK8S03' -Destination 'e:\data'
+
+导入ovf
+Connect-VIServer 10.67.51.81
+$myds=Get-Datastore -Name 'vsanDatastore'
+$vmhost=Get-VMHost -Name '10.67.51.81'
+$vmhost | Import-VApp -source 'E:\data\vSTJK8S03\vSTJK8S03.ovf' -Datastore $myds -force
+更改网络标签，开机状态
+start-vm -vm 'vSTJK8S03'
+get-vm -name 'vSTJK8S03' |get-networkadapter |Set-NetworkAdapter -networkname "VLAN_50" -confirm:$true

@@ -653,7 +653,20 @@ productname => VMware Virtual Platform
 virtual => vmware
 
 =========================================================== 异常 & 排错 ===========================================================
+##### random crng init done hang centos 7
+随机数生成的数目不足导致hang住
+The Linux kernel generates entropy from keyboard timings, mouse movements, and IDE timings and makes the random character data available to other operating system processes
+ through the special files /dev/random and /dev/urandom. This capability was introduced in Linux version 1.3.30.[1]
 
+There are some Linux kernel patches allowing one to use more entropy sources.[2] The audio_entropyd project, which is included in some operating systems such as Fedora,
+ allows audio data to be used as an entropy source.[3] Also available are video_entropyd which calculates random data from a video-source and entropybroker which includes
+ these three and can be used to distribute the entropy data to systems not capable of running any of these (e.g. virtual machines). Furthermore, one can use the HAVEGE algorithm
+ through haveged to pool entropy.[4] In some systems, network interrupts can be used as an entropy source as well.
+ 
+The solution is to install havaged (Hardware Volatile Entropy Gathering and Expansion):
+
+sudo apt install haveged
+sudo systemctl enable haveged 
 ############### Recreate fs and restore via TSM backup ###########################
 umount /media/target/usr 
 mkfs -t ext3 /dev/mapper/vgsys0-lvusr 
@@ -1541,6 +1554,61 @@ ELK site:slideshare.net
 
 
 =========================================================== 脚本 ===========================================================
+Perl单行基本参数
+-e 所有perl one-liner都需要添加的参数
+-n 将会循环读入每行文件，输出需要加‘print’
+-p 将会直接print每行
+-i 直接在源文件里进行修改了。 -i.bak 源文件备份
+-l 将会使输入字符串去掉回车符号，而输出再加上回车符号。
+-a 以空格为分割输入，并将分割的结果自动保存到@F数组中。
+-F 指定分割符号，需要与-a一起用直接加分割符号： 如perl -F:，可以使用正则表达式；可利用scalar @F查报错。
+常用perl -F, -alne：自动以,为分割符号，保存到数组@F中，循环读取每行并去除末位
+符号。
+
+Perl常用内置变量(predefined variables)
+$_ 默认为每行的内容
+$. 为每行的行号数字，类似于awk中的NR
+$/ 输入的每行的分隔符，默认是
+,windows下有些文件是
+结尾。
+
+$ 输出的每行的分隔符。可指定
+$1, $2, $3 正则表达式中匹配到括号里的内容，从里往外数
+$, 标量之间的分割符号，例如perl -le '$,=":"; print 1, 2, 3'
+$" 数组中的每个标量的分隔符，默认直接print数组是以s空格分开。perl -le '$"=":";@data=(1,2,3);print "@data"'
+$反引号 $&, $': 正则表达式中，匹配内容前、匹配内容、匹配内容后会默认赋值给这三个变量。实用
+@F -a、-F参数将每行分割的内容自动加到数组@F中
+@ARGV 最常用的接受文件命令
+%ENV 系统环境中的一些变量加载到%ENV哈希中
+[root@vstjlinuxtrans1 ~]# perl -le 'my @days=qw(Mon Tue Wed Thu);print $#days'
+3
+
+[root@repo-centos ~]# a="a,b,c,d";echo $a |perl -F, -lane 'foreach $i (@F) {print "$i"}'
+a
+b
+c
+d
+[root@repo-centos ~]# a="a,b,c,d";echo $a |perl -pe 's/\,/\n/g'
+a
+b
+c
+d
+[root@repo-centos ~]# a="a,b,c,d";echo $a |perl -F, -lane 'for (@F) {print "$_"}'
+a
+b
+c
+d
+[root@repo-centos ~]# a="a,b,c,d";echo $a |perl -F, -anle '$,="\n";print @F'
+a
+b
+c
+d
+
+[root@repo-centos ~]# a="a,b,c,d";echo $a |awk -F, '{for (i=1;i<=NF;i++) print $i}'
+a
+b
+c
+d
 
 ######## exec ###########
 shell 的内件命令exec执行命令时，不启用新的shell进程。

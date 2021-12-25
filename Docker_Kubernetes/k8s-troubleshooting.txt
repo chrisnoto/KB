@@ -439,3 +439,23 @@ Did the pod was restarted? or not started? (these two things produces the not ha
 
 
 ############ Job has reached the specified backoff limit #########
+
+
+[root@rancher ~]# kubectl drain vstjk8s07 --delete-local-data --ignore-daemonsets
+node/vstjk8s07 cordoned
+WARNING: ignoring DaemonSet-managed Pods: ingress-nginx/nginx-ingress-controller-78v62, kube-system/canal-xbwx7
+evicting pod "default-http-backend-5954bd5d8c-6886s"
+evicting pod "coredns-bdffbc666-lx2nh"
+evicting pod "coredns-bdffbc666-7pwzx"
+evicting pod "logstash-8d7469656-hrmwx"
+evicting pod "zabbix-java-gateway-5857bcfd9c-9gsbq"
+evicting pod "coredns-autoscaler-5d5d49b8ff-zb5ht"
+evicting pod "tiller-deploy-7df98f6b7d-mspkg"
+pod/tiller-deploy-7df98f6b7d-mspkg evicted
+pod/coredns-autoscaler-5d5d49b8ff-zb5ht evicted
+pod/zabbix-java-gateway-5857bcfd9c-9gsbq evicted
+pod/coredns-bdffbc666-lx2nh evicted
+pod/coredns-bdffbc666-7pwzx evicted
+pod/default-http-backend-5954bd5d8c-6886s evicted
+pod/logstash-8d7469656-hrmwx evicted
+node/vstjk8s07 evicted

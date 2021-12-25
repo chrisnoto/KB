@@ -1,0 +1,101 @@
+/ # etcdctl get / --prefix --keys-only |grep deployment
+/registry/clusterrolebindings/system:controller:deployment-controller
+/registry/clusterroles/system:controller:deployment-controller
+/registry/deployments/default/adminer
+/registry/deployments/default/logstash
+/registry/deployments/default/maxscale
+/registry/deployments/default/reloader
+/registry/deployments/default/zabbix-java-gateway
+/registry/deployments/default/zabbix-server-mysql
+/registry/deployments/default/zabbix-web-nginx-mysql
+/registry/deployments/ingress-nginx/default-http-backend
+/registry/deployments/kube-system/coredns
+/registry/deployments/kube-system/coredns-autoscaler
+/registry/deployments/kube-system/metrics-server
+/registry/deployments/kube-system/tiller-deploy
+/registry/secrets/kube-system/deployment-controller-token-7s27r
+/registry/serviceaccounts/kube-system/deployment-controller
+
+
+/ # etcdctl get /registry/deployments/default/zabbix-server-mysql --prefix
+/registry/deployments/default/zabbix-server-mysql
+k8s
+
+apps/v1
+Deployment▒
+▒
+zabbix-server-mysqldefault"*$9ba7bd19-f62d-11e9-a626-005056afc21c28ϝ▒▒Z
+appzabbix-server-mysqlb'
+!deployment.kubernetes.io/revision16b▒
+0kubectl.kubernetes.io/last-applied-configuration▒{"apiVersion":"apps/v1beta2","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"zabbix-server-mysql"},"name":"zabbix-server-mysql","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"zabbix-server-mysql"}},"template":{"metadata":{"labels":{"app":"zabbix-server-mysql"}},"spec":{"containers":[{"env":[{"name":"TZ","value":"Asia/Shanghai"},{"name":"ZBX_SERVER_NAME","value":"zabbixserver"},{"name":"ZBX_CACHESIZE","value":"2048M"},{"name":"ZBX_JAVAGATEWAY_ENABLE","value":"true"},{"name":"DB_SERVER_HOST","value":"maxscale"},{"name":"MYSQL_DATABASE","value":"zabbix"},{"name":"MYSQL_USER","value":"zabbix"},{"name":"MYSQL_PASSWORD","value":"vSTJ456"},{"name":"MYSQL_ROOT_PASSWORD","value":"vSTJ456"},{"name":"ZBX_JAVAGATEWAY","value":"zabbix-java-gateway"},{"name":"ZBX_STARTPOLLERS","value":"10"},{"name":"ZBX_STARTPOLLERSUNREACHABLE","value":"10"},{"name":"ZBX_STARTPINGERS","value":"50"},{"name":"ZBX_STARTDISCOVERERS","value":"10"},{"name":"ZBX_STARTHTTPPOLLERS","value":"100"},{"name":"ZBX_STARTTRAPPERS","value":"300"},{"name":"ZBX_STARTJAVAPOLLERS","value":"10"},{"name":"ZBX_TRENDCACHESIZE","value":"64M"},{"name":"ZBX_VALUECACHESIZE","value":"512M"},{"name":"ZBX_HISTORYCACHESIZE","value":"512M"},{"name":"ZBX_HISTORYINDEXCACHESIZE","value":"32M"},{"name":"ZBX_STARTDBSYNCERS","value":"8"},{"name":"ZBX_STARTVMWARECOLLECTORS","value":"5"},{"name":"ZBX_VMWARECACHESIZE","value":"128M"}],"image":"zabbix/zabbix-server-mysql:centos-5.0.2","imagePullPolicy":"IfNotPresent","name":"zabbix-server-mysql","ports":[{"containerPort":10051,"protocol":"TCP"}],"volumeMounts":[{"mountPath":"/usr/lib/zabbix/alertscripts","name":"mailsender"}]},{"env":[{"name":"ZBX_SERVER_HOST","value":"zabbix-server-mysql,127.0.0.1"},{"name":"ZBX_HOSTNAME","value":"Zabbix server"}],"image":"zabbix/zabbix-agent:centos-5.0.2","imagePullPolicy":"IfNotPresent","name":"zabbix-agent","resources":{"limits":{"cpu":"4","memory":"12Gi"},"requests":{"cpu":"4","memory":"12Gi"}}}],"securityContext":{"fsGroup":1000,"sysctls":[{"name":"net.ipv4.ip_local_port_range","value":"1024 65000"}]},"volumes":[{"configMap":{"defaultMode":511,"name":"mcmailsender"},"name":"mailsender"}]}}}}
+z▒
+
+appzabbix-server-mysql▒
+
+.
+"*28BZ
+appzabbix-server-mysqlz▒
+$
+
+mailsender▒
+
+
+mcmailsender▒▒
+zabbix-server-mysql'zabbix/zabbix-server-mysql:centos-5.0.2*2
+▒N"TCP*:
+Asia/Shanghai:
+ZBX_SERVER_NAME
+               zabbixserver:
+ZBX_CACHESIZE2048M:
+ZBX_JAVAGATEWAY_ENABLEtrue:
+DB_SERVER_HOSmaxscale:
+MYSQL_DATABASEzabbix:
+
+MYSQL_USERzabbix:
+MYSQL_PASSWORDvSTJ456:
+MYSQL_ROOT_PASSWORDvSTJ456:&
+ZBX_JAVAGATEWAYzabbix-java-gateway:
+ZBX_STARTPOLLERS10:!
+BX_STARTPOLLERSUNREACHABLE10:
+ZBX_STARTPINGERS50:
+ZBX_STARTDISCOVERERS10:
+BX_STARTHTTPPOLLERS100:
+ZBX_STARTTRAPPERS300:
+ZBX_STARTJAVAPOLLERS10:
+ZBX_TRENDCACHESIZE64M:
+ZBX_VALUECACHESIZE512M:
+ZBX_HISTORYCACHESIZE512M:
+ZBX_HISTORYINDEXCACHESIZE32M:
+ZBX_STARTDBSYNCERS8:
+ZBX_STARTVMWARECOLLECTORS5:
+BX_VMWARECACHESIZE128MBJ0
+
+mailsender/usr/lib/zabbix/alertscripts"2j/dev/termination-logr
+                                                              IfNotPresent▒▒▒▒File▒
+
+zabbix-agent zabbix/zabbix-agent:centos-5.0.2*:0
+ZBX_SERVER_HOSTzabbix-server-mysql,127.0.0.1:
+
+Zabbix serverB<
+
+
+cpu
+4
+
+memory
+12Gi
+
+cpu
+4
+memory
+12Gij/dev/termination-logr
+                          IfNotPresent▒▒▒▒FileAlways 2
+                                                      ClusterFirstBJRX`hr/(▒:*
+net.ipv4.ip_local_port_range
+1024 65000▒▒▒default-scheduler▒"'
+RollingUpdate
+       25%     25%(0
+8H▒  (2▒
+
+ProgressingTrue"NewReplicaSetAvailable*HReplicaSet "zabbix-server-mysql-5f5f75b4cf" has successfully progressed▒▒▒ϝ▒▒2e
+        AvailableTrue"MinimumReplicasAvailable*$Deployment has minimum availability▒▒▒▒▒8"

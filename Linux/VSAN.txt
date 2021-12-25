@@ -871,3 +871,129 @@ naa.5000c500807caa1c : Local ATA Disk (naa.5000c500807caa1c)
    vmhba2:C0:T3:L0 LUN:0 state:active sas Adapter: 500605b007c95f30  Target: 301b834c64866f50
 
    Physical Location: enclosure 2, slot 7
+   
+[root@STJVSAN01:~] localcli vsan storage list |grep -i 'Device\|Is ssd\|Is Capacity Tier\|DEDUPLICATION\|COMPRESSION\|In CMMDS\|ENCRYPTION:' |sed 'N;N;N;N;;N;N;s/\n//g' | sort -k9
+   Device: naa.518f29209b673132334b373331313730   Is SSD: true   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: false   Encryption: false
+   Device: naa.55cd2e414de4a7c8   Is SSD: true   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: false   Encryption: false
+   Device: naa.5000c5007f7a01ef   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+   Device: naa.5000c5007f7a216f   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+   Device: naa.5000c50080819932   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+   Device: naa.50014ee00400adfb   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+   Device: naa.50014ee00400c777   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+   Device: naa.50014ee0aeaaf100   Is SSD: false   In CMMDS: true   Deduplication: false   Compression: false   Is Capacity Tier: true   Encryption: false
+[root@STJVSAN01:~]
+[root@STJVSAN01:~]  esxcfg-scsidevs -c
+Device UID                                                                Device Type      Console Device                                                                                Size      Multipath PluginDisplay N                                                   ame
+naa.5000c5007f7a01ef                                                      Direct-Access    /vmfs/devices/disks/naa.5000c5007f7a01ef                                                      3815447MB NMP     Local SEAGATE Dis                                                   k (naa.5000c5007f7a01ef)
+naa.5000c5007f7a216f                                                      Direct-Access    /vmfs/devices/disks/naa.5000c5007f7a216f                                                      3815447MB NMP     Local SEAGATE Dis                                                   k (naa.5000c5007f7a216f)
+naa.5000c50080819932                                                      Direct-Access    /vmfs/devices/disks/naa.5000c50080819932                                                      3815447MB NMP     Local ATA Disk (n                                                   aa.5000c50080819932)
+naa.50014ee00400adfb                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee00400adfb                                                      3815447MB NMP     Local ATA Disk (n                                                   aa.50014ee00400adfb)
+naa.50014ee00400c777                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee00400c777                                                      3815447MB NMP     Local ATA Disk (n                                                   aa.50014ee00400c777)
+naa.50014ee0aeaaf100                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee0aeaaf100                                                      3815447MB NMP     Local ATA Disk (n                                                   aa.50014ee0aeaaf100)
+naa.50015178f35ac673                                                      Direct-Access    /vmfs/devices/disks/naa.50015178f35ac673                                                      381554MB  NMP     Local ATA Disk (n                                                   aa.50015178f35ac673)
+naa.518f29209b673132334b373331313730                                      Direct-Access    /vmfs/devices/disks/naa.518f29209b673132334b373331313730                                      1525879MB NMP     Local Shannon Dis                                                   k (naa.518f29209b673132334b373331313730)
+naa.55cd2e414de4a7c8                                                      Direct-Access    /vmfs/devices/disks/naa.55cd2e414de4a7c8                                                      915715MB  NMP     Local ATA Disk (n                                                   aa.55cd2e414de4a7c8)
+naa.55cd2e414de4a815                                                      Direct-Access    /vmfs/devices/disks/naa.55cd2e414de4a815                                                      915715MB  NMP     Local ATA Disk (n                                                   aa.55cd2e414de4a815)
+naa.5fc15b47adb5a03d                                                      Enclosure Svc Dev/vmfs/devices/genscsi/naa.5fc15b47adb5a03d                                                    0MB       NMP     Local FOXCONN Enc                                                   losure Svc Dev (naa.5fc15b47adb5a03d)
+t10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____  Direct-Access    /vmfs/devices/disks/t10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____  324322MB  NMP     Local ATA Disk (t                                                   10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____)
+[root@STJVSAN01:~]
+[root@STJVSAN01:~]
+[root@STJVSAN01:~]
+[root@STJVSAN01:~]  esxcfg-scsidevs -c
+Device UID                                                                Device Type      Console Device                                                                                Size      Multipath PluginDisplay Name
+naa.5000c5007f7a01ef                                                      Direct-Access    /vmfs/devices/disks/naa.5000c5007f7a01ef                                                      3815447MB NMP     Local SEAGATE Disk (naa.5000c5007f7a01ef)
+naa.5000c5007f7a216f                                                      Direct-Access    /vmfs/devices/disks/naa.5000c5007f7a216f                                                      3815447MB NMP     Local SEAGATE Disk (naa.5000c5007f7a216f)
+naa.5000c50080819932                                                      Direct-Access    /vmfs/devices/disks/naa.5000c50080819932                                                      3815447MB NMP     Local ATA Disk (naa.5000c50080819932)
+naa.50014ee00400adfb                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee00400adfb                                                      3815447MB NMP     Local ATA Disk (naa.50014ee00400adfb)
+naa.50014ee00400c777                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee00400c777                                                      3815447MB NMP     Local ATA Disk (naa.50014ee00400c777)
+naa.50014ee0aeaaf100                                                      Direct-Access    /vmfs/devices/disks/naa.50014ee0aeaaf100                                                      3815447MB NMP     Local ATA Disk (naa.50014ee0aeaaf100)
+naa.50015178f35ac673                                                      Direct-Access    /vmfs/devices/disks/naa.50015178f35ac673                                                      381554MB  NMP     Local ATA Disk (naa.50015178f35ac673)
+naa.518f29209b673132334b373331313730                                      Direct-Access    /vmfs/devices/disks/naa.518f29209b673132334b373331313730                                      1525879MB NMP     Local Shannon Disk (naa.518f29209b673132334b373331313730)
+naa.55cd2e414de4a7c8                                                      Direct-Access    /vmfs/devices/disks/naa.55cd2e414de4a7c8                                                      915715MB  NMP     Local ATA Disk (naa.55cd2e414de4a7c8)
+naa.55cd2e414de4a815                                                      Direct-Access    /vmfs/devices/disks/naa.55cd2e414de4a815                                                      915715MB  NMP     Local ATA Disk (naa.55cd2e414de4a815)
+naa.5fc15b47adb5a03d                                                      Enclosure Svc Dev/vmfs/devices/genscsi/naa.5fc15b47adb5a03d                                                    0MB       NMP     Local FOXCONN Enclosure Svc Dev (naa.5fc15b47adb5a03d)
+t10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____  Direct-Access    /vmfs/devices/disks/t10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____  324322MB  NMP     Local ATA Disk (t10.ATA_____INTEL_SSDSCKHB340G4_____________________BTWM446604FW340C____)
+[root@STJVSAN01:~]
+[root@STJVSAN01:~] esxcli storage core path list
+sas.500605b007c95e80-sas.a0974a24bda3b254-naa.50014ee00400c777
+   UID: sas.500605b007c95e80-sas.a0974a24bda3b254-naa.50014ee00400c777
+   Runtime Name: vmhba2:C0:T3:L0
+   Device: naa.50014ee00400c777
+   Device Display Name: Local ATA Disk (naa.50014ee00400c777)
+   Adapter: vmhba2
+   Channel: 0
+   Target: 3
+   LUN: 0
+   Plugin: NMP
+   State: active
+   Transport: sas
+   Adapter Identifier: sas.500605b007c95e80
+   Target Identifier: sas.a0974a24bda3b254
+   Adapter Transport Details: 500605b007c95e80
+   Target Transport Details: a0974a24bda3b254
+   Maximum IO Size: 4194304
+   
+###### vsan中的vmdk已经变成磁盘描述文件
+[root@STJVSAN01:/vmfs/volumes/vsan:5230c16cc5395321-0a821eb08b0d4f96/60d6d95d-34b2-a298-4b2e-70106f48c606] grep RW vSTJeFoxWeb1.vmdk
+RW 335544320 VMFS "vsan://65d6d95d-efaa-fabf-0273-70106f48c606"
+[root@STJVSAN01:/vmfs/volumes/vsan:5230c16cc5395321-0a821eb08b0d4f96/60d6d95d-34b2-a298-4b2e-70106f48c606] /usr/lib/vmware/osfs/bin/objtool getAttr -u 65d6d95d-efaa-fabf-0273-70106f48c606
+Object Attributes --
+
+UUID:65d6d95d-efaa-fabf-0273-70106f48c606
+
+Object type:vsan
+
+Object size:171798691840
+
+User friendly name:(null)
+
+HA metadata:(null)
+
+Allocation type:Thin
+
+Policy:((\"stripeWidth\" i1) (\"cacheReservation\" i0) (\"proportionalCapacity\" i0) (\"hostFailuresToTolerate\" i1) (\"forceProvisioning\" i0) (\"spbmProfileId\" \"aa6d5a82-1c88-45da-85d3-3d74b91a5bad\") (\"spbmProfileGenerationNumber\" l+0) (\"spbmProfileName\" \"vSAN Default Storage Policy\"))
+
+Object class: vdisk
+
+Object capabilities: NONE
+
+Object path: /vmfs/volumes/vsan:5230c16cc5395321-0a821eb08b0d4f96/60d6d95d-34b2-a298-4b2e-70106f48c606/vSTJeFoxWeb1.vmdk
+
+Group uuid: 60d6d95d-34b2-a298-4b2e-70106f48c606
+
+# esxcli vsan debug object list
+Object UUID: 65d6d95d-efaa-fabf-0273-70106f48c606
+   Version: 5
+   Health: healthy
+   Owner: STJVSAN01
+   Size: 160.00 GB
+   Used: 262.82 GB
+   Policy:
+      forceProvisioning: 0
+      SCSN: 235
+      spbmProfileName: vSAN Default Storage Policy
+      CSN: 315
+      proportionalCapacity: 0
+      stripeWidth: 1
+      spbmProfileGenerationNumber: 0
+      hostFailuresToTolerate: 1
+      cacheReservation: 0
+      spbmProfileId: aa6d5a82-1c88-45da-85d3-3d74b91a5bad
+
+   Configuration:
+
+      RAID_1
+         Component: 4a6c105e-584e-aa46-825a-5820b10bfd26
+           Component State: ACTIVE,  Address Space(B): 171798691840 (160.00GB),  Disk UUID: 52931a30-dea2-5acc-c6c3-29c497e1f201,  Disk Name: naa.50014ee0ae8e0706:2
+           Votes: 1,  Capacity Used(B): 142509867008 (132.72GB),  Physical Capacity Used(B): 141096386560 (131.41GB),  Host Name: STJVSAN06
+         Component: 37cde65f-8835-bbb1-4b25-5820b10bfd26
+           Component State: ACTIVE,  Address Space(B): 171798691840 (160.00GB),  Disk UUID: 522d2fc1-9cc0-281a-d14e-1760381a7f1e,  Disk Name: naa.5000c5007f5af6e3:2
+           Votes: 1,  Capacity Used(B): 142509867008 (132.72GB),  Physical Capacity Used(B): 141096386560 (131.41GB),  Host Name: STJVSAN05
+      Witness: 5d8dea5f-7865-c378-48c3-5820b10bfd26
+        Component State: ACTIVE,  Address Space(B): 0 (0.00GB),  Disk UUID: 523d4fec-f1c7-e3bd-543c-92d29f71fbbb,  Disk Name: naa.5000c50080819932:2
+        Votes: 1,  Capacity Used(B): 12582912 (0.01GB),  Physical Capacity Used(B): 8388608 (0.01GB),  Host Name: STJVSAN01
+
+   Type: vdisk
+   Path: /vmfs/volumes/vsan:5230c16cc5395321-0a821eb08b0d4f96/60d6d95d-34b2-a298-4b2e-70106f48c606/vSTJeFoxWeb1.vmdk (Exists)
+   Group UUID: 60d6d95d-34b2-a298-4b2e-70106f48c606
+   Directory Name: N/A

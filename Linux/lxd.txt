@@ -268,3 +268,48 @@ Snapshots:
   c2-snap-initial-20211025 (taken at 2021/10/25 05:44 UTC) (stateless)
 还原快照
 root@u2004:~# lxc restore c2 c2-snap-initial-20211025
+
+
+
+######### api  
+  390  curl -s --unix-socket /var/snap/lxd/common/lxd/unix.socket s/
+/
+/1.0
+/1.0/certificates
+/1.0/certificates/<fingerprint>
+/1.0/containers
+/1.0/containers/<name>
+/1.0/containers/<name>/exec
+/1.0/containers/<name>/files
+/1.0/containers/<name>/snapshots
+/1.0/containers/<name>/snapshots/<name>
+/1.0/containers/<name>/state
+/1.0/containers/<name>/logs
+/1.0/containers/<name>/logs/<logfile>
+/1.0/events
+/1.0/images
+/1.0/images/<fingerprint>
+/1.0/images/<fingerprint>/export
+/1.0/images/aliases
+/1.0/images/aliases/<name>
+/1.0/networks
+/1.0/networks/<name>
+/1.0/operations
+/1.0/operations/<uuid>
+/1.0/operations/<uuid>/wait
+/1.0/operations/<uuid>/websocket
+/1.0/profiles
+/1.0/profiles/<name>
+  404  curl -s --unix-socket /var/snap/lxd/common/lxd/unix.socket a/1.0/profiles/default |jq .
+  405  lxc query --wait -X GET /1.0
+  
+### debug模式
+  lxd --debug --group lxd
+######## 如果单机lxd受全局db的影响，如集群异常，没法启动，如无法连接到db里指定的节点，则可以删除数据库，重新启动LXD
+root@ubuntu1:/var/snap/lxd/common/lxd/database# ls
+global  local.db
+root@ubuntu1:/var/snap/lxd/common/lxd/database# pwd
+/var/snap/lxd/common/lxd/database
+root@ubuntu1:/var/snap/lxd/common/lxd/database# mv * /root
+#######
+global/db.bin  是dqlite 数据库文件

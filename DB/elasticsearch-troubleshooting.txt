@@ -301,3 +301,27 @@ curl -XPUT -H "Content-Type: application/json" http://10.67.51.150:9200/_all/_se
 [2021-07-13T16:16:05,460][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
 [2021-07-13T16:16:08,514][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
 [2021-07-13T16:16:11,606][INFO ][org.apache.kafka.clients.consumer.internals.AbstractCoordinator] [Consumer clientId=logstash-0, groupId=logstash] Attempt to heartbeat failed since group is rebalancing
+
+[root@xtjcesbges01 ~]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/shards?v
+Enter host password for user 'elastic':
+index                               shard prirep state        docs   store ip           node
+filebeat-7.12.0-2021.08.25          0     p      STARTED     33965   8.9mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.08.25          0     r      STARTED     33965     9mb 10.66.12.228 xtjcesbges01
+filebeat-7.12.0-2021.09.05          0     p      STARTED     34089   8.9mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.09.05          0     r      UNASSIGNED
+filebeat-7.12.0-2021.08.07          0     p      STARTED     34246     9mb 10.66.12.228 xtjcesbges01
+filebeat-7.12.0-2021.08.07          0     r      UNASSIGNED
+filebeat-7.12.0-2021.08.21          0     p      STARTED     34145   8.9mb 10.66.12.228 xtjcesbges01
+filebeat-7.12.0-2021.08.21          0     r      UNASSIGNED
+filebeat-7.12.0-2021.07.14          0     p      STARTED     34288     9mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.07.14          0     r      UNASSIGNED
+filebeat-7.12.0-2021.07.11          0     p      STARTED     34320   8.9mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.07.11          0     r      UNASSIGNED
+filebeat-7.12.0-2021.06.15          0     p      STARTED     34346   8.7mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.06.15          0     r      UNASSIGNED
+filebeat-7.12.0-2021.08.18          0     p      STARTED     34002   8.9mb 10.66.12.228 xtjcesbges01
+filebeat-7.12.0-2021.08.18          0     r      UNASSIGNED
+filebeat-7.12.0-2021.08.06          0     p      STARTED     33929   9.1mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.08.06          0     r      UNASSIGNED
+filebeat-7.12.0-2021.06.26          0     p      STARTED     34248   8.9mb 10.66.12.230 xtjcesbges03
+filebeat-7.12.0-2021.06.26          0     r      UNASSIGNED
