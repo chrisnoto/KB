@@ -462,6 +462,17 @@ nginx-ingress-controller-qzp9t   1/1       Running   0          2d
 [root@cobbler ~]# kubectl -n ingress-nginx get po -l app=ingress-nginx -o jsonpath={.items[*].spec.containers[*].name}
 nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller nginx-ingress-controller
 
+[root@rancher ~]# kubectl get pods -o jsonpath='{range .items[*]}{@.metadata.name}{" "}{@..resources.limits.cpu}{" "}{@..resources.limits.memory}{"\n"}' | column -t
+adminer-574458b9bd-wf225
+curator-1640662800-qqp4n
+logstash-8d7469656-b5hzf                 8  16Gi
+logstash-8d7469656-tcvn5                 8  16Gi
+logstash-8d7469656-vg7fx                 8  16Gi
+zabbix-java-gateway-5857bcfd9c-fnbx4
+zabbix-server-mysql-6cc88644c7-n977m     4  12Gi
+zabbix-web-nginx-mysql-56574bd85c-zq9q4  2  4Gi
+
+
 ###########jsonpath范例####
 [root@k8sv17 ~]# kubectl get nodes -o jsonpath='{range .items[*]}{.spec.externalID}{"\t"}{.spec.podCIDR}{"\n"}{end}'
 k8sv17.novalocal        10.96.0.0/24

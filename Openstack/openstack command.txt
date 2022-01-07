@@ -102,6 +102,8 @@ root@node-1:/var/log# openstack server migrate f31a7013-540c-4915-8e13-88e029025
  nova reset-state --active f9cf8968-68a8-4cca-9cfb-07709842c312
 
 #####怎麽进入rabbitmq监控页面##########
+web.page.get["http://{$RABBITMQ.API.USER}:{$RABBITMQ.API.PASSWORD}@{$RABBITMQ.API.HOST}:{$RABBITMQ.API.PORT}/api/healthchecks/node"]
+
 0  添加rabbitmq user
 rabbitmqctl add_user chensen chensen
 rabbitmqctl set_user_tags chensen administrator
@@ -582,6 +584,16 @@ nova image-meta 6410b84d-a473-4ece-83e5-09848a545645 set hw_qemu_guest_agent=yes
  pcs status
  crm_mon --group-by-node --inactive
  
+root@node-1:~# openstack server list --host node-54.domain.tld --all-projects
++--------------------------------------+----------------------+--------+--------------------------------------+
+| ID                                   | Name                 | Status | Networks                             |
++--------------------------------------+----------------------+--------+--------------------------------------+
+| e4286f6f-055f-4184-aeea-9b04b65e9b31 | ostjutouch1          | ACTIVE | admin_floating_net=10.67.39.73       |
+| 784c8122-594b-41ed-ac02-687aade5c982 | ostjwmsdocap2        | ACTIVE | admin_floating_net=10.67.39.30       |
+| 6fb80df6-7148-4fd5-bf27-d783798b5f09 | ostjwmsdocweb2       | ACTIVE | admin_floating_net=10.67.39.28       |
+| 63367456-111e-4f05-b74c-52217a73c8cc | ostjwmsdocweb1       | ACTIVE | admin_floating_net=10.67.39.27       |
+| 959cb967-952f-4625-a924-c3c4a33977aa | oSTJTESTDB4          | ACTIVE | admin_floating_net=10.67.39.25       |
+| ad11dda3-f859-4b17-965c-bc59ccd26388 | gitlab               | ACTIVE | admin_floating_net=10.67.38.81       |
  
 
 

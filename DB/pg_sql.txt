@@ -1,3 +1,6 @@
+docker run --name pg01 -d -p 5432:5432 -e POSTGRES_PASSWORD=Foxconn123 -e PGDATA=/var/lib/postgresql/data/pgdata -v snipeitdb02:/var/lib/postgresql/data postgres:latest
+
+
 psql登录方法
 1  psql -U xxx -d xxx
 2  psql 'host=rep01 user=repmgr dbname=repmgr connect_timeout=2'

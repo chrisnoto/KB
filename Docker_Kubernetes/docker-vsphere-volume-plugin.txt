@@ -15,26 +15,30 @@ hostd is running.
 watchdog-hostd: Terminating watchdog process with PID 67273
 hostd stopped.
 hostd started.
+
 ############# docker plugin install##########
 docker plugin install --grant-all-permissions --alias vsphere vmware/vsphere-storage-for-docker:latest
 [root@vstj00 ~]# docker plugin ls
 ID                  NAME                DESCRIPTION                           ENABLED
 01a830d23311        vsphere:latest      VMWare vSphere Docker Volume plugin   true
-############# use dirver vsphere and verify ################
-[root@vstj00 ~]# docker volume create --driver=vsphere --name=db1 --opt size=1024mb --opt fstype=xfs
-db1
 
-[root@vstj00 ~]# docker volume inspect db1
+############# use dirver vsphere and verify ################
+[root@vstjsnipeitdb02 docker.service.d]# docker volume create --driver=vsphere --name=snipeitdb02 --opt size=10240mb --opt fstype=xfs
+snipeitdb02
+[root@vstjsnipeitdb02 docker.service.d]# docker volume ls
+DRIVER           VOLUME NAME
+vsphere:latest   snipeitdb02@datastore2
+[root@vstjsnipeitdb02 docker.service.d]# docker volume inspect snipeitdb02
 [
     {
         "CreatedAt": "0001-01-01T00:00:00Z",
         "Driver": "vsphere:latest",
         "Labels": {},
-        "Mountpoint": "/mnt/vmdk/db1/",
-        "Name": "db1",
+        "Mountpoint": "/mnt/vmdk/snipeitdb02/",
+        "Name": "snipeitdb02",
         "Options": {
             "fstype": "xfs",
-            "size": "1024mb"
+            "size": "10240mb"
         },
         "Scope": "global",
         "Status": {
@@ -42,12 +46,12 @@ db1
             "attach-as": "independent_persistent",
             "capacity": {
                 "allocated": "15MB",
-                "size": "1GB"
+                "size": "10GB"
             },
             "clone-from": "None",
-            "created": "Sun Sep  8 14:59:46 2019",
-            "created by VM": "TESTY",
-            "datastore": "Datastore-cunchu",
+            "created": "Thu Dec 30 16:58:53 2021",
+            "created by VM": "vSTJSNIPEITDB02",
+            "datastore": "datastore2",
             "diskformat": "thin",
             "fstype": "xfs",
             "status": "detached"
@@ -55,21 +59,37 @@ db1
     }
 ]
 
-[root@Test007:~] esxcli storage guestvol volume ls
-Volume      Datastore         VMGroup   Capacity  Used   Filesystem  Policy  Disk Format  Attached-to  Access      Attach-as               Created By  Created Date
-----------  ----------------  --------  --------  -----  ----------  ------  -----------  -----------  ----------  ----------------------  ----------  ------------------------
-mysql-data  Datastore-cunchu  _DEFAULT  100MB     100MB  ext4        N/A     thin         detached     read-write  independent_persistent  TESTY       Sun Sep  8 14:12:00 2019
-db1         Datastore-cunchu  _DEFAULT  1GB       15MB   xfs         N/A     thin         detached     read-write  independent_persistent  TESTY       Sun Sep  8 14:59:46 2019
 
-[root@vstj00 ~]# docker run -d -v db1:/mnt busybox sleep 10000
-c1faa12499b9fd6d01a73860bf81681fecbe39e4e123f7ed0e43917fde326392
-[root@vstj00 ~]# docker exec -it c1f sh
-/ # df -hTP |grep mnt
-/dev/disk/by-path/pci-0000:03:00.0-scsi-0:0:1:0                            xfs          1014.0M     32.2M    981.8M   3% /mnt
 
-[root@Test007:~] esxcli storage guestvol volume ls
-Volume      Datastore         VMGroup   Capacity  Used   Filesystem  Policy  Disk Format  Attached-to  Access      Attach-as               Created By  Created Date
-----------  ----------------  --------  --------  -----  ----------  ------  -----------  -----------  ----------  ----------------------  ----------  ------------------------
-mysql-data  Datastore-cunchu  _DEFAULT  100MB     100MB  ext4        N/A     thin         detached     read-write  independent_persistent  TESTY       Sun Sep  8 14:12:00 2019
-db1         Datastore-cunchu  _DEFAULT  1GB       447MB  xfs         N/A     thin         TESTY        read-write  independent_persistent  TESTY       Sun Sep  8 14:59:46 2019
+[root@localhost:~] esxcli storage guestvol volume ls
+Volume       Datastore   VMGroup   Capacity  Used  Filesystem  Policy  Disk Format  Attached-to  Access      Attach-as               Created By       Created Date
+-----------  ----------  --------  --------  ----  ----------  ------  -----------  -----------  ----------  ----------------------  ---------------  ------------------------
+snipeitdb02  datastore2  _DEFAULT  10GB      15MB  xfs         N/A     thin         detached     read-write  independent_persistent  vSTJSNIPEITDB02  Thu Dec 30 16:58:53 2021
 
+
+[root@localhost:/vmfs/volumes/61c44a62-8f186566-6c86-5065f36517a9/dockvols/11111111-1111-1111-1111-111111111111] ls -lh
+total 15424
+-rw-------    1 root     root        4.0K Dec 30 16:59 snipeitdb02-f59821cbad470378.vmfd
+-rw-------    1 root     root       10.0G Dec 30 16:59 snipeitdb02-flat.vmdk
+-rw-------    1 root     root         572 Dec 30 16:59 snipeitdb02.vmdk
+
+docker run --name pg01 -d -p 5432:5432 -e POSTGRES_PASSWORD=Foxconn123 -e PGDATA=/var/lib/postgresql/data/pgdata -v snipeitdb02:/var/lib/                                                                  postgresql/data postgres:latest
+
+[root@vstjsnipeitdb02 ~]# df -hT |grep xfs
+/dev/mapper/centos-root                         xfs        38G  4.2G   34G  12% /
+/dev/sda1                                       xfs       473M  134M  340M  29% /boot
+/dev/mapper/snipeitdata-snipeitdatalv           xfs        99G  239M   99G   1% /data
+/dev/disk/by-path/pci-0000:03:00.0-scsi-0:0:0:0 xfs        10G   77M   10G   1% /var/lib/docker/plugins/8e120b043e664428f95ca43c7542670cf05a6f1177dc4ec45757fde8640
+
+[root@vstjsnipeitdb02 ~]# lsblk
+NAME                          MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+fd0                             2:0    1    4K  0 disk
+sda                             8:0    0   50G  0 disk
+├─sda1                          8:1    0  476M  0 part /boot
+└─sda2                          8:2    0 41.1G  0 part
+  ├─centos-root               253:0    0 37.3G  0 lvm  /
+  └─centos-swap               253:1    0  3.8G  0 lvm  [SWAP]
+sdb                             8:16   0  100G  0 disk
+└─sdb1                          8:17   0  100G  0 part
+  └─snipeitdata-snipeitdatalv 253:2    0   99G  0 lvm  /data
+sdc                             8:32   0   10G  0 disk /var/lib/docker/plugins/8e120b043e664428f95ca43c7542670cf05a6f1177dc4ec45757fde8640861bf/propagated-mount/snipeitdb02@datastore2

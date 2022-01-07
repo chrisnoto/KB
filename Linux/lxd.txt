@@ -2,6 +2,8 @@ lxc配置代理
 lxc config set core.proxy_http http://h7108579:pqhkr99ctw@10.36.6.66:3128
 lxc config set core.proxy_https http://h7108579:pqhkr99ctw@10.36.6.66:3128
 
+端口转发
+lxc config device add pg01 port5432 proxy listen=tcp:0.0.0.0:5432 connect=tcp:127.0.0.1:5432
 
 配置remote lxd server
 lxc is a client, and can manage any LXD server (a remote) that you have configured.

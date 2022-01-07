@@ -99,3 +99,11 @@ listen stats
  RabbitMQ 不会为unacked的消息设置过期时间，它判断此消息是否需要重新投递给消费者的
 唯一依据是消费该消息的消费者连接是否己经断开，这么设计的原因是RabbitMQ 允许消费者
 消费一条消息的时间可以很久很久。
+
+root@node-1:/etc# rabbitmqadmin  -V / -u chensen -p chensen list queues vhost name node messages message_stats.publish_details.rate
++-------+--------------------------------------------------------------------------------+-------------------------+----------+--------------------------                                                                                                                      ----------+
+| vhost |                                      name                                      |          node           | messages | message_stats.publish_det                                                                                                                      ails.rate |
++-------+--------------------------------------------------------------------------------+-------------------------+----------+--------------------------                                                                                                                      ----------+
+| /     | alarm.all.sample                                                               | rabbit@messaging-node-2 | 0        |                                                                                                                                                          |
+| /     | alarming.sample                                                                | rabbit@messaging-node-2 | 0        |                                                                                                                                                          |
+| /     | cert                                                                           | rabbit@messaging-node-2 | 0        |                                                                                                                                                          |

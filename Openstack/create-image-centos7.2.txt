@@ -81,7 +81,7 @@ ssh_pwauth:   1  #default 0
 
 虚拟机制作镜像时指定了根分区大小（比如我们设置为10GB），
 为了使虚拟机能够自动调整为flavor disk指定的根磁盘大小，即自动扩容, 
-我们需要安装glowpart(老版本叫growroot)并完成以下配置：
+我们需要安装growpart(老版本叫growroot)并完成以下配置：
 
 yum install -y cloud-utils-growpart.x86_64
 rpm -qa kernel | sed 's/^kernel-//'  | xargs -I {} dracut -f /boot/initramfs-{}.img {}

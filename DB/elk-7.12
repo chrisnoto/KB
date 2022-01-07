@@ -440,7 +440,8 @@ setup.template.settings:
   index.number_of_shards: 1
 setup.kibana:
 output.logstash:
-  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044"]
+  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044","xtjcesbglogstash02.cesbg.foxconn:5044","xtjcesbglogstash03.cesbg.foxconn:5044"]
+  loadbalance: true
   ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
 processors:
   - add_host_metadata:

@@ -1,6 +1,16 @@
 select nova.instances.hostname,nova.instances.vcpus,nova.instances.memory_mb,nova.instances.root_gb,cinder.volumes.display_name as volume_name,cinder.volumes.size from cinder.volumes join cinder.volume_attachment,nova.instances where cinder.volumes.id=cinder.volume_attachment.volume_id and cinder.volume_attachment.instance_uuid=nova.instances.uuid and volumes.deleted='false' group by cinder.volumes.display_name;
 select nova.instances.hostname,nova.instances.vcpus,nova.instances.memory_mb,nova.instances.root_gb,cinder.volumes.display_name as volume_name,cinder.volumes.size from cinder.volumes join cinder.volume_attachment,nova.instances where cinder.volumes.id=cinder.volume_attachment.volume_id and cinder.volume_attachment.instance_uuid=nova.instances.uuid and volumes.deleted='false' group by cinder.volumes.display_name INTO OUTFILE '/var/lib/mysql-files/vm.csv' FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\n';
 
+mysql> select id,host_ip,hypervisor_hostname,running_vms,host,uuid from compute_nodes where running_vms >0;
++----+--------------+---------------------+-------------+--------------------+--------------------------------------+
+| id | host_ip      | hypervisor_hostname | running_vms | host               | uuid                                 |
++----+--------------+---------------------+-------------+--------------------+--------------------------------------+
+|  1 | 192.168.0.8  | node-8.domain.tld   |           8 | node-8.domain.tld  | 7730e360-b6d8-40ec-bbd1-1e62f210c996 |
+|  4 | 192.168.0.14 | node-9.domain.tld   |           4 | node-9.domain.tld  | 7569c19a-257b-4bd7-bf04-854317c52299 |
+|  7 | 192.168.0.15 | node-10.domain.tld  |           5 | node-10.domain.tld | 10fffbc9-d956-4643-8153-cdab291b26c9 |
+| 17 | 192.168.0.21 | node-16.domain.tld  |           8 | node-16.domain.tld | 7461cd31-593d-487e-8e4d-13f4afcfdfd3 |
+
+
 mysql> select glance.images.name,count(glance.images.id) as image_count from nova.instances join glance.images where nova.instances.vm_state='active' and nova.instances.image_ref=glance.images.id group by glance.images.name order by image_count DESC;
 +-----------------------------+-------------+
 | name                        | image_count |
