@@ -997,3 +997,19 @@ Object UUID: 65d6d95d-efaa-fabf-0273-70106f48c606
    Path: /vmfs/volumes/vsan:5230c16cc5395321-0a821eb08b0d4f96/60d6d95d-34b2-a298-4b2e-70106f48c606/vSTJeFoxWeb1.vmdk (Exists)
    Group UUID: 60d6d95d-34b2-a298-4b2e-70106f48c606
    Directory Name: N/A
+
+   
+   
+####### storage migration超时hang住，解决办法   
+~ # esxcli vm process list
+
+vSTJCESBGTrans02
+   World ID: 10570012
+   Process ID: 0
+   VMX Cartel ID: 10570011
+   UUID: 42 15 e5 09 fa 78 94 c8-82 a0 8a 4e e5 73 aa 4a
+   Display Name: vSTJCESBGTrans02
+   Config File: /vmfs/volumes/5dd3ae09-9e79166c-6f78-5065f36bf97c/vSTJCESBGTrans02/vSTJCESBGTrans02.vmx
+
+~ # esxcli vm process kill --type hard --world-id=10570012
+   

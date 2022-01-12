@@ -58,7 +58,17 @@ log with timestamp格式不会解析log内容的
   }
 }
 
+##########
+测试jvm内存是否能用压缩对象指针
+[root@xtjcesbges01 jvm.options.d]# java -Xmx32768m -XX:+PrintFlagsFinal 2> /dev/null | grep UseCompressedOops
+     bool UseCompressedOops                         = false                               {lp64_product}
+[root@xtjcesbges01 jvm.options.d]# java -Xmx31744m -XX:+PrintFlagsFinal 2> /dev/null | grep UseCompressedOops
+     bool UseCompressedOops                        := true                                {lp64_product}
 
+[root@stjes1 elasticsearch]# zcat es-prod-2021-12-14-2.log.gz |grep compressed
+[2021-12-14T13:57:04,174][INFO ][o.e.e.NodeEnvironment    ] [stjes1] heap size [30.6gb], compressed ordinary object pointers [true]
+[root@stjes1 elasticsearch]# ps auwx |grep elasticsearch |grep -v grep
+elastic+ 185073  127 27.6 559346384 36417916 ?  SLsl  2021 44069:07 /bin/java -Xms31g -Xmx31g 
 
 ############# elasticsearch查询 ############
 [naifa@repo-centos ~]$ curl -s -XGET http://10.67.51.150:9200/winlogbeat-6.8.1-2019.12.25/_search?_source=beat.hostname |jq '.hits|.hits|.[]|._source|.beat|.hostname'
@@ -111,74 +121,199 @@ Beats: upgrade instructions
 
 ############repository-s3 与minio ###############
 minio 配置
-[root@rancher ~]# cat minio.sh
-docker run -p 9000:9000 --name minio1 \
-    -e "MINIO_ACCESS_KEY=foxobjectstorage" \
-    -e "MINIO_SECRET_KEY=foxobjectstorageminiominio" \
-    -v /data:/data \
-    minio/minio server /data
+[root@repo ~]# cat minio.sh
+docker run -d \
+    --name myminio \
+    -p 9000:9000 \
+    -p 9001:9001 \
+    -e "MINIO_ACCESS_KEY=admin" \
+    -e "MINIO_SECRET_KEY=vSTJ456789" \
+    -v /mrepo/minio:/data \
+    minio/minio server /data --console-address ":9001"
+
+以下错误需要在jvm.options里添加 -Des.allow_insecure_settings=true，并重启ES
+{
+  "error": {
+    "root_cause": [
+      {
+        "type": "illegal_argument_exception",
+        "reason": "Setting [access_key] is insecure, but property [allow_insecure_settings] is not set"
+      }
+    ],
+    "type": "illegal_argument_exception",
+    "reason": "Setting [access_key] is insecure, but property [allow_insecure_settings] is not set"
+  },
+  "status": 400
+}
 
 repository-s3安装  每台机器都需要操作
-/usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.4.0.zip
+/usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.8.1.zip
 配置s3 endpoint, access key, secret key
 
 [root@es elasticsearch]# tail -3 /etc/elasticsearch/elasticsearch.yml
-s3.client.default.endpoint: "10.67.36.58:9000"
+s3.client.default.endpoint: "10.67.51.164:9000"
 s3.client.default.protocol: http
 
 /usr/share/elasticsearch/bin/elasticsearch-keystore add s3.client.default.access_key
 /usr/share/elasticsearch/bin/elasticsearch-keystore add s3.client.default.secret_key
 
 systemctl restart elasticsearch
+
+############
 创建repository
 [root@es elasticsearch]# !1019
-curl -X PUT 10.67.36.49:9200/_snapshot/logging -H 'Content-Type: application/json' -d'
+curl -X PUT 10.67.51.150:9200/_snapshot/myminio -H 'Content-Type: application/json' -d'
 {
   "type": "s3",
   "settings": {
-    "bucket": "logging"
+    "bucket": "myminio"
   }
 }'
 {"acknowledged":true}
 查看repository
-[root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup |python -m json.tool
+[root@stjes1 ~]# curl -s -XGET http://10.67.51.150:9200/_snapshot/myminio | jq .
 {
-    "backup": {
-        "settings": {
-            "bucket": "backup"
-        },
-        "type": "s3"
+  "myminio": {
+    "type": "s3",
+    "settings": {
+      "bucket": "es-snapshot",
+      "region": "TJ"
     }
+  }
 }
-#########snapshot########
-查看snapshot
-[root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup/demo-2019.02.23-snapshot |python -m json.tool
+
+
+检查repos是否每个节点可用
+[root@stjes1 ~]# curl -s -XPOST "10.67.51.150:9200/_snapshot/myminio/_verify" | jq .
 {
-    "snapshots": [
-        {
-            "duration_in_millis": 648,
-            "end_time": "2019-06-18T01:03:17.439Z",
-            "end_time_in_millis": 1560819797439,
-            "failures": [],
-            "include_global_state": true,
-            "indices": [
-                "demo-2019.02.23"
-            ],
-            "shards": {
-                "failed": 0,
-                "successful": 5,
-                "total": 5
-            },
-            "snapshot": "demo-2019.02.23-snapshot",
-            "start_time": "2019-06-18T01:03:16.791Z",
-            "start_time_in_millis": 1560819796791,
-            "state": "SUCCESS",
-            "uuid": "iMHqEN8SQlWyZoQIQWYRhg",
-            "version": "6.4.0",
-            "version_id": 6040099
-        }
-    ]
+  "nodes": {
+    "BdLnYgiKSBuo-Kw4NvIj1g": {
+      "name": "stjes2"
+    },
+    "KBPaq00ZSkqqF_Z5jnwvXQ": {
+      "name": "stjes1"
+    },
+    "sLZDyxbqROywEOwLwWqHpw": {
+      "name": "stjes3"
+    }
+  }
 }
+
+#########snapshot########
+创建snapshot
+[root@stjes1 ~]# curl -X PUT "10.67.51.150:9200/_snapshot/myminio/filebeat-2022.01.12.backup?wait_for_completion=true" -H 'Content-Type: application/json' -d'
+{
+  "indices": "filebeat-6.8.1-2022.01.12",
+  "ignore_unavailable": true,
+  "include_global_state": false,
+  "metadata": {
+    "taken_by": "admin",
+    "taken_because": "daily backup"
+  }
+}'
+{"snapshot":{"snapshot":"filebeat-2022.01.12.backup","uuid":"4NI1Ky4MSh22gQNb_VohMw","version_id":6080199,"version":"6.8.1","
+indices":["filebeat-6.8.1-2022.01.12"],"include_global_state":false,"state":"SUCCESS",
+"start_time":"2022-01-12T02:41:38.826Z","start_time_in_millis":1641955298826,"end_time":"2022-01-12T02:41:45.100Z","end_time_in_millis":1641955305100,"duration_in_millis":6274,
+"failures":[],"shards":{"total":3,"failed":0,"successful":3}}}
+
+查看snapshot
+[root@stjes1 ~]# curl -XGET http://10.67.51.150:9200/_cat/snapshots/myminio?pretty=true
+filebeat-2022.01.11.backup    SUCCESS 1641889874 08:31:14 1641889904 08:31:44 30.1s 1 3 0 3
+filebeat-2022.01.11.inr.16:37 SUCCESS 1641890229 08:37:09 1641890232 08:37:12  2.4s 1 3 0 3
+filebeat-2022.01.10.backup    SUCCESS 1641890628 08:43:48 1641890688 08:44:48    1m 1 3 0 3
+filebeat-2022.01.12.backup    SUCCESS 1641955298 02:41:38 1641955305 02:41:45  6.2s 1 3 0 3
+
+[root@stjes1 ~]# curl -s -XGET http://10.67.51.150:9200/_snapshot/myminio/filebeat-2022.01.11.backup?pretty=true | jq .
+{
+  "snapshots": [
+    {
+      "snapshot": "filebeat-2022.01.11.backup",
+      "uuid": "owtaMv_-T4aLjSPfbSjHog",
+      "version_id": 6080199,
+      "version": "6.8.1",
+      "indices": [
+        "filebeat-6.8.1-2022.01.11"
+      ],
+      "include_global_state": true,
+      "state": "SUCCESS",
+      "start_time": "2022-01-11T08:31:14.345Z",
+      "start_time_in_millis": 1641889874345,
+      "end_time": "2022-01-11T08:31:44.489Z",
+      "end_time_in_millis": 1641889904489,
+      "duration_in_millis": 30144,
+      "failures": [],
+      "shards": {
+        "total": 3,
+        "failed": 0,
+        "successful": 3
+      }
+    }
+  ]
+}
+[root@stjes1 ~]# curl -s -XGET http://10.67.51.150:9200/_snapshot/myminio/filebeat-2022.01.11.inr.16:37?pretty=true | jq .
+{
+  "snapshots": [
+    {
+      "snapshot": "filebeat-2022.01.11.inr.16:37",
+      "uuid": "JRPAM83QSfSq-3PEHPsN2A",
+      "version_id": 6080199,
+      "version": "6.8.1",
+      "indices": [
+        "filebeat-6.8.1-2022.01.11"
+      ],
+      "include_global_state": true,
+      "state": "SUCCESS",
+      "start_time": "2022-01-11T08:37:09.998Z",
+      "start_time_in_millis": 1641890229998,
+      "end_time": "2022-01-11T08:37:12.425Z",
+      "end_time_in_millis": 1641890232425,
+      "duration_in_millis": 2427,
+      "failures": [],
+      "shards": {
+        "total": 3,
+        "failed": 0,
+        "successful": 3
+      }
+    }
+  ]
+}
+
+[root@repo es-snapshot]# cat index-2 |jq .
+{
+  "snapshots": [
+    {
+      "name": "filebeat-2022.01.11.inr.16:37",
+      "uuid": "JRPAM83QSfSq-3PEHPsN2A",
+      "state": 1
+    },
+    {
+      "name": "filebeat-2022.01.11.backup",
+      "uuid": "owtaMv_-T4aLjSPfbSjHog",
+      "state": 1
+    },
+    {
+      "name": "filebeat-2022.01.10.backup",
+      "uuid": "vIrPYgdST7K8cmM5erDrsA",
+      "state": 1
+    }
+  ],
+  "indices": {
+    "filebeat-6.8.1-2022.01.10": {
+      "id": "TIFICiZaQxGtxBb_Ko62ZA",
+      "snapshots": [
+        "vIrPYgdST7K8cmM5erDrsA"
+      ]
+    },
+    "filebeat-6.8.1-2022.01.11": {
+      "id": "NlSuo-doRMSnLhOQippHsA",
+      "snapshots": [
+        "owtaMv_-T4aLjSPfbSjHog",             #增量
+        "JRPAM83QSfSq-3PEHPsN2A"
+      ]
+    }
+  }
+}
+
 [root@es elasticsearch]# curl -s -X GET 10.67.74.235:9200/_snapshot/backup/demo-2019.02.24-snapshot/_status |python -m json.tool |grep '"state"'
             "state": "SUCCESS",
 还原snapshot
@@ -658,3 +793,18 @@ stjes1
 node-41.domain.tld
 k8s-node1
 [root@stjes1 ~]#
+
+
+[root@stjes1 ~]# curl -XGET http://10.67.51.150:9200/_cat/shards?h=index,shard,prirep,state,unassigned.reason |grep UNA
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 27557  100 27557    0     0    99kwinlogbeat-6.8.1-2021.12.30       2 r UNASSIGNED NODE_LEFT
+    winlogbeat-6.8.1-2021.12.30       0 r UNASSIGNED NODE_LEFT
+  0filebeat-6.2.4-2021.12.30         0 r UNASSIGNED NODE_LEFT
+ --docker-2021.12.23                 1 r UNASSIGNED NODE_LEFT
+:--docker-2021.12.23                 0 r UNASSIGNED NODE_LEFT
+:--docker-2022.01.01                 1 r UNASSIGNED NODE_LEFT
+ --docker-2022.01.01                 0 r UNASSIGNED NODE_LEFT
+:--docker-2021.12.31                 2 r UNASSIGNED NODE_LEFT
+:--docker-2021.12.31                 0 r UNASSIGNED NODE_LEFT
+ --syslog-2022.01.09                 0 r UNASSIGNED NODE_LEFT
