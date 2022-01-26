@@ -1,0 +1,48 @@
+#### cerebro access elasticsearch https
+[root@xtjcesbges01 ~]# cat cerebro.sh
+docker run -d \
+--name cerebro \
+-v /root/ca.pem:/root/ca.pem \
+-v /root/application.conf:/opt/cerebro/conf/application.conf \
+-p 9000:9000 \
+yannart/cerebro:latest
+
+[root@xtjcesbges01 ~]# cat application.conf
+secret = "ki:s:[[@=Ag?QI`W2jMwkY:eqvrJ]JqoJyi2axj3ZvOv^/KavOT4ViJSv?6YY5[N"
+play.ws.ssl {
+  trustManager = {
+    stores = [
+      { type = "PEM", path = "/root/ca.pem" }
+    ]
+  }
+}
+
+hosts = [
+  {
+    host = "https://xtjcesbges01.cesbg.foxconn:9200"
+    name = "ELK Cluster"
+    auth = {
+      username = "elastic"
+      password = "vSTJ456"
+    }
+  }
+]
+
+
+# 如果需要容器能使用主机的FQDN，则使用host模式,host模式不用expose端口
+docker run -d \
+--net=host \
+--name cerebro \
+--dns 10.67.50.111 \
+-v /root/ca.pem:/root/ca.pem \
+-v /root/application.conf:/opt/cerebro/conf/application.conf \
+yannart/cerebro:latest
+
+[root@xtjcesbges01 ~]# docker exec -it cerebro bash
+root@xtjcesbges01:/opt/cerebro# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.66.12.228  xtjcesbges01 xtjcesbges01.cesbg.foxconn
+10.66.12.214  xtjcesbges02 xtjcesbges02.cesbg.foxconn
+10.66.12.230  xtjcesbges03 xtjcesbges03.cesbg.foxconn
+10.66.12.122  kibana.cesbg.foxconn kibana

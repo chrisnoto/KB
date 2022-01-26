@@ -1,0 +1,57 @@
+# 代码
+------------------------------------------
+{% set jvm = ansible_memtotal_mb  %}
+{% if jvm >= 61000 %}
+{% set jvm = '30' %}
+{% else %}
+{% set jvm = (ansible_memtotal_mb/2)//1024 %}
+{% endif %}
+-Xms{{ jvm|int }}G
+
+------------------------------------------
+set 变量赋值
+//  除以并且取整
+jvm |int  去掉末尾的 .0
+------------------------------------------
+
+# 代码
+{% for host in groups['lb'] %}
+node    {{ hostvars[host].ansible_nodename }}
+{% endfor %}
+
+# 代码
+{% if docker__env_http_proxy|d() or docker__env_https_proxy|d() %}
+[Service]
+Environment={% if docker__env_http_proxy|d() %}"HTTP_PROXY={{ docker__env_http_proxy }}" {% endif %}{% if docker__env_https_proxy|d() %}"HTTPS_PROXY={{ docker__env_https_proxy }}"{% endif %}
+ {% if docker__env_no_proxy|d() %}"NO_PROXY={{ docker__env_no_proxy }}"{% endif %} 
+{% endif %}
+
+------------------------------------------
+if docker__env_http_proxy|d()  判断变量是否有默认值  d() = default()
+------------------------------------------
+
+node.master: {{ m | default('false') }}
+node.data: {{ d | default('false') }}
+node.ingest: {{ i | default('false') }}
+
+[root@repo ~]# ansible localhost -c local -m template -a "src=/root/1.j2 dest=1" -e '{"ansible_memtotal_mb":29999,"m":"true"}';cat 1
+-Xms14G
+node.master: true
+node.data: false
+node.ingest: false
+
+或者在inventory file里定义
+[masters]
+m=true
+
+[root@repo ~]# ansible localhost -c local -m template -a "src=/root/1.j2 dest=1" -e '{"ansible_memtotal_mb":29999,"m":"true","i":"true"}';cat 1
+-Xms14G
+node.master: true
+node.data: false
+node.ingest: true
+
+或者在inventory file里定义
+[masteringest]
+m=true
+i=true
+

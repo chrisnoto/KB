@@ -1,3 +1,23 @@
+####### docker api #####
+curl -Ss --unix-socket /var/run/docker.sock http:/containers/json |jq .
+拉鏡像
+[root@rancher mysql]# curl -Ss -X POST --unix-socket /var/run/docker.sock http:/images/create?fromImage=nginx:latest
+{"status":"Pulling from library/nginx","id":"latest"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a2abf6c4d29d"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a9edb18cadd1"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"589b7251471a"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"186b1aaa4aa6"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"b4df32aa5a72"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"a0bcbecc962e"}
+{"status":"Waiting","progressDetail":{},"id":"186b1aaa4aa6"}
+{"status":"Waiting","progressDetail":{},"id":"a0bcbecc962e"}
+{"status":"Waiting","progressDetail":{},"id":"b4df32aa5a72"}
+{"status":"Downloading","progressDetail":{"current":602,"total":602},"progress":"[==================================================\u003e]     602B/602B","id":"589b7251471a"}
+{"status":"Download complete","progressDetail":{},"id":"589b7251471a"}
+........
+{"status":"Digest: sha256:0d17b565c37bcbd895e9d92315a05c1c3c9a29f762b011a10c54a66cd53c9b31"}
+{"status":"Status: Downloaded newer image for nginx:latest"}
+
 ######## docker kill 发送信号 reload 配置 #####
 Reloading config
 If you used a bind mount for the config and have edited your haproxy.cfg file, you can use HAProxy's graceful reload feature by sending a SIGHUP to the container:

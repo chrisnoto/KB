@@ -1,17 +1,20 @@
-ansible-doc docker_image  查看帮助
+#### ansible 配置 #######
+# redis backend
+/etc/ansible/ansible.cfg
+fact_caching = redis
+fact_caching_timeout = 864000
+
+redis-cli get ansible_facts10.67.38.105 | jq .
+
 #####Ansible adhoc 命令
-对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
-ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
-# tag a docker image
-ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0 source=local" 
-# tag and push a docker image
-ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=10.67.51.161:5000/kubernetes-dashboard-amd64:v1.10.0 source=local push=yes"
+ansible-doc docker_image  查看帮助
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
 ansible controller -m script -a '/root/monitor.sh'
 ansible -i hosts 10.67.50.63 -m service -a "name=zabbix-agent enabled=yes"
 ansible k8s -m yum -a "name=socat state=present"
 ansible openstack -m service -a "name=filebeat state=restarted"
+
 ###no need sudo#####
 ansible openstack-prod -m copy -a "src=/root/zabbix/pageinout.sh dest=/etc/zabbix/zabbix_agentd.d/pageinout.sh"
 ansible openstack-prod -m apt -a "name=zabbix-sender state=present"
@@ -32,24 +35,42 @@ ansible worker -m copy -a "src=/root/ansible-common/http-proxy.conf dest=/etc/sy
 ansible worker -m shell -a "systemctl daemon-reload;systemctl restart docker"
 ansible worker -m shell -a "docker info | grep Proxy"
 
+### ansible windows ###
+[root@vstjlinuxtrans1  ansible]# ansible windows2016  -m win_shell -a "get-service winrm"
+10.67.50.186 | CHANGED | rc=0 >>
 
+Status   Name               DisplayName
+------   ----               -----------
+Running  winrm              Windows Remote Management (WS-Manag...
+
+
+
+10.67.70.96 | CHANGED | rc=0 >>
+
+Status   Name               DisplayName
+------   ----               -----------
+Running  winrm              Windows Remote Management (WS-Manag...
+
+########    ansible模塊
+# ansible mysql_info模塊
+ansible -i hosts db -m yum -a "name=MySQL-python state=present"
+ansible -i hosts db -m mysql_info -a "login_user=root login_password=vSTJ456"
+
+
+# docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
+ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
+# tag a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0 source=local" 
+# tag and push a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=10.67.51.161:5000/kubernetes-dashboard-amd64:v1.10.0 source=local push=yes"
+
+# apt&yum模塊
 # Update repositories cache and install "foo" package
 - apt: name=foo update_cache=yes
 # Run the equivalent of "apt-get update" as a separate step
 - apt: update_cache=yes
 
-cat astute.yaml |grep '^[a-z].*:'
-hiera nodes
 
-
-facter
-facter ipaddress
-###### redis backend###
-/etc/ansible/ansible.cfg
-fact_caching = redis
-fact_caching_timeout = 864000
-
-redis-cli get ansible_facts10.67.38.105 | jq .
 #######使用Ansible自动部署zabbix agent#########
 # ansible-playbook -i hosts site.yaml -v
 
@@ -93,7 +114,8 @@ ansible playbook的目录结构
 ├── site.yml
 └── zabbix.yml
 
-####   使用 inventory脚本
+
+####   ansible使用 inventory脚本
 1 编辑 /etc/ansible/ansible.cfg，修改inventory
 inventory      = /etc/ansible/inv.py
 
@@ -313,3 +335,65 @@ ansible_all_ipv4_addresses      ansible_distribution      ansible_distribution_v
 ------------------------------  ----------------------  ------------------------------  --------------------------  -----------------------  -------------------------  ---------------------
 ["172.17.0.1", "10.67.51.164"]  CentOS                                             7.5  3.10.0-957.27.2.el7.x86_64  VMware Virtual Platform                          4                   7931
 
+########### ansible playbook ###########
+1 docker安装简单版，无roles
+对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
+-----------------------------------------------------------------------------------------------------------------------------------------
+# docker run脚本
+docker run -d \
+--name mydb \
+--user 999:999 \
+-e MYSQL_ROOT_PASSWORD=Foxconn123 \
+-e TZ='Asia/Shanghai' \
+-v /mysql:/var/lib/mysql \
+-p 3306:3306 \
+mysql:5.7.13 \
+--character-set-server=utf8mb4 \
+--collation-server=utf8mb4_unicode_ci \
+--max_connections=1000 \
+--skip-name-resolve
+
+# 转换成ansible playbook
+[root@repo ansible]# cat hosts
+[docker]
+10.67.36.58
+
+[root@repo ansible]# cat mysql.yaml
+---
+- name: install mysql
+  hosts: docker
+  become: true
+
+
+  tasks:
+  - name: install python-docker-py
+    yum: name=python-docker-py update_cache=yes
+  - name: pull mysql5.7.26 images
+    docker_image:
+      name=mysql:5.7.26
+      source=pull
+  - name: create /mysql directory and change ownership
+    file:
+      path: '/mysql'
+      state: 'directory'
+      owner: '999'
+      group: '999'
+      mode: '0755'
+
+  - name: create mysql container
+    docker_container:
+      name: mydb
+      user: 999:999
+      image: mysql:5.7.26
+      state: started
+      ports:
+        - "3306:3306"
+      env:
+        MYSQL_ROOT_PASSWORD: Foxconn123
+        TZ: 'Asia/Shanghai'
+      volumes:
+        - /mysql:/var/lib/mysql
+      command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci","--max_connections=1000","--skip-name-resolve"]
+
+run:  ansible-playbook -i hosts mysql.yaml -vv
+-----------------------------------------------------------------------------------------------------------------------------------------

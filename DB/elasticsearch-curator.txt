@@ -193,4 +193,35 @@ actions:
       timestring: '%Y.%m.%d'
       unit: days
       unit_count: 1
+
+#  snapshot
+  4:
+    action: snapshot
+    description: >-
+      take snapshot
+    options:
+      repository: myminio
+      name:
+      ignore_unavailable: False
+      include_global_state: True
+      partial: False
+      wait_for_completion: True
+      skip_repo_fs_check: False
+      disable_action: False
+    filters:
+    - filtertype: pattern
+      kind: prefix
+      value: docker-2022
+    - filtertype: age
+      source: creation_date
+      direction: older
+      unit: days
+      unit_count: 1
+
+[root@stjes1 curator]# curator_cli --host 10.67.51.150 --port 9200 show_snapshots --repository myminio
+curator-20220114085641
+filebeat-2022.01.10.backup
+filebeat-2022.01.11.backup
+filebeat-2022.01.11.inr.16:37
+filebeat-2022.01.12.backup
 	  

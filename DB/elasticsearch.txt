@@ -119,6 +119,50 @@ Beats: upgrade instructions
 }
 '
 
+##########  elasticsearch高级操作 ##########
+### reindex在不同集群之间迁移数据
+curl -X POST "http://10.67.39.81:9200/_reindex" -H 'Content-Type: application/json' -d'
+{
+  "source": {
+    "remote": {
+      "host": "http://10.67.51.150:9200"
+    },
+    "index": "docker-2022.01.08",
+    "query": {
+      "match_all": {}
+    }
+  },
+  "dest": {
+    "index": "clm_2"
+  }
+}'
+
+### split index
+1 set it read only
+curl -X PUT "http://10.67.39.81:9200/clm_20220112/_settings" -H 'Content-Type: application/json' -d'
+{
+  "settings": {
+    "index.blocks.write": true
+   }
+}'
+2 split it into new target index
+curl -X POST "http://10.67.39.81:9200/clm_20220112/_split/clm_3" -H 'Content-Type: application/json' -d'
+{
+  "settings": {
+    "index.number_of_shards": 2
+   }
+}'
+
+# 将多个index写到一个新的index
+curl -X POST "http://10.67.51.150:9200/_reindex" -H 'Content-Type: application/json' -d'
+{
+  "source": {
+    "index": "docker-2022.01.*"
+  },
+  "dest": {
+    "index": "docker-2022.01"
+  }
+}'
 ############repository-s3 与minio ###############
 minio 配置
 [root@repo ~]# cat minio.sh
@@ -199,6 +243,7 @@ curl -X PUT 10.67.51.150:9200/_snapshot/myminio -H 'Content-Type: application/js
   }
 }
 
+
 #########snapshot########
 创建snapshot
 [root@stjes1 ~]# curl -X PUT "10.67.51.150:9200/_snapshot/myminio/filebeat-2022.01.12.backup?wait_for_completion=true" -H 'Content-Type: application/json' -d'
@@ -273,6 +318,42 @@ filebeat-2022.01.12.backup    SUCCESS 1641955298 02:41:38 1641955305 02:41:45  6
         "total": 3,
         "failed": 0,
         "successful": 3
+      }
+    }
+  ]
+}
+
+[root@stjes1 curator]# curl -s -XGET http://10.67.51.150:9200/_snapshot/myminio/curator-20220114085641?pretty=true | jq .
+{
+  "snapshots": [
+    {
+      "snapshot": "curator-20220114085641",
+      "uuid": "3QzR8rwlQ0O8oS4Ir24yJw",
+      "version_id": 6080199,
+      "version": "6.8.1",
+      "indices": [
+        "docker-2022.01.08",
+        "docker-2022.01.04",
+        "docker-2022.01",
+        "docker-2022.01.03",
+        "docker-2022.01.06",
+        "docker-2022.01.07",
+        "docker-2022.01.02",
+        "docker-2022.01.01",
+        "docker-2022.01.05"
+      ],
+      "include_global_state": true,
+      "state": "SUCCESS",
+      "start_time": "2022-01-14T08:56:41.447Z",
+      "start_time_in_millis": 1642150601447,
+      "end_time": "2022-01-14T08:56:50.664Z",
+      "end_time_in_millis": 1642150610664,
+      "duration_in_millis": 9217,
+      "failures": [],
+      "shards": {
+        "total": 27,
+        "failed": 0,
+        "successful": 27
       }
     }
   ]
@@ -808,3 +889,47 @@ k8s-node1
 :--docker-2021.12.31                 2 r UNASSIGNED NODE_LEFT
 :--docker-2021.12.31                 0 r UNASSIGNED NODE_LEFT
  --syslog-2022.01.09                 0 r UNASSIGNED NODE_LEFT
+
+######## elasticsearch-sql-cli
+curl -X PUT "http://10.67.51.150:9200/library/book/_bulk?refresh&pretty" -H 'Content-Type: application/json' -d'
+{"index":{"_id": "Leviathan Wakes"}}
+{"name": "Leviathan Wakes", "author": "James S.A. Corey", "release_date": "2011-06-02", "page_count": 561}
+{"index":{"_id": "Hyperion"}}
+{"name": "Hyperion", "author": "Dan Simmons", "release_date": "1989-05-26", "page_count": 482}
+{"index":{"_id": "Dune"}}
+{"name": "Dune", "author": "Frank Herbert", "release_date": "1965-06-01", "page_count": 604}
+'
+
+[root@stjes1 ~]# /usr/share/elasticsearch/bin/elasticsearch-sql-cli http://10.67.51.147:9200
+
+sql> select * from library;
+     author     |     name      |  page_count   |      release_date
+----------------+---------------+---------------+------------------------
+Dan Simmons     |Hyperion       |482            |1989-05-26T00:00:00.000Z
+James S.A. Corey|Leviathan Wakes|561            |2011-06-02T00:00:00.000Z
+Frank Herbert   |Dune           |604            |1965-06-01T00:00:00.000Z 
+
+sql> show tables "filebeat-*";
+          name           |     type
+-------------------------+---------------
+filebeat-6.2.3-2022.01.07|BASE TABLE
+filebeat-6.2.4-2021.12.29|BASE TABLE
+filebeat-6.2.4-2021.12.30|BASE TABLE
+filebeat-6.2.4-2021.12.31|BASE TABLE
+filebeat-6.2.4-2022.01.01|BASE TABLE
+filebeat-6.2.4-2022.01.02|BASE TABLE
+
+
+
+sql> select '@timestamp',host,message from "syslog-2022.01.18" limit 5;
+ '@timestamp'  |     host      |                                                                                         message
+---------------+---------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+@timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.064Z A21VSAN18 Vpxa: verbose vpxa[6D8CB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-1124d8de] Received WaitForUpdatesDone callback
+
+@timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.064Z A21VSAN18 Vpxa: verbose vpxa[6D8CB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-1124d8de] Completed WaitForUpdatesDone callback
+
+@timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.094Z A21VSAN18 Vpxa: verbose vpxa[6AFFB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-28a7c199] Applying updates from 28475812 to 28475813 (at 28475812)
+
+@timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.064Z A21VSAN18 Vpxa: verbose vpxa[6D8CB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-1124d8de] Starting next WaitForUpdates() call to hostd
+
+@timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.072Z A21VSAN18 Vpxa: verbose vpxa[6D6BB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-a19df9d] Received WaitForUpdatesDone callback

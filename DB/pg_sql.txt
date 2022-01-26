@@ -856,6 +856,15 @@ postgres-1机器里archive_status目录中.backup和.ready文件同时存在
 验证了test ! -f /opt/archivedir/0000000100000003000000EA, 发现/opt/archivedir/0000000100000003000000EA存在/opt/archivedir目录中，所以后续cp命令不会执行
 删除该文件后，一切正常
 
+-bash-4.2$ pg_archivecleanup -d pg_wal/ 000000010000000900000000
+pg_archivecleanup: keeping WAL file "pg_wal//000000010000000900000000" and later
+pg_archivecleanup: removing file "pg_wal//000000010000000600000000"
+pg_archivecleanup: removing file "pg_wal//000000010000000600000001"
+pg_archivecleanup: removing file "pg_wal//000000010000000600000002"
+pg_archivecleanup: removing file "pg_wal//000000010000000600000003"
+pg_archivecleanup: removing file "pg_wal//000000010000000600000004"
+
+
 # max_wal_size参数没有起作用
 -bash-4.2$ du -sh pg_wal
 1.7G    pg_wal

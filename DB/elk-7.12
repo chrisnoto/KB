@@ -480,6 +480,125 @@ discovery.seed_hosts: ["xtjcesbges01.cesbg.foxconn", "xtjcesbges02.cesbg.foxconn
 cluster.initial_master_nodes: ["xtjcesbges01", "xtjcesbges02","xtjcesbges03"]  
 
 
+##############  elk 7.6.2 容器部署   ##############
+每台主机设置sysctl参数
+cat /etc/sysctl.conf|tail -1
+vm.max_map_count=655365
+
+配置/data权限
+chown 1000:1000 /data
+
+### 容器部署脚本
+# es1
+docker run -d \
+--name es1 \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es1:10.67.39.79 \
+-e node.name=es1 \
+-e node.master=true \
+-e network.publish_host=10.67.39.79 \
+-e node.data=true \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es2,es3 \
+-e cluster.initial_master_nodes=es1,es2,es3 \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+# es2
+docker run -d \
+--name es2 \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es1:10.67.39.79 \
+-e node.name=es2 \
+-e node.master=true \
+-e node.data=true \
+-e network.publish_host=10.67.39.80 \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es1,es3 \
+-e cluster.initial_master_nodes=es1,es2,es3 \
+-e bootstrap.memory_lock=true \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+--ulimit memlock=-1:-1 \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+# es3
+docker run -d \
+--name es3 \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es1:10.67.39.79 \
+-e node.name=es3 \
+-e node.master=true \
+-e network.publish_host=10.67.39.81 \
+-e node.data=true \
+-e reindex.remote.whitelist=10.67.51.150:9200 \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es1,es2 \
+-e cluster.initial_master_nodes=es1,es2,es3 \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+# es4
+docker run -d \
+--name es4 \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es1:10.67.39.79 \
+--add-host=es4:10.67.36.59 \
+-e node.name=es4 \
+-e node.master=false \
+-e network.publish_host=10.67.36.59 \
+-e node.data=true \
+-e reindex.remote.whitelist=10.67.51.150:9200 \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es1,es2 \
+-e cluster.initial_master_nodes=es1,es2,es3 \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+# es5
+docker run -d \
+--name es5 \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es1:10.67.39.79 \
+--add-host=es4:10.67.36.59 \
+--add-host=es5:10.67.36.57 \
+-e node.name=es5 \
+-e node.master=false \
+-e network.publish_host=10.67.36.57 \
+-e node.data=true \
+-e reindex.remote.whitelist=10.67.51.150:9200 \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es1,es2 \
+-e cluster.initial_master_nodes=es1,es2,es3 \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
 
 
 
