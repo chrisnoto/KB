@@ -1,0 +1,64 @@
+---
+- hosts: localhost
+  tasks:
+  - name: Create a new instance and attaches to a network and passes metadata to the instance
+    os_server:
+      state: present
+      auth:
+        auth_url: https://10.67.36.80:5000
+        username: admin
+        password: F0xc0nn!23
+        project_name: admin
+      validate_certs: no
+      name: "{{ instance }}"
+      image: centos7-ryan
+      key_name: KEY8
+      timeout: 2000
+      flavor: 4C-8G-40G
+      network: admin_floating_net
+    register: vm
+
+  - name: Wait for ssh on the Instance
+    command: 
+      ssh -oBatchMode=yes -oStrictHostKeyChecking=no -i /root/key8.pem
+      centos@{{ vm.server.public_v4 }} true
+    register: result
+    until: result is success
+    retries: 30
+    delay: 30
+
+  - name: Add instance to inventory
+    add_host: name=vm groups=openstack
+              ansible_ssh_host={{ vm.server.public_v4 }}
+
+- hosts: openstack
+  remote_user: centos
+  vars:
+    ansible_ssh_private_key_file: /root/key8.pem
+  become: true
+  tasks:
+    - name: set timezone to Asia Shanghai 
+      timezone:
+        name: Asia/Shanghai
+    - name: find default yumrepo files
+      find:
+        paths: /etc/yum.repos.d
+        patterns: "*.repo"
+      register: repofiles_to_delete
+
+    - name: remove default yumrepo files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ repofiles_to_delete.files }}"
+  
+    - name: get new yumrepofiles
+      uri:
+        url: http://10.67.51.164/repofile/centos7.repo
+        creates: centos7.repo
+        dest: /etc/yum.repos.d
+
+    - name: install docker-ce
+      yum:
+        name: docker-ce
+        state: present

@@ -437,3 +437,10 @@ ansible_python_interpreter=/bin/python
 
 
 run: [root@repo ansible]# ansible-playbook -i hosts snapshot.yaml -e esx=10.67.51.16 -e vm=vSTJLinuxTrans1
+
+备注  when: ping_result|success wont work with ansible 2.9 changing it to when: ping_result is success worked.
+# openstack模块
+yum install -y python2-openstacksdk
+[root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
+# vmware模块
+yum install -y python2-pyvmomi
