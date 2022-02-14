@@ -1,0 +1,23 @@
+---
+- hosts: localhost
+  tasks:
+  - name: Create a new instance and attaches to a network and passes metadata to the instance
+    os_server:
+         state: present
+         auth:
+           auth_url: https://10.67.36.80:5000
+           username: admin
+           password: F0xc0nn!23
+           project_name: admin
+         validate_certs: no
+         name: vm1
+         image: centos7-ryan
+         key_name: KEY8
+         timeout: 2000
+         flavor: 4C-8G-40G
+         network: admin_floating_net
+         userdata: |
+           {%- raw -%}#!/bin/bash
+           sudo sed -i '/keepcache/aproxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128' /etc/yum.conf
+           sudo yum install telnet -y
+           {% endraw %}

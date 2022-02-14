@@ -397,3 +397,43 @@ mysql:5.7.13 \
 
 run:  ansible-playbook -i hosts mysql.yaml -vv
 -----------------------------------------------------------------------------------------------------------------------------------------
+
+vmware snaphost
+
+[root@repo ansible]# cat hosts
+[esxi]
+10.67.51.16
+10.67.51.18
+10.67.51.19
+10.67.51.79
+10.67.51.8
+10.67.51.80
+10.67.51.81
+10.67.51.82
+[esxi:vars]
+ansible_ssh_user='root'
+ansible_ssh_pass='Foxconn$56'
+ansible_python_interpreter=/bin/python
+
+
+[root@repo ansible]# cat snapshot.yaml
+---
+- hosts: "{{ esx }}"
+  tasks:
+  - name: Gather all registered virtual machines
+    vmware_guest_snapshot:
+      hostname: '10.67.51.89'
+      username: 'administrator@vsphere.local'
+      password: 'Foxconn$56'
+      validate_certs: no
+      datacenter: "A21"
+      folder: "/A21/vm/"
+      name: "{{ vm }}"
+      state: present
+      snapshot_name: s_20220211
+      memory_dump: yes
+    delegate_to: localhost
+
+
+
+run: [root@repo ansible]# ansible-playbook -i hosts snapshot.yaml -e esx=10.67.51.16 -e vm=vSTJLinuxTrans1

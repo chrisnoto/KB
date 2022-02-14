@@ -1,0 +1,36 @@
+---
+- name: install mysql
+  hosts: docker
+  become: true
+
+  tasks:
+  - name: install python-docker-py
+    yum: name=python-docker-py update_cache=yes
+
+  - name: pull mysql5.7.26 images
+    docker_image:
+      name=mysql:5.7.26
+      source=pull
+
+  - name: create /mysql directory and change ownership
+    file:
+      path: '/mysql'
+      state: 'directory'
+      owner: '999'
+      group: '999'
+      mode: '0755'
+
+  - name: create mysql container
+    docker_container:
+      name: mydb
+      user: 999:999
+      image: mysql:5.7.26
+      state: started
+      ports:
+        - "3306:3306"
+      env: 
+        MYSQL_ROOT_PASSWORD: Foxconn123
+        TZ: 'Asia/Shanghai'
+      volumes:
+        - /mysql:/var/lib/mysql
+      command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci","--max_connections=1000","--skip-name-resolve"]

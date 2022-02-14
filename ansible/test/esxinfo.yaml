@@ -1,0 +1,12 @@
+---
+- hosts: esxi
+  tasks:
+  - name: Gather all registered virtual machines
+    vmware_vm_info:
+      hostname: '10.67.51.89'
+      username: 'administrator@vsphere.local'
+      password: 'Foxconn$56'
+      validate_certs: no
+    delegate_to: localhost
+    register: host_facts
+

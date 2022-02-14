@@ -103,48 +103,6 @@ UserParameter=custom.vfs.dev.io.active[*],awk ‘{print $$9}’ /sys/class/block
 UserParameter=custom.vfs.dev.io.ms[*],awk ‘{print $$10}’ /sys/class/block/$1/stat
 UserParameter=custom.vfs.dev.weight.io.ms[*],awk ‘{print $$11}’ /sys/class/block/$1/stat
 
-#######使用Ansible自动部署zabbix agent#########
-# ansible-playbook -i hosts site.yaml
-
-ansible playbook的目录结构
-
-[root@cobbler ansible-zabbix]# tree
-.
-├── common.yml
-├── group_vars
-│   ├── trusty
-│   └── xenial
-├── hosts
-├── host_vars
-├── roles
-│   ├── base_inst_zbclient_linux
-│   │   ├── files
-│   │   │   ├── centos6.repo
-│   │   │   ├── centos7.repo
-│   │   │   ├── lld-disks-3.py
-│   │   │   ├── lld-disks.py
-│   │   │   ├── pageinout.sh
-│   │   │   ├── sources.list-1404
-│   │   │   ├── sources.list-1604
-│   │   │   └── userparameter_diskstats.conf
-│   │   ├── handlers
-│   │   │   └── main.yml
-│   │   ├── tasks
-│   │   │   └── main.yml
-│   │   └── templates
-│   │   └── zabbix_agentd.conf.j2
-│   └── common
-│   ├── files
-│   │   ├── centos6.repo
-│   │   ├── centos7.repo
-│   │   ├── sources.list-1404
-│   │   └── sources.list-1604
-│   ├── handlers
-│   ├── tasks
-│   │   └── main.yml
-│   └── templates
-├── site.yml
-└── zabbix.yml
 
 # proxy和server之间的监控数据存在huge lag。
 查看zabbix-proxy和zabbix-server之间的lag

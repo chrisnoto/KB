@@ -1,0 +1,17 @@
+---
+- hosts: "{{ esx }}"
+  tasks:
+  - name: Gather all registered virtual machines
+    vmware_guest_snapshot:
+      hostname: '10.67.51.89'
+      username: 'administrator@vsphere.local'
+      password: 'Foxconn$56'
+      validate_certs: no
+      datacenter: "A21"
+      folder: "/A21/vm/"
+      name: "{{ vm }}"
+      state: present
+      snapshot_name: s_20220211
+      memory_dump: yes
+    delegate_to: localhost
+
