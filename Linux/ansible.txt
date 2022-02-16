@@ -444,3 +444,30 @@ yum install -y python2-openstacksdk
 [root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
 # vmware模块
 yum install -y python2-pyvmomi
+
+
+# ansible-vault 加密
+[root@repo ansible]# cat password.yml
+password: 'Foxconn$56'
+
+[root@repo ansible]# ansible-vault encrypt password.yml
+New Vault password:
+Confirm New Vault password:
+Encryption successful
+
+[root@repo ansible]# cat password.yml
+$ANSIBLE_VAULT;1.1;AES256
+65633036303664353265343538613338303034326335323336653933343564373564373966666538
+3531383237393764313566393766383462333839313231640a643231333532636364633631633434
+31666436383738353361613136313461366461636266626263633465393663616536633361353364
+6464323833656539310a386265313533393832386539343830383765636364383266626562663938
+66303535653836373832313534616335653833383166313164626433363837656161
+
+[root@repo ansible]# ansible-vault view password.yml
+Vault password:
+password: 'Foxconn$56'
+
+# set_fact赋变量
+    - name: Extract IP address from docker dockerData
+      set_fact:
+        ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"

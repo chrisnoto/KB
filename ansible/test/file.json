@@ -1,0 +1,10 @@
+ {"size":"500",
+ "query":{
+   "wildcard":{
+     "agent.version":"7.*"
+     }
+   },
+   "collapse":{
+     "field":"host.hostname"
+   }
+ }

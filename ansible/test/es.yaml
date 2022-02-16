@@ -1,0 +1,41 @@
+---
+- name: es
+  hosts: localhost
+#  collections:
+#    - community.general
+  gather_facts: false
+  tasks:
+
+  - name: get es status
+    uri:
+      url: http://10.67.51.150:9200/_cat/{{ item }}?v
+      method: GET
+      return_content: yes
+    with_items:
+    - health
+    - nodes
+    - allocation
+    register: res
+
+  - name: display all metrics
+    ansible.builtin.debug:
+      var: item.splitlines()
+    loop: "{{ res | json_query('results[*].content') }}"
+
+  - name: get hostname
+    uri:
+      url: https://xtjcesbges01.cesbg.foxconn:9200/filebeat-7.12.0-2022.01.01/_search
+      method: POST
+      body_format: json
+      force_basic_auth: yes
+      url_username: elastic
+      url_password: vSTJ456
+      src: /root/ansible/file.json 
+      validate_certs: no
+      timeout: 60
+    register: res
+
+  - name: display all hostname
+    ansible.builtin.debug:
+      var: item
+    loop: "{{ res.json | json_query('hits.hits[*]._source.agent.hostname') }}"

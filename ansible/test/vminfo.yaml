@@ -1,5 +1,5 @@
 ---
-- hosts: esxi
+- hosts: localhost
   tasks:
   - name: Gather all registered virtual machines
     vmware_vm_info:

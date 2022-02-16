@@ -83,10 +83,10 @@
         state: started
 
     - name: download mysql-5.7.26.tar
-      uri:
+      get_url:
         url: http://10.67.51.164/mysql-5.7.26.tar
-        creates: mysql-5.7.26.tar
-        dest: /root
+        dest: /root/mysql-5.7.26.tar
+        mode: '0644'
 
     - name: install python-docker-py
       yum: name=python-docker-py update_cache=yes
