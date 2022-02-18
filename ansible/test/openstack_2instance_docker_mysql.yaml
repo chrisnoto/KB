@@ -40,8 +40,6 @@
       ansible_ssh_host: "{{ item['server']['public_v4'] }}"
     with_items: "{{ vm.results }}"
 
-  - debug:
-      var: master
 #- hosts: master:slave
 #  remote_user: centos
 #  delegate_to: localhost
@@ -225,7 +223,7 @@
       with_items:
         - "{{ nested_list }}"
 
-
+# 如果slave处于started状态时，不能直接change master
     - name: change master to mysql master server
       mysql_replication:
         mode: changemaster
@@ -237,15 +235,15 @@
         master_log_file: "{{ hostvars['mydb01']['master_log_file'] }}"
         master_log_pos: "{{ hostvars['mydb01']['master_log_pos'] }}"
 
-    - name: start slave
-      mysql_replication:
-        mode: startslave
-        login_user: root
-        login_password: Foxconn123
+#    - name: start slave
+#      mysql_replication:
+#        mode: startslave
+#        login_user: root
+#        login_password: Foxconn123
 
-    - name: get slave
-      mysql_replication:
-        mode: getslave
-        login_user: root
-        login_password: Foxconn123
+#    - name: get slave
+#      mysql_replication:
+#        mode: getslave
+#        login_user: root
+#        login_password: Foxconn123
 

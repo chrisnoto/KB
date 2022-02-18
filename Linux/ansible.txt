@@ -1,12 +1,38 @@
-#### ansible 配置 #######
+------------------- ansible 配置 
 # redis backend
 /etc/ansible/ansible.cfg
 fact_caching = redis
 fact_caching_timeout = 864000
 
+-------------------  ansible模塊
+# openstack模块
+yum install -y python2-openstacksdk
+[root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
+
+# vmware模块
+yum install -y python2-pyvmomi
+
+# mysql模块
+yum install -y MySQL-python  (被控端)
+ansible -i hosts db -m yum -a "name=MySQL-python state=present"
+ansible -i hosts db -m mysql_info -a "login_user=root login_password=vSTJ456"
+
+# docker_image模块
+ansible >=2.8 & yum install -y python-docker-py (被控端)
+ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
+# tag a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0 source=local" 
+# tag and push a docker image
+ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=10.67.51.161:5000/kubernetes-dashboard-amd64:v1.10.0 source=local push=yes"
+
+# apt&yum模塊
+# Update repositories cache and install "foo" package
+- apt: name=foo update_cache=yes
+# Run the equivalent of "apt-get update" as a separate step
+- apt: update_cache=yes
 redis-cli get ansible_facts10.67.38.105 | jq .
 
-#####Ansible adhoc 命令
+------------------- Ansible adhoc 命令
 ansible-doc docker_image  查看帮助
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
 ansible controller -m shell -a "ps -ef|grep rbd"
@@ -35,7 +61,7 @@ ansible worker -m copy -a "src=/root/ansible-common/http-proxy.conf dest=/etc/sy
 ansible worker -m shell -a "systemctl daemon-reload;systemctl restart docker"
 ansible worker -m shell -a "docker info | grep Proxy"
 
-### ansible windows ###
+-------------------  ansible windows 
 [root@vstjlinuxtrans1  ansible]# ansible windows2016  -m win_shell -a "get-service winrm"
 10.67.50.186 | CHANGED | rc=0 >>
 
@@ -51,27 +77,10 @@ Status   Name               DisplayName
 ------   ----               -----------
 Running  winrm              Windows Remote Management (WS-Manag...
 
-########    ansible模塊
-# ansible mysql_info模塊
-ansible -i hosts db -m yum -a "name=MySQL-python state=present"
-ansible -i hosts db -m mysql_info -a "login_user=root login_password=vSTJ456"
 
 
-# docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
-ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
-# tag a docker image
-ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=k8s.gcr.io/kubernetes-dashboard-amd64:v1.10.0 source=local" 
-# tag and push a docker image
-ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.10.0 repository=10.67.51.161:5000/kubernetes-dashboard-amd64:v1.10.0 source=local push=yes"
 
-# apt&yum模塊
-# Update repositories cache and install "foo" package
-- apt: name=foo update_cache=yes
-# Run the equivalent of "apt-get update" as a separate step
-- apt: update_cache=yes
-
-
-#######使用Ansible自动部署zabbix agent#########
+------------------- 使用Ansible自动部署zabbix agent 
 # ansible-playbook -i hosts site.yaml -v
 
 ansible playbook的目录结构
@@ -115,7 +124,7 @@ ansible playbook的目录结构
 └── zabbix.yml
 
 
-####   ansible使用 inventory脚本
+-------------------   ansible使用 inventory脚本
 1 编辑 /etc/ansible/ansible.cfg，修改inventory
 inventory      = /etc/ansible/inv.py
 
@@ -240,7 +249,7 @@ null
 #ansible (单个/多个组)列出host
 ansible k8s:kafka --list-hosts
 
-####### ansible facts 导入到 SQLITE3 #########
+------------------- ansible facts 导入到 SQLITE3 
 1 配置ansible fact缓存为redis
 [root@repo-centos ~]# cat /etc/ansible/ansible.cfg |grep '^fact_caching'
 fact_caching = redis
@@ -335,7 +344,69 @@ ansible_all_ipv4_addresses      ansible_distribution      ansible_distribution_v
 ------------------------------  ----------------------  ------------------------------  --------------------------  -----------------------  -------------------------  ---------------------
 ["172.17.0.1", "10.67.51.164"]  CentOS                                             7.5  3.10.0-957.27.2.el7.x86_64  VMware Virtual Platform                          4                   7931
 
-########### ansible playbook ###########
+
+
+
+
+-------------------------------- ansible playbook --------------------------------
+------------------- ansible变量
+1 You can assign variables in a playbook on the level of a play, which are then valid for all tasks and all hosts within that play
+2 Similarly, variables can be defined on the level of an individual task in a playbook
+3 You can define variables on the level of hosts or groups of hosts in the inventory file
+4 There is a module called set_fact that allows you to define variables and assign values which are then scoped per host and for the remainder of the playbook execution
+5 Variables can be defined on the command line when executing a playbook
+6 Variables can be bound to a module so that the return values of that module are assigned to that variable within the scope of the respective host
+7 Variable definitions can be moved into separate files and be referenced from within the playbook
+8 Finally, Ansible will provide some variables and facts
+
+# set_fact赋变量
+    - name: Extract IP address from docker dockerData
+      set_fact:
+        ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
+
+# ansible-playbook不同主机之间的变量传递
+- hosts: 192.168.0.10
+  tasks:
+      set_fact: worker_join_token={{ worker_join_token.stdout.replace('To add a worker to this swarm, run the following command:\n\n    ', '').replace('\\\n','') }}
+- hosts: mongo
+  tasks:
+    - name: 加入 swarm 集群
+      command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
+
+------------------- 数据结构语法
+###  list
+# This will run debug three times since the list is flattened
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items: "{{ nested_list }}"
+
+# This will run debug once with the three items
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items:
+    - "{{ nested_list }}"	
+
+        command: "{{ item }}"
+      vars:
+        nested_list:
+          - - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+            - "--max_connections=1000"
+            - "--skip-name-resolve"
+      with_items:
+        - "{{ nested_list }}"
+	  
+-------------------  ansible playbook举例	  
 1 docker安装简单版，无roles
 对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -439,15 +510,8 @@ ansible_python_interpreter=/bin/python
 run: [root@repo ansible]# ansible-playbook -i hosts snapshot.yaml -e esx=10.67.51.16 -e vm=vSTJLinuxTrans1
 
 备注  when: ping_result|success wont work with ansible 2.9 changing it to when: ping_result is success worked.
-# openstack模块
-yum install -y python2-openstacksdk
-[root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
-# vmware模块
-yum install -y python2-pyvmomi
-# mysql模块
-yum install -y MySQL-python  (被控端)
-# docker_image模块
-ansible >=2.8 & yum install -y python-docker-py (被控端)
+
+
 
 # ansible-vault 加密
 [root@repo ansible]# cat password.yml
@@ -470,49 +534,7 @@ $ANSIBLE_VAULT;1.1;AES256
 Vault password:
 password: 'Foxconn$56'
 
-# set_fact赋变量
-    - name: Extract IP address from docker dockerData
-      set_fact:
-        ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
 
-# ansible-playbook不同主机之间的变量传递
-- hosts: 192.168.0.10
-  tasks:
-      set_fact: worker_join_token={{ worker_join_token.stdout.replace('To add a worker to this swarm, run the following command:\n\n    ', '').replace('\\\n','') }}
-- hosts: mongo
-  tasks:
-    - name: 加入 swarm 集群
-      command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
 	  
-###  list
-# This will run debug three times since the list is flattened
-- debug:
-    msg: "{{ item }}"
-  vars:
-    nested_list:
-      - - one
-        - two
-        - three
-  with_items: "{{ nested_list }}"
 
-# This will run debug once with the three items
-- debug:
-    msg: "{{ item }}"
-  vars:
-    nested_list:
-      - - one
-        - two
-        - three
-  with_items:
-    - "{{ nested_list }}"	
-
-        command: "{{ item }}"
-      vars:
-        nested_list:
-          - - "--character-set-server=utf8mb4"
-            - "--collation-server=utf8mb4_unicode_ci"
-            - "--max_connections=1000"
-            - "--skip-name-resolve"
-      with_items:
-        - "{{ nested_list }}"
 	
