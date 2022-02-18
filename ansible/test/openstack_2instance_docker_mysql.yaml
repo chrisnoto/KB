@@ -237,15 +237,15 @@
         master_log_file: "{{ hostvars['mydb01']['master_log_file'] }}"
         master_log_pos: "{{ hostvars['mydb01']['master_log_pos'] }}"
 
-    - name: change master to mysql master server
+    - name: start slave
       mysql_replication:
-        mode: changemaster
+        mode: startslave
         login_user: root
         login_password: Foxconn123
-        master_host: "{{ hostvars['mydb01']['master_host'] }}"
-        master_user: repl
-        master_password: Foxconn123
-        master_log_file: "{{ hostvars['mydb01']['master_log_file'] }}"
-        master_log_pos: "{{ hostvars['mydb01']['master_log_pos'] }}"
 
+    - name: get slave
+      mysql_replication:
+        mode: getslave
+        login_user: root
+        login_password: Foxconn123
 
