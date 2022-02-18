@@ -444,7 +444,10 @@ yum install -y python2-openstacksdk
 [root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
 # vmware模块
 yum install -y python2-pyvmomi
-
+# mysql模块
+yum install -y MySQL-python  (被控端)
+# docker_image模块
+ansible >=2.8 & yum install -y python-docker-py (被控端)
 
 # ansible-vault 加密
 [root@repo ansible]# cat password.yml
@@ -471,3 +474,45 @@ password: 'Foxconn$56'
     - name: Extract IP address from docker dockerData
       set_fact:
         ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
+
+# ansible-playbook不同主机之间的变量传递
+- hosts: 192.168.0.10
+  tasks:
+      set_fact: worker_join_token={{ worker_join_token.stdout.replace('To add a worker to this swarm, run the following command:\n\n    ', '').replace('\\\n','') }}
+- hosts: mongo
+  tasks:
+    - name: 加入 swarm 集群
+      command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
+	  
+###  list
+# This will run debug three times since the list is flattened
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items: "{{ nested_list }}"
+
+# This will run debug once with the three items
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items:
+    - "{{ nested_list }}"	
+
+        command: "{{ item }}"
+      vars:
+        nested_list:
+          - - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+            - "--max_connections=1000"
+            - "--skip-name-resolve"
+      with_items:
+        - "{{ nested_list }}"
+	

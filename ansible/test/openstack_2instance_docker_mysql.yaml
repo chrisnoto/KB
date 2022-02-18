@@ -1,0 +1,251 @@
+---
+- hosts: localhost
+  vars:
+    servers:
+      - name: mydb01
+        image: centos7-ryan
+        flavor: 4C-8G-40G
+        key: KEY8
+        meta:
+          group: master
+      - name: mydb02
+        image: centos7-ryan
+        flavor: 4C-8G-40G
+        key: KEY8
+        meta:
+          group: slave
+  tasks:
+  - name: Create a new instance and attaches to a network and passes metadata to the instance
+    os_server:
+      state: present
+      auth:
+        auth_url: https://10.67.36.80:5000
+        username: admin
+        password: F0xc0nn!23
+        project_name: admin
+      validate_certs: no
+      name: "{{ item.name }}"
+      image: "{{ item.image }}"
+      key_name: "{{ item.key }}"
+      timeout: 2000
+      flavor: "{{ item.flavor }}"
+      network: admin_floating_net
+    with_items: "{{ servers }}"
+    register: vm
+
+  - name: Add instance to inventory
+    add_host:
+      name: "{{ item['item']['name'] }}" 
+      groups: "{{ item['item']['meta']['group'] }}"
+      ansible_ssh_host: "{{ item['server']['public_v4'] }}"
+    with_items: "{{ vm.results }}"
+
+  - debug:
+      var: master
+#- hosts: master:slave
+#  remote_user: centos
+#  delegate_to: localhost
+#  - name: Wait for ssh on the Instance
+#    command: 
+#      ssh -oBatchMode=yes -oStrictHostKeyChecking=no -i /root/key8.pem
+#      centos@"{{ item }}" true
+#    with_items:
+#      - mydb01
+#      - mydb02
+#    register: result
+#    until: result is success
+#    retries: 30
+#    delay: 30
+
+
+- hosts: master:slave
+  remote_user: centos
+  vars:
+    ansible_ssh_private_key_file: /root/key8.pem
+  become: true
+  tasks:
+    - name: set timezone to Asia Shanghai 
+      timezone:
+        name: Asia/Shanghai
+
+    - name: test to see if selinux is running
+      command: getenforce
+      register: sestatus
+      changed_when: false
+
+    - name: ensure Selinux is disabled
+      selinux: state=disabled
+
+    - name: set Senlinux permissive runtime
+      shell: setenforce 0
+      when: '"Enabled" in sestatus.stdout'
+
+    - name: find default yumrepo files
+      find:
+        paths: /etc/yum.repos.d
+        patterns: "*.repo"
+      register: repofiles_to_delete
+
+    - name: remove default yumrepo files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ repofiles_to_delete.files }}"
+  
+    - name: get new yumrepofiles
+      uri:
+        url: http://10.67.51.164/repofile/centos7.repo
+        creates: centos7.repo
+        dest: /etc/yum.repos.d
+
+    - name: install docker-ce
+      yum:
+        name: "{{ item }}"
+        state: present
+      with_items: 
+        - docker-ce
+        - python2-PyMySQL
+
+    - name: enable and start docker daemon
+      service:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: download mysql-5.7.26.tar
+      get_url:
+        url: http://10.67.51.164/mysql-5.7.26.tar
+        dest: /root/mysql-5.7.26.tar
+        mode: '0644'
+
+    - name: install python-docker-py
+      yum: name=python-docker-py update_cache=yes
+
+    - name: load image from archive
+      docker_image:
+        name: mysql:5.7.26
+        source: load
+        load_path: /root/mysql-5.7.26.tar
+
+    - name: create /mysql directory and change ownership
+      file:
+        path: '/mysql'
+        state: 'directory'
+        owner: '999'
+        group: '999'
+        mode: '0755'
+
+- hosts: master
+  remote_user: centos
+  vars:
+    ansible_ssh_private_key_file: /root/key8.pem
+  become: true
+  tasks:
+
+    - name: create mysql master container
+      docker_container:
+        name: mydb
+        user: 999:999
+        image: mysql:5.7.26
+        state: started
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: Foxconn123
+          TZ: 'Asia/Shanghai'
+        volumes:
+          - /mysql:/var/lib/mysql
+        command: "{{ item }}"
+      vars:
+        nested_list:
+          - - "--character-set-server=utf8mb4"  
+            - "--collation-server=utf8mb4_unicode_ci"
+            - "--max_connections=1000"
+            - "--skip-name-resolve"
+            - "--server-id=1"
+            - "--log_bin=/var/lib/mysql/mysql-bin.log"
+            - "--binlog_format=ROW"
+            
+      with_items:
+        - "{{ nested_list }}"
+
+    - name: create repl user
+      mysql_user:
+        name: repl
+        host: "%"
+        password: Foxconn123
+        priv: '*.*:REPLICATION SLAVE'
+        state: present
+        login_user: root
+        login_password: Foxconn123
+
+    - name: get master binlog file name and binlog position
+      mysql_replication:
+        mode: getmaster
+        login_user: root
+        login_password: Foxconn123
+      register: binloginfo
+
+    - name: set facts of mysql master
+      set_fact:
+        master_log_file: "{{ binloginfo.File }}"
+        master_log_pos:  "{{ binloginfo.Position }}"      
+        master_host: "{{ ansible_ssh_host }}"
+
+- hosts: slave
+  remote_user: centos
+  vars:
+    ansible_ssh_private_key_file: /root/key8.pem
+  become: true
+  tasks:
+    - name: create mysql slave container
+      docker_container:
+        name: mydb
+        user: 999:999
+        image: mysql:5.7.26
+        state: started
+        ports:
+          - "3306:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: Foxconn123
+          TZ: 'Asia/Shanghai'
+        volumes:
+          - /mysql:/var/lib/mysql
+        command: "{{ item }}"
+      vars:
+        nested_list:
+          - - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+            - "--max_connections=1000"
+            - "--skip-name-resolve"
+            - "--server-id=2"
+            - "--log_bin=/var/lib/mysql/mysql-bin.log"
+            - "--relay-log=/var/lib/mysql/mysql-relay-bin.log"
+
+      with_items:
+        - "{{ nested_list }}"
+
+
+    - name: change master to mysql master server
+      mysql_replication:
+        mode: changemaster
+        login_user: root
+        login_password: Foxconn123
+        master_host: "{{ hostvars['mydb01']['master_host'] }}"
+        master_user: repl
+        master_password: Foxconn123
+        master_log_file: "{{ hostvars['mydb01']['master_log_file'] }}"
+        master_log_pos: "{{ hostvars['mydb01']['master_log_pos'] }}"
+
+    - name: change master to mysql master server
+      mysql_replication:
+        mode: changemaster
+        login_user: root
+        login_password: Foxconn123
+        master_host: "{{ hostvars['mydb01']['master_host'] }}"
+        master_user: repl
+        master_password: Foxconn123
+        master_log_file: "{{ hostvars['mydb01']['master_log_file'] }}"
+        master_log_pos: "{{ hostvars['mydb01']['master_log_pos'] }}"
+
+
