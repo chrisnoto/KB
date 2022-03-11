@@ -3,6 +3,7 @@ git guide reference  https://www.liaoxuefeng.com/wiki/0013739516305929606dd18361
 git config --global http.proxy 10.67.124.99:808
 git config --global https.proxy 10.67.124.99:808
 
+git config --global credential.helper store  #可用来保存git用户密码，只需第一次输入
 
 ##################撤销修改
 场景1：当你改乱了工作区某个文件的内容，想直接丢弃工作区的修改时，用命令git checkout -- file。

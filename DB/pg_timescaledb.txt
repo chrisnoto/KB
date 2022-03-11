@@ -9,6 +9,13 @@ $ createuser --pwprompt zabbix
 $ createdb -O zabbix -E Unicode -T template0 zabbix
 $ pg_restore -d zabbix /tmp/zabbix.dump
 
+RUN service postgresql start && \
+   psql -U postgres -d postgres -c "alter user postgres with password '${POSTGRES_PASSWORD}';" && \
+   psql -U postgres -d postgres -c "alter system set listen_addresses to '*';" && \
+   psql -U postgres -d postgres -c "alter system set shared_preload_libraries to 'timescaledb';"   
+RUN sed -i "s|# host    .*|host all all all scram-sha-256|g" /etc/postgresql/14/main/pg_hba.conf
+RUN service postgresql restart &&\
+   psql -X -c "create extension timescaledb;"
 
 #使用timescaledb脚本，创建hyphertable
 -bash-4.2$ zcat /tmp/timescaledb.sql.gz | psql zabbix

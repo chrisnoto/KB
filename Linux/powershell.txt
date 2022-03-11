@@ -1,0 +1,10 @@
+列出已安装的软件
+PS C:\Windows\system32> Get-WmiObject -Class Win32_Product |select name,vendor,version
+
+name                                                                            vendor                     version
+----                                                                            ------                     -------
+osquery                                                                         osquery                    4.9.0
+Microsoft Office Office 32-bit Components 2010                                  Microsoft Corporation      14.0.7015.1000
+Microsoft Office Shared 32-bit MUI (Chinese (Simplified)) 2010                  Microsoft Corporation      14.0.7015.1000
+Microsoft Office Visio MUI (Chinese (Simplified)) 2010                          Microsoft Corporation      14.0.7015.1000
+Microsoft Office Visio 2010                                                     Microsoft Corporation      14.0.7015.1000

@@ -1,0 +1,13 @@
+---
+- hosts: localhost
+
+  vars:
+    now_date: "{{ lookup('pipe','date +%Y%m%d%H%M') }}"
+  tasks:
+  - name: git acp
+    shell: |
+      git add .
+      git commit -m "ansible commit {{ now_date }}"
+      git push
+    args:
+      chdir: /root/ansible

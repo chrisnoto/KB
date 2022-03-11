@@ -220,42 +220,6 @@ $ galera_new_cluster
 Change the value of wsrep_cluster_address on rest of the nodes to mention IP addresses, then restart mariadb service one node at a time. The cluster should be up and running and data sync 
 should commit all the changes. Check the last committed value on all nodes after a while to ensure nodes are now in sync. 
 
-
-#######
-zbxdb01 
-wsrep_gtid_mode = on
-wsrep_gtid_domain_id =0
-server-id =01
-log_slave_updates = on
-log-bin = /data/mysql/master-bin
-log-bin-index = /data/mysql/master-bin.index
-gtid_domain_id = 1
-
-zbxdb02
-wsrep_gtid_mode = on
-wsrep_gtid_domain_id =0
-server-id =01
-log_slave_updates = on
-log-bin = /data/mysql/master-bin
-log-bin-index = /data/mysql/master-bin.index
-gtid_domain_id = 2
-
-zbxdb03
-wsrep_gtid_mode = on
-wsrep_gtid_domain_id =0
-server-id =01
-log_slave_updates = on
-log-bin = /data/mysql/master-bin
-log-bin-index = /data/mysql/master-bin.index
-gtid_domain_id = 3
-
-slave
-#Replication slave to Galera Cluster
-server-id       = 02
-relay-log-index = /data/mysql/slave-relay-bin.index
-relay-log       = /data/mysql/slave-relay-bin
-gtid_domain_id  = 99
-
-log-bin         = /data/mysql/slave-bin
-log-bin-index   = /data/mysql/slave-bin.index
-binlog_format   = mixed
+### binlog的删除
+MariaDB [(none)]> purge binary logs before '2022-02-01 08:37:42';
+Query OK, 0 rows affected (1.781 sec)

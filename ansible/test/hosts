@@ -1,3 +1,5 @@
+[pg]
+10.67.39.58
 [es]
 10.67.51.147
 [docker]
@@ -18,3 +20,8 @@
 ansible_ssh_user='root'
 ansible_ssh_pass='Foxconn$56'
 ansible_python_interpreter=/bin/python
+[slave]
+10.67.39.88
+[slave:vars]
+ansible_ssh_user='centos'
+ansible_ssh_private_key_file='/root/key8.pem'

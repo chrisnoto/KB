@@ -40,20 +40,15 @@
       ansible_ssh_host: "{{ item['server']['public_v4'] }}"
     with_items: "{{ vm.results }}"
 
-#- hosts: master:slave
-#  remote_user: centos
-#  delegate_to: localhost
-#  - name: Wait for ssh on the Instance
-#    command: 
-#      ssh -oBatchMode=yes -oStrictHostKeyChecking=no -i /root/key8.pem
-#      centos@"{{ item }}" true
-#    with_items:
-#      - mydb01
-#      - mydb02
-#    register: result
-#    until: result is success
-#    retries: 30
-#    delay: 30
+  - name: Wait for ssh on the Instance
+    command: 
+      ssh -oBatchMode=yes -oStrictHostKeyChecking=no -i /root/key8.pem
+      centos@"{{ item['server']['public_v4'] }}" true
+    with_items: "{{ vm.results }}"
+    register: result
+    until: result is success
+    retries: 30
+    delay: 30
 
 
 - hosts: master:slave
@@ -241,9 +236,11 @@
 #        login_user: root
 #        login_password: Foxconn123
 
-#    - name: get slave
-#      mysql_replication:
-#        mode: getslave
-#        login_user: root
-#        login_password: Foxconn123
+    - name: get slave
+      mysql_replication:
+        mode: getslave
+        login_user: root
+        login_password: Foxconn123
+      tags:
+        - getslave
 

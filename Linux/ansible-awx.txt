@@ -1,0 +1,69 @@
+# AWX里导入hosts文件
+awx-manage inventory_import --inventory-name k8s --source hosts_add
+sh-4.4# cat hosts_add
+[production]
+10.67.49.241
+10.67.49.242
+10.67.49.243
+10.67.49.244
+10.67.49.245
+10.67.49.246
+[production:vars]
+ansible_ssh_user='root'
+ansible_ssh_pass='ext566-32081'
+
+
+
+# AWX安裝
+前提条件
+1 下载AWX项目 17.1.0  可以用docker-compose安裝
+ 后续版本适合kubernetes
+git clone -b 17.1.0 --depth 50 https://github.com/ansible/awx.git
+
+2 安裝docker软件包和导入docker image
+postgres:12
+redis:latest
+centos:8
+ansible/awx:17.1.0
+
+3 yum安裝的依赖包
+yum -y install git gcc gcc-c++ nodejs gettext device-mapper-persistent-data lvm2 bzip2 python-pip
+yum -y install libselinux-python3
+yum -y install python-docker-py
+yum -y install docker-compose
+
+4 此次安裝是在localhost安裝，所以要先安裝ansible软件包
+
+配置inventory文件
+其中secret_key由以下命令生成：
+   openssl rand -base64 30
+[root@repo ~]# cat awx/installer/inventory |egrep -v '#|^$'
+localhost ansible_connection=local ansible_python_interpreter="/usr/bin/env python3"
+[all:vars]
+dockerhub_base=ansible
+awx_task_hostname=awx
+awx_web_hostname=awxweb
+postgres_data_dir="~/.awx/pgdocker"
+host_port=8090
+host_port_ssl=443
+docker_compose_dir="~/.awx/awxcompose"
+pg_username=awx
+pg_password=awxpass
+pg_database=awx
+pg_port=5432
+admin_user=admin
+admin_password=Foxconn$56
+create_preload_data=True
+secret_key=0TXGSMb4I/HBH07apRkMCOamZq8B8g0qDcm4UGbt
+awx_container_search_domains=cesbg.foxconn
+awx_alternate_dns_servers="10.67.50.111"
+project_data_dir=/var/lib/awx/projects
+
+部署
+cd awx/installer/
+ansible-playbook -i inventory install.yml
+
+
+AWX 关键工作流程
+1 inventory file可以用awx-manage随时导入
+2 playbook可以放在gitlab上，在AWX中创建projects时，指定gitlab 项目地址

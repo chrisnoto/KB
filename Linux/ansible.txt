@@ -17,6 +17,10 @@ yum install -y MySQL-python  (被控端)
 ansible -i hosts db -m yum -a "name=MySQL-python state=present"
 ansible -i hosts db -m mysql_info -a "login_user=root login_password=vSTJ456"
 
+# postgresql模块
+ yum install python-psycopg2 -y  (被控端)
+ansible -i hosts pg -m postgresql_info --become-user postgres -b
+ 
 # docker_image模块
 ansible >=2.8 & yum install -y python-docker-py (被控端)
 ansible k8s -m docker_image -a "name=mysql:5.7.13 source=pull"
@@ -122,6 +126,237 @@ ansible playbook的目录结构
 │   └── templates
 ├── site.yml
 └── zabbix.yml
+
+# 在main.yml中调用同一个目录中的其他yaml文件
+---
+
+- name: get public IP
+  ipify_facts:
+  when: not public_ip|default(False)
+
+- include: docker.yml
+  tags: docker
+
+- include: server.yml
+  tags: server
+  when: "'server' in group_names"
+
+- include: node.yml
+  tags: node
+  when: "'node' in group_names and
+        rancher_env in api_keys|default([])"
+
+
+-------------------------------- ansible playbook --------------------------------
+------------------- ansible变量
+1 You can assign variables in a playbook on the level of a play, which are then valid for all tasks and all hosts within that play
+2 Similarly, variables can be defined on the level of an individual task in a playbook
+3 You can define variables on the level of hosts or groups of hosts in the inventory file
+4 There is a module called set_fact that allows you to define variables and assign values which are then scoped per host and for the remainder of the playbook execution
+5 Variables can be defined on the command line when executing a playbook
+6 Variables can be bound to a module so that the return values of that module are assigned to that variable within the scope of the respective host
+7 Variable definitions can be moved into separate files and be referenced from within the playbook
+8 Finally, Ansible will provide some variables and facts
+
+# set_fact赋变量
+    - name: Extract IP address from docker dockerData
+      set_fact:
+        ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
+
+# ansible-playbook不同主机之间的变量传递
+- hosts: 192.168.0.10
+  tasks:
+      set_fact: worker_join_token={{ worker_join_token.stdout.replace('To add a worker to this swarm, run the following command:\n\n    ', '').replace('\\\n','') }}
+- hosts: mongo
+  tasks:
+    - name: 加入 swarm 集群
+      command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
+
+------------------- playbook语法
+###  list
+# This will run debug three times since the list is flattened
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items: "{{ nested_list }}"
+
+# This will run debug once with the three items
+- debug:
+    msg: "{{ item }}"
+  vars:
+    nested_list:
+      - - one
+        - two
+        - three
+  with_items:
+    - "{{ nested_list }}"	
+
+        command: "{{ item }}"
+      vars:
+        nested_list:
+          - - "--character-set-server=utf8mb4"
+            - "--collation-server=utf8mb4_unicode_ci"
+            - "--max_connections=1000"
+            - "--skip-name-resolve"
+      with_items:
+        - "{{ nested_list }}"
+		
+### lineinfile写法
+- hosts: node
+  user: ubuntu
+  tasks: 
+    - name: Configure elasticsearch.yml
+      become: true
+      become_user: root
+      lineinfile:
+        dest: '/etc/elasticsearch/elasticsearch.yml'
+        backrefs: no
+        state: present
+        regexp: "{{ item.old }}"
+        line: "{{ item.new }}"
+      with_items:
+        - {old: '^cluster.name', new: 'cluster.name: esapi' }
+        - {old: '^node.roles', new: 'node.roles: [data]' }
+        - {old: '^node.name', new: 'node.name: {{ es_node_name }}' }  
+        - {old: '^myhost', new: 'myhost: {{ inventory_hostname }}' }  
+        - {old: '^path.data', new: 'path.data: /data/elasticsearch/data' }  
+        - {old: '^path.log', new: 'path.log: /data/elasticsearch/log' }  
+        - {old: '^network.host', new: 'network.host: 0.0.0.0' }
+        - {old: '^http.port', new: 'http.port: 9200' }  
+        - {old: '^discovery.seed_hosts', new: 'discovery.seed_hosts: ["172.31.0.1", "172.31.0.2", "172.31.0.3"]' }
+        - {old: '^cluster.initial_master_nodes', new: 'cluster.initial_master_nodes: ["node01", "node02", "node03"]' }  	
+		
+-------------------  ansible playbook举例	  
+1 docker安装简单版，无roles
+对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
+-----------------------------------------------------------------------------------------------------------------------------------------
+# docker run脚本
+docker run -d \
+--name mydb \
+--user 999:999 \
+-e MYSQL_ROOT_PASSWORD=Foxconn123 \
+-e TZ='Asia/Shanghai' \
+-v /mysql:/var/lib/mysql \
+-p 3306:3306 \
+mysql:5.7.13 \
+--character-set-server=utf8mb4 \
+--collation-server=utf8mb4_unicode_ci \
+--max_connections=1000 \
+--skip-name-resolve
+
+# 转换成ansible playbook
+[root@repo ansible]# cat hosts
+[docker]
+10.67.36.58
+
+[root@repo ansible]# cat mysql.yaml
+---
+- name: install mysql
+  hosts: docker
+  become: true
+
+
+  tasks:
+  - name: install python-docker-py
+    yum: name=python-docker-py update_cache=yes
+  - name: pull mysql5.7.26 images
+    docker_image:
+      name=mysql:5.7.26
+      source=pull
+  - name: create /mysql directory and change ownership
+    file:
+      path: '/mysql'
+      state: 'directory'
+      owner: '999'
+      group: '999'
+      mode: '0755'
+
+  - name: create mysql container
+    docker_container:
+      name: mydb
+      user: 999:999
+      image: mysql:5.7.26
+      state: started
+      ports:
+        - "3306:3306"
+      env:
+        MYSQL_ROOT_PASSWORD: Foxconn123
+        TZ: 'Asia/Shanghai'
+      volumes:
+        - /mysql:/var/lib/mysql
+      command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci","--max_connections=1000","--skip-name-resolve"]
+
+run:  ansible-playbook -i hosts mysql.yaml -vv
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+vmware snaphost
+
+[root@repo ansible]# cat hosts
+[esxi]
+10.67.51.16
+10.67.51.18
+10.67.51.19
+10.67.51.79
+10.67.51.8
+10.67.51.80
+10.67.51.81
+10.67.51.82
+[esxi:vars]
+ansible_ssh_user='root'
+ansible_ssh_pass='Foxconn$56'
+ansible_python_interpreter=/bin/python
+
+
+[root@repo ansible]# cat snapshot.yaml
+---
+- hosts: "{{ esx }}"
+  tasks:
+  - name: Gather all registered virtual machines
+    vmware_guest_snapshot:
+      hostname: '10.67.51.89'
+      username: 'administrator@vsphere.local'
+      password: 'Foxconn$56'
+      validate_certs: no
+      datacenter: "A21"
+      folder: "/A21/vm/"
+      name: "{{ vm }}"
+      state: present
+      snapshot_name: s_20220211
+      memory_dump: yes
+    delegate_to: localhost
+
+
+
+run: [root@repo ansible]# ansible-playbook -i hosts snapshot.yaml -e esx=10.67.51.16 -e vm=vSTJLinuxTrans1
+
+备注  when: ping_result|success wont work with ansible 2.9 changing it to when: ping_result is success worked.
+
+
+
+# ansible-vault 加密
+[root@repo ansible]# cat password.yml
+password: 'Foxconn$56'
+
+[root@repo ansible]# ansible-vault encrypt password.yml
+New Vault password:
+Confirm New Vault password:
+Encryption successful
+
+[root@repo ansible]# cat password.yml
+$ANSIBLE_VAULT;1.1;AES256
+65633036303664353265343538613338303034326335323336653933343564373564373966666538
+3531383237393764313566393766383462333839313231640a643231333532636364633631633434
+31666436383738353361613136313461366461636266626263633465393663616536633361353364
+6464323833656539310a386265313533393832386539343830383765636364383266626562663938
+66303535653836373832313534616335653833383166313164626433363837656161
+
+[root@repo ansible]# ansible-vault view password.yml
+Vault password:
+password: 'Foxconn$56'
 
 
 -------------------   ansible使用 inventory脚本
@@ -344,195 +579,6 @@ ansible_all_ipv4_addresses      ansible_distribution      ansible_distribution_v
 ------------------------------  ----------------------  ------------------------------  --------------------------  -----------------------  -------------------------  ---------------------
 ["172.17.0.1", "10.67.51.164"]  CentOS                                             7.5  3.10.0-957.27.2.el7.x86_64  VMware Virtual Platform                          4                   7931
 
-
-
-
-
--------------------------------- ansible playbook --------------------------------
-------------------- ansible变量
-1 You can assign variables in a playbook on the level of a play, which are then valid for all tasks and all hosts within that play
-2 Similarly, variables can be defined on the level of an individual task in a playbook
-3 You can define variables on the level of hosts or groups of hosts in the inventory file
-4 There is a module called set_fact that allows you to define variables and assign values which are then scoped per host and for the remainder of the playbook execution
-5 Variables can be defined on the command line when executing a playbook
-6 Variables can be bound to a module so that the return values of that module are assigned to that variable within the scope of the respective host
-7 Variable definitions can be moved into separate files and be referenced from within the playbook
-8 Finally, Ansible will provide some variables and facts
-
-# set_fact赋变量
-    - name: Extract IP address from docker dockerData
-      set_fact:
-        ipAddress:  "{{ dockerData['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
-
-# ansible-playbook不同主机之间的变量传递
-- hosts: 192.168.0.10
-  tasks:
-      set_fact: worker_join_token={{ worker_join_token.stdout.replace('To add a worker to this swarm, run the following command:\n\n    ', '').replace('\\\n','') }}
-- hosts: mongo
-  tasks:
-    - name: 加入 swarm 集群
-      command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
-
-------------------- 数据结构语法
-###  list
-# This will run debug three times since the list is flattened
-- debug:
-    msg: "{{ item }}"
-  vars:
-    nested_list:
-      - - one
-        - two
-        - three
-  with_items: "{{ nested_list }}"
-
-# This will run debug once with the three items
-- debug:
-    msg: "{{ item }}"
-  vars:
-    nested_list:
-      - - one
-        - two
-        - three
-  with_items:
-    - "{{ nested_list }}"	
-
-        command: "{{ item }}"
-      vars:
-        nested_list:
-          - - "--character-set-server=utf8mb4"
-            - "--collation-server=utf8mb4_unicode_ci"
-            - "--max_connections=1000"
-            - "--skip-name-resolve"
-      with_items:
-        - "{{ nested_list }}"
-	  
--------------------  ansible playbook举例	  
-1 docker安装简单版，无roles
-对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
------------------------------------------------------------------------------------------------------------------------------------------
-# docker run脚本
-docker run -d \
---name mydb \
---user 999:999 \
--e MYSQL_ROOT_PASSWORD=Foxconn123 \
--e TZ='Asia/Shanghai' \
--v /mysql:/var/lib/mysql \
--p 3306:3306 \
-mysql:5.7.13 \
---character-set-server=utf8mb4 \
---collation-server=utf8mb4_unicode_ci \
---max_connections=1000 \
---skip-name-resolve
-
-# 转换成ansible playbook
-[root@repo ansible]# cat hosts
-[docker]
-10.67.36.58
-
-[root@repo ansible]# cat mysql.yaml
----
-- name: install mysql
-  hosts: docker
-  become: true
-
-
-  tasks:
-  - name: install python-docker-py
-    yum: name=python-docker-py update_cache=yes
-  - name: pull mysql5.7.26 images
-    docker_image:
-      name=mysql:5.7.26
-      source=pull
-  - name: create /mysql directory and change ownership
-    file:
-      path: '/mysql'
-      state: 'directory'
-      owner: '999'
-      group: '999'
-      mode: '0755'
-
-  - name: create mysql container
-    docker_container:
-      name: mydb
-      user: 999:999
-      image: mysql:5.7.26
-      state: started
-      ports:
-        - "3306:3306"
-      env:
-        MYSQL_ROOT_PASSWORD: Foxconn123
-        TZ: 'Asia/Shanghai'
-      volumes:
-        - /mysql:/var/lib/mysql
-      command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci","--max_connections=1000","--skip-name-resolve"]
-
-run:  ansible-playbook -i hosts mysql.yaml -vv
------------------------------------------------------------------------------------------------------------------------------------------
-
-vmware snaphost
-
-[root@repo ansible]# cat hosts
-[esxi]
-10.67.51.16
-10.67.51.18
-10.67.51.19
-10.67.51.79
-10.67.51.8
-10.67.51.80
-10.67.51.81
-10.67.51.82
-[esxi:vars]
-ansible_ssh_user='root'
-ansible_ssh_pass='Foxconn$56'
-ansible_python_interpreter=/bin/python
-
-
-[root@repo ansible]# cat snapshot.yaml
----
-- hosts: "{{ esx }}"
-  tasks:
-  - name: Gather all registered virtual machines
-    vmware_guest_snapshot:
-      hostname: '10.67.51.89'
-      username: 'administrator@vsphere.local'
-      password: 'Foxconn$56'
-      validate_certs: no
-      datacenter: "A21"
-      folder: "/A21/vm/"
-      name: "{{ vm }}"
-      state: present
-      snapshot_name: s_20220211
-      memory_dump: yes
-    delegate_to: localhost
-
-
-
-run: [root@repo ansible]# ansible-playbook -i hosts snapshot.yaml -e esx=10.67.51.16 -e vm=vSTJLinuxTrans1
-
-备注  when: ping_result|success wont work with ansible 2.9 changing it to when: ping_result is success worked.
-
-
-
-# ansible-vault 加密
-[root@repo ansible]# cat password.yml
-password: 'Foxconn$56'
-
-[root@repo ansible]# ansible-vault encrypt password.yml
-New Vault password:
-Confirm New Vault password:
-Encryption successful
-
-[root@repo ansible]# cat password.yml
-$ANSIBLE_VAULT;1.1;AES256
-65633036303664353265343538613338303034326335323336653933343564373564373966666538
-3531383237393764313566393766383462333839313231640a643231333532636364633631633434
-31666436383738353361613136313461366461636266626263633465393663616536633361353364
-6464323833656539310a386265313533393832386539343830383765636364383266626562663938
-66303535653836373832313534616335653833383166313164626433363837656161
-
-[root@repo ansible]# ansible-vault view password.yml
-Vault password:
-password: 'Foxconn$56'
 
 
 	  
