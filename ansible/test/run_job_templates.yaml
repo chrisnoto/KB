@@ -1,0 +1,24 @@
+---
+- hosts: localhost
+  vars:
+    now_date: "{{ lookup('pipe','date +%Y%m%d%H%M') }}"
+  tasks:
+  - name: include the playbook gitacp.yaml 
+    include: gitacp.yaml
+    tags: git
+
+  - name: add host 10.67.36.15 to operate awx
+    add_host:
+      name: 10.67.36.15
+      groups: awxclient
+      ansible_ssh_host: 10.67.36.15
+      ansible_ssh_user: root
+      ansible_ssh_pass: 'ext566-32081'
+- hosts: awxclient
+  tasks:
+  - name: execute awx job_template
+    shell: |
+      source /root/ansible-awx-rc
+      awx login -f human | tee /root/token
+      source /root/token
+      awx job_templates launch "{{ job }}" --credentials "{{ cred }}" --monitor -f human

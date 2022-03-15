@@ -1478,12 +1478,12 @@ postgres=# \du chensen
 
 
 pg_hba.conf
-Trust Authentication
+1 Trust Authentication
 Allow the connection unconditionally. This method allows anyone that can connect to the PostgreSQL database server to login as any PostgreSQL user they wish, 
 without the need for a password or any other authentication.
-Ident authentication can only be used on TCP/IP connections. 
+2 Ident authentication can only be used on TCP/IP connections. 
 When specified for local connections, peer authentication will be used instead.
-md5 Authentication
+3 md5 Authentication
 Require the client to supply a double-MD5-hashed password for authentication.
 
 最好设置为允许所有用户通过网络走密码验证，这样就不需要reload postgresql

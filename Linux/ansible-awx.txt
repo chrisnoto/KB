@@ -63,7 +63,93 @@ project_data_dir=/var/lib/awx/projects
 cd awx/installer/
 ansible-playbook -i inventory install.yml
 
+部署完后访问 http://10.67.51.164:8090
 
 AWX 关键工作流程
 1 inventory file可以用awx-manage随时导入
 2 playbook可以放在gitlab上，在AWX中创建projects时，指定gitlab 项目地址
+
+
+# awx命令行   用于CI
+安装awx到centos8
+yum-config-manager --add-repo https://releases.ansible.com/ansible-tower/cli/ansible-tower-cli-el8.repo
+yum install ansible-tower-cli -y
+配置环境变量
+[root@c8-cilent1 ~]# cat ansible-awx-rc
+export TOWER_HOST=http://10.67.51.164:8090
+export TOWER_USERNAME=admin
+export TOWER_PASSWORD='Foxconn$56'
+使用环境变量获得AWX的token
+source ansible-awx-rc;awx login -f human | tee token; source token
+运行命令
+[root@c8-cilent1 ~]# awx job_template list --filter id,name,inventory,project,playbook -f human
+id name              inventory project playbook
+== ================= ========= ======= ===================
+23 check vm          1         20      vminfo.yaml
+7  Demo Job Template 1         6       hello_world.yml
+19 ntp               4         17      baseconfig/site.yml
+15 test 1            3         13      site.yml
+
+awx credentials create --credential_type 'Machine' \
+    --name 'My SSH Key' --user 'alice' \
+    --inputs '{"username": "server-login", "ssh_key_data": "@~/.ssh/id_rsa"}'
+
+1 创建project
+[root@c8-cilent1 ~]# cat awx_project_create.sh
+awx projects create --wait \
+--organization 1 \
+--name 'chensen' \
+--scm_type git \
+--scm_url 'https://gitlab.ces.efoxconn.com/H7108579/ansible' \
+--scm_update_on_launch yes \
+--credential 4 \
+-f human
+2 创建job template
+[root@c8-cilent1 ~]# cat awx_job_template_create.sh
+awx job_templates create \
+--name 'check vm' \
+--job_type run \
+--project 'chensen' \
+--playbook vminfo.yaml \
+--inventory 'Demo Inventory' \
+--ask_credential_on_launch yes \
+--verbosity 2 \
+-f human
+
+3 执行job template
+awx job_templates launch 'check vm' --credentials 'vcenter5189' --monitor -f human
+
+可以转为playbook
+[root@repo ansible]# cat run_job_templates.yaml
+---
+- hosts: localhost
+  vars:
+    now_date: "{{ lookup('pipe','date +%Y%m%d%H%M') }}"
+  tasks:
+  - name: include the playbook gitacp.yaml
+    include: gitacp.yaml
+
+  - name: add host 10.67.36.15 to operate awx
+    add_host:
+      name: 10.67.36.15
+      groups: awxclient
+      ansible_ssh_host: 10.67.36.15
+      ansible_ssh_user: root
+      ansible_ssh_pass: 'ext566-32081'
+- hosts: awxclient
+  tasks:
+  - name: execute awx job_template
+    shell: |
+      source /root/ansible-awx-rc
+      awx login -f human | tee /root/token
+      source /root/token
+      awx job_templates launch "{{ job }}" --credentials "{{ cred }}" --monitor -f human
+[root@repo ansible]# cat gitacp.yaml
+- name: git acp
+  shell: |
+    git add .
+    git commit -m "ansible commit {{ now_date }}"
+    git push
+  args:
+    chdir: /root/ansible
+执行命令： ansible-playbook run_job_templates.yaml -e job='check_vm' -e cred='vcenter5189' -vv

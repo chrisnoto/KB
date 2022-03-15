@@ -1,10 +1,6 @@
 ---
 - hosts: localhost
   tasks:
-  - name: Add openstack repository
-    yum_repository:
-      name: openstack-rocky
-      description: 
   - name: Create a new instance and attaches to a network and passes metadata to the instance
     os_server:
       state: present
@@ -14,7 +10,7 @@
         password: F0xc0nn!23
         project_name: admin
       validate_certs: no
-      name: "{{ instance }}"
+      name: pgb
       image: centos7-ryan
       key_name: KEY8
       timeout: 2000
@@ -39,6 +35,7 @@
   remote_user: centos
   vars:
     ansible_ssh_private_key_file: /root/key8.pem
+    ansible_python_interpreter: /bin/python
   become: true
   tasks:
     - name: set timezone to Asia Shanghai 
@@ -76,8 +73,114 @@
         dest: /etc/yum.repos.d
 
     - name: install postgresql and dependent python packages
-      yum: "name={{ item }} state=preset"
+      yum: "name={{ item }} state=present"
       with_items:
-        - python2-psycopg2
+        - python2-pip
+        - python-ipaddress
+        - python-psycopg2
         - postgresql14
         - postgresql14-server
+
+    - name: check if postgresql is initialized
+      ansible.builtin.stat:
+        path: "/var/lib/pgsql/14/data/pg_hba.conf"
+      register: postgres_data
+
+    - name: Initialize PG
+      shell: "postgresql-14-setup initdb"
+      when: not postgres_data.stat.exists
+
+    - name: start and enable services
+      service: "name=postgresql-14 state=started enabled=yes"
+
+    - name: create database
+      postgresql_db:
+        state: present
+        name: "{{ dbname }}"
+      become: yes
+      become_user: postgres
+
+    - name: create db user
+      postgresql_user:
+        state: present
+        name: "{{ dbuser }}"
+        password: "{{ dbpass }}"
+      become: yes
+      become_user: postgres
+
+    - name: "grant dbuser access to target db"
+      postgresql_privs:
+        type: database
+        database: "{{ dbname }}"
+        roles: "{{ dbuser }}"
+        grant_option: no
+        privs: all
+      become: yes
+      become_user: postgres
+
+    - name: "Allow md5 conn for the db user"
+      postgresql_pg_hba:
+        dest: "~/14/data/pg_hba.conf"
+        contype: host
+        databases: all
+        method: md5
+        users: "{{ dbuser }}"
+        create: true
+      become: yes
+      become_user: postgres
+      notify: reload postgres
+
+    - name: set listen_addresses parameter
+      postgresql_set:
+        name: listen_addresses
+        value: '*'
+      become: yes
+      become_user: postgres
+      notify: restart postgres
+
+    - name: set work mem parameter
+      postgresql_set:
+        name: work_mem
+        value: 24mb
+      become: yes
+      become_user: postgres
+      notify: restart postgres
+
+#timescaledb
+    - name: install timescaledb
+      yum: name=timescaledb_14 state=present
+
+    - name: timescaledb-tune
+      postgresql_set:
+        name: shared_buffers 
+        value: 2GB
+      become: yes
+      become_user: postgres
+      notify: restart postgres
+
+    - name: set shared_preload_libraries parameter
+      postgresql_set:
+        name: shared_preload_libraries
+        value: 'timescaledb'
+      become: yes
+      become_user: postgres
+      notify: restart postgres
+
+    - name: create exetension timescaledb
+      postgresql_ext:
+        name: timescaledb
+        db: Zabbix
+        schema: public
+      become: yes
+      become_user: postgres
+        
+  handlers:
+    - name: reload postgres
+      postgresql_query:
+        db: postgres
+        query: select pg_reload_conf()
+      become: yes
+      become_user: postgres
+
+    - name: restart postgres
+      service: name=postgresql-14 state=restarted
