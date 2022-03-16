@@ -37,6 +37,7 @@
     ansible_ssh_private_key_file: /root/key8.pem
     ansible_python_interpreter: /bin/python
   become: true
+
   tasks:
     - name: set timezone to Asia Shanghai 
       timezone:
@@ -123,6 +124,7 @@
         dest: "~/14/data/pg_hba.conf"
         contype: host
         databases: all
+        source: 0.0.0.0/0
         method: md5
         users: "{{ dbuser }}"
         create: true
@@ -165,14 +167,15 @@
       become: yes
       become_user: postgres
       notify: restart postgres
-
-    - name: create exetension timescaledb
-      postgresql_ext:
-        name: timescaledb
-        db: Zabbix
-        schema: public
-      become: yes
-      become_user: postgres
+# 只要有任务失败, handler便不会运行。此处create extension会失败，因为handler还没来得及运行
+# 需要另写playbook创建extension
+#    - name: create exetension timescaledb
+#      postgresql_ext:
+#        name: timescaledb
+#        db: Zabbix
+#        schema: public
+#      become: yes
+#      become_user: postgres
         
   handlers:
     - name: reload postgres
@@ -183,4 +186,5 @@
       become_user: postgres
 
     - name: restart postgres
-      service: name=postgresql-14 state=restarted
+      service: "name=postgresql-14 state=restarted"
+      become: true
