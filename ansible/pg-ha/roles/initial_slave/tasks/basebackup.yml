@@ -1,0 +1,14 @@
+---
+- name: Stop PostgreSQL
+  service:
+    name: postgresql-14
+    state: stopped
+
+- name: Clear out data directory
+  shell: rm -rf /var/lib/pgsql/14/data/*
+
+- name: run base backup
+  shell: pg_basebackup -X stream -D /var/lib/pgsql/14/data -h {{ postgresrep_master_address }} -c fast -U repl -R --slot=replicate 
+  become: yes
+  become_user: postgres
+  notify: restart postgresql

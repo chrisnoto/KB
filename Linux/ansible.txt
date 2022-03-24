@@ -4,6 +4,9 @@
 fact_caching = redis
 fact_caching_timeout = 864000
 
+inventory      = /etc/ansible/         # 目录类所有hosts文件都能被主动发现
+callback_whitelist = profile_tasks      #打印每个task的执行时间
+stdout_callback = actionable           # 只显示changed or failed的task
 -------------------  ansible模塊
 # openstack模块
 yum install -y python2-openstacksdk
@@ -36,6 +39,15 @@ ansible k8s -m docker_image -a "name=shanchaodev/kubernetes-dashboard-amd64:v1.1
 - apt: update_cache=yes
 redis-cli get ansible_facts10.67.38.105 | jq .
 
+# shell模块
+- name: git acp
+  shell: |
+    git add .
+    git commit -m "ansible commit {{ now_date }}"
+    git push
+  args:
+    chdir: /root/ansible
+    executable: /bin/bash # Run whatever command in the Bash shell
 ------------------- Ansible adhoc 命令
 ansible-doc docker_image  查看帮助
 ansible 10.20.0.16 -m setup -a filter='ansible_lsb'
@@ -127,6 +139,9 @@ ansible playbook的目录结构
 ├── site.yml
 └── zabbix.yml
 
+roles/database/vars/main.yml       #Variables that shouldn’t be overridden
+roles/database/defaults/main.yml   #Default variables that can be overridden 
+
 # 在main.yml中调用同一个目录中的其他yaml文件
 ---
 
@@ -145,8 +160,15 @@ ansible playbook的目录结构
   tags: node
   when: "'node' in group_names and
         rancher_env in api_keys|default([])"
-
-
+		
+# 根据组名选择是否执行task
+tasks:
+  - name: ntp role
+    include_role:
+      name: ntp
+    tags:
+      - ntp
+    when: ansible_hostname in groups['group_name']
 -------------------------------- ansible playbook --------------------------------
 ------------------- ansible变量
 1 You can assign variables in a playbook on the level of a play, which are then valid for all tasks and all hosts within that play
@@ -172,6 +194,80 @@ ansible playbook的目录结构
     - name: 加入 swarm 集群
       command: "{{ hostvars['192.168.0.10']['worker_join_token'] }}"
 
+### source变量的几种方法
+
+1. Inventory environment variables
+The best option is to have the environment at your inventory side in a variable with different value for each group/host through group_vars/host_vars, then to use it for the environment keyword
+
+# host_vars/my_host.yml
+---
+env_vars:
+  VAR1: key1
+  VAR2: key2
+- hosts: my_host
+  tasks: 
+    - name: Display environment variables
+      command: env
+      environment: "{{ env_vars }}"
+Pros:  full ansible solution
+       will work for environment of every module
+Cons:  need to know the environment variables at ansible side
+
+2. Loading environment variables for every tasks
+If your tasks are all shell/command (which I don't advise, as it's better to use appropriate ansible module whenever possible), you can simply load the env file every time with shell module
+
+- hosts: my_host
+  tasks: 
+    - name: Display environment variables
+      shell: |
+        . ./.env_file_name && env
+
+    - name: Do another action
+      shell: |
+        . ./.env_file_name && do_something_else
+Pros: no need to know the environment variables at ansible side
+Cons: limited to tasks with shell module
+
+3. Load environment variables from env_file into ansible fact
+This option is to parse the env file once and for all and load it in an ansible fact to use with the environment keyword.
+
+- hosts: my_host
+  tasks: 
+    - name: Get env file content
+      slurp:
+        src: ./.env_file_name
+      register: env_file_content
+
+    - name: Parse environment
+      set_fact:
+        env_vars: "{{ ('{' + (env_file_content.content | b64decode).split('\n') | select | map('regex_replace', '([^=]*)=(.*)', '\"\\1\": \"\\2\"') | join(',') + '}') | from_json }}"
+
+    - name: Display environment variables
+      command: env
+      environment: "{{ env_vars }}"
+Or, if the env file need to be executed instead of directly parsed:
+
+- hosts: my_host
+  tasks: 
+    - name: Get env file content
+      shell: . ./.env_file_name && env
+      register: env_file_result
+
+    - name: Parse environment
+      set_fact:
+        env_vars: "{{ ('{' + env_file_result.stdout_lines | map('regex_replace', '([^=]*)=(.*)', '\"\\1\": \"\\2\"') | join(',') + '}') | from_json }}"
+
+    - name: Display environment variables
+      command: env
+      environment: "{{ env_vars }}"
+Pros:  will work for environment of every module
+       no need to know the environment variables at ansible side
+Cons:  could fail on bad formatting of file	  
+	  
+	  
+### 关于handlers
+Normally when a task fails and the play aborts on that host, any handlers that had been notified by earlier tasks in the play will not run. 
+If you set the force_handlers: yes keyword on the play, then notified handlers are called even if the play aborted because a later task failed.	  
 ------------------- playbook语法
 ###  list
 # This will run debug three times since the list is flattened
@@ -229,7 +325,35 @@ ansible playbook的目录结构
         - {old: '^http.port', new: 'http.port: 9200' }  
         - {old: '^discovery.seed_hosts', new: 'discovery.seed_hosts: ["172.31.0.1", "172.31.0.2", "172.31.0.3"]' }
         - {old: '^cluster.initial_master_nodes', new: 'cluster.initial_master_nodes: ["node01", "node02", "node03"]' }  	
-		
+
+批量替换方法二	
+先在defaults/main.yml中定义变量
+postgresrep_postgres_conf_lines:
+  - regexp: '#?wal_level = \w+(\s+#.*)'
+    line: 'wal_level = {{ postgresrep_wal_level }}\1'
+
+  - regexp: '#?max_wal_senders = \d+(\s+#.*)'
+    line: 'max_wal_senders = {{ postgresrep_max_wal_senders }}\1'
+
+  - regexp: '#?wal_keep_segments = .*(\s+#.*)'
+    line: 'wal_keep_segments = {{ postgresrep_wal_keep_segments }}\1'
+
+  - regexp: '#?synchronous_standby_names = .*'
+    line: "synchronous_standby_names = '{{ postgresrep_application_name }}'"
+
+  - regexp: '#?synchronous_commit = \w+(\s+#.*)'
+    line: 'synchronous_commit = {{ postgresrep_synchronous_commit }}\1'
+然后在task中引用变量做替换
+- name: Configure master server
+  lineinfile:
+    state: present
+    backrefs: yes
+    dest: /var/lib/pgsql/9.4/data/postgresql.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items: "{{ postgresrep_postgres_conf_lines }}"
+  notify: restart postgresql	
+  
 -------------------  ansible playbook举例	  
 1 docker安装简单版，无roles
 对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)

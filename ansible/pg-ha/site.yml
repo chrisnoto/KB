@@ -1,0 +1,37 @@
+---
+- name: provisioning VMs on openstack
+  hosts: localhost
+  vars:
+    master: otjdb01
+    slave: otjdb02
+
+  roles:
+    - openstack_provision_vm
+
+- name: deploy postgresql-14 on CentOS 7
+  hosts: master:slave
+  remote_user: centos
+  vars:
+    ansible_ssh_private_key_file: /root/key8.pem
+  become: true
+
+  roles:
+    - initial_vm
+    - initial_pg
+
+- name: initial master
+  hosts: master
+  remote_user: centos
+  become: true
+  
+  roles:
+    - initial_master
+
+- name: initial slave
+  hosts: slave
+  remote_user: centos
+  become: true
+
+  roles:
+    - initial_slave
+

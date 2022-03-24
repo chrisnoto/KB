@@ -1,0 +1,10 @@
+---
+- name: Configure pghba file
+  lineinfile:
+    state: present
+    dest: /var/lib/pgsql/14/data/pg_hba.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.replace }}"
+  with_items: "{{ postgresrep_pg_hba_conf_lines }}"
+  notify: restart postgresql
+

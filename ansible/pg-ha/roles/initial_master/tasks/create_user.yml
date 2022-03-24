@@ -1,0 +1,12 @@
+---
+- name: create db user
+  postgresql_user:
+    state: present
+    name: "{{ repluser }}"
+    password: "{{ replpass }}"
+    role_attr_flags: 'replication'
+  become: True
+  become_user: postgres
+  tags: createuser
+
+

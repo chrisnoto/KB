@@ -1,0 +1,7 @@
+---
+- name: create slot for replication
+  postgresql_slot:
+    slot_name: replicate
+    state: present
+  become: True
+  become_user: postgres

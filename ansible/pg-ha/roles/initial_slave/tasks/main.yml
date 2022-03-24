@@ -1,0 +1,4 @@
+---
+- import_role:
+    name: initial_master
+- include: basebackup.yml

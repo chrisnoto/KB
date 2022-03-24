@@ -130,6 +130,7 @@ MariaDB [zbx_proxy]> select count(*) from proxy_history where id>(select nextid 
 |   920722 |
 +----------+
 1 row in set (1.562 sec)
+
 调整proxy和server端的参数，比如增大starttrapper都没有作用。最后删除lag的backlog数据
 To do that, we need:
 1. stop the Zabbix proxy,

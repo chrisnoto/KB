@@ -1,0 +1,7 @@
+---
+
+- include: dbinit.yml
+- include: create_user.yml
+- include: streaming_replication.yml
+- include: pg_hba.yml
+- include: create_slot.yml

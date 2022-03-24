@@ -1,0 +1,41 @@
+---
+- name: Create a new instance and attaches to a network and passes metadata to the instance
+  os_server:
+    state: present
+    auth:
+      auth_url: "{{ cloud_auth_url }}"
+      username: "{{ cloud_user }}"
+      password: "{{ cloud_pass }}"
+      project_name: "{{ cloud_project_name }}"
+    validate_certs: no
+    name: "{{ item.name }}"
+    image: "{{ item.image }}"
+    key_name: "{{ item.key }}"
+    timeout: 2000
+    flavor: "{{ item.flavor }}"
+    network: "{{ cloud_network }}"
+  with_items: "{{ servers }}"
+  register: vm
+
+- name: Add instance to inventory
+  add_host:
+    name: "{{ item['item']['name'] }}"
+    groups: "{{ item['item']['meta']['group'] }}"
+    ansible_ssh_host: "{{ item['server']['public_v4'] }}"
+  with_items: "{{ vm.results }}"
+
+#- name: set fact
+#  set_fact:
+    
+
+
+- name: Wait for ssh on the Instance
+  command:
+    ssh -oBatchMode=yes -oStrictHostKeyChecking=no -i /root/key8.pem
+    centos@"{{ item['server']['public_v4'] }}" true
+  with_items: "{{ vm.results }}"
+  register: result
+  until: result is success
+  retries: 30
+  delay: 30
+

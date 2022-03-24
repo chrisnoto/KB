@@ -1,0 +1,13 @@
+---
+- name: check if postgresql is initialized
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/14/data/pg_hba.conf"
+  register: postgres_data
+
+- name: Initialize PG
+  shell: "postgresql-14-setup initdb"
+  when: not postgres_data.stat.exists
+
+- name: start and enable services
+  service: "name=postgresql-14 state=started enabled=yes"
+

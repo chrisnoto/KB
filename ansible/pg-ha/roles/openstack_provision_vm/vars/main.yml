@@ -1,0 +1,5 @@
+cloud_auth_url: https://10.67.36.80:5000
+cloud_user: admin
+cloud_pass: F0xc0nn!23
+cloud_project_name: admin
+cloud_network: admin_floating_net

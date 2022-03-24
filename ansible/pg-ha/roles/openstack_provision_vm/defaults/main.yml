@@ -1,0 +1,14 @@
+servers:
+  - name: "{{ master }}"
+    image: centos7-ryan
+    flavor: 4C-8G-40G
+    key: KEY8
+    meta:
+      group: master
+  - name: "{{ slave }}"
+    image: centos7-ryan
+    flavor: 4C-8G-40G
+    key: KEY8
+    meta:
+      group: slave
+
