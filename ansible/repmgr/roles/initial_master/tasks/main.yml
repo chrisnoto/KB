@@ -1,0 +1,9 @@
+---
+
+- include: dbinit.yml
+- include: create_user.yml
+- include: create_repmgr_db.yml
+- include: configure_postgresql_conf.yml
+- include: pg_hba.yml
+- include: add_shared_preload_libraries.yml
+- include: configure_repmgr.yml

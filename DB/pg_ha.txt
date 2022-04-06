@@ -351,13 +351,14 @@ archive_command = 'test ! -f /opt/archivedir/%f && cp %p /opt/archivedir/%f'
 5 创建复制用户
 create user repl replication LOGIN CONNECTION LIMIT 30 ENCRYPTED PASSWORD 'Foxconn123';
 
+**********************可以简化********************
 ---------从库操作
 从库只安装数据库软件，不进行数据库初始化
 /usr/pgsql-13/bin/pg_basebackup --pgdata=$PGDATA --format=p --write-recovery-conf --checkpoint=fast --label=mffb --progress --host=postgres-1 --port=5432 --username=repl
 ***在PG12之前，-R备份结束之后会自动生成recovery.conf文件，用来做流复制判断主从同步的信息。但是从PG12开始，这个文件已经不需要了。***
 ***只需要在参数文件postgresql.conf中配置primary_conninfo参数即可。***
 
-修改potgresql.conf， 这个配置文件从主库复制来
+修改postgresql.conf， 这个配置文件从主库复制来
 primary_conninfo = 'host=10.67.39.58 port=5432 user=repl password=Foxconn123'
 primary_slot_name = 'postgres2_slot'
 
@@ -366,6 +367,9 @@ primary_slot_name = 'postgres2_slot'
 ***Slots can be created and dropped either via the streaming replication protocol (see Section 53.4) or via SQL functions (see Section 9.27.6).***
 select * from pg_create_physical_replication_slot('postgres2_slot');
 select slot_name,slot_type,active,wal_status from pg_replication_slots;
+**********************可以简化********************
+pg_basebackup就能创建复制槽（使用-C），并且复制完后，postgresql.auto.conf有 primary_conninfo和primary_slot_name信息
+pg_basebackup -X stream -D /var/lib/pgsql/14/data -h {{ postgresrep_master_address }} -c fast -U repl -R --slot=replicate -C
 
 ---------从库操作
 systemctl start postgresql-13
@@ -588,6 +592,14 @@ config_directory='/var/lib/pgsql/13/data'
 log_level=INFO
 log_facility=STDERR
 log_file='/var/lib/pgsql/13/data/log/repmgr.log'
+failover=automatic
+promote_command='/usr/pgsql-13/bin/repmgr standby promote -f /etc/repmgr/13/repmgr.conf --log-to-file'
+follow_command='/usr/pgsql-13/bin/repmgr standby follow -f /etc/repmgr/13/repmgr.conf --log-to-file --upstream-node-id=%n'
+monitoring_history=true
+monitoring_interval_secs=5
+reconnect_attempts=10
+reconnect_interval=5
+
 
 1.5 配置pg_hba.conf
 -bash-4.2$ cat pg_hba.conf |grep trust
@@ -644,6 +656,14 @@ config_directory='/var/lib/pgsql/13/data'
 log_level=INFO
 log_facility=STDERR
 log_file='/var/lib/pgsql/13/data/log/repmgr.log'
+failover=automatic
+promote_command='/usr/pgsql-13/bin/repmgr standby promote -f /etc/repmgr/13/repmgr.conf --log-to-file'
+follow_command='/usr/pgsql-13/bin/repmgr standby follow -f /etc/repmgr/13/repmgr.conf --log-to-file --upstream-node-id=%n'
+monitoring_history=true
+monitoring_interval_secs=5
+reconnect_attempts=10
+reconnect_interval=5
+
 
 2.2 standby clone dry run
 /usr/pgsql-13/bin/repmgr -h rep01 -U repmgr -d repmgr standby clone --dry-run
@@ -1016,3 +1036,54 @@ WARNING: following issues were detected
 8、启动target db，连接source db接收WAL，或restore_command配置接收WAL，从切换点开始所有WAL，进行apply。
 
 9、target db现在是source db的从库。 
+
+# docker测试 pgpool II 加 repmgr
+docker run --detach --user 1001 --rm --name pg-0 \
+  --network my-network \
+  --env REPMGR_PARTNER_NODES=pg-0,pg-1 \
+  --env REPMGR_NODE_NAME=pg-0 \
+  --env REPMGR_NODE_NETWORK_NAME=pg-0 \
+  --env REPMGR_PRIMARY_HOST=pg-0 \
+  --env REPMGR_PASSWORD=repmgrpass \
+  --env POSTGRESQL_POSTGRES_PASSWORD=adminpassword \
+  --env POSTGRESQL_USERNAME=customuser \
+  --env POSTGRESQL_PASSWORD=custompassword \
+  --env POSTGRESQL_DATABASE=customdatabase \
+  bitnami/postgresql-repmgr:latest
+
+docker run --detach --user 1001 --rm --name pg-1 \
+  --network my-network \
+  --env REPMGR_PARTNER_NODES=pg-0,pg-1 \
+  --env REPMGR_NODE_NAME=pg-1 \
+  --env REPMGR_NODE_NETWORK_NAME=pg-1 \
+  --env REPMGR_PRIMARY_HOST=pg-0 \
+  --env REPMGR_PASSWORD=repmgrpass \
+  --env POSTGRESQL_POSTGRES_PASSWORD=adminpassword \
+  --env POSTGRESQL_USERNAME=customuser \
+  --env POSTGRESQL_PASSWORD=custompassword \
+  --env POSTGRESQL_DATABASE=customdatabase \
+  bitnami/postgresql-repmgr:latest
+  
+docker run --detach --user 1001 --name pgpool \
+  --network my-network \
+  --env PGPOOL_BACKEND_NODES=0:pg-0:5432,1:pg-1:5432 \
+  --env PGPOOL_SR_CHECK_USER=postgres \
+  --env PGPOOL_SR_CHECK_PASSWORD=adminpassword \
+  --env PGPOOL_ENABLE_LDAP=no \
+  --env PGPOOL_USERNAME=postgres \
+  --env PGPOOL_PASSWORD=adminpassword \
+  --env PGPOOL_ADMIN_USERNAME=postgres \
+  --env PGPOOL_ADMIN_PASSWORD=adminpassword \
+  --env PGPOOL_POSTGRES_USERNAME=customuser \
+  --env PGPOOL_POSTGRES_PASSWORD=custompassword \
+  --env PGPOOL_AUTHENTICATION_METHOD=scram-sha-256 \
+  --env PGPOOL_AES_KEY='f83hf87dg' \
+  bitnami/pgpool:latest
+
+  
+# bitnami制作的镜像是非root运行，进入上面三个镜像后，不存在user id为1001用户 无法su - postgres  
+所以用下面的方法来运行psql 
+docker run -it --rm \
+  --network my-network \
+  bitnami/postgresql:latest \
+  psql -h pg-0 -U postgres

@@ -8,6 +8,9 @@ inventory      = /etc/ansible/         # 目录类所有hosts文件都能被主�
 callback_whitelist = profile_tasks      #打印每个task的执行时间
 stdout_callback = actionable           # 只显示changed or failed的task
 -------------------  ansible模塊
+# authorized_key 模块  推送 ssh key
+ansible es -m authorized_key -a "user=root key='{{ lookup('file','/root/.ssh/id_rsa.pub') }}' path=/root/.ssh/authorized_keys manage_dir=no" -l 10.67.51.147
+
 # openstack模块
 yum install -y python2-openstacksdk
 [root@repo ansible]# ansible-playbook -i hosts create_manage_instance.yaml -e instance=docker1 -vvv
@@ -268,6 +271,11 @@ Cons:  could fail on bad formatting of file
 ### 关于handlers
 Normally when a task fails and the play aborts on that host, any handlers that had been notified by earlier tasks in the play will not run. 
 If you set the force_handlers: yes keyword on the play, then notified handlers are called even if the play aborted because a later task failed.	  
+
+Handlers are executed:
+at the end of a play (not playbook)
+on executing the meta: flush_handlers task
+
 ------------------- playbook语法
 ###  list
 # This will run debug three times since the list is flattened
@@ -325,6 +333,40 @@ If you set the force_handlers: yes keyword on the play, then notified handlers a
         - {old: '^http.port', new: 'http.port: 9200' }  
         - {old: '^discovery.seed_hosts', new: 'discovery.seed_hosts: ["172.31.0.1", "172.31.0.2", "172.31.0.3"]' }
         - {old: '^cluster.initial_master_nodes', new: 'cluster.initial_master_nodes: ["node01", "node02", "node03"]' }  	
+		
+- name: "Allow remote connection for user repmgr"
+  postgresql_pg_hba:
+    dest: "~/14/data/pg_hba.conf"
+    contype: "{{ item.contype }}"
+    databases: "{{ item.database }}"
+    source: "{{ item.source }}"
+    method: "{{ item.method }}"
+    users: "{{ item.user }}"
+    create: true
+  with_items:
+    - {contype: 'host',database: 'replication',user: 'repmgr',source: '127.0.0.1/32',method: 'trust'}
+    - {contype: 'host',database: 'replication',user: 'repmgr',source: '0.0.0.0/0',method: 'trust'}
+    - {contype: 'host',database: 'repmgr',user: 'repmgr',source: '127.0.0.1/32',method: 'trust'}
+    - {contype: 'host',database: 'repmgr',user: 'repmgr',source: '0.0.0.0/0',method: 'trust'}
+  become: yes
+  become_user: postgres
+  notify: reload postgres
+
+- name: "Allow local connection for user repmgr"
+  postgresql_pg_hba:
+    dest: "~/14/data/pg_hba.conf"
+    contype: "{{ item.contype }}"
+    databases: "{{ item.database }}"
+    method: "{{ item.method }}"
+    users: "{{ item.user }}"
+    create: true
+  with_items:
+    - {contype: 'local',database: 'replication',user: 'repmgr',method: 'trust'}
+    - {contype: 'local',database: 'repmgr',user: 'repmgr',method: 'trust'}
+  become: yes
+  become_user: postgres
+  notify: reload postgres
+
 
 批量替换方法二	
 先在defaults/main.yml中定义变量

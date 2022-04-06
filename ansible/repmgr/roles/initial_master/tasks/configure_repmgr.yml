@@ -1,0 +1,14 @@
+---
+- name: configure repmgr.conf on pgmaster
+  template:
+    src: repmgr.conf.j2
+    dest: /etc/repmgr/14/repmgr.conf
+    owner: postgres
+    group: postgres
+    mode: 0640
+
+- name: register primary node to repmgr
+  shell: |
+    /usr/pgsql-14/bin/repmgr primary register -F
+  become: yes
+  become_user: postgres

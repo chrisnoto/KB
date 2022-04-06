@@ -1,0 +1,12 @@
+---
+- name: Configure master server
+  lineinfile:
+    state: present
+    backrefs: yes
+    dest: /var/lib/pgsql/14/data/postgresql.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.replace }}"
+  with_items: "{{ postgresrep_postgres_conf_lines }}"
+  notify: restart postgresql
+
+- meta: flush_handlers

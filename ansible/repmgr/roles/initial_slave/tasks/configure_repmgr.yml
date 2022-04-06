@@ -1,0 +1,33 @@
+---
+- name: Stop PostgreSQL
+  service:
+    name: postgresql-14
+    state: stopped
+
+- name: Clear out data directory
+  shell: rm -rf /var/lib/pgsql/14/data/*
+
+- name: configure repmgr.conf on pgslave node
+  template:
+    src: repmgr.conf.j2
+    dest: /etc/repmgr/14/repmgr.conf
+    owner: postgres
+    group: postgres
+    mode: 0640
+
+- name: repmgr standby clone
+  shell: |
+    /usr/pgsql-14/bin/repmgr -F -h "{{ groups['pgmaster'][0] }}" -U repmgr -d repmgr standby clone
+  become: yes
+  become_user: postgres
+
+- name: Start PostgreSQL
+  service:
+    name: postgresql-14
+    state: started
+
+- name: register standby node to repmgr
+  shell: |
+    /usr/pgsql-14/bin/repmgr standby register -F
+  become: yes
+  become_user: postgres

@@ -1,0 +1,3 @@
+---
+- include: pg_install.yml
+- include: configure_ssh_key.yml

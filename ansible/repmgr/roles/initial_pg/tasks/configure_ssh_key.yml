@@ -1,0 +1,53 @@
+- name: create .ssh directory
+  file:
+    path: "/var/lib/pgsql/.ssh"
+    state: directory
+    mode: '0700'
+    group: postgres
+    owner: postgres
+
+- name: generate ssh key pairs
+  openssh_keypair:
+    path: "~/.ssh/id_dsa"
+    type: dsa
+    size: 1024
+    state: present
+    force: no
+  become: True
+  become_user: postgres
+  
+- name: fetch the key file from pg servers to ansible master host
+  fetch:
+    src: "/var/lib/pgsql/.ssh/id_dsa.pub"
+    dest: "buffer/{{ansible_hostname}}-id_dsa.pub"
+    flat: yes
+
+- name: copy the ssh key file from ansible master host and add to authorized_keys on pg servers
+  authorized_key:
+    user: postgres
+    state: present
+    key: "{{ lookup('file','buffer/{{item.dest}}-id_dsa.pub') }}"
+    manage_dir: no
+  when: "item['dest'] != ansible_hostname"
+  with_items:
+    - dest: "{{ groups['pgmaster'][0] }}"
+    - dest: "{{ groups['pgslave'][0] }}"
+
+- name: "Build hosts file"
+  lineinfile: dest=/etc/hosts regexp='.*{{ item }}$' line="{{ hostvars[item]['ansible_ssh_host'] }} {{item}}" state=present
+  when: hostvars[item]['ansible_ssh_host'] is defined
+  with_items: 
+    - "{{ groups['mydb'][0] }}"
+    - "{{ groups['mydb'][1] }}"
+
+- name: add peers to known_hosts file
+  shell: |
+    ssh-keyscan -H "{{item.dest}}" > ~/.ssh/known_hosts
+  when: "item['dest'] != ansible_hostname"
+  with_items:
+    - dest: "{{ groups['pgmaster'][0] }}"
+    - dest: "{{ groups['pgslave'][0] }}"
+  become: True
+  become_user: postgres
+
+  

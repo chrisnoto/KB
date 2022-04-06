@@ -1,0 +1,29 @@
+---
+- name: set timezone to Asia Shanghai
+  timezone:
+    name: Asia/Shanghai
+
+- name: find default yumrepo files
+  find:
+    paths: /etc/yum.repos.d
+    patterns: "*.repo"
+  register: repofiles_to_delete
+
+- name: remove default yumrepo files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ repofiles_to_delete.files }}"
+
+- name: get new yumrepofiles
+  uri:
+    url: http://10.67.51.164/repofile/centos7.repo
+    creates: centos7.repo
+    dest: /etc/yum.repos.d
+ 
+- name: install postgresql and dependent python packages
+  yum: "name={{ item }} state=present"
+  with_items:
+    - libselinux-python
+    - chrony
+    - sudo

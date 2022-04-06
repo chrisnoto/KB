@@ -1,0 +1,35 @@
+---
+- name: "Allow remote connection for user repmgr"
+  postgresql_pg_hba:
+    dest: "~/14/data/pg_hba.conf"
+    contype: "{{ item.contype }}"
+    databases: "{{ item.database }}"
+    source: "{{ item.source }}"
+    method: "{{ item.method }}"
+    users: "{{ item.user }}"
+    create: true
+  with_items:
+    - {contype: 'host',database: 'replication',user: 'repmgr',source: '127.0.0.1/32',method: 'trust'}
+    - {contype: 'host',database: 'replication',user: 'repmgr',source: '0.0.0.0/0',method: 'trust'}
+    - {contype: 'host',database: 'repmgr',user: 'repmgr',source: '127.0.0.1/32',method: 'trust'}
+    - {contype: 'host',database: 'repmgr',user: 'repmgr',source: '0.0.0.0/0',method: 'trust'}
+  become: yes
+  become_user: postgres
+  notify: reload postgresql
+
+- name: "Allow local connection for user repmgr"
+  postgresql_pg_hba:
+    dest: "~/14/data/pg_hba.conf"
+    contype: "{{ item.contype }}"
+    databases: "{{ item.database }}"
+    method: "{{ item.method }}"
+    users: "{{ item.user }}"
+    create: true
+  with_items:
+    - {contype: 'local',database: 'replication',user: 'repmgr',method: 'trust'}
+    - {contype: 'local',database: 'repmgr',user: 'repmgr',method: 'trust'}
+  become: yes
+  become_user: postgres
+  notify: restart postgresql
+
+- meta: flush_handlers

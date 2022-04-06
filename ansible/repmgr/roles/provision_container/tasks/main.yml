@@ -1,0 +1,25 @@
+---
+- name: create container
+  lxd_container:
+    name: "{{ item.name }}"
+    state: started
+    source:
+      type: image
+      alias: pg14-tpl
+    profiles: ["default"]
+    wait_for_ipv4_addresses: true
+    timeout: 600
+  with_items: "{{ servers }}"
+  register: res
+
+- name: add host
+  add_host:
+    name: "{{ item['item']['name'] }}"
+    groups:
+    - "{{ item['item']['meta']['group1'] }}"
+    - "{{ item['item']['meta']['group2'] }}"
+    ansible_ssh_host: "{{ item['addresses']['eth0'][0] }}"
+    ansible_ssh_pass: 'vSTJ456'
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o ProxyCommand="ssh -W %h:%p -q 10.67.51.222"'
+  loop: "{{ res.results }}"
+

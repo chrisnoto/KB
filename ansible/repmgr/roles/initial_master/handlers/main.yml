@@ -1,0 +1,11 @@
+---
+- name: restart postgresql
+  service: name=postgresql-14 state=restarted
+
+- name: reload postgresql
+  postgresql_query:
+    db: postgres
+    query: select pg_reload_conf()
+  become: yes
+  become_user: postgres
+

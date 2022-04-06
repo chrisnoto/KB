@@ -1,0 +1,94 @@
+#pgpool-II-13
+
+1 安装
+yum install pgpool-II-13 
+yum install -y postgresql13     需要psql和postgres用户
+
+2 配置
+
+2.1 pcp验证
+pg_md5 adminpassword
+-bash-4.2$ cat pcp.conf
+pcpuser:e3274be5c857fb42ab72d786e281b4b8
+重启pgpool-II-13
+pcp_node_info -U pcpuser 1
+
+2.2 pgpool验证  Pgpool-II 4.0之后是用SCRAM验证  而不是用md5验证  #费了很多时间才弄清楚
+# su - postgres
+$ echo '84b346e' > ~/.pgpoolkey        #任意字符做加密字符串
+$ chmod 600 ~/.pgpoolkey
+-bash-4.2$ /usr/pgpool-13/bin/pg_enc -m -f /etc/pgpool-II-13/pgpool.conf -u postgres -p
+db password:
+trying to read key from file /var/lib/pgsql/.pgpoolkey
+-bash-4.2$ cat /etc/pgpool-II-13/pool_passwd
+postgres:AESKzqDaCD0ZRjcALjviWu6Ig==
+重启PGPOOL
+[root@pgpool pgpool-II-13]# systemctl restart pgpool-II-13
+[root@pgpool pgpool-II-13]# su - postgres
+Last login: Thu Mar 31 00:51:11 UTC 2022
+psql -p 5432 -h 10.152.219.13 -U postgres -d postgres -W
+Password:
+psql (13.6, server 13.4)
+Type "help" for help.
+
+postgres=# show pool_nodes;
+ node_id | hostname | port | status  | lb_weight |  role  | select_cnt | load_balance_node | replication_delay | replication_state | replication_sync_state | last_status_change
+---------+----------+------+---------+-----------+--------+------------+-------------------+-------------------+-------------------+------------------------+---------------------
+ 0       | rep01    | 5432 | up      | 0.500000  | master | 0          | false             | 0                 |                   |                        | 2022-03-31 00:54:27
+ 1       | rep02    | 5432 | waiting | 0.500000  | slave  | 0          | true              | 0                 |                   |                        | 2022-03-31 00:53:57
+
+ 
+ 
+ 
+# docker测试 pgpool II 加 repmgr
+docker run --detach --rm --name pg-0 \
+  --network my-network \
+  --env REPMGR_PARTNER_NODES=pg-0,pg-1 \
+  --env REPMGR_NODE_NAME=pg-0 \
+  --env REPMGR_NODE_NETWORK_NAME=pg-0 \
+  --env REPMGR_PRIMARY_HOST=pg-0 \
+  --env REPMGR_PASSWORD=repmgrpass \
+  --env POSTGRESQL_POSTGRES_PASSWORD=adminpassword \
+  --env POSTGRESQL_USERNAME=customuser \
+  --env POSTGRESQL_PASSWORD=custompassword \
+  --env POSTGRESQL_DATABASE=customdatabase \
+  bitnami/postgresql-repmgr:latest
+
+docker run --detach --rm --name pg-1 \
+  --network my-network \
+  --env REPMGR_PARTNER_NODES=pg-0,pg-1 \
+  --env REPMGR_NODE_NAME=pg-1 \
+  --env REPMGR_NODE_NETWORK_NAME=pg-1 \
+  --env REPMGR_PRIMARY_HOST=pg-0 \
+  --env REPMGR_PASSWORD=repmgrpass \
+  --env POSTGRESQL_POSTGRES_PASSWORD=adminpassword \
+  --env POSTGRESQL_USERNAME=customuser \
+  --env POSTGRESQL_PASSWORD=custompassword \
+  --env POSTGRESQL_DATABASE=customdatabase \
+  bitnami/postgresql-repmgr:latest
+  
+docker run --detach --name pgpool \
+  --network my-network \
+  --env PGPOOL_BACKEND_NODES=0:pg-0:5432,1:pg-1:5432 \
+  --env PGPOOL_SR_CHECK_USER=postgres \
+  --env PGPOOL_SR_CHECK_PASSWORD=adminpassword \
+  --env PGPOOL_ENABLE_LDAP=no \
+  --env PGPOOL_USERNAME=postgres \
+  --env PGPOOL_PASSWORD=adminpassword \
+  --env PGPOOL_ADMIN_USERNAME=postgres \
+  --env PGPOOL_ADMIN_PASSWORD=adminpassword \
+  --env PGPOOL_POSTGRES_USERNAME=postgres \
+  --env PGPOOL_POSTGRES_PASSWORD=adminpassword \
+  --env PGPOOL_AUTHENTICATION_METHOD=scram-sha-256 \
+  --env PGPOOL_AES_KEY='f83hf87dg' \
+  bitnami/pgpool:latest
+
+  
+# bitnami制作的镜像是非root运行，进入上面三个镜像后，不存在user id为1001用户 无法su - postgres  
+所以用下面的方法来运行psql 
+docker run -it --rm \
+  --network my-network \
+  bitnami/postgresql:latest \
+  psql -h pg-0 -U postgres
+
+docker run -it --rm --network my-network bitnami/postgresql:latest psql -h pgpool -U postgres 

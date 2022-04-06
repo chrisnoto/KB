@@ -1,0 +1,10 @@
+---
+- name: install postgresql, repmgr and dependent python packages
+  yum: "name={{ item }} state=present"
+  with_items:
+    - python2-pip
+    - python-ipaddress
+    - python-psycopg2
+    - postgresql14
+    - postgresql14-server
+    - repmgr_14

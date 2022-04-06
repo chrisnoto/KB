@@ -1,0 +1,46 @@
+repluser: repmgr
+replpass: repmgr
+repldb: repmgr
+
+postgresrep_master_address: "{{ hostvars[groups['pgmaster'][0]].ansible_ssh_host }}"
+postgresrep_slave_address: "{{ hostvars[groups['pgslave'][0]].ansible_ssh_host }}"
+
+pg_listen_addresses: '*'
+pg_wal_level: replica
+pg_wal_log_hints: 'on'
+pg_max_wal_senders: 10
+pg_max_wal_size: 1GB
+pg_hot_standby: 'on'
+pg_archive_mode: 'on'
+pg_archive_command: '/bin/true'
+pg_wal_keep_segments: 100
+
+
+postgresrep_postgres_conf_lines:
+  - regexp: '#?listen_addresses = .*(\s+#.*)'
+    replace: "listen_addresses = '{{ pg_listen_addresses }}'"
+
+  - regexp: '#?wal_level = \w+(\s+#.*)'
+    replace: 'wal_level = {{ pg_wal_level }}\1'
+
+  - regexp: '#?max_wal_senders = \d+(\s+#.*)'
+    replace: 'max_wal_senders = {{ pg_max_wal_senders }}\1'
+
+  - regexp: '#?max_wal_size = \w+(\s+#.*)'
+    replace: 'max_wal_size = {{ pg_max_wal_size }}\1'
+
+  - regexp: '#?wal_log_hints = \w+(\s+#.*)'
+    replace: 'wal_log_hints = {{ pg_wal_log_hints }}\1'
+
+  - regexp: '#?wal_keep_segments = .*(\s+#.*)'
+    replace: 'wal_keep_segments = {{ pg_wal_keep_segments }}\1'
+
+  - regexp: '#?hot_standby = \w+(\s+#.*)'
+    replace: 'hot_standby = {{ pg_hot_standby }}\1'
+
+  - regexp: '#?archive_mode = \w+(\s+#.*)'
+    replace: 'archive_mode = {{ pg_archive_mode }}\1'
+
+  - regexp: '#?archive_command = .*(\s+#.*)'
+    replace: "archive_command = '{{ pg_archive_command }}'"
+

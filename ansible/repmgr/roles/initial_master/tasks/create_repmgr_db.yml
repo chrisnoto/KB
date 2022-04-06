@@ -1,0 +1,15 @@
+---
+- name: create repmgr database
+  postgresql_db:
+    name: repmgr
+    owner: repmgr
+    state: present
+  become: True
+  become_user: postgres
+
+- name: set search_path for user repmgr
+  postgresql_query:
+    db: postgres
+    query: alter user repmgr set search_path to repmgr,public
+  become: yes
+  become_user: postgres

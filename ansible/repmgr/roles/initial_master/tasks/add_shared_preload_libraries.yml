@@ -1,0 +1,11 @@
+---
+- name: add rempgr to shared preload libraries
+  postgresql_set:
+    name: shared_preload_libraries
+    value: 'repmgr'
+  become: True
+  become_user: postgres
+  notify: restart postgresql
+
+- meta: flush_handlers
+
