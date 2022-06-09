@@ -1,5 +1,8 @@
 docker run --name pg01 -d -p 5432:5432 -e POSTGRES_PASSWORD=Foxconn123 -e PGDATA=/var/lib/postgresql/data/pgdata -v snipeitdb02:/var/lib/postgresql/data postgres:latest
 
+#postgresql 14的配置参数变化
+之前的wal_keep_segments变为wal_keep_size  如果之前segments为1000,则现在的wal_keep_size大小为16*1000 = 16000 MB
+更改的原因是因为 wal_keep_size 可以与 v13里增加的参数 max_slot_wal_keep_size更换的配合，不会引起混淆
 
 psql登录方法
 1  psql -U xxx -d xxx
@@ -20,6 +23,20 @@ postgres@u2004:~$ psql postgres://chensen:chensen@10.67.39.58:5432/chensen
 
 postgres@u2004:~$ psql postgres://chensen@10.67.39.58:5432/chensen
 Password for user chensen:
+
+postgres=# alter system set shared_preload_libraries = "repmgr","timescaledb";
+ALTER SYSTEM
+
+哪些参数的更改需要reload/restart        另外如果使用alter system变更，且reload之后，pending_restart变为t， 则需要restart
+Always remember to make changes via the system and once your reload the service it will show what needs restart.
+
+zabbix=# select name,context,pending_restart from pg_settings where name like '%mem%';
+            name            |  context   | pending_restart
+----------------------------+------------+-----------------
+ autovacuum_work_mem        | sighup     | f                                       - reload
+ dynamic_shared_memory_type | postmaster | f                                       - restart
+ enable_memoize             | user       | f
+
 
 #########  逻辑概念 ##########
 在 Postgresql中是以下的關係
@@ -1332,11 +1349,143 @@ FROM information_schema.triggers
 GROUP BY table_name , trigger_name 
 ORDER BY table_name ,trigger_name;
 
+
+
 # 数据库之外创建用户和数据库
 createuser --pwprompt zabbix
 createdb -O zabbix -E Unicode -T template0 zabbix
 
 \c dbname username  切换数据库或用户
+
+
+表 5.1. ACL 权限缩写
+
+权限	缩写	适用对象类型
+SELECT	r (“读”)	LARGE OBJECT, SEQUENCE, TABLE (and table-like objects), table column
+INSERT	a (“增补”)	TABLE, table column
+UPDATE	w (“写”)	LARGE OBJECT, SEQUENCE, TABLE, table column
+DELETE	d	TABLE
+TRUNCATE	D	TABLE
+REFERENCES	x	TABLE, table column
+TRIGGER	t	TABLE
+CREATE	C	DATABASE, SCHEMA, TABLESPACE
+CONNECT	c	DATABASE
+TEMPORARY	T	DATABASE
+EXECUTE	X	FUNCTION, PROCEDURE
+USAGE	U	DOMAIN, FOREIGN DATA WRAPPER, FOREIGN SERVER, LANGUAGE, SCHEMA, SEQUENCE, TYPE
+
+ALL PRELEGES：它是针对一个授权目标的所有权限的总和，不同目标有不同的权限，参见下面那张表。
+例如 revoke all privileges on database xxx from user; 只是收回了对数据库的CTc权限
+即创建schema,安装插件、创建临时文件、连接数据库
+要收回全部权限，还得针对table,schema,sequence,等等一个个的做
+
+对象类型	All Privileges包含	Default PUBLIC Privileges	psql Command
+DATABASE	CTc	Tc	\l
+DOMAIN	U	U	\dD+
+FUNCTION or PROCEDURE	X	X	\df+
+FOREIGN DATA WRAPPER	U	none	\dew+
+FOREIGN SERVER	U	none	\des+
+LANGUAGE	U	U	\dL+
+LARGE OBJECT	rw	none	
+SCHEMA	UC	none	\dn+
+SEQUENCE	rwU	none	\dp
+TABLE (and table-like objects)	arwdDxt	none	\dp
+Table column	arwx	none	\dp
+TABLESPACE	C	none	\db+
+TYPE	U	U	\dT+
+————————————————
+版权声明：本文为CSDN博主「zou8944」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/zou8944/article/details/121528128
+
+#对于非public的schema，要grant user usage on schema xxx的權限，不然要select * from schema_name.table ,不能用搜索路徑
+zabbix=> select * from chensen.test;
+ERROR:  permission denied for schema chensen
+LINE 1: select * from chensen.test;
+
+解决
+zabbix=# grant usage on schema chensen to chensen;
+GRANT
+
+zabbix=> select * from chensen.test;
+ERROR:  permission denied for table test
+
+解决
+zabbix=# grant select,update,insert,delete on all tables in schema chensen to chensen;
+GRANT
+
+zabbix=> show search_path;
+   search_path
+-----------------
+ "$user", public
+(1 row)
+
+
+zabbix=> select * from test;        search path里含有chensen，如果$user不是chensen的话，不能直接select * from test;
+ id |  name
+----+---------
+  1 | chensen
+(1 row)
+
+zabbix=> select * from chensen.test;
+ id |  name
+----+---------
+  1 | chensen
+(1 row)
+现创建另一个用户chenlin
+zabbix=# create role chenlin with login password 'chenlin';
+CREATE ROLE
+zabbix=# grant usage on schema chensen to chenlin;
+GRANT
+zabbix=# grant select,update,insert,delete on all tables in schema chensen to chenlin;
+GRANT
+zabbix=# \q
+-bash-4.2$ psql -U chenlin zabbix
+psql (14.2)
+Type "help" for help.
+
+zabbix=> select * from test;
+ERROR:  relation "test" does not exist
+LINE 1: select * from test;
+                      ^
+zabbix=> select * from chensen.test;
+ id |  name
+----+---------
+  1 | chensen
+(1 row)
+要解决search path问题
+方案一  会话级别
+zabbix=> set search_path="$user",chensen,public;
+SET
+zabbix=> select * from test;
+ id |  name
+----+---------
+  1 | chensen
+(1 row)
+方案二  alter role
+zabbix=# alter role chenlin in database zabbix set search_path="$user",chensen,public;
+ALTER ROLE
+zabbix=# \q
+-bash-4.2$ psql -U chenlin zabbix
+psql (14.2)
+Type "help" for help.
+
+zabbix=> show search_path;
+       search_path
+--------------------------
+ "$user", chensen, public
+(1 row)
+
+zabbix=> select * from test;
+ id |  name
+----+---------
+  1 | chensen
+(1 row)
+
+PUBLIC默认是拥有以下权限
+
+本地登录
+对public的USAGE权限
+对public的CREATE权限
 
 # 创建用户和赋予用户对象权限
 zabbix=# create user chensen with password 'chensen';
@@ -1451,6 +1600,97 @@ olvaliduntil
  18728 | sam     | f        | t          | f             | f           | t           | f              | f            |           -1 | SCRAM-SHA-256$4096:DNulkDpKBLqkY90Z4z4P3Q==$f+jAGXc1BC7K39LJ3XXmLQ7RpFUGotQaC1uJiBIonHk=:cCx2zsHzUGUooAtoyB4U79afIWnX4qpeXZglPC6WoGk= |
 (1 row)
 
+
+#移除权限
+chensen=> revoke connect on database chensen from public;   #光移除这个还不行，因为cl已经有connect权限
+REVOKE
+chensen=> revoke connect on database chensen from cl;
+REVOKE
+
+-bash-4.2$ psql -h 10.67.39.58 -U cl chensen -W
+Password:
+psql: error: FATAL:  permission denied for database "chensen"
+DETAIL:  User does not have CONNECT privilege.
+
+赋权限的标准做法
+------------------------------------------------------------------------
+1 先移除public对DB的connect权限，再grant connect给某个user
+chensen=> revoke connect on database chensen from public;
+chensen=> grant connect on database chensen to cl;
+GRANT
+
+* 此时cl用户拥有public schema的权限，可以创建自己的表，但不能访问其他用户的表
+chensen=> select * from s1;
+ERROR:  permission denied for table s1
+chensen=> create table s2(id integer,age integer);
+CREATE TABLE
+chensen=> \d+
+                             List of relations
+ Schema |  Name   | Type  |  Owner   | Persistence |  Size   | Description
+--------+---------+-------+----------+-------------+---------+-------------
+ public | s1      | table | postgres | permanent   | 16 kB   |
+ public | s2      | table | cl       | permanent   | 0 bytes |
+
+2 移除public的schema权限
+chensen=# \c
+You are now connected to database "chensen" as user "postgres".
+chensen=# revoke all on schema public from PUBLIC;
+REVOKE
+chensen=> \d
+Did not find any relations.
+
+chensen=# grant usage on schema public to cl;
+GRANT
+chensen=> \d
+          List of relations
+ Schema |  Name   | Type  |  Owner
+--------+---------+-------+----------
+ public | s1      | table | postgres
+ public | s2      | table | cl
+ public | s3      | table | cl
+ public | timelog | table | chensen
+(4 rows)
+
+# 更改默认权限
+情景：通常情况下，a用户新创建一张表，可能需要再次授权给b。 更改默认权限后，新表会自动授权给b
+alter default privileges in schema a grant select on tables to b;
+pg_default_acl表存儲要被分配給新創建對象的初始權限
+
+chensen=# select * from pg_catalog.pg_default_acl ;
+ oid | defaclrole | defaclnamespace | defaclobjtype | defaclacl
+-----+------------+-----------------+---------------+-----------
+(0 rows)
+
+chensen=# alter default privileges in schema public grant select on tables to cl;
+ALTER DEFAULT PRIVILEGES
+chensen=# select * from pg_catalog.pg_default_acl ;
+  oid   | defaclrole | defaclnamespace | defaclobjtype |    defaclacl
+--------+------------+-----------------+---------------+-----------------
+ 474051 |         10 |            2200 | r             | {cl=r/postgres}
+(1 row)
+
+chensen=# SELECT pg_catalog.pg_get_userbyid(d.defaclrole) AS "Granter",
+chensen-#  n.nspname AS "Schema",
+chensen-#  CASE d.defaclobjtype WHEN 'r' THEN 'table' WHEN 'S' THEN 'sequence' WHEN 'f' THEN 'function' WHEN 'T' THEN 'type' END AS "Type",
+chensen-#  pg_catalog.array_to_string(d.defaclacl, E', ') AS "Access privileges"
+chensen-# FROM pg_catalog.pg_default_acl d
+chensen-# LEFT JOIN pg_catalog.pg_namespace n ON n.oid = d.defaclnamespace
+chensen-# ORDER BY 1, 2, 3;
+ Granter  | Schema | Type  | Access privileges
+----------+--------+-------+-------------------
+ postgres | public | table | cl=r/postgres
+
+postgres=# alter default privileges for role postgres grant all on tables to olda;
+ALTER DEFAULT PRIVILEGES 
+意思為 postgres使用者建立的所有表都預設對 olda使用者重新授予許可權
+
+#
+alter default privileges in schema public grant select on tables to cl;
+与
+grant select on all tables in schema public to cl;
+的区别是
+第一个命令预设用户对未来新增的表有select权限，第二个命令只是让用户对已存在的所有表有select权限。
+
 # 更改用户权限
 赋予权限:alter user xxx with (CREATEDB, CREATEROLE, CREATEUSER, and even SUPERUSER)
 revoke权限:  alter user xxx with nocreatedb  权限前面加no
@@ -1475,6 +1715,21 @@ postgres=# \du chensen
  Role name | Attributes | Member of
 -----------+------------+-----------
  chensen   |            | {}
+
+# 更改用户密码及过期时间
+postgres=# alter role cl with password 'Foxconn123' valid until '01/01/2024';
+ALTER ROLE
+postgres=# select * from pg_user where usename='cl';
+ usename | usesysid | usecreatedb | usesuper | userepl | usebypassrls |  passwd  |        valuntil        | useconfig
+---------+----------+-------------+----------+---------+--------------+----------+------------------------+-----------
+ cl      |    19000 | t           | f        | f       | f            | ******** | 2024-01-01 00:00:00+00 |
+(1 row)
+
+postgres=# \q
+-bash-4.2$ psql -h 10.67.39.58 -U cl chensen -W
+Password:
+psql (13.4)
+Type "help" for help.
 
 
 pg_hba.conf
@@ -2428,7 +2683,7 @@ pg_archivecleanup can also be used as a standalone program to clean WAL file arc
 -bash-4.2$ pg_basebackup -D backups
 
 看到000000010000000400000078.00000028.backup这个文件，这个文件是一个backup label文件，里面有label信息
--bash-4.2$ ls -lh pg_wal
+-bash-4.2$ ls -lh pg_walpg_archivecleanup
 總計 513M
 -rw-------. 1 postgres postgres 16M 11月  6 07:50 000000010000000400000078
 -rw-------. 1 postgres postgres 340 11月  6 07:50 000000010000000400000078.00000028.backup
@@ -2491,4 +2746,15 @@ postgres=# select * from nt_geo ;
 (1 row)  
 cool !!!使用这种方法，我们不需要先入库在转换，也不需要在入库前写程序进行转换。
 
+# 查客户端和服务器端的IP
+postgres=# select inet_client_addr();
+ inet_client_addr
+------------------
+ 10.152.219.48
+(1 row)
 
+postgres=# select inet_server_addr();
+ inet_server_addr
+------------------
+ 10.152.219.31
+(1 row)

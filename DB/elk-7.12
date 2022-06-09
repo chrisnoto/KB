@@ -601,6 +601,128 @@ docker run -d \
 elasticsearch:7.6.2
 
 
+############带证书的部署方式#######################
+每台主机设置sysctl参数
+cat /etc/sysctl.conf|tail -1
+vm.max_map_count=655365
+
+配置/data权限
+chown 1000:1000 /data
+
+生成的证书放到/data目录
+
+1 用临时容器生成证书
+[root@worker1 ~]# cat es-key.sh
+docker run --rm \
+--name es \
+-e network.publish_host=10.67.36.62 \
+-e cluster.name=lenovo \
+-e discovery.type=single-node \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.16.3 \
+/usr/share/elasticsearch/bin/elasticsearch-certutil cert --keep-ca-key --pem --in /usr/share/elasticsearch/data/instance.yml --out /usr/share/elasticsearch/data/certs.zip
+unzip /data/certs.zip
+
+2 证书分发到各ES节点   scp
+
+3 各ES节点分别run 部署脚本
+[root@worker3 ~]# cat es.sh
+docker run -d \
+--name es \
+-h xtjcesbges01.cesbg.foxconn \
+--add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
+--add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
+--add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+-e node.name=xtjcesbges01.cesbg.foxconn \
+-e node.master=true \
+-e network.publish_host=xtjcesbges01.cesbg.foxconn \
+-e node.data=true \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-e xpack.security.enabled=true \
+-e xpack.security.http.ssl.enabled=true \
+-e xpack.security.transport.ssl.enabled=true \
+-e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/xtjcesbges01/xtjcesbges01.key \
+-e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges01/xtjcesbges01.crt \
+-e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/xtjcesbges01/xtjcesbges01.key \
+-e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges01/xtjcesbges01.crt \
+-e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+[root@worker4 ~]# cat es.sh
+docker run -d \
+--name es \
+-h xtjcesbges02.cesbg.foxconn \
+--add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
+--add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
+--add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+-e node.name=xtjcesbges02.cesbg.foxconn \
+-e node.master=true \
+-e network.publish_host=xtjcesbges02.cesbg.foxconn \
+-e node.data=true \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-e xpack.security.enabled=true \
+-e xpack.security.http.ssl.enabled=true \
+-e xpack.security.transport.ssl.enabled=true \
+-e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/xtjcesbges02/xtjcesbges02.key \
+-e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges02/xtjcesbges02.crt \
+-e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/xtjcesbges02/xtjcesbges02.key \
+-e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges02/xtjcesbges02.crt \
+-e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
+
+[root@kubernetes-dashboard ~]# cat es.sh
+docker run -d \
+--name es \
+-h xtjcesbges03.cesbg.foxconn \
+--add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
+--add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
+--add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+-e node.name=xtjcesbges03.cesbg.foxconn \
+-e node.master=true \
+-e network.publish_host=xtjcesbges03.cesbg.foxconn \
+-e node.data=true \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-e xpack.security.enabled=true \
+-e xpack.security.http.ssl.enabled=true \
+-e xpack.security.transport.ssl.enabled=true \
+-e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/xtjcesbges03/xtjcesbges03.key \
+-e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges03/xtjcesbges03.crt \
+-e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/xtjcesbges03/xtjcesbges03.key \
+-e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/xtjcesbges03/xtjcesbges03.crt \
+-e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
 
 
 

@@ -99,7 +99,8 @@ postgres=# create user mapping for chensen
 server zabbixdb
 options (username 'root',password 'vSTJ456');
 CREATE USER MAPPING
-postgres=# create foreign table tf_interface(interfaceid bigint,hostid bigint,main int,type int,useip int,ip varchar(64),dns varchar(64),port varchar(64)) server zabbixdb options (dbname 'zabbix',table_name 'interface');
+postgres=# create foreign table tf_interface(interfaceid bigint,hostid bigint,main int,type int,useip int,ip varchar(64),dns varchar(64),port varchar(64))
+           server zabbixdb options (dbname 'zabbix',table_name 'interface');
 CREATE FOREIGN TABLE
 postgres=# \dew
                  List of foreign-data wrappers

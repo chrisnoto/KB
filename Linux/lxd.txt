@@ -2,6 +2,7 @@ lxc配置代理
 lxc config set core.proxy_http http://h7108579:pqhkr99ctw@10.36.6.66:3128
 lxc config set core.proxy_https http://h7108579:pqhkr99ctw@10.36.6.66:3128
 
+
 端口转发
 lxc config device add pg01 port5432 proxy listen=tcp:0.0.0.0:5432 connect=tcp:127.0.0.1:5432
 
@@ -146,6 +147,41 @@ Again:
 Would you like stale cached images to be updated automatically? (yes/no) [default=yes] yes
 Would you like a YAML "lxd init" preseed to be printed? (yes/no) [default=no]: no
 
+*** image导出导入
+root@lxd-1804:~# lxc image export centos7.6
+Image exported successfully!
+root@lxd-1804:~# ls
+3370eca8870a1b12487ee0943df5e72d327717ef114ab3f3fe10a6d0e9c57fe9.tar.gz      
+
+root@docker-chensen:/home/chensen# lxc image import 3370eca8870a1b12487ee0943df5e72d327717ef114ab3f3fe10a6d0e9c57fe9.tar.gz --alias centos7.6
+Image imported with fingerprint: 3370eca8870a1b12487ee0943df5e72d327717ef114ab3f3fe10a6d0e9c57fe9
+root@docker-chensen:/home/chensen# lxc image list
++-----------+--------------+--------+----------------------------------+--------------+-----------+----------+------------------------------+
+|   ALIAS   | FINGERPRINT  | PUBLIC |           DESCRIPTION            | ARCHITECTURE |   TYPE    |   SIZE   |         UPLOAD DATE          |
++-----------+--------------+--------+----------------------------------+--------------+-----------+----------+------------------------------+
+| centos7.6 | 3370eca8870a | no     | Centos 7 x86_64 (20190628_07:08) | x86_64       | CONTAINER | 263.74MB | May 27, 2022 at 7:41am (UTC) |
++-----------+--------------+--------+----------------------------------+--------------+-----------+----------+------------------------------+
+
+*** lxc手动下载image
+下载 lxd.tar.xz 和 rootfs.squashfs两个文件
+如 链接https://us.lxd.images.canonical.com/images/centos/8-Stream/amd64/default/20220529_07:08/
+    lxd.tar.xz	2022-05-29 08:11	    836
+	rootfs.squashfs	2022-05-29 08:11	130M
+
+root@docker-chensen:~# cd /home/chensen
+root@docker-chensen:/home/chensen# ls
+3370eca8870a1b12487ee0943df5e72d327717ef114ab3f3fe10a6d0e9c57fe9.tar.gz  lxd.tar.xz  rootfs.squashfs
+root@docker-chensen:/home/chensen# lxc image import lxd.tar.xz rootfs.squashfs --alias centos8-stream
+Image imported with fingerprint: 0f23c178a8c79b5833a3663884be73d5bb0148d32dbaad5f5df546f8c021e743
+root@docker-chensen:/home/chensen# lxc image list
++----------------+--------------+--------+-----------------------------------------+--------------+-----------+----------+------------------------------+
+|     ALIAS      | FINGERPRINT  | PUBLIC |               DESCRIPTION               | ARCHITECTURE |   TYPE    |   SIZE   |         UPLOAD DATE          |
++----------------+--------------+--------+-----------------------------------------+--------------+-----------+----------+------------------------------+
+| centos7.6      | 3370eca8870a | no     | Centos 7 x86_64 (20190628_07:08)        | x86_64       | CONTAINER | 263.74MB | May 27, 2022 at 7:41am (UTC) |
++----------------+--------------+--------+-----------------------------------------+--------------+-----------+----------+------------------------------+
+| centos8-stream | 0f23c178a8c7 | no     | Centos 8-Stream x86_64 (20220529_07:08) | x86_64       | CONTAINER | 129.59MB | May 30, 2022 at 5:21am (UTC) |
++----------------+--------------+--------+-----------------------------------------+--------------+-----------+----------+------------------------------+
+root@docker-chensen:/home/chensen#
 
 
 列出所有在线的image
@@ -315,3 +351,23 @@ root@ubuntu1:/var/snap/lxd/common/lxd/database# pwd
 root@ubuntu1:/var/snap/lxd/common/lxd/database# mv * /root
 #######
 global/db.bin  是dqlite 数据库文件
+
+# podman in lxd  
+lxd容器需要配置security.nesting
+root@docker-chensen:~# lxc config set docker2 security.nesting=true
+root@docker-chensen:~# lxc stop docker2
+root@docker-chensen:~# lxc start docker2
+或者
+root@docker-chensen:~# lxc launch centos8-stream docker1 -c security.nesting=true
+Creating docker1
+Starting docker1 
+centos8可以, centos7会出现 Error: could not get runtime: default OCI runtime "runc" not found
+centos8还需要配置/etc/containers/storage.conf
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+
+[root@docker2 ~]# cd /etc/profile.d
+[root@docker2 profile.d]# cat proxy.sh
+export http_proxy=http://10.67.9.210:3128
+export https_proxy=http://10.67.9.210:3128
+

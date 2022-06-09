@@ -1,3 +1,33 @@
+#dblink示例1
+postgres=# create view remote_zabbix_server2 as
+           select * from dblink ('dbname=zabbix port=5432 host=10.67.51.222 user=zabbix password=Foxconn123','select hostid,host,status from hosts')
+           as t1(hostid bigint,host text,status integer);
+CREATE VIEW
+postgres=# select * from remote_zabbix_server2 where hostid>10449;
+ hostid |    host     | status
+--------+-------------+--------
+  10450 | ZBtest1-win |      0
+  10451 | ZBtest2-win |      0
+  10452 | jumpserver  |      0
+(3 rows)
+
+示例2
+postgres=# create view remote_zabbix_server3 as
+           select * from dblink ('dbname=zabbix port=5432 host=10.67.51.222 user=zabbix password=Foxconn123','select hostid,host,status from hosts')
+           as t1(hostid bigint,host text,status integer) where hostid>10449;
+CREATE VIEW
+postgres=# select * from remote_zabbix_server3;
+ hostid |    host     | status
+--------+-------------+--------
+  10450 | ZBtest1-win |      0
+  10451 | ZBtest2-win |      0
+  10452 | jumpserver  |      0
+(3 rows)
+
+#dblink示例3
+先用dblink_fdw创建remote server
+然后select * from dblink('remote server','sql语句') as 别名 (字段名 字段类型);
+
 # postgresql awr配置
 1 下载并解压pg_profile--0.3.4.tar.gz，解压后的文件放到/usr/pgsql-13/share/extension
 https://github.com/zubkov-andrei/pg_profile/releases/download/0.3.4/pg_profile--0.3.4.tar.gz
@@ -269,3 +299,33 @@ Other extensions
 pg_stat_plans 				query plan statistics
 pg_stat_kcache				CPU and I/O statistics
 pg_qualstats 				predicate statistics	
+
+postgres-1上安装的extension
+postgres=# \dx
+                                            List of installed extensions
+        Name        | Version |   Schema   |                              Description
+--------------------+---------+------------+------------------------------------------------------------------------
+ dblink             | 1.2     | public     | connect to other PostgreSQL databases from within a database
+ file_fdw           | 1.0     | public     | foreign-data wrapper for flat file access
+ hstore             | 1.7     | public     | data type for storing sets of (key, value) pairs
+ ogr_fdw            | 1.1     | public     | foreign-data wrapper for GIS data access
+ pageinspect        | 1.8     | public     | inspect the contents of database pages at a low level
+ pg_buffercache     | 1.3     | public     | examine the shared buffer cache
+ pg_cron            | 1.3     | public     | Job scheduler for PostgreSQL
+ pg_freespacemap    | 1.2     | public     | examine the free space map (FSM)
+ pg_prewarm         | 1.2     | public     | prewarm relation data
+ pg_profile         | 0.3.4   | profile    | PostgreSQL load profile repository and report builder
+ pg_repack          | 1.4.7   | public     | Reorganize tables in PostgreSQL databases with minimal locks
+ pg_squeeze         | 1.3     | squeeze    | A tool to remove unused space from a relation.
+ pg_stat_kcache     | 2.2.0   | public     | Kernel statistics gathering
+ pg_stat_statements | 1.8     | public     | track planning and execution statistics of all SQL statements executed
+ pg_visibility      | 1.2     | public     | examine the visibility map (VM) and page-level visibility info
+ pgfincore          | 1.2     | public     | examine and manage the os buffer cache
+ pgrowlocks         | 1.2     | public     | show row-level locking information
+ pgstattuple        | 1.5     | public     | show tuple-level statistics
+ plpgsql            | 1.0     | pg_catalog | PL/pgSQL procedural language
+ postgres_fdw       | 1.0     | public     | foreign-data wrapper for remote PostgreSQL servers
+ redis_fdw          | 1.0     | public     | foreign-data wrapper for Redis
+ sqlite_fdw         | 1.0     | public     | SQLite Foreign Data Wrapper
+ timescaledb        | 2.5.0   | public     | Enables scalable inserts and complex queries for time-series data
+ uuid-ossp          | 1.1     | public     | generate universally unique identifiers (UUIDs)

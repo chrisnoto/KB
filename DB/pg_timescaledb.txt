@@ -1,5 +1,51 @@
 ###########  zabbix 5.4 + timescaledb-2 安装和配置
 
+https://packagecloud.io/timescale/timescaledb/el/7/x86_64
+
+timescaledb插件升级，  这里是2.6.0的apache license版本升级到2.6.1的community版本
+1 安装新的包  timescaledb-2-postgresql-14-2.6.1-0.el7.x86_64.rpm
+[root@mydb03 ~]# cd tsdb
+[root@mydb03 tsdb]# ls
+make-3.82-24.el7.x86_64.rpm         openssl-libs-1.0.2k-25.el7_9.x86_64.rpm                    timescaledb-2-postgresql-14-2.6.1-0.el7.x86_64.rpm
+openssl-1.0.2k-25.el7_9.x86_64.rpm  timescaledb-2-loader-postgresql-14-2.6.1-0.el7.x86_64.rpm  timescaledb-tools-0.12.0-0.el7.x86_64.rpm
+[root@mydb03 tsdb]# rpm -Uvh *.rpm
+Preparing...                          ################################# [100%]
+Updating / installing...
+   1:openssl-libs-1:1.0.2k-25.el7_9   ################################# [ 14%]
+   2:timescaledb-tools-0.12.0-0.el7   ################################# [ 29%]
+   3:make-1:3.82-24.el7               ################################# [ 43%]
+   4:openssl-1:1.0.2k-25.el7_9        ################################# [ 57%]
+   5:timescaledb-2-loader-postgresql-1################################# [ 71%]
+Using pg_config located at /usr/pgsql-14/bin/pg_config to finish installation...
+   6:timescaledb-2-postgresql-14-2.6.1################################# [ 86%]
+Using pg_config located at /usr/pgsql-14/bin/pg_config to finish installation...
+
+TimescaleDB has been installed. You need to update your postgresql.conf file
+to load the library by adding 'timescaledb' to your shared_preload_libraries.
+The easiest way to do this (and more configuration) is to use timescaledb-tune:
+
+timescaledb-tune --pg-config=/usr/pgsql-14/bin/pg_config
+
+Cleaning up / removing...
+   7:openssl-libs-1:1.0.2k-16.el7_6.1 ################################# [100%]
+2 升级extension
+-bash-4.2$ psql -X -d zabbix
+psql (14.2)
+Type "help" for help.
+
+zabbix=# \c
+You are now connected to database "zabbix" as user "postgres".
+zabbix=# alter extension timescaledb update;
+ALTER EXTENSION
+zabbix=# \dx
+                                      List of installed extensions
+    Name     | Version |   Schema   |                            Description
+-------------+---------+------------+-------------------------------------------------------------------
+ plpgsql     | 1.0     | pg_catalog | PL/pgSQL procedural language
+ timescaledb | 2.6.1   | public     | Enables scalable inserts and complex queries for time-series data
+(2 rows)
+
+
 安装timescaledb-2插件
 # yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-$(rpm -E %{rhel})-x86_64/pgdg-redhat-repo-latest.noarch.rpm
 # yum install timescaledb-2-postgresql-13
@@ -384,12 +430,12 @@ postgres=# \des+
 docker run --name promscale_3ts -d -p 9201:9201 timescale/promscale:0.6 -db-password=secret -db-port=5432 -db-name=postgres -db-host=10.67.36.60 -db-ssl-mode=allow
 
 5 在access node上测试分布式hypertable
-postgres=# CREATE TABLE conditions (
-postgres(#   time        TIMESTAMPTZ       NOT NULL,
-postgres(#   location    TEXT              NOT NULL,
-postgres(#   temperature DOUBLE PRECISION  NULL,
-postgres(#   humidity    DOUBLE PRECISION  NULL
-postgres(# );
+postgres=# CREATE TABLE conditions21 (
+ time        TIMESTAMPTZ       NOT NULL,
+ location    TEXT              NOT NULL,
+ temperature DOUBLE PRECISION  NULL,
+ humidity    DOUBLE PRECISION  NULL
+ );
 CREATE TABLE
 
 postgres=# SELECT create_distributed_hypertable('conditions', 'time', 'location');  #单副本
@@ -583,3 +629,271 @@ time               |device_id|cpu_usage          |
 2021-01-01 02:00:00|        1|   88.5015939122006|
 2021-01-01 03:00:00|        1|  97.49037810105996|
 
+#### 删除数据库
+zabbix=# drop database zabbix;
+ERROR:  cannot drop the currently open database
+
+
+postgres=# drop database zabbix with (FORCE);
+NOTICE:  TimescaleDB distributed database might require additional cleanup on the data nodes
+DETAIL:  Distributed database UUID is "83ff9b47-630a-4ec6-aac7-b823ca1eb4fd".
+DROP DATABASE
+
+##################################################################################################################################################################
+##### zabbix server + pgpool(repmgr) + 3 access node + 2 data node
+
+在access node mydb01上执行
+\c zabbix            用户是postgres
+create extension timescaledb;
+
+select add_data_node('dn1',host=>'10.152.219.66');
+select add_data_node('dn2',host=>'10.152.219.210');
+select * from timescaledb_information.data_nodes;
+
+先测试能否建分布表         这里是postgres用户
+CREATE TABLE conditions21 ( time        TIMESTAMPTZ       NOT NULL, location    TEXT              NOT NULL, temperature DOUBLE PRECISION  NULL, humidity    DOUBLE PRECISION  NULL );
+\d
+select create_distributed_hypertable('conditions21','time','location',replication_factor=>2);
+SELECT * FROM timescaledb_information.hypertables;
+
+测试ok后，启动zabbix server容器       这里的思路是zabbix用户建表，postgres用户来创建distributed hypertable，hypertable的owner是postgres,所以后面要授很多权给zabbix
+docker run --name zabbix-server-timescalesb -d \
+-e TZ='Asia/Shanghai' \
+-e ZBX_SERVER_NAME='zabbixserver' \
+-e DB_SERVER_HOST="10.67.51.222" \
+-e POSTGRES_USER="zabbix" \
+-e POSTGRES_PASSWORD="Foxconn123" \
+-p 10051:10051 \
+zabbix/zabbix-server-pgsql:centos-5.4.7
+
+准备执行下面脚本，转换原表为分布表
+        SELECT create_distributed_hypertable('history', 'clock', chunk_time_interval => 86400, replication_factor=>2);       
+        SELECT create_distributed_hypertable('history_uint', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+        SELECT create_distributed_hypertable('history_log', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+        SELECT create_distributed_hypertable('history_text', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+        SELECT create_distributed_hypertable('history_str', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+        SELECT create_distributed_hypertable('trends', 'clock', chunk_time_interval => 2592000, replication_factor=>2);        
+        SELECT create_distributed_hypertable('trends_uint', 'clock', chunk_time_interval => 2592000, replication_factor=>2);
+        UPDATE config SET db_extension='timescaledb',hk_history_global=1,hk_trends_global=1;
+        UPDATE config SET compression_status=1,compress_older='7d';
+		
+********遇到一堆错误    *******
+1 分布表不支持migrate_data选项
+zabbix=> SELECT create_distributed_hypertable('history', 'clock', chunk_time_interval => 86400, migrate_data => true,replication_factor=>2);
+ERROR:  cannot migrate data for distributed hypertable
+
+2 没有data node上的权限
+zabbix=> SELECT create_distributed_hypertable('history', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+NOTICE:  2 of 2 data nodes not used by this hypertable due to lack of permissions
+HINT:  Grant USAGE on data nodes to attach them to a hypertable.
+ERROR:  no data nodes can be assigned to the hypertable
+DETAIL:  Data nodes exist, but none have USAGE privilege.
+HINT:  Grant USAGE on data nodes to attach them to the hypertable.
+
+解决
+zabbix=# grant usage on foreign server "dn1","dn2" to postgres;
+GRANT
+
+3 非空表不能转换成分布表
+zabbix=# SELECT create_distributed_hypertable('history', 'clock', chunk_time_interval => 86400, replication_factor=>2);
+ERROR:  table "history" is not empty
+HINT:  You can migrate data by specifying 'migrate_data => true' when calling this function.
+
+解决
+delete from history;
+
+
+
+
+********遇到错误  没有连接dn的密码*******		
+Apr 18 11:16:17 pgpool pgpool: 2022-04-18 11:16:17.236: [unknown] pid 17134: LOG:  pool_send_and_wait: Error or notice message from backend: : DB node id: 0 backend pid: 12339 statement: "alter table history set (timescaledb.compress,ti                                   mescaledb.compress_segmentby='itemid',timescaledb.compress_orderby='clock,ns')" message: "could not connect to "dn1""
+Apr 18 11:16:17 pgpool pgpool: 2022-04-18 11:16:17.292: [unknown] pid 17134: LOG:  pool_send_and_wait: Error or notice message from backend: : DB node id: 0 backend pid: 12339 statement: "alter table history_uint set (timescaledb.compre                                   ss,timescaledb.compress_segmentby='itemid',timescaledb.compress_orderby='clock,ns')" message: "could not connect to "dn1""
+2022-04-18 11:16:17.236 CST [12339] ERROR:  could not connect to "dn1"
+2022-04-18 11:16:17.236 CST [12339] DETAIL:  connection to server at "10.152.219.66", port 5432 failed: fe_sendauth: no password supplied
+		
+解决	在access node上执行
+create user mapping for zabbix server dn1 options(user 'zabbix',password 'Foxconn123');
+create user mapping for zabbix server dn2 options(user 'zabbix',password 'Foxconn123');
+
+********遇到错误 没有写入history表的权限*******
+Apr 18 14:27:06 pgpool pgpool: " message: "[dn1]: permission denied for table "history""
+Apr 18 14:27:07 pgpool pgpool: 2022-04-18 14:27:07.895: [unknown] pid 17521: LOG:  pool_send_and_wait: Error or notice message from backend: : DB node id: 0 backend pid: 14149 statement: "insert into history (itemid,clock,ns,value) values (10078,1650263218,9595054,0.13454704410099078);
+2022-04-18 14:27:50.079 CST [14149] ERROR:  [dn2]: permission denied for table "history"
+2022-04-18 14:27:50.079 CST [14149] DETAIL:  Insert privileges required on "history" to create chunks.
+2022-04-18 14:27:50.079 CST [14149] STATEMENT:  insert into history (itemid,clock,ns,value) values (23620,1650263260,19487206,0.22412351017473048),(23260,1650263260,19592596,0);
+
+解决  分别在dn上执行
+zabbix=# grant all privileges on all tables in schema public to zabbix;
+GRANT
+
+权限问题解决后，貌似正常了
+查看所有的hypertable
+zabbix=# select hypertable_schema,hypertable_name,chunk_schema,chunk_name,is_compressed,data_nodes from timescaledb_information.chunks ;
+ hypertable_schema | hypertable_name |     chunk_schema      |       chunk_name        | is_compressed | data_nodes
+-------------------+-----------------+-----------------------+-------------------------+---------------+------------
+ public            | history         | _timescaledb_internal | _dist_hyper_2_309_chunk | f             | {dn1,dn2}
+ public            | history_uint    | _timescaledb_internal | _dist_hyper_3_310_chunk | f             | {dn1,dn2}
+
+zabbix=# SELECT * FROM timescaledb_information.hypertables;
+ hypertable_schema | hypertable_name |  owner   | num_dimensions | num_chunks | compression_enabled | is_distributed | replication_factor | data_nodes | tablespaces
+-------------------+-----------------+----------+----------------+------------+---------------------+----------------+--------------------+------------+-------------
+ public            | conditions21    | postgres |              2 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history         | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_uint    | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_log     | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_text    | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_str     | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | trends          | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | trends_uint     | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+(8 rows)
+
+zabbix=# select * from timescaledb_information.chunks ;
+ hypertable_schema | hypertable_name |     chunk_schema      |       chunk_name        | primary_dimension | primary_dimension_type | range_start | range_end | range_start_integer | range_end_integer | is_compressed | chunk_tablespace | data_nodes
+-------------------+-----------------+-----------------------+-------------------------+-------------------+------------------------+-------------+-----------+---------------------+-------------------+---------------+------------------+------------
+ public            | history         | _timescaledb_internal | _dist_hyper_2_309_chunk | clock             | integer                |             |           |          1650240000 |        1650326400 | f             |                  | {dn1,dn2}
+ public            | history_uint    | _timescaledb_internal | _dist_hyper_3_310_chunk | clock             | integer                |             |           |          1650240000 |        1650326400 | f             |                  | {dn1,dn2}
+(2 rows)
+
+
+
+zabbix=# select public.show_chunks('history');
+                  show_chunks
+-----------------------------------------------
+ _timescaledb_internal._dist_hyper_2_309_chunk
+(1 row)
+
+#### timescaledb的认证
+1 节点之间的认证
+data node更改pg_hba.conf  access node配置.pgpass
+2 能创建分布式超表的用户的认证
+添加非superuser用户, 非superuser用户为分布表的owner
+create role chensen with login password 'chensen';
+\c zabbix
+call distributed_exec($$ create role chensen with login password 'chensen' $$);
+grant usage on foreign server dn1,dn2 to chensen;
+CREATE TABLE conditions100 (time timestamptz NOT NULL, device integer, temp float);    用户chensen登录
+SELECT create_distributed_hypertable('conditions100', 'time', 'device',replication_factor=>2);
+zabbix=> SELECT * FROM timescaledb_information.hypertables;
+ hypertable_schema | hypertable_name |  owner   | num_dimensions | num_chunks | compression_enabled | is_distributed | replication_factor | data_nodes | tablespaces
+-------------------+-----------------+----------+----------------+------------+---------------------+----------------+--------------------+------------+-------------
+ public            | conditions21    | postgres |              2 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history         | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_uint    | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_log     | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_text    | zabbix   |              1 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | history_str     | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | trends          | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | trends_uint     | zabbix   |              1 |          1 | f                   | t              |                  2 | {dn1,dn2}  |
+ public            | conditions100   | chensen  |              2 |          0 | f                   | t              |                  2 | {dn1,dn2}  |
+(9 rows)
+
+INSERT INTO conditions100
+SELECT time, (random()*30)::int, random()*80
+FROM generate_series('2021-04-01 00:00:00'::timestamptz, '2022-03-31 23:59:59', '1 sec') AS time; 
+
+手动删除conditions100表6个月的数据
+zabbix=# select drop_chunks('conditions100',INTERVAL '6 months');
+                  drop_chunks
+------------------------------------------------
+ _timescaledb_internal._dist_hyper_11_426_chunk
+ _timescaledb_internal._dist_hyper_11_427_chunk
+ _timescaledb_internal._dist_hyper_11_428_chunk
+ _timescaledb_internal._dist_hyper_11_429_chunk
+ _timescaledb_internal._dist_hyper_11_430_chunk
+ _timescaledb_internal._dist_hyper_11_431_chunk
+ _timescaledb_internal._dist_hyper_11_432_chunk
+ _timescaledb_internal._dist_hyper_11_433_chunk
+ _timescaledb_internal._dist_hyper_11_434_chunk
+ _timescaledb_internal._dist_hyper_11_435_chunk
+ _timescaledb_internal._dist_hyper_11_436_chunk
+
+ 添加数据保留策略
+ zabbix=# select add_retention_policy('conditions100',INTERVAL '6 months');
+ add_retention_policy
+----------------------
+                 1000
+ 
+zabbix=# select * from timescaledb_information.jobs;
+ job_id |    application_name     | schedule_interval | max_runtime | max_retries | retry_period |      proc_schema      |    proc_name     |  owner   | scheduled |                    config                     |          next_start           | hypertable_schema | hypert
+able_name
+--------+-------------------------+-------------------+-------------+-------------+--------------+-----------------------+------------------+----------+-----------+-----------------------------------------------+-------------------------------+-------------------+-------
+----------
+      1 | Telemetry Reporter [1]  | 24:00:00          | 00:01:40    |          -1 | 01:00:00     | _timescaledb_internal | policy_telemetry | postgres | t         |                                               | 2022-04-19 23:48:01.710119+08 |                   |
+   1000 | Retention Policy [1000] | 1 day             | 00:05:00    |          -1 | 00:05:00     | _timescaledb_internal | policy_retention | chensen  | t         | {"drop_after": "6 mons", "hypertable_id": 11} | 2022-04-20 16:05:18.741537+08 | public            | condit
+ions100
+(2 rows)
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+For security purposes, only superusers or users with necessary privileges can add data nodes (see below for details). When adding a data node, 
+the access node also tries to connect to the data node and therefore needs a way to authenticate with it. TimescaleDB currently supports several different 
+such authentication methods for flexibility (including trust, user mappings, password, and certificate methods).
+Unless bootstrap is false, the function attempts to bootstrap the data node by:
+
+Creating the database given in database that serve as the new data node.
+Loading the TimescaleDB extension in the new database.
+Setting metadata to make the data node part of the distributed database.
+
+在新增的data node上添加zabbix用户
+call distributed_exec($$ create role zabbix with login password 'Foxconn123' $$,node_list=>'{"dn3","dn4"}');
+
+将dn3和dn4加入到history表
+zabbix=# select * from attach_data_node('dn3','history');
+ hypertable_id | node_hypertable_id | node_name
+---------------+--------------------+-----------
+             2 |                  1 | dn3
+(1 row)
+
+zabbix=# select * from attach_data_node('dn4','history');
+ hypertable_id | node_hypertable_id | node_name
+---------------+--------------------+-----------
+             2 |                  1 | dn4
+(1 row)
+
+select * from attach_data_node('dn3','history_uint');
+select * from attach_data_node('dn3','history_log');
+select * from attach_data_node('dn3','history_text');
+select * from attach_data_node('dn3','history_str');
+select * from attach_data_node('dn3','history_trends');
+select * from attach_data_node('dn3','trends');
+select * from attach_data_node('dn3','trends_uint');
+select * from attach_data_node('dn4','trends_uint');
+select * from attach_data_node('dn4','trends');
+select * from attach_data_node('dn4','history_str');
+select * from attach_data_node('dn4','history_text');
+select * from attach_data_node('dn4','history_log');
+select * from attach_data_node('dn4','history_uint');
+
+第二天发现写入新的chuck到新节点时有权限错误
+181:20220421:082806.812 [Z3005] query failed: [0] PGRES_FATAL_ERROR:ERROR:  [dn3]: permission denied for table "history"
+DETAIL:  Insert privileges required on "history" to create chunks.
+ [insert into history (itemid,clock,ns,value) values (36906,1650500886,263176919,0),(37146,1650500886,279791330,0);
+]
+   179:20220421:082807.919 [Z3005] query failed: [0] PGRES_FATAL_ERROR:ERROR:  [dn4]: permission denied for table "history_uint"
+DETAIL:  Insert privileges required on "history_uint" to create chunks.
+ [insert into history_uint (itemid,clock,ns,value) values (37087,1650500887,280329964,0),(37027,1650500887,288442663,0),(36907,1650500887,499099618,52400128);
+]
+解决  分别在dn上执行
+zabbix=# grant all privileges on all tables in schema public to zabbix;
+GRANT
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+移动chunk    还需要wal_level >=logical
+Required settings
+When moving a chunk, the destination data node needs a way to authenticate with the data node that holds the source chunk.
+ It is currently recommended to use a password file on the data node.
+
+The wal_level setting must also be set to logical or higher on data nodes from which chunks are moved. 
+If you are copying or moving many chunks in parallel, you can increase max_wal_senders and max_replication_slots.
+
+CALL timescaledb_experimental.move_chunk('_timescaledb_internal._dist_hyper_2_534_chunk', 'dn2', 'dn3');
+zabbix=# CALL timescaledb_experimental.move_chunk('_timescaledb_internal._dist_hyper_2_534_chunk', 'dn2', 'dn3');
+ERROR:  [dn2]: logical decoding requires wal_level >= logical
+DETAIL:  Chunk copy operation id: ts_copy_2_534.
+
+-- 启用压缩
+ALTER TABLE conditions100 SET (
+ timescaledb.compress,
+ timescaledb.compress_segmentby = 'time'
+);
+-- See info about compression
+SELECT * FROM timescaledb_information.compression_settings;

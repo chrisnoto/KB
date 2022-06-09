@@ -22,23 +22,168 @@ db password:
 trying to read key from file /var/lib/pgsql/.pgpoolkey
 -bash-4.2$ cat /etc/pgpool-II-13/pool_passwd
 postgres:AESKzqDaCD0ZRjcALjviWu6Ig==
+
+2.3 pool_hba.conf  
+pgpool上
+host    postgres   postgres    0.0.0.0/0              trust
+backend db上
+host    postgres postgres 0.0.0.0/0     md5
+
+2.5 pgpool
+[root@pgpool pgpool-II-13]# cat pgpool.conf
+listen_addresses = '*'
+port = '5432'
+socket_dir = '/tmp'
+pcp_socket_dir = '/tmp'
+enable_pool_hba = 'on'
+pool_passwd = 'pool_passwd'
+authentication_timeout = '30'
+allow_clear_text_frontend_auth = 'off'
+max_pool = '15'
+log_connections = 'off'
+log_hostname = 'off'
+log_per_node_statement = 'off'
+pid_file_name = '/var/run/pgpool/pgpool.pid'
+logdir = '/tmp'
+load_balance_mode = 'on'
+disable_load_balance_on_write = 'transaction'
+statement_level_load_balance = 'off'
+sr_check_period = '30'
+sr_check_user = 'postgres'
+sr_check_password = 'adminpassword'
+sr_check_database = 'postgres'
+health_check_period = '30'
+health_check_timeout = '10'
+health_check_user = 'postgres'
+health_check_password = 'adminpassword'
+health_check_max_retries = '5'
+health_check_retry_delay = '5'
+failover_command = 'echo ">>> Failover - that will initialize new primary node search!"'
+failover_on_backend_error = 'off'
+search_primary_node_timeout = '0'
+backend_hostname0 = 'mydb01'
+backend_port0 = 5432
+backend_weight0 = 1
+backend_data_directory0 = '/var/lib/pgsql/14/data'
+backend_flag0 = 'ALLOW_TO_FAILOVER'
+backend_hostname1 = 'mydb02'
+backend_port1 = 5432
+backend_weight1 = 1
+backend_data_directory1 = '/var/lib/pgsql/14/data'
+backend_flag1 = 'ALLOW_TO_FAILOVER'
+backend_hostname2 = 'mydb03'
+backend_port2 = 5432
+backend_weight2 = 1
+backend_data_directory2 = '/var/lib/pgsql/14/data'
+backend_flag2 = 'ALLOW_TO_FAILOVER'
+
+
 重启PGPOOL
 [root@pgpool pgpool-II-13]# systemctl restart pgpool-II-13
-[root@pgpool pgpool-II-13]# su - postgres
-Last login: Thu Mar 31 00:51:11 UTC 2022
-psql -p 5432 -h 10.152.219.13 -U postgres -d postgres -W
-Password:
-psql (13.6, server 13.4)
+
+# pcp command 免密
+-bash-4.2$ cat .pcppass
+10.152.219.48:9898:pcpuser:adminpassword
+
+pcp命令获取节点状态
+-bash-4.2$ pcp_node_info -U pcpuser -h 10.152.219.48 -p 9898 -w -n 0
+mydb01 5432 2 0.333333 up up primary primary 0 none none 2022-04-07 15:58:09
+-bash-4.2$ pcp_node_info -U pcpuser -h 10.152.219.48 -p 9898 -w -n 1
+mydb02 5432 2 0.333333 up up standby standby 0 none none 2022-04-07 15:58:09
+-bash-4.2$ pcp_node_info -U pcpuser -h 10.152.219.48 -p 9898 -w -n 2
+mydb03 5432 2 0.333333 up up standby standby 0 none none 2022-04-07 15:58:09
+
+pcp命令获取pgpool子进程状态
+-bash-4.2$ pcp_proc_info  -U pcpuser -h 10.152.219.48 -p 9898 -w
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 15474 1 17813 0 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 25875 1 17813 1 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 21794 1 17813 2 Idle
+zabbix zabbix 2022-04-18 16:17:55 (4:58 before process restarting) 7735 3 0 2022-04-18 16:19:01 2022-04-19 08:39:26 0 2022-04-19 08:39:26 7735 15467 0 17814 0 Wait for connection
+zabbix zabbix 2022-04-18 16:17:55 (4:58 before process restarting) 7735 3 0 2022-04-18 16:19:01 2022-04-19 08:39:26 0 2022-04-19 08:39:26 7735 25869 0 17814 1 Wait for connection
+zabbix zabbix 2022-04-18 16:17:55 (4:58 before process restarting) 7735 3 0 2022-04-18 16:19:01 2022-04-19 08:39:26 0 2022-04-19 08:39:26 7735 21788 0 17814 2 Wait for connection
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 15477 1 17815 0 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 25879 1 17815 1 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 21797 1 17815 2 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 15480 1 17816 0 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 25882 1 17816 1 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 21801 1 17816 2 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 15487 1 17817 0 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 25890 1 17817 1 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 21809 1 17817 2 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 15472 1 17818 0 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 25878 1 17818 1 Idle
+zabbix zabbix 2022-04-18 16:17:55 0 3 0 2022-04-18 16:19:01 2022-04-18 16:19:01 0  1 21799 1 17818 2 Idle
+
+
+-bash-4.2$ psql -h 10.152.219.48 -p 5432 -U postgres postgres
+psql (14.2)
 Type "help" for help.
 
 postgres=# show pool_nodes;
- node_id | hostname | port | status  | lb_weight |  role  | select_cnt | load_balance_node | replication_delay | replication_state | replication_sync_state | last_status_change
----------+----------+------+---------+-----------+--------+------------+-------------------+-------------------+-------------------+------------------------+---------------------
- 0       | rep01    | 5432 | up      | 0.500000  | master | 0          | false             | 0                 |                   |                        | 2022-03-31 00:54:27
- 1       | rep02    | 5432 | waiting | 0.500000  | slave  | 0          | true              | 0                 |                   |                        | 2022-03-31 00:53:57
+ node_id | hostname | port | status | pg_status | lb_weight |  role   | pg_role | select_cnt | load_balance_node | replication_delay | replication_state | replication_sync_state | last_status_change
+---------+----------+------+--------+-----------+-----------+---------+---------+------------+-------------------+-------------------+-------------------+------------------------+---------------------
+ 0       | mydb01   | 5432 | up     | up        | 0.333333  | primary | primary | 0          | true              | 0                 |                   |                        | 2022-04-07 11:27:48
+ 1       | mydb02   | 5432 | down   | up        | 0.333333  | standby | unknown | 0          | false             | 0                 |                   |                        | 2022-04-07 11:28:03
+ 2       | mydb03   | 5432 | down   | up        | 0.333333  | standby | unknown | 0          | false             | 0                 |                   |                        | 2022-04-07 11:28:03
+(3 rows)
+# mydb02 mydb03的pg_hba未配置，所以health check被blocked掉了
+postgres=# show pool_nodes;
+ node_id | hostname | port | status | pg_status | lb_weight |  role   | pg_role | select_cnt | load_balance_node | replication_delay | replication_state | replication_sync_state | last_status_change
+---------+----------+------+--------+-----------+-----------+---------+---------+------------+-------------------+-------------------+-------------------+------------------------+---------------------
+ 0       | mydb01   | 5432 | up     | up        | 0.333333  | primary | primary | 0          | false             | 0                 |                   |                        | 2022-04-07 11:35:52
+ 1       | mydb02   | 5432 | up     | up        | 0.333333  | standby | standby | 0          | false             | 0                 |                   |                        | 2022-04-07 11:35:52
+ 2       | mydb03   | 5432 | up     | up        | 0.333333  | standby | standby | 0          | true              | 0                 |                   |                        | 2022-04-07 11:35:52
+(3 rows)
 
- 
- 
+pgpool_status文件可以被删除，代表之前的backend状态，我的情况是replication不由pgpool创建的
+
+The health check process collects various statistics data such as number of health check count in total. To inspect the statistics data, use SHOW POOL_HEALTH_CHECK_STATS command.
+ Please note that the data is stored in the shared memory area and it will be initialized upon Pgpool-II starting up. 
+
+
+
+
+
+
+# mydb01上的pg关闭后
+Apr  7 08:44:03 pgpool pgpool: 2022-04-07 16:44:03.491: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:03 pgpool pgpool: 2022-04-07 16:44:03.491: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:03 pgpool pgpool: 2022-04-07 16:44:03.492: health_check0 pid 4481: LOG:  health check retrying on DB node: 0 (round:1)
+Apr  7 08:44:05 pgpool pgpool: 2022-04-07 16:44:05.146: sr_check_worker pid 4480: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:05 pgpool pgpool: 2022-04-07 16:44:05.146: sr_check_worker pid 4480: DETAIL:  Operation now in progress
+Apr  7 08:44:08 pgpool pgpool: 2022-04-07 16:44:08.493: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:08 pgpool pgpool: 2022-04-07 16:44:08.493: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:08 pgpool pgpool: 2022-04-07 16:44:08.493: health_check0 pid 4481: LOG:  health check retrying on DB node: 0 (round:2)
+Apr  7 08:44:13 pgpool pgpool: 2022-04-07 16:44:13.494: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:13 pgpool pgpool: 2022-04-07 16:44:13.494: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:13 pgpool pgpool: 2022-04-07 16:44:13.494: health_check0 pid 4481: LOG:  health check retrying on DB node: 0 (round:3)
+Apr  7 08:44:18 pgpool pgpool: 2022-04-07 16:44:18.496: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:18 pgpool pgpool: 2022-04-07 16:44:18.496: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:18 pgpool pgpool: 2022-04-07 16:44:18.496: health_check0 pid 4481: LOG:  health check retrying on DB node: 0 (round:4)
+Apr  7 08:44:23 pgpool pgpool: 2022-04-07 16:44:23.497: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:23 pgpool pgpool: 2022-04-07 16:44:23.497: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:23 pgpool pgpool: 2022-04-07 16:44:23.497: health_check0 pid 4481: LOG:  health check retrying on DB node: 0 (round:5)
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: health_check0 pid 4481: LOG:  failed to connect to PostgreSQL server on "mydb01:5432", getsockopt() failed
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: health_check0 pid 4481: DETAIL:  Operation now in progress
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: health_check0 pid 4481: LOG:  health check failed on node 0 (timeout:0)
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: health_check0 pid 4481: LOG:  received degenerate backend request for node_id: 0 from pid [4481]
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: health_check0 pid 4481: LOG:  signal_user1_to_parent_with_reason(0)
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: main pid 4444: LOG:  Pgpool-II parent process received SIGUSR1
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: main pid 4444: LOG:  Pgpool-II parent process has received failover request
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.498: main pid 4444: LOG:  starting degeneration. shutdown host mydb01(5432)
+Apr  7 08:44:28 pgpool pgpool: 2022-04-07 16:44:28.500: main pid 4444: LOG:  Restart all children
+Apr  7 08:44:35 pgpool pgpool: 2022-04-07 16:44:35.251: sr_check_worker pid 4480: ERROR:  Failed to check replication time lag
+Apr  7 08:44:35 pgpool pgpool: 2022-04-07 16:44:35.251: sr_check_worker pid 4480: DETAIL:  No persistent db connection for the node 0
+Apr  7 08:44:35 pgpool pgpool: 2022-04-07 16:44:35.251: sr_check_worker pid 4480: HINT:  check sr_check_user and sr_check_password
+Apr  7 08:44:35 pgpool pgpool: 2022-04-07 16:44:35.251: sr_check_worker pid 4480: CONTEXT:  while checking replication time lag
+Apr  7 08:45:20 pgpool su: (to postgres) root on none
+Apr  7 08:45:20 pgpool systemd: Started Session c208 of user postgres.
+Apr  7 08:45:21 pgpool pgpool: 2022-04-07 16:45:21.846: pcp_main pid 4479: LOG:  forked new pcp worker, pid=4669 socket=7
+
+
+
+
+
  
 # docker测试 pgpool II 加 repmgr
 docker run --detach --rm --name pg-0 \
@@ -87,8 +232,7 @@ docker run --detach --name pgpool \
 # bitnami制作的镜像是非root运行，进入上面三个镜像后，不存在user id为1001用户 无法su - postgres  
 所以用下面的方法来运行psql 
 docker run -it --rm \
-  --network my-network \
   bitnami/postgresql:latest \
-  psql -h pg-0 -U postgres
+  psql -h 10.67.51.222 -U postgres
 
 docker run -it --rm --network my-network bitnami/postgresql:latest psql -h pgpool -U postgres 

@@ -1,0 +1,17 @@
+创建pod
+podman pod create -n mydb -p 3306:3306
+
+在pod里运行容器
+podman run -d --pod mydb --name mysql01 -e MYSQL_ROOT_PASSWORD=vSTJ456  docker.io/library/mysql
+
+导出pod的yaml文件
+podman generate kube mydb -f pod_mydb.yaml
+
+用yaml文件创建pod和container
+podman play kube --down demo.yml
+
+销毁pod和container
+podman play kube --down demo.yml
+
+重新创建pod和container
+podman play kube --replace demo.yml

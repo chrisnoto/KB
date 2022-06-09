@@ -1,4 +1,43 @@
 =========================================================== 命 令 ===========================================================
+通过堡垒机sftp传文件到目标服务器
+[root@repo ~]# sftp -P 2222 chensen@10.67.36.62 root@10.67.50.63
+chensen@10.67.36.62's password:
+Connected to 10.67.36.62.
+sftp> ls
+Default    收藏夹
+sftp> cd Default/
+sftp> ls
+Windows server  linux server
+sftp> cd linux\ server/
+sftp> ls
+vstjlinuxtrans1
+sftp> cd vstjlinuxtrans1/
+sftp> ls
+1.pem                                 1.sh                                  DBA                                   LH                                    LJJ
+Package                               Query.sh                              RPM-GPG-KEY-ZABBIX                    Running                               SA
+VMwareTools-10.2.1-8267844.tar.gz     a                                     addsftpuser.sh                        anaconda-ks.cfg                       ansible-linux-config
+b                                     bak                                   centos6.repo                          centos7.repo                          centos_git_list
+chaofeng                              config                                cpkey.sh                              curl-format.txt                       cve-2017-10000367.sh
+czyscripts                            db.txt                                dblist                                dcas                                  filebeat-6.8.1-x86_64.rpm
+filebeat.yml                          getconfig.sh                          getoken.sh                            gitpush.sh                            history.txt
+hpacucli-8.60-8.0.noarch.rpm          hr.txt                                it_plm.pem                            it_plm.tar                            jenkins-ci.org.key
+jiaoben.docx                          key8.pem                              kubecfg.crt                           kubecfg.key                           kubecfg.p12
+libdshconfig-0.20.13                  mail.py                               newlist                               openstackser                          openstackser2
+osquery-4.8.0-1.linux.x86_64.rpm      p2.sh                                 pageinout.sh                          password.pem                          password.tar
+py1234.py                             redhat                                root@10.66.12.122                     scripts                               serverlist1215
+sjwconfig                             snmpd6.conf                           snmpd7.conf                           software                              sosreport
+sources.list-1404                     sources.list-1604                     srvlist                               test.db                               tmp
+tuoguanser2                           ubuntu_git_list                       updatesepm.yml                        user.txt                              userparameter_diskstats.conf
+vmware-tools-distrib                  zabbix-agent-3.4.9-1.el6.x86_64.rpm   zabbix-agent-4.4.0-1.el7.x86_64.rpm   zabbix-proxy-sqlite3.5.0.2.tar        zabbix3.4-agent.sh
+zabbix3.4-agent.sh.bak                zabbix3.4-agent.sh7                   zabbix_agentd.conf                    zabbix_proxy_db                       zhang
+ 
+sftp> get py1234.py
+Fetching /Default/linux server/vstjlinuxtrans1/py1234.py to py1234.py
+/Default/linux server/vstjlinuxtrans1/py1234.py                                                                                                                100%  101    10.1KB/s   00:00
+sftp> put osquery-4.8.0-1.linux.x86_64.rpm
+Uploading osquery-4.8.0-1.linux.x86_64.rpm to /Default/linux server/vstjlinuxtrans1/osquery-4.8.0-1.linux.x86_64.rpm
+osquery-4.8.0-1.linux.x86_64.rpm          
+
 #  操作known_hosts文件
 To add a new host to the ssh known_hosts file, you can use the following command:
 $ ssh-keyscan -t rsa [remote.server.com] >> ~/.ssh/known_hosts
@@ -1966,6 +2005,27 @@ sed -i 's/^.*$/chensen@&/' r6
 # sed with variable
 cat test.txt |sed "s/$a/ABC/g"
 cat test.txt |sed 's/'$a'/ABC/g'
+
+# sed将3的内容插入到4的最后一行之前
+[root@repo ~]# cat 3
+a{
+bcd
+}
+[root@repo ~]# cat 4
+multipath{
+12325
+}
+
+}
+[root@repo ~]# sed '$e cat 3' 4
+multipath{
+12325
+}
+
+a{
+bcd
+}
+}
 
 ############## awk 命令汇总 ##############
 # awk if判断
