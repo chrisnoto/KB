@@ -606,12 +606,27 @@ elasticsearch:7.6.2
 cat /etc/sysctl.conf|tail -1
 vm.max_map_count=655365
 
-配置/data权限
+配置/data权限，生成的证书会放到/data目录
 chown 1000:1000 /data
 
-生成的证书放到/data目录
-
 1 用临时容器生成证书
+制作文件 instance.yml
+instances:
+  - name: 'xtjcesbges01'
+    dns: [ 'xtjcesbges01.cesbg.foxconn' ]
+  - name: 'xtjcesbges02'
+    dns: [ 'xtjcesbges02.cesbg.foxconn' ]
+  - name: 'xtjcesbges03'
+    dns: [ 'xtjcesbges03.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash01'
+    dns: [ 'xtjcesbglogstash01.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash02'
+    dns: [ 'xtjcesbglogstash02.cesbg.foxconn' ]
+  - name: 'xtjcesbglogstash03'
+    dns: [ 'xtjcesbglogstash03.cesbg.foxconn' ]
+  - name: 'kibana'
+    dns: [ 'kibana.cesbg.foxconn' ]
+	
 [root@worker1 ~]# cat es-key.sh
 docker run --rm \
 --name es \
