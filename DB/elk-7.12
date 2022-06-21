@@ -600,6 +600,32 @@ docker run -d \
 -p 9300:9300 \
 elasticsearch:7.6.2
 
+####### 为ES增加plugin #######
+[root@worker1 ~]# cat es.sh
+docker run -d \
+--name es \
+--add-host=es3:10.67.39.81 \
+--add-host=es2:10.67.39.80 \
+--add-host=es6:10.67.39.79 \
+--add-host=es7:10.67.36.62 \
+-e node.name=es7 \
+-e node.master=true \
+-e network.publish_host=10.67.36.62 \
+-e node.data=false \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=es2,es3 \
+-e cluster.initial_master_nodes=es6,es2,es3 \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-e s3.client.default.endpoint=10.67.51.164:9000 \
+-e s3.client.default.protocol=http \
+-v /data:/usr/share/elasticsearch/data \
+-v /root/config/elasticsearch.keystore:/usr/share/elasticsearch/config/elasticsearch.keystore \
+-v /root/elasticsearch-plugins.yml:/usr/share/elasticsearch/config/elasticsearch-plugins.yml \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.16.3
 
 ############带证书的部署方式#######################
 每台主机设置sysctl参数
@@ -643,6 +669,13 @@ elasticsearch:7.16.3 \
 /usr/share/elasticsearch/bin/elasticsearch-certutil cert --keep-ca-key --pem --in /usr/share/elasticsearch/data/instance.yml --out /usr/share/elasticsearch/data/certs.zip
 unzip /data/certs.zip
 
+# 各个节点也可以用同一份p12服务器证书 手动运行 elasticsearch-certutil cert --ca xxx.p12 --days 3650
+# 如果CA证书和服务器证书有设置密码的话  需要添加到keystore中
+elasticsearch-keystore add xpack.security.http.ssl.keystore.secure_password
+elasticsearch-keystore add xpack.security.http.ssl.truststore.secure_password
+elasticsearch-keystore add xpack.security.transport.ssl.truststore.secure_password
+elasticsearch-keystore add xpack.security.transport.ssl.truststore.secure_password
+
 2 证书分发到各ES节点   scp
 
 3 各ES节点分别run 部署脚本
@@ -653,6 +686,7 @@ docker run -d \
 --add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
 --add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
 --add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+--add-host=xtjcesbges04.cesbg.foxconn:10.67.36.61 \
 -e node.name=xtjcesbges01.cesbg.foxconn \
 -e node.master=true \
 -e network.publish_host=xtjcesbges01.cesbg.foxconn \
@@ -684,6 +718,7 @@ docker run -d \
 --add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
 --add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
 --add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+--add-host=xtjcesbges04.cesbg.foxconn:10.67.36.61 \
 -e node.name=xtjcesbges02.cesbg.foxconn \
 -e node.master=true \
 -e network.publish_host=xtjcesbges02.cesbg.foxconn \
@@ -715,6 +750,7 @@ docker run -d \
 --add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
 --add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
 --add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+--add-host=xtjcesbges04.cesbg.foxconn:10.67.36.61 \
 -e node.name=xtjcesbges03.cesbg.foxconn \
 -e node.master=true \
 -e network.publish_host=xtjcesbges03.cesbg.foxconn \
@@ -739,6 +775,235 @@ docker run -d \
 -p 9300:9300 \
 elasticsearch:7.6.2
 
+新增节点   将ca.crt和ca.key拷贝到新节点，然后生成服务器证书
+[root@worker2 ~]# cat es-key.sh
+docker run --rm \
+--name es \
+-e network.publish_host=10.67.36.61 \
+-e cluster.name=lenovo \
+-e discovery.type=single-node \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2 \
+/usr/share/elasticsearch/bin/elasticsearch-certutil cert --pem --ca-cert /usr/share/elasticsearch/data/ca/ca.crt --ca-key /usr/share/elasticsearch/data/ca/ca.key --dns xtjcesbges04.cesbg.foxconn --out /usr/share/elasticsearch/data/certs.zip
+
+unzip certs.zip
+
+[root@worker2 ~]# cat es.sh
+docker run -d \
+--name es \
+-h xtjcesbges04.cesbg.foxconn \
+--add-host=xtjcesbges01.cesbg.foxconn:10.67.36.60 \
+--add-host=xtjcesbges02.cesbg.foxconn:10.67.36.59 \
+--add-host=xtjcesbges03.cesbg.foxconn:10.67.36.57 \
+--add-host=xtjcesbges04.cesbg.foxconn:10.67.36.61 \
+-e node.name=xtjcesbges04.cesbg.foxconn \
+-e node.master=true \
+-e network.publish_host=xtjcesbges04.cesbg.foxconn \
+-e node.data=true \
+-e cluster.name=lenovo \
+-e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+-e bootstrap.memory_lock=true \
+--ulimit memlock=-1:-1 \
+-e "ES_JAVA_OPTS=-Xms4G -Xmx4G" \
+-v /data:/usr/share/elasticsearch/data \
+-e xpack.security.enabled=true \
+-e xpack.security.http.ssl.enabled=true \
+-e xpack.security.transport.ssl.enabled=true \
+-e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/instance/instance.key \
+-e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/instance/instance.crt \
+-e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/instance/instance.key \
+-e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/instance/instance.crt \
+-e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/ca/ca.crt \
+-p 9200:9200 \
+-p 9300:9300 \
+elasticsearch:7.6.2
 
 
+elasticsearch-certutil http的使用
+1 各节点使用同一个证书
+Generate a certificate per node? [y/N]n
+
+## Which hostnames will be used to connect to your nodes?
+
+These hostnames will be added as "DNS" names in the "Subject Alternative Name"
+(SAN) field in your certificate.
+
+You should list every hostname and variant that people will use to connect to
+your cluster over http.
+Do not list IP addresses here, you will be asked to enter them later.
+
+If you wish to use a wildcard certificate (for example *.es.example.com) you
+can enter that here.
+
+Enter all the hostnames that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+*.cesbg.foxconn
+
+You entered the following hostnames.
+
+ - *.cesbg.foxconn
+
+Is this correct [Y/n]y
+
+## Which IP addresses will be used to connect to your nodes?
+
+If your clients will ever connect to your nodes by numeric IP address, then you
+can list these as valid IP "Subject Alternative Name" (SAN) fields in your
+certificate.
+
+If you do not have fixed IP addresses, or not wish to support direct IP access
+to your cluster then you can just press <ENTER> to skip this step.
+
+Enter all the IP addresses that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+
+You did not enter any IP addresses.
+
+Is this correct [Y/n]y
+
+2 各节点使用自己的证书
+Generate a certificate per node? [y/N]y
+
+## What is the name of node #1?
+
+This name will be used as part of the certificate file name, and as a
+descriptive name within the certificate.
+
+You can use any descriptive name that you like, but we recommend using the name
+of the Elasticsearch node.
+
+node #1 name: es1.cesbg.foxconn
+
+## Which hostnames will be used to connect to es1.cesbg.foxconn?
+
+These hostnames will be added as "DNS" names in the "Subject Alternative Name"
+(SAN) field in your certificate.
+
+You should list every hostname and variant that people will use to connect to
+your cluster over http.
+Do not list IP addresses here, you will be asked to enter them later.
+
+If you wish to use a wildcard certificate (for example *.es.example.com) you
+can enter that here.
+
+Enter all the hostnames that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+es2.cesbg.foxconn
+es3.cesbg.foxconn
+
+You entered the following hostnames.
+
+ - es2.cesbg.foxconn
+ - es3.cesbg.foxconn
+
+Is this correct [Y/n]y
+
+## Which IP addresses will be used to connect to es1.cesbg.foxconn?
+
+If your clients will ever connect to your nodes by numeric IP address, then you
+can list these as valid IP "Subject Alternative Name" (SAN) fields in your
+certificate.
+
+If you do not have fixed IP addresses, or not wish to support direct IP access
+to your cluster then you can just press <ENTER> to skip this step.
+
+Enter all the IP addresses that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+192.168.2.10
+192.168.2.11
+192.168.2.12
+
+You entered the following IP addresses.
+
+ - 192.168.2.10
+ - 192.168.2.11
+ - 192.168.2.12
+
+Is this correct [Y/n]y
+
+## Other certificate options
+
+The generated certificate will have the following additional configuration
+values. These values have been selected based on a combination of the
+information you have provided above and secure defaults. You should not need to
+change these values unless you have specific requirements.
+
+Key Name: es1.cesbg.foxconn
+Subject DN: CN=es1, DC=cesbg, DC=foxconn
+Key Size: 2048
+
+Do you wish to change any of these options? [y/N]n
+Generate additional certificates? [Y/n]y
+
+## What is the name of node #2?
+
+This name will be used as part of the certificate file name, and as a
+descriptive name within the certificate.
+
+You can use any descriptive name that you like, but we recommend using the name
+of the Elasticsearch node.
+
+node #2 name: es3.cesbg.foxconn
+
+## Which hostnames will be used to connect to es3.cesbg.foxconn?
+
+These hostnames will be added as "DNS" names in the "Subject Alternative Name"
+(SAN) field in your certificate.
+
+You should list every hostname and variant that people will use to connect to
+your cluster over http.
+Do not list IP addresses here, you will be asked to enter them later.
+
+If you wish to use a wildcard certificate (for example *.es.example.com) you
+can enter that here.
+
+Enter all the hostnames that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+
+You did not enter any hostnames.
+Clients are likely to encounter TLS hostname verification errors if they
+connect to your cluster using a DNS name.
+
+Is this correct [Y/n]y
+
+## Which IP addresses will be used to connect to es3.cesbg.foxconn?
+
+If your clients will ever connect to your nodes by numeric IP address, then you
+can list these as valid IP "Subject Alternative Name" (SAN) fields in your
+certificate.
+
+If you do not have fixed IP addresses, or not wish to support direct IP access
+to your cluster then you can just press <ENTER> to skip this step.
+
+Enter all the IP addresses that you need, one per line.
+When you are done, press <ENTER> once more to move on to the next step.
+
+192.168.2.21
+
+You entered the following IP addresses.
+
+ - 192.168.2.21
+
+Is this correct [Y/n]y
+
+######### 新架构 ######
+kibana + logstash
+--------------------
+run in k8s
+
+2 coordinating nodes   3 master nodes  3 data nodes
+--------------------   ----------------------------
+  run in k8s                 run in docker nodes
 

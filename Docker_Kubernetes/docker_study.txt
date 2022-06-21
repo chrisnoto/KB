@@ -1,3 +1,5 @@
+
+
 ####### docker api #####
 curl -Ss --unix-socket /var/run/docker.sock http:/containers/json |jq .
 拉鏡像
@@ -79,6 +81,7 @@ COPY assets     assets
 RUN chown -R app:app ./
 USER app
 CMD ["./gateway"]
+
 ################docker容器注册到systemd##########
 [root@fuel multi-user.target.wants]# cat docker-mcollective.service
 [Unit]
@@ -383,6 +386,7 @@ Also, the index figures out which registry that particular image lives in and fo
 
 Beyond that, when you're working locally and running commands like docker images, you're interacting with 
 something that is neither an index or a registry, but a little of both.
+
 #########docker rmi清除的是本地image####
 清除步骤
 untag  当有多個tag关联到同一個image ID
@@ -399,6 +403,7 @@ docker build -t chrisnoto/mysql-client-alpine:v1.0.0 --build-arg http_proxy=http
 或dockerfile里设置
 ENV http_proxy <HTTP_PROXY>
 ENV https_proxy <HTTPS_PROXY>
+
 ############docker repo#################
 [root@registry yum.repos.d]# cat docker.repo
 [dockerrepo]
@@ -528,4 +533,147 @@ workdir=/var/lib/docker/overlay2/53fd96ea5f28fb08dda295bc8fb73ccb9889a798e219312
 diff  link  lower  merged  work
 
 
+##### docker 特权模式
+CRI(Container Runtime Interface) 中特权模式的说明如下：
 
+// If set, run container in privileged mode.
+// Privileged mode is incompatible with the following options. If
+// privileged is set, the following features MAY have no effect:
+// 1. capabilities
+// 2. selinux_options
+// 4. seccomp
+// 5. apparmor
+//
+// Privileged mode implies the following specific options are applied:
+// 1. All capabilities are added.
+// 2. Sensitive paths, such as kernel module paths within sysfs, are not masked.
+// 3. Any sysfs and procfs mounts are mounted RW.
+// 4. AppArmor confinement is not applied.
+// 5. Seccomp restrictions are not applied.
+// 6. The device cgroup does not restrict access to any devices.
+// 7. All devices from the host's /dev are available within the container.
+// 8. SELinux restrictions are not applied (e.g. label=disabled).
+
+###### linux capacities
+简单说就是把root权限细分成很多更细的权限。capability可以作用在進程上(受限),也可以作用在程序文件上
+CAP_CHOWN:修改文件屬主的權限
+CAP_DAC_OVERRIDE:忽略文件的DAC訪問限制
+CAP_DAC_READ_SEARCH:忽略文件讀及目錄搜索的DAC訪問限制
+CAP_FOWNER：忽略文件屬主ID必須和進程用戶ID相匹配的限制
+CAP_FSETID:允許設置文件的setuid位
+CAP_KILL:允許對不屬於自己的進程發送信號
+CAP_SETGID:允許改變進程的組ID
+CAP_SETUID:允許改變進程的用戶ID
+CAP_SETPCAP:允許向其他進程轉移能力以及刪除其他進程的能力
+CAP_LINUX_IMMUTABLE:允許修改文件的IMMUTABLE和APPEND屬性標誌
+CAP_NET_BIND_SERVICE:允許綁定到小於1024的端口
+CAP_NET_BROADCAST:允許網絡廣播和多播訪問
+CAP_NET_ADMIN:允許執行網絡管理任務                          
+CAP_NET_RAW:允許使用原始套接字
+CAP_IPC_LOCK:允許鎖定共享內存片段
+CAP_IPC_OWNER:忽略IPC所有權檢查
+CAP_SYS_MODULE:允許插入和刪除內核模塊
+CAP_SYS_RAWIO:允許直接訪問/devport,/dev/mem,/dev/kmem及原始塊設備
+CAP_SYS_CHROOT:允許使用chroot()系統調用
+CAP_SYS_PTRACE:允許跟蹤任何進程
+CAP_SYS_PACCT:允許執行進程的BSD式審計
+CAP_SYS_ADMIN:允許執行系統管理任務，如加載或卸載文件系統、設置磁盤配額等
+CAP_SYS_BOOT:允許重新啓動系統
+CAP_SYS_NICE:允許提升優先級及設置其他進程的優先級
+CAP_SYS_RESOURCE:忽略資源限制
+CAP_SYS_TIME:允許改變系統時鐘
+CAP_SYS_TTY_CONFIG:允許配置TTY設備
+CAP_MKNOD:允許使用mknod()系統調用
+CAP_LEASE:允許修改文件鎖的FL_LEASE標誌
+查看capacities
+[root@repo 8760]# getpcaps 8760
+Capabilities for `8760': = cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,cap_setfcap+eip
+
+实例 ping
+[root@vstjlinuxtrans1  ~]# getcap /usr/bin/ping   #原本的cap
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+[root@vstjlinuxtrans1  ~]# setcap  cap_net_admin+p /usr/bin/ping    #修改cap
+[root@vstjlinuxtrans1  ~]# getcap /usr/bin/ping
+/usr/bin/ping = cap_net_admin+p
+[root@vstjlinuxtrans1  ~]# su - chensen
+Last login: Mon Jun 13 16:27:06 CST 2022 on pts/1
+[chensen@vstjlinuxtrans1  ~]$ ping 10.67.51.164
+ping: socket: Operation not permitted
+
+[root@vstjlinuxtrans1  ~]# setcap cap_net_raw=eip /usr/bin/ping          # 再次修改
+[root@vstjlinuxtrans1  ~]# getcap /usr/bin/ping
+/usr/bin/ping = cap_net_raw+eip
+[root@vstjlinuxtrans1  ~]# su - chensen
+Last login: Mon Jun 13 16:28:24 CST 2022 on pts/1
+[chensen@vstjlinuxtrans1  ~]$ ping 10.67.51.164
+PING 10.67.51.164 (10.67.51.164) 56(84) bytes of data.
+64 bytes from 10.67.51.164: icmp_seq=1 ttl=64 time=0.270 ms
+64 bytes from 10.67.51.164: icmp_seq=2 ttl=64 time=0.300 ms
+^C
+--- 10.67.51.164 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 999ms
+rtt min/avg/max/mdev = 0.270/0.285/0.300/0.015 ms
+
+或者设置/usr/bin/ping = cap_net_admin,cap_net_raw+p
+[root@vstjlinuxtrans1  ~]# setcap cap_net_admin,cap_net_raw+p /usr/bin/ping
+[root@vstjlinuxtrans1  ~]# getcap /usr/bin/ping
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+
+
+实例route   普通用户无权限添加删除路由
+[root@vstjlinuxtrans1  ~]# getcap `which route`
+[root@vstjlinuxtrans1  ~]# which route
+/sbin/route
+[root@vstjlinuxtrans1  ~]# su - chensen
+Last login: Mon Jun 13 16:29:49 CST 2022 on pts/1
+[chensen@vstjlinuxtrans1  ~]$ /sbin/route
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+default         gateway         0.0.0.0         UG    100    0        0 ens32
+10.67.50.0      0.0.0.0         255.255.254.0   U     100    0        0 ens32
+[chensen@vstjlinuxtrans1  ~]$ /sbin/route add -host 192.168.27.139 gw 192.168.27.2
+SIOCADDRT: Operation not permitted
+如果setcap cap_net_admin=eip /sbin/route
+普通用户就可以增加路由了
+
+实例 date
+普通用戶不能改變系統時鐘,如下:
+date -s 2012-01-01
+date: cannot set date: Operation not permitted
+Sun Jan  1 00:00:00 EST 2012
+
+CAP_SYS_TIME可以幫助普通用戶改變系統時鐘,如下:
+setcap cap_sys_time=eip /bin/date
+切換到普通用戶再次改變時間,發現已經可以改變了
+su - test
+date -s 2012-01-01
+Sun Jan  1 00:00:00 EST 2012
+date
+Sun Jan  1 00:00:02 EST 2012
+
+###### seccomp 就是 syscall 防火墙
+Seccomp（Secure Computing 安全计算模式的简称）是Linux内核中的一个安全特性，它可以限制用户态程序对syscall的使用，
+
+######## mount /sys/fs/cgroup #######
+如果希望在容器里运行systemd,那么需要以只读方式mount /sys/fs/cgroup
+Containers running systemd need access to /sys/fs/cgroup. We should mount it into the container as a read only mount.
+此外，还需要
+Running systemd inside a Docker container
+So to be able to easily troubleshoot this problem and quickly iterate over possible solutions I utilized Docker. To start systemd inside a Docker container a few pre-requisites have to be met:
+
+systemd has to be installed inside the container of course. It provides e.g. the /sbin/init binary. Using the fedora:34 Docker image this can be achieved by installing httpd for example (the Apache web server).
+
+The cgroup file system has to be mounted inside the container (-v /sys/fs/cgroup:/sys/fs/cgroup:ro). We do this in read-only mode.
+
+The /tmp and /run mount points have to be present inside the container (--tmpfs /tmp --tmpfs /run).
+
+So if you just want to get systemd and the Apache web server up and running inside a Docker container just clone the source code repository located here and execute the following command inside the folder
+ running-systemd-inside-a-docker-container:
+
+Build the container image: docker build . -t sysd
+
+Start a container: docker run --tmpfs /tmp --tmpfs /run -v /sys/fs/cgroup:/sys/fs/cgroup:ro -p 9090:80 --name sysd --rm sysd
+
+To get a shell inside the container execute the following command in a second shell: docker exec -it sysd bash
+
+Now you may also open the URL http://localhost:9090/ in your web browser to view he page served by the Apache web server running as a child process of systemd inside the container.

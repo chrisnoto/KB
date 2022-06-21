@@ -396,7 +396,20 @@ postgresrep_postgres_conf_lines:
   with_items: "{{ postgresrep_postgres_conf_lines }}"
   notify: restart postgresql	
   
--------------------  ansible playbook举例	  
+-------------------  ansible playbook举例
+# 添加copy ssh key	  
+[root@repo ansible]# cat add_ssh_key.yaml
+---
+- hosts: "{{ server }}"
+  tasks:
+  - name: copy local ssh key to dest servers and write to login user's authorized_keys file
+    authorized_key:
+      user: tjadmin
+      state: present
+      key: "{{ lookup('file','/root/.ssh/id_rsa.pub') }}"
+
+[root@repo ansible]# ansible-playbook -i /etc/ansible/hosts add_ssh_key.yaml -e "server=xtjk8s"
+
 1 docker安装简单版，无roles
 对于docker_image模块, ansible >=2.8 & yum install -y python-docker-py (被控端)
 -----------------------------------------------------------------------------------------------------------------------------------------

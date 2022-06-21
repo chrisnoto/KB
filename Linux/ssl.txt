@@ -1,3 +1,12 @@
+###### p12 证书 ######
+查看内容 
+[root@worker4 ~]# openssl pkcs12 -info -nodes -in http.p12
+Enter Import Password:
+MAC Iteration 100000
+MAC verified OK
+PKCS7 Data
+
+
 ############# OpenSSL 颁发证书 ###########
 自签名证书的 Issuer 和 Subject 是一样的
 # 生成自签名CA根证书
@@ -34,7 +43,7 @@ Generating RSA private key, 2048 bit long modulus
 e is 65537 (0x10001)
 2 生成CSR
 [root@master1 ~]# openssl req -new -key client.key -subj "/CN=client/O=system:masters" -out client.csr
-3 根据CSR签发证书
+3 CA根据CSR签发证书
 [root@master1 ~]# openssl x509 -req -in client.csr -CA /etc/kubernetes/ssl/kube-ca.pem -CAkey /etc/kubernetes/ssl/kube-ca-key.pem -CAcreateserial -out client.crt -days 3650
 Signature ok
 subject=/CN=client/O=system:masters
