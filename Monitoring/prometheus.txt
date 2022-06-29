@@ -203,6 +203,10 @@ root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
 global:
   external_labels:
       monitor: 'codelab-monitor'
+remote_write:
+        - url: "http://10.67.36.62:9201/write"
+remote_read:
+    - url: "http://10.67.36.62:9201/read"
 rule_files:
 scrape_configs:
   - job_name: 'prometheus'
@@ -212,70 +216,215 @@ scrape_configs:
     file_sd_configs:
       - files:
         - ./conf.d/*.json
+  - job_name: federate
+    scrape_interval: 15s
+    honor_labels: true
+    metrics_path: '/federate'
+    params:
+      'match[]':
+         - '{job="prometheus"}'
+         - '{job="node_exporter"}'
+         - '{__name__=~"job:.*"}'
+    static_configs:
+      - targets:
+        - 10.67.36.215:9090
+
 
 root@u1804:/var/snap/prometheus/18# ls conf.d
 cassandra.json  docker.json  kafka.json  mysqld.json  node_exporter.json
-root@u1804:/var/snap/prometheus/18# cat conf.d/cassandra.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat cassandra.json
 [
   {
     "targets": [ "10.67.125.129:8080" ],
     "labels": {
-      "env": "product",
+      "env": "production",
       "job": "cassandra"
     }
   }
 ]
 
-root@u1804:/var/snap/prometheus/18# cat conf.d/docker.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat docker.json
 [
   {
     "targets": [ "10.67.36.70:9323" ],
     "labels": {
-      "env": "product",
+      "env": "production",
       "job": "docker"
     }
   }
 ]
 
-root@u1804:/var/snap/prometheus/18# cat conf.d/kafka.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat gluster_exporter.json
 [
   {
-    "targets": [ "10.67.36.59:9308" ],
+    "targets": [ "10.67.36.51:8080" ],
     "labels": {
-      "env": "product",
+      "env": "production",
+      "job": "glusterfs"
+    }
+  },
+  {
+    "targets": [ "10.67.36.52:8080" ],
+    "labels": {
+      "env": "production",
+      "job": "glusterfs"
+    }
+  },
+  {
+    "targets": [ "10.67.36.53:8080" ],
+    "labels": {
+      "env": "production",
+      "job": "glusterfs"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18/conf.d#
+root@u1804:/var/snap/prometheus/18/conf.d# cat haproxy.json
+[
+  {
+    "targets": [ "10.67.51.148:9101" ],
+    "labels": {
+      "env": "production",
+      "job": "haproxy"
+    }
+  }
+]
+root@u1804:/var/snap/prometheus/18/conf.d#
+root@u1804:/var/snap/prometheus/18/conf.d# cat kafka.json
+[
+  {
+    "targets": [ "10.67.38.134:7071" ],
+    "labels": {
+      "env": "test",
       "job": "kafka"
     }
   },
   {
     "targets": [ "10.67.51.144:9308" ],
     "labels": {
-      "env": "product",
+      "env": "production",
+      "job": "kafka"
+    }
+  },
+  {
+    "targets": [ "10.67.51.144:7071" ],
+    "labels": {
+      "env": "production",
       "job": "kafka"
     }
   }
 ]
 
-root@u1804:/var/snap/prometheus/18# cat conf.d/mysqld.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat mysqld.json
 [
   {
     "targets": [ "10.67.37.192:9104" ],
     "labels": {
-      "env": "product",
+      "env": "production",
       "job": "mysqld"
     }
   }
 ]
 
-root@u1804:/var/snap/prometheus/18# cat conf.d/node_exporter.json
+root@u1804:/var/snap/prometheus/18/conf.d# cat node_exporter.json
 [
   {
     "targets": [ "10.67.37.192:9100" ],
     "labels": {
-      "env": "product",
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.36.65:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.36.73:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.50.200:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.2:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.48.194:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.147:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.148:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.149:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.146:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.145:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node_exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.144:9100" ],
+    "labels": {
+      "env": "production",
       "job": "node_exporter"
     }
   }
 ]
+
+root@u1804:/var/snap/prometheus/18/conf.d# cat rabbitmq.json
+[
+  {
+    "targets": [ "10.67.36.59:15692" ],
+    "labels": {
+      "env": "production",
+      "job": "rabbitmq"
+    }
+  }
+]
+
 root@u1804:/var/snap/prometheus/18/conf.d# cat wmi_exporter.json
 [
   {
@@ -286,9 +435,6 @@ root@u1804:/var/snap/prometheus/18/conf.d# cat wmi_exporter.json
     }
   }
 ]
-
-
-
 
 ##########remote storage elasticsearch##########
 ./elastic-adapter -elasticsearch-url=http://localhost:9200/ -elasticsearch.max-retries=1 -elasticsearch.index-perfix=prometheus -elasticsearch.type=prom-metric

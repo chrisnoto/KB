@@ -346,7 +346,7 @@ cat /etc/hosts
 
 ------主库操作
 1 初始化数据库
-postgresql-setup --initdb
+postgresql-setup initdb
 
 2 在pg_hba.conf增加一行
 host    replication     repl            postgres-2              trust

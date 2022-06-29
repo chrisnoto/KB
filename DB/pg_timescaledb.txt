@@ -640,7 +640,7 @@ DETAIL:  Distributed database UUID is "83ff9b47-630a-4ec6-aac7-b823ca1eb4fd".
 DROP DATABASE
 
 ##################################################################################################################################################################
-##### zabbix server + pgpool(repmgr) + 3 access node + 2 data node
+##### zabbix server + pgpool(repmgr) + 3 access node + 4 data node
 
 在access node mydb01上执行
 \c zabbix            用户是postgres
@@ -875,6 +875,16 @@ DETAIL:  Insert privileges required on "history_uint" to create chunks.
 解决  分别在dn上执行
 zabbix=# grant all privileges on all tables in schema public to zabbix;
 GRANT
+
+#  总共4个data node 3 access node  1 pgpool
+zabbix=# select * from timescaledb_information.data_nodes;
+ node_name |  owner   |                    options
+-----------+----------+-----------------------------------------------
+ dn1       | postgres | {host=10.152.219.66,port=5432,dbname=zabbix}
+ dn2       | postgres | {host=10.152.219.210,port=5432,dbname=zabbix}
+ dn3       | postgres | {host=10.152.219.249,port=5432,dbname=zabbix}
+ dn4       | postgres | {host=10.152.219.224,port=5432,dbname=zabbix}
+(4 rows)
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
 移动chunk    还需要wal_level >=logical

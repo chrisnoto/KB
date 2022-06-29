@@ -1871,6 +1871,17 @@ exec是用被执行的命令行替换掉当前的shell进程，且exec命令后�
 
 其中有一个例外：当exec命令对文件描述符操作的时候，就不会替换shell，而是操作完成后还会继续执行后面的命令！
 
+# exec操作FD，避免 input is the same as output 错误。
+比如过滤log里的关键字再把结果写入log里
+[root@repo ~]# cat hihi.sh
+exec > ~/hihi.log 2>&1
+exec 5<> ~/filter.log
+
+ip r
+grep default ~/hihi.log |tee >&5
+grep default ~/hihi.log |tee -a >&5
+exec 5>&-
+
 
 ############# crontab 每5秒执行一次脚本 ######
 ## For excuting scripts.sh every 3 seconds##on 2014-10-15

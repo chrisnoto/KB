@@ -1,3 +1,10 @@
+The best attributes of Podman include:
+
+Podman can run in rootless mode – its containers are more secure since they run without any added privileges.
+Podman is daemonless- it has lower resource requirements at idle because if you are not running containers, Podman is not running. Docker, on the other hand, has a daemon always running.
+systemd integration -it allows you to run containers as system services.
+
+######## 常用podman命令 ###########
 创建pod
 podman pod create -n mydb -p 3306:3306
 
@@ -8,10 +15,256 @@ podman run -d --pod mydb --name mysql01 -e MYSQL_ROOT_PASSWORD=vSTJ456  docker.i
 podman generate kube mydb -f pod_mydb.yaml
 
 用yaml文件创建pod和container
-podman play kube --down demo.yml
+podman play kube pod_mydb.yaml
 
 销毁pod和container
-podman play kube --down demo.yml
+podman play kube --down pod_mydb.yaml
 
 重新创建pod和container
-podman play kube --replace demo.yml
+podman play kube --replace pod_mydb.yaml
+
+podman 4.0有了新功能  podman image scp, 适用于没有docker registry的情况下
+实现把镜像从本地传到目标机器
+1 目标机器 启用podman.socket
+[root@docker2 run]# systemctl enable --now podman.socket
+Created symlink /etc/systemd/system/sockets.target.wants/podman.socket → /usr/lib/systemd/system/podman.socket.
+[root@docker2 run]# systemctl status podman.socket
+● podman.socket - Podman API Socket
+   Loaded: loaded (/usr/lib/systemd/system/podman.socket; enabled; vendor preset: disabled)
+   Active: active (listening) since Wed 2022-06-22 05:26:51 UTC; 6s ago
+     Docs: man:podman-system-service(1)
+   Listen: /run/podman/podman.sock (Stream)
+   CGroup: /system.slice/podman.socket
+
+Jun 22 05:26:51 docker2 systemd[1]: Listening on Podman API Socket.
+[root@docker2 run]# ll /run/podman/podman.sock
+srw-rw---- 1 root root 0 Jun 22 05:26 /run/podman/podman.sock
+[root@docker2 run]# curl --unix-socket /run/podman/podman.sock http://localhost/_ping
+OK[root@docker2 run]#
+2 本地机器
+ssh-copy-id root@10.85.212.146
+[root@docker1 ~]# podman system connection add --identity ~/.ssh/id_rsa --port 22 docker2 root@10.85.212.146
+[root@docker1 ~]# podman system connection list
+Name        URI                                                 Identity           Default
+docker2     ssh://root@10.85.212.146:22/run/podman/podman.sock  /root/.ssh/id_rsa  true
+[root@docker1 ~]# podman image scp docker.io/library/postgres:13 docker2::
+Copying blob ad6562704f37 done
+Copying blob 8fa5e671e665 done
+Copying blob 81c2fe13a1f0 done
+Copying blob 287d777006b9 done
+Copying blob 69feeba6d5b0 done
+Copying blob 1b67a9cd5215 done
+Copying blob 1ff3ceb3f414 done
+Copying blob 32e442eaf909 done
+Copying blob 6dd78802570d done
+Copying blob a1f899c1a213 done
+Copying blob 4a354fd74471 done
+Copying blob d972a0262c0d done
+Copying blob 3e09fcb35380 done
+Copying config bb3dc22779 done
+Writing manifest to image destination
+Storing signatures
+Loaded image(s): docker.io/library/postgres:13
+
+将目标机器的镜像拷到本机
+[root@docker1 ~]# podman image scp docker2::docker.io/library/mysql:latest
+Getting image source signatures
+Copying blob e51f7a7d2db0 done
+Copying blob 1e1c6bf65237 done
+Copying blob 013eb603c51e done
+Copying blob ac6318adf0f9 done
+Copying blob d679785ef3bb done
+Copying blob 99dd4ea70884 done
+Copying blob 5d8c54cd3009 done
+Copying blob e0e93feafd3f done
+Copying blob 76aa3bcfaf7d done
+Copying blob ec2af7fb937e done
+Copying blob 90a1c8b695ee done
+Copying blob 87aeacb6c98d done
+Copying config 20b875c974 done
+Writing manifest to image destination
+Storing signatures
+Loaded image(s): docker.io/library/mysql:latest
+[root@docker1 ~]# podman images |grep mysql
+docker.io/library/mysql     latest            20b875c97488  3 weeks ago  529 MB
+
+### How to run systemd in a container
+There are lots of reasons to run systemd inside a system, such as:
+
+1 Multiservice containers—Lots of people want to take existing multi-service applications out of VMs and run them inside of containers. 
+We would prefer that they break apart these applications into microservices, but some people can’t or don’t have time yet.  So running them as services launched out of unit files by systemd makes sense.
+2 Systemd unit files—Most applications that run inside of containers are built from code that was run in VMs or on host systems. These applications have a unit file that was written for the application and 
+understands how to run the application. It can be better to launch the service via the supported method, rather than to hack up your own init service.
+3 Systemd is a process manager—It handles the management of services like reaping, restarting, and shutting down better than any other tool.
+
+That being said, there are also lots of reasons not to run systemd in containers. The main one is that systemd/journald controls the output of containers, whereas tools like Kubernetes and OpenShift 
+expect the containers to log directly to stdout and stderr. So, if you are going to manage your containers via Orchestrator like these, then you should think twice about using systemd-based containers. 
+Additionally, the upstream community of Docker and Moby were often hostile to the use of systemd in a container.
+k8s里避免使用跑着systemd的容器，因为日志输出会有问题
+
+man podman run
+
+…
+
+--systemd=true|false
+
+Run container in systemd mode. The default is true.
+
+If the command you running inside of the container is systemd or init, podman will setup tmpfs mount points in the following directories:
+
+/run, /run/lock, /tmp, /sys/fs/cgroup/systemd, /var/lib/journal
+
+It will also set the default stop signal to SIGRTMIN+3.
+
+podman生成systemd unit file
+podman generate systemd --name p13 --files --new
+
+# podman与systemd结合的比较好，远好于docker与systemd的结合
+Podman in systemd unit files works better than Docker
+When launching containers at boot, you can simply put Podman commands into a systemd unit file, and systemd will launch and monitor the service. Podman is a standard fork and exec model. 
+That means the container processes are children of the Podman process, so systemd has an easy time monitoring the processes.
+
+Docker is a client service model and putting the Docker CLI into a unit file is possible. However, as the Docker client connects to the Docker daemon, the Docker client becomes just another 
+process handling stdin and stdout. Systemd has no idea of this relationship between the Docker client and the container that is running under the Docker daemon and can't monitor the service in this model.
+
+SD_NOTIFY
+Systemd has the ability to hold up secondary services from starting that rely on a containerized service starting. Podman can pass down the SD_NOTIFY Socket to the containerized service, 
+so it can notify systemd when it is ready to begin servicing requests. Docker again cannot do this, because of the client/server model.
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+buildah命令制作镜像
+buildah from localhost/centos:7
+new=`buildah mount centos-working-container`
+rm -f ${new}/etc/yum.repos.d/C*
+curl -o ${new}/etc/yum.repos.d/centos7.repo http://10.67.51.164/repofile/centos7.repo
+buildah run centos-working-container yum install -y postgresql14 postgresql14-server iproute
+buildah config --env PGDATA="/var/lib/pgsql/14/data" centos-working-container
+buildah config --user postgres centos-working-container
+buildah run --user postgres centos-working-container /usr/pgsql-14/bin/initdb -D /var/lib/pgsql/14/data --data-checksums
+echo "host all all all md5" >> ${new}/var/lib/pgsql/14/data/pg_hba.conf
+echo "listen_addresses = '*'" >> ${new}/var/lib/pgsql/14/data/postgresql.auto.conf
+buildah config --cmd "/usr/pgsql-14/bin/postmaster -D /var/lib/pgsql/14/data" centos-working-container
+buildah config --port 5432  centos-working-container
+buildah config --volume /var/lib/pgsql/14/data centos-working-container
+buildah commit centos-working-container mypg14:1.4
+buildah rm centos-working-container
+
+#关掉working container
+[root@389dsbak ~]# buildah rm centos-working-container
+beee0dc057ef7b7fb46865ca7d4adf5386ed78008b90ed5018a17915a66bf772
+
+#  标准镜像制作
+[root@389dsbak ~]# cat build2.sh
+buildah from localhost/centos:7
+new=`buildah mount centos-working-container`
+rm -f ${new}/etc/yum.repos.d/C*
+curl -o ${new}/etc/yum.repos.d/centos7.repo http://10.67.51.164/repofile/centos7.repo
+buildah run centos-working-container yum install -y postgresql14 postgresql14-server postgresql14-contrib iproute
+buildah config --env PGDATA="/var/lib/pgsql/14/data" centos-working-container
+buildah config --env PGDATABASE="" centos-working-container
+buildah config --env PGUSERNAME="" centos-working-container
+buildah config --env PGPASSWORD="" centos-working-container
+buildah config --user postgres centos-working-container
+buildah config --entrypoint "/usr/bin/entrypoint.sh" centos-working-container
+buildah copy centos-working-container /root/entrypoint.sh /usr/bin/entrypoint.sh
+buildah run centos-working-container chmod +x /usr/bin/entrypoint.sh
+buildah config --port 5432  centos-working-container
+buildah config --volume /var/lib/pgsql/14/data centos-working-container
+buildah config --stop-signal SIGINT centos-working-container
+buildah commit centos-working-container mypg14
+buildah rm centos-working-container
+
+[root@389dsbak ~]#
+[root@389dsbak ~]#
+[root@389dsbak ~]# cat entrypoint.sh
+#!/bin/bash
+
+PGDATA="/var/lib/pgsql/14/data"
+PGAUTOCONF=${PGDATA}/postgresql.auto.conf
+PGDB=${PGDATABASE}
+PGUSERNAME=${PGUSERNAME}
+PGPASSWD=${PGPASSWORD}
+PGBIN="/usr/pgsql-14/bin"
+
+
+pg_initdb()
+{
+${PGBIN}/initdb -D ${PGDATA} --data-checksums
+}
+
+pg_conf()
+{
+echo "host all all all md5" >> /var/lib/pgsql/14/data/pg_hba.conf
+echo "listen_addresses = '*'" >> /var/lib/pgsql/14/data/postgresql.auto.conf
+}
+
+pg_prestart()
+{
+${PGBIN}/pg_ctl -D ${PGDATA} -w start
+}
+
+pg_start()
+{
+# the exec command replaces the shell process with the postmaster process. Now postmaster is PID 1, which means it receives all signals sent to the container!
+exec ${PGBIN}/postmaster -D ${PGDATA}
+}
+
+pg_stop()
+{
+${PGBIN}/pg_ctl -D ${PGDATA} -m fast -w stop
+}
+
+pg_passwd()
+{
+/bin/psql -c "create user ${PGUSERNAME} with login password '${PGPASSWD}'" postgres
+/bin/psql -c "create database ${PGDB} with owner = ${PGUSERNAME}" postgres
+
+}
+
+
+if [ -e "${PGDATA}/base" ];then
+pg_prestart
+pg_passwd
+pg_stop
+pg_start
+else
+pg_initdb
+pg_conf
+pg_prestart
+pg_passwd
+pg_stop
+pg_start
+fi
+
+
+问题1  容器db进程pid不是1，SIGNAL传递不到db进程
+[root@389dsbak ~]# podman rm -f fc5c090a2b21
+WARN[0010] StopSignal SIGTERM failed to stop container musing_galileo in 10 seconds, resorting to SIGKILL
+解决
+在容器启动命令前加 exec   将pid 1从脚本传递给postmaster进程
+exec ${PGBIN}/postmaster -D ${PGDATA}
+
+修改前 entrypoint.sh的PID为1  postmaster为18
+[root@389dsbak ~]# podman top 3842
+USER        PID         PPID        %CPU        ELAPSED              TTY         TIME        COMMAND
+postgres    1           0           0.000       14h55m20.982903046s  ?           0s          /bin/bash /usr/bin/entrypoint.sh
+postgres    18          1           0.004       14h55m20.983114597s  ?           2s          /usr/pgsql-14/bin/postmaster -D /var/lib/pgsql/14/data
+postgres    19          18          0.000       14h55m20.983252367s  ?           0s          postgres: logger
+postgres    21          18          0.000       14h55m20.983348224s  ?           0s          postgres: checkpointer
+postgres    22          18          0.000       14h55m20.98344384s   ?           0s          postgres: background writer
+postgres    23          18          0.000       14h55m20.983539607s  ?           0s          postgres: walwriter
+postgres    24          18          0.002       14h55m20.983660404s  ?           1s          postgres: autovacuum launcher
+postgres    25          18          0.004       14h55m20.983761627s  ?           2s          postgres: stats collector
+postgres    26          18          0.000       14h55m20.983871237s  ?           0s          postgres: logical replication launcher
+postgres    1800        18          0.000       6m50.98398707s       ?           0s          postgres: zabbix zabbix 10.67.50.63(58078) idle
+修改后 postmaster的PID为1
+[root@389dsbak ~]# podman top fd3e
+USER        PID         PPID        %CPU        ELAPSED       TTY         TIME        COMMAND
+postgres    1           0           0.000       8.188178619s  ?           0s          /usr/pgsql-14/bin/postmaster -D /var/lib/pgsql/14/data
+postgres    18          1           0.000       8.188378969s  ?           0s          postgres: logger
+postgres    20          1           0.000       7.188490523s  ?           0s          postgres: checkpointer
+postgres    21          1           0.000       7.18858404s   ?           0s          postgres: background writer
+postgres    22          1           0.000       7.18867736s   ?           0s          postgres: walwriter
+postgres    23          1           0.000       7.188776677s  ?           0s          postgres: autovacuum launcher
+postgres    24          1           0.000       7.18886787s   ?           0s          postgres: stats collector
+postgres    25          1           0.000       7.188983657s  ?           0s          postgres: logical replication launcher
