@@ -147,3 +147,50 @@ docker run --name zabbix-web-nginx-timescalesb -d \
 --link zabbix-server-timescalesb:zabbix-server \
 -p 28080:8080 \
 zabbix/zabbix-web-nginx-pgsql:centos-5.4.0
+
+### systemd controlled zabbix-proxy
+[root@xlhceszabbixproxy01 ~]# cat zabbix-proxy.sh
+#!/bin/bash
+cat >/usr/lib/systemd/system/zabbix-proxy.service -<<EOF
+Requires=docker.service
+
+[Service]
+Type=simple
+TimeoutStartSec=5m
+ExecStartPre=-/usr/bin/docker rm -f zabbix-proxy-sqlite3
+
+ExecStart=/usr/bin/docker run --rm \
+--name zabbix-proxy-sqlite3 \
+--dns 10.67.50.111 \
+-e TZ='Asia/Shanghai' \
+-e ZBX_HOSTNAME=xlhceszabbixproxy \
+-e ZBX_SERVER_HOST=monitoring.cesbg.foxconn \
+-e ZBX_SERVER_PORT=30051 \
+-e ZBX_PROXYMODE=0 \
+-e ZBX_PROXYLOCALBUFFER=3 \
+-e ZBX_PROXYOFFLINEBUFFER=24 \
+-e ZBX_STARTPOLLERS=100 \
+-e ZBX_STARTTRAPPERS=100 \
+-e ZBX_STARTPINGERS=100 \
+-e ZBX_STARTDISCOVERERS=50 \
+-e ZBX_STARTPREPROCESSORS=5 \
+-e ZBX_CACHESIZE=64M \
+-e ZBX_HISTORYCACHESIZE=64M \
+-e ZBX_HISTORYINDEXCACHESIZE=16M \
+-e ZBX_HOUSEKEEPINGFREQUENCY=8 \
+-e ZBX_DATASENDERFREQUENCY=10 \
+-p 10051:10051 \
+zabbix/zabbix-proxy-sqlite3:centos-5.4.0
+
+
+ExecReload=-/usr/bin/docker stop zabbix-proxy-sqlite3
+ExecReload=-/usr/bin/docker rm zabbix-proxy-sqlite3
+ExecStop=-/usr/bin/docker stop es
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy = multi-user.target
+EOF
+
+systemctl enable zabbix-proxy.service

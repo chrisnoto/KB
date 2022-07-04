@@ -49,18 +49,7 @@ Name        URI                                                 Identity        
 docker2     ssh://root@10.85.212.146:22/run/podman/podman.sock  /root/.ssh/id_rsa  true
 [root@docker1 ~]# podman image scp docker.io/library/postgres:13 docker2::
 Copying blob ad6562704f37 done
-Copying blob 8fa5e671e665 done
-Copying blob 81c2fe13a1f0 done
-Copying blob 287d777006b9 done
-Copying blob 69feeba6d5b0 done
-Copying blob 1b67a9cd5215 done
-Copying blob 1ff3ceb3f414 done
-Copying blob 32e442eaf909 done
-Copying blob 6dd78802570d done
-Copying blob a1f899c1a213 done
-Copying blob 4a354fd74471 done
-Copying blob d972a0262c0d done
-Copying blob 3e09fcb35380 done
+.....
 Copying config bb3dc22779 done
 Writing manifest to image destination
 Storing signatures
@@ -70,17 +59,7 @@ Loaded image(s): docker.io/library/postgres:13
 [root@docker1 ~]# podman image scp docker2::docker.io/library/mysql:latest
 Getting image source signatures
 Copying blob e51f7a7d2db0 done
-Copying blob 1e1c6bf65237 done
-Copying blob 013eb603c51e done
-Copying blob ac6318adf0f9 done
-Copying blob d679785ef3bb done
-Copying blob 99dd4ea70884 done
-Copying blob 5d8c54cd3009 done
-Copying blob e0e93feafd3f done
-Copying blob 76aa3bcfaf7d done
-Copying blob ec2af7fb937e done
-Copying blob 90a1c8b695ee done
-Copying blob 87aeacb6c98d done
+.....
 Copying config 20b875c974 done
 Writing manifest to image destination
 Storing signatures
@@ -131,6 +110,9 @@ SD_NOTIFY
 Systemd has the ability to hold up secondary services from starting that rely on a containerized service starting. Podman can pass down the SD_NOTIFY Socket to the containerized service, 
 so it can notify systemd when it is ready to begin servicing requests. Docker again cannot do this, because of the client/server model.
 
+
+
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 buildah命令制作镜像
 buildah from localhost/centos:7
@@ -153,7 +135,8 @@ buildah rm centos-working-container
 [root@389dsbak ~]# buildah rm centos-working-container
 beee0dc057ef7b7fb46865ca7d4adf5386ed78008b90ed5018a17915a66bf772
 
-#  标准镜像制作
+######################################  buildah制作标准镜像  ######################################
+## 版本1    存在三个问题
 [root@389dsbak ~]# cat build2.sh
 buildah from localhost/centos:7
 new=`buildah mount centos-working-container`
@@ -164,6 +147,7 @@ buildah config --env PGDATA="/var/lib/pgsql/14/data" centos-working-container
 buildah config --env PGDATABASE="" centos-working-container
 buildah config --env PGUSERNAME="" centos-working-container
 buildah config --env PGPASSWORD="" centos-working-container
+buildah config --env PGADMPWD="" centos-working-container
 buildah config --user postgres centos-working-container
 buildah config --entrypoint "/usr/bin/entrypoint.sh" centos-working-container
 buildah copy centos-working-container /root/entrypoint.sh /usr/bin/entrypoint.sh
@@ -177,13 +161,14 @@ buildah rm centos-working-container
 [root@389dsbak ~]#
 [root@389dsbak ~]#
 [root@389dsbak ~]# cat entrypoint.sh
-#!/bin/bash
+#!/usr/bin/bash
 
 PGDATA="/var/lib/pgsql/14/data"
 PGAUTOCONF=${PGDATA}/postgresql.auto.conf
 PGDB=${PGDATABASE}
 PGUSERNAME=${PGUSERNAME}
 PGPASSWD=${PGPASSWORD}
+PGADMPWD=${PGADMPWD}
 PGBIN="/usr/pgsql-14/bin"
 
 
@@ -194,8 +179,8 @@ ${PGBIN}/initdb -D ${PGDATA} --data-checksums
 
 pg_conf()
 {
-echo "host all all all md5" >> /var/lib/pgsql/14/data/pg_hba.conf
-echo "listen_addresses = '*'" >> /var/lib/pgsql/14/data/postgresql.auto.conf
+echo "host all all all md5" >> ${PGDATA}/pg_hba.conf
+echo "listen_addresses = '*'" >> ${PGAUTOCONF}
 }
 
 pg_prestart()
@@ -206,7 +191,7 @@ ${PGBIN}/pg_ctl -D ${PGDATA} -w start
 pg_start()
 {
 # the exec command replaces the shell process with the postmaster process. Now postmaster is PID 1, which means it receives all signals sent to the container!
-exec ${PGBIN}/postmaster -D ${PGDATA}
+exec ${PGBIN}/postmaster -D ${PGDATA}       ###更改后加了 exec
 }
 
 pg_stop()
@@ -216,9 +201,15 @@ ${PGBIN}/pg_ctl -D ${PGDATA} -m fast -w stop
 
 pg_passwd()
 {
-/bin/psql -c "create user ${PGUSERNAME} with login password '${PGPASSWD}'" postgres
-/bin/psql -c "create database ${PGDB} with owner = ${PGUSERNAME}" postgres
-
+#/bin/psql -c "create user ${PGUSERNAME} with login password '${PGPASSWD}'" postgres
+#/bin/psql -c "alter user postgres password '${PGADMPWD}'" postgres
+#/bin/psql -c "create database ${PGDB} with owner = ${PGUSERNAME}" postgres
+/bin/psql -v ON_ERROR_STOP=1 --username postgres --dbname postgres <<-EOSQL
+  create user ${PGUSERNAME} with login password '${PGPASSWD}';
+  alter user postgres password '${PGADMPWD}';
+  create database ${PGDB} with owner = ${PGUSERNAME};
+  create extension if not exists "postgres_fdw";
+EOSQL
 }
 
 
@@ -268,3 +259,141 @@ postgres    22          1           0.000       7.18867736s   ?           0s    
 postgres    23          1           0.000       7.188776677s  ?           0s          postgres: autovacuum launcher
 postgres    24          1           0.000       7.18886787s   ?           0s          postgres: stats collector
 postgres    25          1           0.000       7.188983657s  ?           0s          postgres: logical replication launcher
+
+问题2  日志输出问题，podman logs显示不了日志
+podman run -d -e PGDATABASE=zabbix -e PGUSERNAME=zabbix -e PGPASSWORD=Foxconn123 -e PGADMPWD=vSTJ456 -v /data:/var/lib/pgsql/14/data -p 5432:5432 localhost/mypg14:latest
+日志输出在容器里log目录底下，需要配置logging_collector = 'off'，日志才会输出到stderr, podman logs 才能看得到
+
+问题3  cmd的参数没有pass给entrypoint，也就是不能传参数
+解释：--entrypoint "command" | '["command", "arg1", ...]'
+
+Set the entry point for containers based on any images which will be built using the specified container. buildah supports two formats for entrypoint.
+ It can be specified as a simple string, or as an array of commands.
+
+Note: When the entrypoint is specified as a string, container runtimes will ignore the cmd value of the container image. 
+However if you use the array form, then the cmd will be appended onto the end of the entrypoint cmd and be executed together.
+当我用buildah config --entrypoint "/usr/bin/entrypoint.sh"时，cmd指定 "-c shared_buffers=256MB" 时，cmd不会传递给entrypoint.sh，导致容器run时异常退出
+期待的结果  + exec postgres -c shared_buffers=256MB
+此时的结果  _main "$@"
+            + _main
+            /usr/bin/entrypoint.sh: line 47: 1: unbound variable  因为cmd没有传递给entrypoint,导致无变量。这里entrypoint.sh已经修改为第二版，build2.sh为第一版
+
+## 版本2   三个问题都已解决
+[root@389dsbak ~]# cat build2.sh
+buildah from localhost/centos:7
+new=`buildah mount centos-working-container`
+rm -f ${new}/etc/yum.repos.d/C*
+curl -o ${new}/etc/yum.repos.d/centos7.repo http://10.67.51.164/repofile/centos7.repo
+buildah run centos-working-container yum install -y postgresql14 postgresql14-server postgresql14-contrib iproute
+buildah config --env PGDATA="/var/lib/pgsql/14/data" centos-working-container
+buildah config --env PATH="$PATH:/usr/pgsql-14/bin" centos-working-container
+buildah config --env PGDATABASE="" centos-working-container
+buildah config --env PGUSERNAME="" centos-working-container
+buildah config --env PGPASSWORD="" centos-working-container
+buildah config --env PGADMPWD="" centos-working-container
+buildah config --user postgres centos-working-container
+buildah config --entrypoint '["/usr/bin/entrypoint.sh"]' centos-working-container
+buildah copy centos-working-container /root/entrypoint.sh /usr/bin/entrypoint.sh
+buildah run centos-working-container chmod +x /usr/bin/entrypoint.sh
+buildah config --cmd "postgres" centos-working-container
+buildah config --port 5432  centos-working-container
+buildah config --volume /var/lib/pgsql/14/data centos-working-container
+buildah config --stop-signal SIGINT centos-working-container
+buildah commit centos-working-container mypg14:20220701
+buildah rm centos-working-container
+
+[root@389dsbak ~]# cat entrypoint.sh
+#!/bin/sh
+
+PGDATA="/var/lib/pgsql/14/data"
+PGAUTOCONF=${PGDATA}/postgresql.auto.conf
+PGDB=${PGDATABASE}
+PGUSERNAME=${PGUSERNAME}
+PGPASSWD=${PGPASSWORD}
+PGADMPWD=${PGADMPWD}
+
+
+pg_initdb()
+{
+initdb -D ${PGDATA} --data-checksums
+}
+
+pg_conf()
+{
+echo "host all all all md5" >> ${PGDATA}/pg_hba.conf
+echo "listen_addresses = '*'" >> ${PGAUTOCONF}
+echo "logging_collector = 'off'" >> ${PGAUTOCONF}
+}
+
+pg_prestart()
+{
+pg_ctl -D ${PGDATA} -w start
+}
+
+pg_stop()
+{
+pg_ctl -D ${PGDATA} -m fast -w stop
+}
+
+pg_sql()
+{
+/bin/psql -v ON_ERROR_STOP=1 --username postgres --dbname postgres <<-EOSQL
+  create user ${PGUSERNAME} with login password '${PGPASSWD}';
+  alter user postgres password '${PGADMPWD}';
+  create database ${PGDB} with owner = ${PGUSERNAME};
+  create extension if not exists "postgres_fdw";
+EOSQL
+}
+
+
+
+_main() {
+  if [ "${1:0:1}" = '-' ]; then
+    set -- postgres "$@"
+  fi
+
+  if [ "$1" = 'postgres' ];then
+    if [ -e "${PGDATA}/base" ];then
+      echo "PostgreSQL appears to contain a database; Skipping initialization"
+    else
+      pg_initdb
+      pg_conf
+      pg_prestart
+      pg_sql
+      pg_stop
+      echo "PostgreSQL init process complete; Ready for start up"
+    fi
+  fi
+  exec "$@"
+}
+
+_main "$@"
+
+## 现在 run 第二个版本的镜像
+podman run -d -e PGDATABASE=zabbix -e PGUSERNAME=zabbix -e PGPASSWORD=Foxconn123 -e PGADMPWD=vSTJ456 \ 
+   -v /data:/var/lib/pgsql/14/data -p 5432:5432 localhost/mypg14:20220701 -c shared_buffers=256MB
+容器run的结果
+1 有日志
+[root@389dsbak ~]# podman logs -f 77e6
+.......
+
++ exec postgres -c shared_buffers=256MB
+2022-07-04 08:04:51.274 UTC [1] LOG:  starting PostgreSQL 14.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit
+2022-07-04 08:04:51.275 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2022-07-04 08:04:51.275 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2022-07-04 08:04:51.279 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2022-07-04 08:04:51.283 UTC [1] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2022-07-04 08:04:51.288 UTC [25] LOG:  database system was shut down at 2022-07-04 08:04:51 UTC
+2022-07-04 08:04:51.295 UTC [1] LOG:  database system is ready to accept connections
+
+2 postgres的pid为1 且cmd参数传递给postgres了
+podman top 77e6
+USER        PID         PPID        %CPU        ELAPSED           TTY         TIME        COMMAND
+postgres    1           0           0.000       14m44.468481343s  ?           0s          postgres -c shared_buffers=256MB
+postgres    26          1           0.000       14m42.468688549s  ?           0s          postgres: checkpointer
+postgres    27          1           0.000       14m42.468808229s  ?           0s          postgres: background writer
+postgres    28          1           0.000       14m42.468990833s  ?           0s          postgres: walwriter
+postgres    29          1           0.000       14m42.469108753s  ?           0s          postgres: autovacuum launcher
+postgres    30          1           0.000       14m42.46922044s   ?           0s          postgres: stats collector
+postgres    31          1           0.000       14m42.469348074s  ?           0s          postgres: logical replication launcher
+3 

@@ -343,6 +343,29 @@ rpm2cpio mysql-server/application
 find peoplever.rpm | cpio -t
 rpm2cpio mysql-server.rpm | cpio -ivd "file name"
 
+### check package installation/update history
+[root@vstjlinuxtrans1  ~]# yum history packages-list kernel
+Loaded plugins: etckeeper, fastestmirror
+ID     | Action(s)      | Package
+-------------------------------------------------------------------------------
+    66 | Install        | kernel-3.10.0-1160.31.1.el7.x86_64
+    58 | Install        | kernel-3.10.0-1160.11.1.el7.x86_64                 EE
+    31 | Install        | kernel-3.10.0-693.11.1.el7.x86_64                  EE
+    19 | Install        | kernel-3.10.0-514.21.1.el7.x86_64
+     1 | Install        | kernel-3.10.0-327.el7.x86_64
+history packages-list
+
+[root@rancher ~]# yum history packages-list jq
+Loaded plugins: etckeeper, fastestmirror, product-id, search-disabled-repos, subscription-manager
+
+This system is not registered with an entitlement server. You can use subscription-manager to register.
+
+ID     | Action(s)      | Package
+-------------------------------------------------------------------------------
+    28 | Updated        | jq-1.5-1.el7.x86_64
+    28 | Update         |    1.6-2.el7.x86_64
+    22 | Install        | jq-1.5-1.el7.x86_64
+
 ######### mysql命令 ########
 for i in `cat igalist`;do echo -n $i;fc $i|grep 'Application:';done
 mysql SrvInformation -e "select SrvName,Application from SrvInfo"
