@@ -578,3 +578,9 @@ open("/etc/my.cnf.d/server.cnf", O_RDONLY|O_CLOEXEC) = 4
 stat("/root/.my.cnf", 0x7fff932d5b00)   = -1 ENOENT (No such file or directory)
 +++ exited with 0 +++
 [root@ceszabbixproxydb01 run]# strace -e trace=file mysqld --print-defaults
+
+
+# 只保留30天binlog，并清除30天以外的binlog
+SET GLOBAL expire_logs_days=30;
+flush binary logs;
+同时修改配置文件，设置expire_logs_days=30

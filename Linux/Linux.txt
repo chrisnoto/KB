@@ -1,5 +1,79 @@
 =========================================================== 命 令 ===========================================================
-通过堡垒机sftp传文件到目标服务器
+# 网络管理工具
+发行版 				管理工具								默认配置文件 
+AlmaLinux 8			NetworkManager							/etc/sysconfig/network-scripts/ifcfg-eth0
+Alpine				ifupdown-ng								/etc/network/interfaces
+Arch				systemd-networkd                        /etc/systemd/network/05-eth0.network
+CentOS 5 and 6      network 								/etc/sysconfig/network-scripts/ifcfg-eth0
+CentOS 7 and 8		NetworkManager  						/etc/sysconfig/network-scripts/ifcfg-eth0
+CentOS Stream 8/9	NetworkManager 							/etc/sysconfig/network-scripts/ifcfg-eth0
+Debian 9-11			ifupdown            					/etc/network/interfaces
+Fedora 34-36		NetworkManager							/etc/sysconfig/network-scripts/ifcfg-eth0
+Gentoo				netifrc
+Rocky Linux 8		NetworkManager							/etc/sysconfig/network-scripts/ifcfg-eth0
+Slackware			netconfig
+OpenSUSE Leap		wicked
+Ubuntu 16.04		ifupdown        						/etc/network/interfaces
+Ubuntu 18.04-22.04	Netplan前端 NetworkManager/systemd-network为后端            /etc/netplan/00-installer-config.yaml
+
+Ubuntu 18.04 and 20.04
+Netplan is used to configure networking in Ubuntu 18.04 and later. 
+Ubuntu Server is packaged with systemd-networkd as the backend for Netplan, 
+while NetworkManager is used as the Netplan backend in Ubuntu Desktop.
+
+OpenSUSE
+Networking in OpenSUSE is managed by wicked and netconfig. In addition to directly editing the network configuration files shown below, you can also use YaST
+
+Arch, CoreOS Container Linux
+Networking in these distributions is managed entirely by systemd. See man systemd-networkd and man systemd-resolved for more information.
+
+Debian 7 and above all use ifup and ifdown to manage networking.
+Though systemd-networkd and systemd-resolved are both present in Debian 8 and 9, they’re not enabled.
+Like with Debian, systemd-networkd and systemd-resolved are both present but not enabled in Ubuntu 16.04.
+
+# systemd-networkd配置IP
+[root@389dsbak network]# pwd
+/etc/systemd/network
+[root@389dsbak network]# cat 00-ens192.network
+[Match]
+Name=ens192
+
+[Network]
+Address=10.67.50.225/23
+Gateway=10.67.50.1
+DNS=10.67.50.88
+重启服务  systemctl restart systemd-networkd
+
+# systemd-resolvd       (Ubuntu20.04)
+当前Ubuntu的网络配置使用的是netplan，DNS使用systemd-resolved。原来配置DNS的文件 /etc/resolv.conf 已经变成了指向systemd-resolve地址127.0.0.53。
+这个文件本身标注了不要修改，因为它已经变成了软连接，指向了systemd-resolve控制的配置文件，系统会自动修改其内容
+系统的DNS请求会发给本机的127.0.0.53，systemd-resolve侦听的地址
+root@docker-chensen:/etc/systemd# ll /etc/resolv.conf
+lrwxrwxrwx 1 root root 39 Feb  1  2021 /etc/resolv.conf -> ../run/systemd/resolve/stub-resolv.conf
+root@docker-chensen:/etc/systemd# ss -lunp
+State          Recv-Q         Send-Q                             Local Address:Port                   Peer Address:Port         Process
+UNCONN         0              0                                      127.0.0.1:8125                        0.0.0.0:*             users:(("netdata",pid=723006,fd=17))
+UNCONN         0              0                                  127.0.0.53%lo:53                          0.0.0.0:*             users:(("systemd-resolve",pid=2481876,fd=12))
+
+netplan里配置的是某个网卡的dns，要配置全局DNS，需要修改/etc/systemd/resolved.conf
+[Resolve]
+DNS=10.67.50.88
+FallbackDNS=10.67.50.111
+然后systemctl restart systemd-resolved
+root@docker-chensen:/etc/systemd# resolvectl status
+Global
+       LLMNR setting: no
+MulticastDNS setting: no
+  DNSOverTLS setting: no
+      DNSSEC setting: no
+    DNSSEC supported: no
+         DNS Servers: 10.67.50.88
+Fallback DNS Servers: 10.67.50.111
+
+
+如要禁用systemd-resolved,使用/etc/resolve.conf，可以 stop/disable 或者mask systemd-resolved
+
+#通过堡垒机sftp传文件到目标服务器
 [root@repo ~]# sftp -P 2222 chensen@10.67.36.62 root@10.67.50.63
 chensen@10.67.36.62's password:
 Connected to 10.67.36.62.

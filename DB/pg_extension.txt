@@ -1,3 +1,33 @@
+######## 加载插件
+2.1 当前会话加载
+load 'pg_hint_plan';
+注意这样加载只在当前回话生效。
+
+2.2 用户、库级自动加载
+alter user postgres set session_preload_libraries='pg_hint_plan';
+alter database postgres set session_preload_libraries='pg_hint_plan';
+配置错了的话就连不上数据库了！
+
+如果配置错了，连接template1库执行
+
+alter database postgres reset session_preload_libraries;
+alter user postgres reset session_preload_libraries;
+2.3 cluster级自动加载
+在postgresql.conf中修改shared_preload_libraries=‘pg_hint_plan'
+重启数据库
+
+3 检查是否已经加载
+pg_hint_plan加载后在extension里面是看不到的，所以需要确认插件是否已经加载
+
+show session_preload_libraries;
+ session_preload_libraries
+---------------------------
+ pg_hint_plan
+或者
+
+show shared_preload_libraries;
+如果使用load方式加载不需要检查。
+
 #dblink示例1
 postgres=# create view remote_zabbix_server2 as
            select * from dblink ('dbname=zabbix port=5432 host=10.67.51.222 user=zabbix password=Foxconn123','select hostid,host,status from hosts')

@@ -67,6 +67,21 @@ Loaded image(s): docker.io/library/mysql:latest
 [root@docker1 ~]# podman images |grep mysql
 docker.io/library/mysql     latest            20b875c97488  3 weeks ago  529 MB
 
+# podman remote访问远程podman
+[root@docker1 ~]# podman --remote --connection docker2 images
+REPOSITORY                  TAG               IMAGE ID      CREATED      SIZE
+localhost/podman-pause      4.0.2-1647371706  79ad25dfe5ba  4 weeks ago  739 kB
+docker.io/library/postgres  13                bb3dc2277987  5 weeks ago  381 MB
+docker.io/library/nginx     latest            0e901e68141f  5 weeks ago  146 MB
+docker.io/library/mysql     latest            65b636d5542b  5 weeks ago  529 MB
+docker.io/library/httpd     latest            98f93cd0ec3b  5 weeks ago  148 MB
+docker.io/library/alpine    latest            e66264b98777  6 weeks ago  5.82 MB
+或者
+[root@docker1 ~]# podman-remote -c docker2 images
+REPOSITORY                  TAG               IMAGE ID      CREATED      SIZE
+localhost/podman-pause      4.0.2-1647371706  79ad25dfe5ba  4 weeks ago  739 kB
+
+
 ### How to run systemd in a container
 There are lots of reasons to run systemd inside a system, such as:
 
@@ -397,3 +412,34 @@ postgres    29          1           0.000       14m42.469108753s  ?           0s
 postgres    30          1           0.000       14m42.46922044s   ?           0s          postgres: stats collector
 postgres    31          1           0.000       14m42.469348074s  ?           0s          postgres: logical replication launcher
 3 
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+Skopeo命令
+1 查看podman image
+[root@389dsbak ~]# skopeo inspect containers-storage:localhost/mypg14:20220701
+INFO[0000] Not using native diff for overlay, this may cause degraded performance for building images: kernel has CONFIG_OVERLAY_FS_REDIRECT_DIR enabled
+{
+    "Name": "localhost/mypg14",
+    "Digest": "sha256:a0d2e0d01a3004b6fa746c26d7da847a653846fd19af9a5cf9b63e40dabfe545",
+    "RepoTags": [],
+    "Created": "2022-07-04T08:03:39.142467658Z",
+    "DockerVersion": "",
+	
+2 查看docker image
+[root@worker1 ~]# skopeo inspect docker-daemon:mysql:5.7.26
+{
+    "Name": "docker.io/library/mysql",
+    "Digest": "sha256:cfe6cad6fb1dca9963eeb05ad86a3769e51f12ba036726ea317fb6d64cc33157",
+    "RepoTags": [],
+    "Created": "2019-07-17T22:08:58.487042051Z",
+    "DockerVersion": "18.06.1-ce",
+	
+3 查看docker save出来的tar文件
+[root@389dsbak ~]# skopeo inspect docker-archive:/root/centos7.tar
+{
+    "Digest": "sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951",
+    "RepoTags": [],
+    "Created": "2021-09-15T18:20:23.99863383Z",
+    "DockerVersion": "20.10.7",

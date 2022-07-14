@@ -1,0 +1,118 @@
+# 注意
+container里所做的更改是永久的，无论是启动时指定目录还是image
+machinectl list -a  列出启动、未启动的所有容器
+
+# debootstrap制作debian镜像
+export http_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+export https_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128  
+debootstrap bullseye container1/
+  853  systemd-nspawn -M deb01 -D container1 -a systemctl enable systemd-networkd
+  854  systemd-nspawn -M deb01 -D container1 -a passwd root
+  855  systemd-nspawn -M deb01 -D container1 -a rm -f /etc/securetty
+  856  systemd-nspawn -M deb01 -D container1 -b -n
+
+# dnf制作alma9的镜像  
+dnf -y --releasever=9 --installroot=/root/container/alma9 install bash dnf passwd vim-minimal openssh-clients rootfiles iproute iputils
+  896  systemd-nspawn -M alma01 -D container/alma9 -a systemctl enable systemd-networkd
+  897  systemd-nspawn -M alma01 -D container/alma9 -a passwd root
+  898  systemd-nspawn -M alma01 -D container/alma9 -b
+
+# mkosi制作alma9的镜像  
+export http_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+export https_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128  
+mkosi -d alma -r 9 --use-host-repositories   # 创建了一个安装了systemd和almalinux-release的image，很多功能和命令都没有  并且登录没有密码，基本上不可用
+systemd-nspawn -b -i image.raw
+
+# machinectl import mkosi制作的镜像
+[root@389dsbak ~]# machinectl import-raw alma9.raw alma9.0
+Enqueued transfer job 1. Press C-c to continue download in background.
+Importing '/root/alma9.raw', saving as 'alma9.0'.
+Wrote 0B.
+Operation completed successfully.
+Exiting.
+[root@389dsbak ~]# machinectl list-images
+NAME    TYPE RO  USAGE CREATED                     MODIFIED
+alma9.0 raw  no 581.2M Sat 2022-07-09 16:15:31 CST Sat 2022-07-09 16:28:12 CST
+[root@389dsbak ~]# machinectl show-image alma9.0
+Name=alma9.0
+Path=/var/lib/machines/alma9.0.raw
+Type=raw
+ReadOnly=no
+CreationTimestamp=Sat 2022-07-09 16:15:31 CST
+ModificationTimestamp=Sat 2022-07-09 16:28:12 CST
+Usage=609460224
+Limit=3222315008
+UsageExclusive=609460224
+LimitExclusive=3222315008
+[root@389dsbak ~]# ls /var/lib/machines/
+alma9.0.raw
+
+# machinectl start 镜像，默认会自动配置systemd service
+[root@389dsbak ~]# machinectl start alma9.0
+[root@389dsbak ~]# systemctl status systemd-nspawn@alma9.0.service
+● systemd-nspawn@alma9.0.service - Container alma9.0
+     Loaded: loaded (/usr/lib/systemd/system/systemd-nspawn@.service; disabled; vendor preset: disabled)
+     Active: active (running) since Sat 2022-07-09 16:31:32 CST; 58s ago
+       Docs: man:systemd-nspawn(1)
+   Main PID: 1297123 (systemd-nspawn)
+     Status: "Container running: Ready."
+      Tasks: 7 (limit: 16384)
+     Memory: 68.7M
+        CPU: 1.846s
+     CGroup: /machine.slice/systemd-nspawn@alma9.0.service
+             ├─payload
+             │ ├─init.scope
+             │ │ └─1297146 /usr/lib/systemd/systemd
+             │ └─system.slice
+             │   ├─console-getty.service
+             │   │ └─1297186 /sbin/agetty -o "-p -- \\u" --noclear --keep-baud - 115200,38400,9600 vt220
+             │   ├─dbus-broker.service
+             │   │ ├─1297187 /usr/bin/dbus-broker-launch --scope system --audit
+             │   │ └─1297188 dbus-broker --log 4 --controller 9 --machine-id a572b0f3362c4789b9acf2e6cf2ad64b --max-bytes 536870912 --max-fds 4096 --max-matches 16384 --audit
+             │   ├─systemd-journald.service
+             │   │ └─1297174 /usr/lib/systemd/systemd-journald
+             │   └─systemd-logind.service
+             │     └─1297184 /usr/lib/systemd/systemd-logind
+             └─supervisor
+               └─1297123 systemd-nspawn --quiet --keep-unit --boot --link-journal=try-guest --network-veth -U --settings=override --machine=alma9.0
+
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]: [  OK  ] Started D-Bus System Message Bus.
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]: [  OK  ] Started User Login Management.
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]: [  OK  ] Reached target Multi-User System.
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]: [  OK  ] Reached target Graphical Interface.
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]:          Starting Record Runlevel Change in UTMP...
+Jul 09 16:31:33 389dsbak.dstest2.com systemd-nspawn[1297123]: [  OK  ] Finished Record Runlevel Change in UTMP.
+Jul 09 16:31:34 389dsbak.dstest2.com systemd-nspawn[1297123]:
+Jul 09 16:31:34 389dsbak.dstest2.com systemd-nspawn[1297123]: AlmaLinux 9.0 (Emerald Puma)
+Jul 09 16:31:34 389dsbak.dstest2.com systemd-nspawn[1297123]: Kernel 5.14.0-70.13.1.el9_0.x86_64 on an x86_64
+Jul 09 16:31:34 389dsbak.dstest2.com systemd-nspawn[1297123]:
+
+[root@389dsbak ~]# machinectl login alma9.0
+Connected to machine alma9.0. Press ^] three times within 1s to exit session.
+
+AlmaLinux 9.0 (Emerald Puma)
+Kernel 5.14.0-70.13.1.el9_0.x86_64 on an x86_64
+
+alma9 login: root
+Password:
+Last login: Sat Jul  9 16:25:13 on pts/0
+[root@alma9 ~]#
+
+# machinctl start image 默认启动的容器是隔离网络  
+如何修改container的网络
+在override.conf中先清空execstart,再自定义execstart
+[root@389dsbak systemd-nspawn@alma9.0.service.d]# cat override.conf
+[Service]
+ExecStart=
+ExecStart=systemd-nspawn --quiet --keep-unit --boot --link-journal=try-guest -U --machine=%i
+
+以上例子是host networking，跟主机共享网络
+
+# image 克隆
+machinectl clone alma9.0 mysql8
+machinectl start mysql8
+修改systemd
+mkdir systemd-nspawn@mysql8.service.d
+cp systemd-nspawn@alma9.0.service.d/override.conf systemd-nspawn@mysql8.service.d/
+systemctl daemon-reload
+machinectl reboot mysql8

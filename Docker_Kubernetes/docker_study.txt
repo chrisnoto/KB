@@ -1,3 +1,11 @@
+# 国内镜像站
+docker image pull quay.io/kubevirt/virt-api:v0.45.0
+# 换成
+docker pull quay.mirrors.ustc.edu.cn/kubevirt/virt-api:v0.45.0
+
+docker pull k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0
+# 换成
+docker pull registry.aliyuncs.com/google_containers/csi-node-driver-registrar:v2.3.0
 
 
 ####### docker api #####
