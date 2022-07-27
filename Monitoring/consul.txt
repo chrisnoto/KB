@@ -253,23 +253,9 @@ podman run -d --net=host \
   -dns-port=53 -client=0.0.0.0 \
   --join 10.85.212.51 -rejoin \
   -recursor 10.67.50.88
-客户端
-podman run -d --net=host \
-  -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
-  --name consul_client consul:latest agent \
-  -bind=10.85.212.146 \
-  -dns-port=53 -client=10.88.0.1 \
-  --join 10.85.212.51 -rejoin \
-  -recursor 10.67.50.88
 
   
- [root@consul1 ~]# podman exec -t 3b0 consul members
-Node     Address             Status  Type    Build   Protocol  DC   Partition  Segment
-consul1  10.85.212.51:8301   alive   server  1.12.3  2         dc1  default    <all>
-consul2  10.85.212.195:8301  alive   server  1.12.3  2         dc1  default    <all>
-consul3  10.85.212.127:8301  alive   server  1.12.3  2         dc1  default    <all>
-docker2  10.85.212.146:8301  alive   client  1.12.3  2         dc1  default    <default>
- 
+  
 ###集成 prometheus using consul_sd_configs
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
 global:
