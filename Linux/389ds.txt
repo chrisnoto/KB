@@ -10,7 +10,61 @@ ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com'
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(cn=*Managers)" -W |grep dn  #模糊匹配
 
 ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -W -D "cn=陳森,ou=tj-fiwo,ou=vdiusers,ou=cesbgusers,dc=cesbg,dc=foxconn" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(sAMAccountName=H7104398)"
- ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -W -D "CN=陳森,OU=IT (Disable Network Disk),OU=TJsite,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'dc=cesbg,dc=foxconn' "(sAMAccountName=sepmanager)"
+
+##  ldapsearch 根据AD的SRV记录做查询 
+[root@repo ~]# ldapsearch -H ldap:///dc%3Dcesbg%2Cdc%3Dfoxconn -x -W -D "cn=test0722,ou=test,ou=Infra,ou=IT,ou=TJsite,ou=CESBGUsers,dc=CESBG,dc=FOXCONN" -b 'dc=cesbg,dc=foxconn' "(sAMAccountName=H7104398)"  -d 1
+ldap_url_parse_ext(ldap:///dc%3Dcesbg%2Cdc%3Dfoxconn)
+ldap_create
+ldap_url_parse_ext(ldap://vtyncdc04.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://xtjcesbgdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vtyncdc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vstjcesbgdc03.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vsgycesad02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vstjcesbgdc04.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vtycebgdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vhchkdc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vsgysfcdc.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vstjcesbgdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vhchkdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vtyncdc03.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://xtjclouddc.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vslhcedc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://xlhcesbgdc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vstjepbgsfcdc.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vtycebgdc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://xtjcesbgdc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://xlhcesbgdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vslhcesrddc.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vstjcabgsfcdc.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vslhcedc02.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vtyncdc01.cesbg.foxconn:389)
+ldap_url_parse_ext(ldap://vsgycesad01.cesbg.foxconn:389)
+Enter LDAP Password:
+ldap_sasl_bind
+ldap_send_initial_request
+ldap_new_connection 1 1 0
+ldap_int_open_connection
+ldap_connect_to_host: TCP vsgycesad01.cesbg.foxconn:389
+ldap_new_socket: 3
+ldap_prepare_socket: 3
+ldap_connect_to_host: Trying 10.250.68.40:389
+ldap_pvt_connect: fd: 3 tm: -1 async: 0
+attempting to connect:
+connect success
+ldap_open_defconn: successful
+ldap_send_server_request
+ber_scanf fmt ({it) ber:
+ber_scanf fmt ({i) ber:
+ber_flush2: 104 bytes to sd 3
+ldap_result ld 0x559f4ee62090 msgid 1
+wait4msg ld 0x559f4ee62090 msgid 1 (infinite timeout)
+wait4msg continue ld 0x559f4ee62090 msgid 1 all 1
+** ld 0x559f4ee62090 Connections:
+* host: vsgycesad01.cesbg.foxconn  port: 389  (default)
+  refcnt: 2  status: Connected
+  last used: Fri Jul 22 16:57:02 2022
+ 
+ 
 ######## 查询ipa ##############
 ldapsearch -H ldaps://ipa.xq.foxconn:636 -D 'uid=admin,cn=users,cn=accounts,dc=xq,dc=foxconn' -Z -b 'cn=accounts,dc=xq,dc=foxconn' -s subtree -W 
 with GSSAPI方式认证，参考kerbros.txt
@@ -31,7 +85,7 @@ certutil -S -n "CA certificate" -s "cn=CAcert" -x -t "CT,," -m 1000 -v 120 -d ./
 3 生成admin server证书和directory server证书
 certutil -S -n "admin-cert" -s "cn=itldap1,ou=389 Administration server" -c "CA certificate" -t "u,u,u" -m 1002 -v 120 -d ./
 certutil -S -n "server-cert" -s "cn=itldap1,ou=389 Directory server" -c "CA certificate" -t "u,u,u" -m 1001 -v 120 -d ./
-4 导出adin-cert证书并导入到 admin-serv所在的数据库中
+4 导出admin-cert证书并导入到 admin-serv所在的数据库中
 pk12util -d ./ -o adminserver.p12 -n admin-cert
 cd ../
 pk12util -d admin-serv/ -n admin-cert -i slapd-itldap1/adminserver.p12
@@ -245,3 +299,8 @@ h7108579:x:1012:1012:h7108579 [LDAP User]:/home/h7108579:/usr/bin/bash
 h7108579:*:18397:0:100:1:::0
 
 ssh -v h7108579@10.67.51.158
+
+
+
+
+dsconf localhost backend create --suffix dc=tj,dc=cesbg --be-name userRoot --create-entries --create-suffix

@@ -105,7 +105,7 @@ zabbix/zabbix-web-nginx-pgsql:centos-5.4.0
 
 ######## zabbix-proxy-sqlite3:centos-5.0.2
 docker run --name zabbix-proxy-sqlite3 -d \
---dns=10.67.50.111
+--dns 10.67.50.111
 -e TZ='Asia/Shanghai' \
 -e ZBX_HOSTNAME=ceszabbixproxy \
 -e ZBX_SERVER_HOST=monitoring.cesbg.foxconn \
@@ -185,7 +185,7 @@ zabbix/zabbix-proxy-sqlite3:centos-5.4.0
 
 ExecReload=-/usr/bin/docker stop zabbix-proxy-sqlite3
 ExecReload=-/usr/bin/docker rm zabbix-proxy-sqlite3
-ExecStop=-/usr/bin/docker stop es
+ExecStop=-/usr/bin/docker stop zabbix-proxy-sqlite3
 Restart=always
 RestartSec=30
 

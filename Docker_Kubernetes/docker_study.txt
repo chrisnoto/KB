@@ -7,6 +7,10 @@ docker pull k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0
 # 换成
 docker pull registry.aliyuncs.com/google_containers/csi-node-driver-registrar:v2.3.0
 
+# 远程访问docker
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2376
 
 ####### docker api #####
 curl -Ss --unix-socket /var/run/docker.sock http:/containers/json |jq .

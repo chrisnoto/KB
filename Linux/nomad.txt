@@ -1,0 +1,148 @@
+=========================nomad配置  这里未与consul集成=========================
+[root@repo nomad]# cat /etc/nomad.d/nomad.hcl
+# Full configuration options can be found at https://www.nomadproject.io/docs/configuration
+
+data_dir  = "/opt/nomad/data"
+bind_addr = "0.0.0.0"
+
+server {
+  # license_path is required as of Nomad v1.1.1+
+  #license_path = "/opt/nomad/license.hclic"
+  enabled          = true
+  bootstrap_expect = 1
+}
+
+#service {
+#  name = "api"
+#  provider = "nomad"
+#  port = "api"
+#}
+
+client {
+  enabled = true
+  servers = ["127.0.0.1"]
+  host_volume "postgres" {
+    path = "/opt/postgres/data"
+    read_only = false
+  }
+}
+
+如果要集成consul，默认是自动集成的，如果consul监听地址不一样的话，手动指定
+consul {
+  address = "10.88.0.1:8500"
+}
+-----------------------------------------------------------------------------------------------
+有用的nomad命令
+nomad stop -purge webiste   删除job及其部署的容器
+nomad job history -p website   查看job历史版本
+Version     = 5
+Stable      = true
+Submit Date = 2022-07-29T10:11:07+08:00
+Diff        =
++/- Job: "website"
++/- Task Group: "website"
+  +/- Task: "myweb"
+    +   Env[TZ]: "Asia/Shanghai"
+    +/- Resources {
+      +/- CPU:         "100" => "500"
+          Cores:       "0"
+          DiskMB:      "0"
+          IOPS:        "0"
+      +/- MemoryMB:    "300" => "1024"
+          MemoryMaxMB: "0"
+        }
+
+Version     = 4
+Stable      = true
+Submit Date = 2022-07-28T22:26:32+08:00
+Diff        =
++/- Job: "website"
++/- Task Group: "website"
+  +/- Task: "myweb"
+    +/- Config {
+      - env[0][TZ]: "Asia/Shanghai"
+        image:      "nginx:20220728"
+        ports[0]:   "http"
+        }
+
+nomad job revert website 2          #把job rollback到版本2	
+-----------------------------------------------------------------------------------------------
+一个简单的job例子
+[root@repo nomad]# cat postgres.nomad
+job "mydb" {
+  datacenters = ["dc1"]
+  type = "service"
+  update {
+    max_parallel =1
+    min_healthy_time = "10s"
+    healthy_deadline = "3m"
+    progress_deadline = "10m"
+    auto_revert = false
+    canary = 0
+  }
+  migrate {
+    max_parallel = 1
+    health_check = "checks"
+    min_healthy_time = "10s"
+    healthy_deadline = "5m"
+  }
+  group "mydb" {
+    count = 1
+    volume "postgres" {
+      type = "host"
+      read_only = false
+      source = "postgres"
+    }
+    network {
+      port "db" { to = 5432 }
+    }
+    restart {
+      attempts =2
+      interval = "30m"
+      delay = "15s"
+      mode = "fail"
+    }
+    task "mydb" {
+      driver = "docker"
+      volume_mount {
+        volume = "postgres"
+        destination = "/var/lib/postgresql/data/pgdata"
+        read_only = false
+      }
+
+      env {
+        TZ = "Asia/Shanghai"
+        POSTGRES_PASSWORD = "Foxconn123"
+        PGDATA = "/var/lib/postgresql/data/pgdata"
+      }
+
+      resources {
+        cpu = 500
+        memory = 1024
+      }
+
+      config {
+        image = "postgres:12"
+        ports = [
+          "db",
+        ]
+      }
+    }
+  }
+}
+
+-----------------------------------------------------------------------------------------------
+# job的关键字
+    network {
+      port "db" {
+        static = 5432   # 相当于 -p 5432:5432
+		to = 5432       #  主机任意大端口映射到容器5432
+
+
+artifact {
+  source = "http://path.to/redis.tar"
+}
+config {
+  load = "redis.tar"
+  image = "redis"
+}

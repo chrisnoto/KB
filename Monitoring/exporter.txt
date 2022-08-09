@@ -1,0 +1,35 @@
+# postgres_exporter
+[root@worker2 ~]# cat pg_exporter.sh
+docker run -d \
+  --net=host \
+  -e "DATA_SOURCE_URI=10.67.36.61:5432/postgres?sslmode=disable" \
+  -e DATA_SOURCE_USER='postgres' \
+  -e DATA_SOURCE_PASS='Foxconn123' \
+  wrouesnel/postgres_exporter:latest
+
+
+# mysqld_exporter
+[root@zbxdb ~]# cat exporter.sh
+docker run -d \
+  -p 9104:9104 \
+  -e DATA_SOURCE_NAME="root:vSTJ456@(10.67.51.162:3306)/" \
+  prom/mysqld-exporter:latest
+
+# docker_exporter
+[root@rancher ~]# cat docker_exporter.sh
+docker run --name docker_exporter -d \
+ --restart always \
+ --volume "/var/run/docker.sock":"/var/run/docker.sock" \
+ --publish 9417:9417 \
+ prometheusnet/docker_exporter
+ 
+# elasticsearch_exporter 
+[root@xtjcesbges01 ~]# cat es-exp.sh
+docker run -d \
+ -p 9114:9114 \
+ --dns 10.67.50.88 \
+ -v /etc/elasticsearch/certs/ca.crt:/tmp/ca.crt \
+ prometheuscommunity/elasticsearch-exporter:latest \
+ --es.uri=https://elastic:vSTJ456@xtjcesbges01.cesbg.foxconn:9200 \
+ --es.ca=/tmp/ca.crt 
+  

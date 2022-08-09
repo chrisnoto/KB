@@ -237,38 +237,59 @@ There are several ways to register services in Consul:
   run "consul catalog services" to show the result
 
 # docker run
+docker run --rm --env CONSUL_LOCAL_CONFIG='{ "connect":{ "enabled":true } }' consul agent -grpc-port=8502
 第一个master
-podman run -d --net=host \
+docker run -d --net=host \
   -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
-  --name consul_server consul:latest agent -server \
-  -bind=0.0.0.0 -bootstrap-expect=3 \
-  -dns-port=53 -client=0.0.0.0 \
-  -recursor 10.67.50.88
-  
-其他master
-podman run -d --net=host \
-  -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
+  -e CONSUL_LOCAL_CONFIG='{ "connect":{ "enabled":true } }' \
   --name consul_server consul:latest agent -server \
   -bind=0.0.0.0 -bootstrap-expect=3 -ui \
-  -dns-port=53 -client=0.0.0.0 \
-  --join 10.85.212.51 -rejoin \
-  -recursor 10.67.50.88
+  -dns-port=53 -grpc-port=8502 -client=0.0.0.0 \
+  -recursor 10.66.12.206
+  
+其他master
+docker run -d --net=host \
+  -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
+  -e CONSUL_LOCAL_CONFIG='{ "connect":{ "enabled":true } }' \
+  --name consul_server consul:latest agent -server \
+  -bind=0.0.0.0 -bootstrap-expect=3 -ui \
+  -dns-port=53 -grpc-port=8502 -client=0.0.0.0 \
+  --join 10.66.12.122 -rejoin \
+  -recursor 10.66.12.206
 客户端
-podman run -d --net=host \
+docker run -d --net=host \
   -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
   --name consul_client consul:latest agent \
   -bind=10.85.212.146 \
   -dns-port=53 -client=10.88.0.1 \
-  --join 10.85.212.51 -rejoin \
-  -recursor 10.67.50.88
+  --join 10.66.12.122 -rejoin \
+  -recursor 10.66.12.206
 
-  
+ 
  [root@consul1 ~]# podman exec -t 3b0 consul members
 Node     Address             Status  Type    Build   Protocol  DC   Partition  Segment
 consul1  10.85.212.51:8301   alive   server  1.12.3  2         dc1  default    <all>
 consul2  10.85.212.195:8301  alive   server  1.12.3  2         dc1  default    <all>
 consul3  10.85.212.127:8301  alive   server  1.12.3  2         dc1  default    <all>
 docker2  10.85.212.146:8301  alive   client  1.12.3  2         dc1  default    <default>
+
+容器客户端里注册服务
+consul reload -http-addr=http://10.88.0.1:8500
+如果env有http_proxy,则unset
+
+[root@docker1 consul.d]# dig @10.88.0.1 _ldap._tcp.service.consul -t srv
+;; QUESTION SECTION:
+;_ldap._tcp.service.consul.     IN      SRV
+
+;; ANSWER SECTION:
+_ldap._tcp.service.consul. 0    IN      SRV     1 1 389 0a55d414.addr.dc1.consul.
+
+;; ADDITIONAL SECTION:
+0a55d414.addr.dc1.consul. 0     IN      A       10.85.212.20
+docker1.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
+
+Consul 互连 这个特性最大的意义在于， 将访问控制与服务IP解耦 。
+
  
 ###集成 prometheus using consul_sd_configs
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'

@@ -196,3 +196,40 @@ $vmhost | Import-VApp -source 'E:\data\vSTJK8S03\vSTJK8S03.ovf' -Datastore $myds
 更改网络标签，开机状态
 start-vm -vm 'vSTJK8S03'
 get-vm -name 'vSTJK8S03' |get-networkadapter |Set-NetworkAdapter -networkname "VLAN_50" -confirm:$true
+
+Connect-VIServer -server 10.67.51.89 -user administrator@vsphere.local -password 'Foxconn$56'
+$esxcli = Get-EsxCli -VMhost (Get-VMHost 10.67.50.143) -V2
+PowerCLI C:\> $esxcli.vsan.cluster.get.invoke()
+
+
+ConfigGeneration                  : 03edb8be-512e-47ac-bb2b-69a7062a65f8 8 2022-07-14T01:50:24.566
+CurrentLocalTime                  : 2022-07-18T06:54:08Z
+Enabled                           : true
+LocalNodeHealthState              : HEALTHY
+LocalNodeState                    : MASTER
+LocalNodeType                     : NORMAL
+LocalNodeUUID                     : 62748eee-d8a2-475b-1155-70106f48c802
+MaintenanceModeState              : OFF
+SubClusterBackupUUID              :
+SubClusterMasterUUID              : 62748eee-d8a2-475b-1155-70106f48c802
+SubClusterMemberCount             : 1
+SubClusterMemberHostNames         : {localhost}
+SubClusterMemberUUIDs             : {62748eee-d8a2-475b-1155-70106f48c802}
+SubClusterMembershipEntryRevision : 0
+SubClusterMembershipUUID          : 177acf62-34aa-72cb-5652-70106f48c802
+SubClusterUUID                    : 52b57679-f978-3bf3-8164-e00384835f9d
+UnicastModeEnabled                : true
+
+
+
+PowerCLI C:\> $esxcli.vsan.cluster.leave.invoke()
+true
+PowerCLI C:\> $esxcli.vsan.cluster.get.invoke()
+Message: vSAN Clustering is not enabled on this host;
+$esxcli.vsan.storage.list.invoke()
+查找 VSANDiskGroupUUID            : 52d21f5c-028f-c583-3143-8bd1b3752fc7
+$Agr=@{
+uuid="52f187d1-b04f-e2b8-d972-78ced7f4b80f"
+}
+PowerCLI C:\> $esxcli.vsan.storage.remove.invoke($Agr)
+true

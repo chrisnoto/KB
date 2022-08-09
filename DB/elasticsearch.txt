@@ -862,7 +862,7 @@ curl -XPOST --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.ce
  }
  ' | jq -r '.hits.hits[]._source.host.hostname'
 
-[root@stjes1 ~]# curl -X POST "10.67.51.147:9200/filebeat-6.8.1-2021.03.*/_search" -H 'Content-Type: application/json' -d'
+[root@stjes1 ~]# curl -X POST "10.67.51.147:9200/filebeat-6.8.1-2022.07.*/_search" -H 'Content-Type: application/json' -d'
  {"size":"500",
  "query":{
    "wildcard":{

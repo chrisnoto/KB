@@ -1,0 +1,55 @@
+################# Terraform部署
+# 部署本地docker容器
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 2.13.0"
+    }
+  }
+}
+
+provider "docker" {}
+
+resource "docker_image" "nginx" {
+  name         = "nginx:latest"
+  keep_locally = false
+}
+
+resource "docker_container" "nginx" {
+  image = docker_image.nginx.latest
+  name  = "tutorial"
+  ports {
+    internal = 80
+    external = 8000
+  }
+}
+
+# 部署远程服务器docker容器
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 2.13.0"
+    }
+  }
+}
+
+provider "docker" {
+#  host = "tcp://10.66.12.228:2376/"
+  host = "ssh://root@10.66.12.228"
+}
+
+resource "docker_image" "nginx" {
+  name = "nginx:latest"
+  keep_locally = false
+}
+
+resource "docker_container" "nginx" {
+  image = "${docker_image.nginx.latest}"
+  name  = "tutorial"
+  ports {
+    internal = 80
+    external = 8001
+  }
+}
