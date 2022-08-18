@@ -436,6 +436,55 @@ root@u1804:/var/snap/prometheus/18/conf.d# cat wmi_exporter.json
   }
 ]
 
+# 配置consul_sd 发现nomad
+1 nomad.hcl
+telemetry {
+  collection_interval = "5s",
+  prometheus_metrics = true,
+  publish_allocation_metrics = true,
+  publish_node_metrics = true
+}
+2 配置prometheus.yml
+- job_name: nomad_metrics
+  params:
+    format:
+    - prometheus
+  scrape_interval: 5s
+  scrape_timeout: 5s
+  metrics_path: /v1/metrics
+  scheme: http
+  consul_sd_configs:
+  - server: '10.67.50.63:8500'
+    scheme: http
+    services:
+    - nomad-client
+    - nomad
+    - zdb
+3 导入nomad dashboard
+发现nomad dashboard太简单，监控指标不够多。决定弃用，另外，metrics path是 /v1/metrics 与通常的exporter路径不一致
+只用consul服务发现来发现各种exporter会是一个好的选择，新的配置
+- job_name: consul_sd
+  params:
+    format:
+    - prometheus
+  scrape_interval: 5s
+  scrape_timeout: 5s
+  metrics_path: /metrics
+  scheme: http
+  consul_sd_configs:
+  - server: '10.67.50.63:8500'
+    scheme: http
+    services:
+    - postgres_exporter-9187
+  relabel_configs:
+    - source_labels: [__meta_consul_service_port]        # 修改job标签的值，与file_sd里提供的标签一致
+      regex: 9187
+      target_label: "job"
+      replacement: "postgres"
+    - target_label: "env"                                #增加env标签，与file_sd里提供的标签一致
+      replacement: "production"
+
+
 ##########remote storage elasticsearch##########
 ./elastic-adapter -elasticsearch-url=http://localhost:9200/ -elasticsearch.max-retries=1 -elasticsearch.index-perfix=prometheus -elasticsearch.type=prom-metric
 
@@ -451,3 +500,179 @@ grafana-cli admin reset-admin-password --homepath "/usr/share/grafana" Foxconn45
 ##############cannot change profile for the next exec call: No such file or directory##########
 ##############   Failed to start Service for snap application prometheus.prometheus  ##########
 执行apparmor_parser -r /var/lib/snapd/apparmor/profiles/*, 然后重启prometheus
+
+
+###################################################################################################################################################################################################
+# snmptrap接收alertmanager报警
+1 配置文件prometheus.yml
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+alerting:
+  alertmanagers:
+    - static_configs:
+      - targets:
+        - alertmanager:9093
+      enable_http2: true
+      scheme: http
+      timeout: 10s
+      api_version: v1
+      follow_redirects: true
+rule_files:
+  - "rules/test.yml"
+scrape_configs:
+- job_name: prometheus
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: /metrics
+  scheme: http
+  static_configs:
+  - targets:
+    - localhost:9090
+    - node-exporter:9100
+- job_name: 'file_sd'
+  file_sd_configs:
+    - files:
+      - ./conf.d/*.json
+
+2 配置alertmanager.yml
+[root@promsrv prometheus-grafana]# cat alertmanager/alertmanager.yml
+global:
+  # global parameter
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h        #控制发送报警的间隔时间
+  receiver: 'snmp_notifier'
+
+receivers:
+- name: 'snmp_notifier'
+  webhook_configs:
+  - send_resolved: true
+    url: 'http://10.67.50.237:9464/alerts'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+	  
+3 rule配置文件
+[root@promsrv prometheus]# cat rules/test.yml
+groups:
+- name: test
+  rules:
+
+  - alert: Host out of memory
+    expr: 'node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 98'
+    for: 30s
+    labels:
+      severity: warning
+      type: service
+      oid: "1.3.6.1.4.1.123.0.10.1.1.1.5.1"
+      environment: "production"
+    annotations:
+      summary: "Host {{ $labels.instance }} out of memory"
+      description: "{{ $labels.instance }} out of memory, current memory: {{ $value }}"
+	  
+4 跑起 snmp_notifier程序	  
+[root@promsrv ~]# cat /root/description-template.tpl
+{{- if .Alerts -}}
+{{- range $severity, $alerts := (groupAlertsByLabel .Alerts "severity") -}}
+Status: {{ $severity }}
+{{- range $index, $alert := $alerts }}
+- Alert: {{ $alert.Labels.alertname }}
+  Summary: {{ $alert.Annotations.summary }}
+  Description: {{ $alert.Annotations.description }}
+{{ end }}
+{{ end }}
+{{ else -}}
+Status: OK
+{{- end -}}
+
+	
+cat snmp_notifier.sh
+#!/bin/sh
+snmp_notifier --web.listen-address=:9464 \
+  --snmp.trap-description-template=/root/description-template.tpl \
+  --log.level=debug > /root/snmp.log 2>&1 &
+
+5 安装net-snmp并配置/etc/snmp/snmptrapd.conf
+[root@promsrv prometheus]# cat /etc/snmp/snmptrapd.conf
+authCommunity log,execute,net public
+	
+验证结果	  默认一个小时报警一次
+/usr/sbin/snmptrapd -m ALL -m +SNMP-NOTIFIER-MIB -f -Of -Lo
+NET-SNMP version 5.7.2
+2022-08-16 17:10:55 localhost [UDP: [127.0.0.1]:60575->[127.0.0.1]:162]:
+.iso.org.dod.internet.mgmt.mib-2.system.sysUpTime.sysUpTimeInstance = Timeticks: (227446800) 26 days, 7:47:48.00        .iso.org.dod.internet.snmpV2.snmpModules.snmpMIB.snmpMIBObjects.snmpTrap.snmpTrapOID.0 = OID: .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1       .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.1 = STRING: "1.3.6.1.4.1.123.0.10.1.1.1.5.1[alertname=Host out of memory]"  .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.2 = STRING: "warning"      .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.3 = STRING: "Status: warning
+- Alert: Host out of memory
+  Summary: Host node-exporter:9100 out of memory
+  Description: node-exporter:9100 out of memory, current memory: 93.87814920961615"
+
+- Alert: Host out of memory
+  Summary: Host node-exporter:9100 out of memory
+  Description: node-exporter:9100 out of memory, current memory: 93.48062738907147"
+2022-08-17 04:10:57 localhost [UDP: [127.0.0.1]:57754->[127.0.0.1]:162]:
+.iso.org.dod.internet.mgmt.mib-2.system.sysUpTime.sysUpTimeInstance = Timeticks: (231407000) 26 days, 18:47:50.00       .iso.org.dod.internet.snmpV2.snmpModules.snmpMIB.snmpMIBObjects.snmpTrap.snmpTrapOID.0 = OID: .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1       .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.1 = STRING: "1.3.6.1.4.1.123.0.10.1.1.1.5.1[alertname=Host out of memory]"  .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.2 = STRING: "warning"      .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.3 = STRING: "Status: warning
+- Alert: Host out of memory
+  Summary: Host node-exporter:9100 out of memory
+  Description: node-exporter:9100 out of memory, current memory: 93.49661088426842"
+2022-08-17 05:10:58 localhost [UDP: [127.0.0.1]:33684->[127.0.0.1]:162]:
+.iso.org.dod.internet.mgmt.mib-2.system.sysUpTime.sysUpTimeInstance = Timeticks: (231767100) 26 days, 19:47:51.00       .iso.org.dod.internet.snmpV2.snmpModules.snmpMIB.snmpMIBObjects.snmpTrap.snmpTrapOID.0 = OID: .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1       .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.1 = STRING: "1.3.6.1.4.1.123.0.10.1.1.1.5.1[alertname=Host out of memory]"  .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.2 = STRING: "warning"      .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.3 = STRING: "Status: warning
+- Alert: Host out of memory
+  Summary: Host node-exporter:9100 out of memory
+  Description: node-exporter:9100 out of memory, current memory: 93.46179145473167"
+2022-08-17 06:10:58 localhost [UDP: [127.0.0.1]:34202->[127.0.0.1]:162]:
+.iso.org.dod.internet.mgmt.mib-2.system.sysUpTime.sysUpTimeInstance = Timeticks: (232127100) 26 days, 20:47:51.00       .iso.org.dod.internet.snmpV2.snmpModules.snmpMIB.snmpMIBObjects.snmpTrap.snmpTrapOID.0 = OID: .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1       .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.1 = STRING: "1.3.6.1.4.1.123.0.10.1.1.1.5.1[alertname=Host out of memory]"  .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.2 = STRING: "warning"      .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.3 = STRING: "Status: warning
+- Alert: Host out of memory
+  Summary: Host node-exporter:9100 out of memory
+  Description: node-exporter:9100 out of memory, current memory: 93.46966025236709"
+2022-08-17 07:10:58 localhost [UDP: [127.0.0.1]:51870->[127.0.0.1]:162]:
+.iso.org.dod.internet.mgmt.mib-2.system.sysUpTime.sysUpTimeInstance = Timeticks: (232487100) 26 days, 21:47:51.00       .iso.org.dod.internet.snmpV2.snmpModules.snmpMIB.snmpMIBObjects.snmpTrap.snmpTrapOID.0 = OID: .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1       .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.1 = STRING: "1.3.6.1.4.1.123.0.10.1.1.1.5.1[alertname=Host out of memory]"  .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.2 = STRING: "warning"      .iso.org.dod.internet.private.enterprises.123.0.10.1.1.1.5.1.3 = STRING: "Status: warning
+- Alert: Host out of memory
+ 
+### alertmanager api
+[root@promsrv share]# curl http://10.67.50.237:9093/api/v1/alerts | jq .
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   740  100   740    0     0   381k      0 --:--:-- --:--:-- --:--:--  722k
+{
+  "status": "success",
+  "data": [
+    {
+      "labels": {
+        "alertname": "Host out of memory",
+        "environment": "production",
+        "instance": "node-exporter:9100",
+        "job": "prometheus",
+        "oid": "1.3.6.1.4.1.123.0.10.1.1.1.5.1",
+        "severity": "warning",
+        "type": "service"
+      },
+      "annotations": {
+        "description": "node-exporter:9100 out of memory, current memory: 93.648109828743",
+        "summary": "Host node-exporter:9100 out of memory"
+      },
+      "startsAt": "2022-08-16T08:54:00.232593388Z",
+      "endsAt": "2022-08-16T08:58:00.232593388Z",
+      "generatorURL": "http://766a56dea2ce:9090/graph?g0.expr=node_memory_MemAvailable_bytes+%2F+node_memory_MemTotal_bytes+%2A+100+%3C+98&g0.tab=1",
+      "status": {
+        "state": "unprocessed",
+        "silencedBy": [],
+        "inhibitedBy": []
+      },
+      "receivers": [
+        "snmp_notifier"
+      ],
+      "fingerprint": "5d8b1e218591e94c"
+    }
+  ]
+}
+ 

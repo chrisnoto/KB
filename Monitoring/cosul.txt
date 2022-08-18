@@ -242,8 +242,9 @@ docker run --rm --env CONSUL_LOCAL_CONFIG='{ "connect":{ "enabled":true } }' con
 docker run -d --net=host \
   -e 'CONSUL_ALLOW_PRIVILEGED_PORTS=' \
   -e CONSUL_LOCAL_CONFIG='{ "connect":{ "enabled":true } }' \
+  -e CONSUL_BIND_INTERFACE=ens32 \
   --name consul_server consul:latest agent -server \
-  -bind=0.0.0.0 -bootstrap-expect=3 -ui \
+  -bootstrap-expect=3 -ui \
   -dns-port=53 -grpc-port=8502 -client=0.0.0.0 \
   -recursor 10.66.12.206
   
@@ -264,6 +265,15 @@ docker run -d --net=host \
   -dns-port=53 -client=10.88.0.1 \
   --join 10.66.12.122 -rejoin \
   -recursor 10.66.12.206
+
+# envoy
+[root@vstjlinuxtrans1  chensen]# cat envoy.sh
+docker run -d --network host \
+  --name ingress-gateway \
+  timarenz/envoy-consul:latest \
+  --gateway=ingress -register \
+  --service db-ingress \
+  -address '{{ GetInterfaceIP "ens32" }}:8888'
 
  
  [root@consul1 ~]# podman exec -t 3b0 consul members

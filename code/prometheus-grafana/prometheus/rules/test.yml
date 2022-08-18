@@ -1,0 +1,16 @@
+groups:
+- name: test
+  rules:
+
+  - alert: Host out of memory
+    expr: 'node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 98'
+    for: 30s
+    labels:
+      severity: warning
+      type: service
+      oid: "1.3.6.1.4.1.123.0.10.1.1.1.5.1"
+      environment: "production"
+    annotations:
+      summary: "Host {{ $labels.instance }} out of memory"
+      description: "{{ $labels.instance }} out of memory, current memory: {{ $value }}"
+

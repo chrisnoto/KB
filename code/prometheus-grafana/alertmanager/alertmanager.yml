@@ -1,0 +1,23 @@
+global:
+  # global parameter
+  resolve_timeout: 5m
+  
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'snmp_notifier'
+  
+receivers:
+- name: 'snmp_notifier'
+  webhook_configs:
+  - send_resolved: true
+    url: 'http://10.67.50.237:9464/alerts'
+  
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']

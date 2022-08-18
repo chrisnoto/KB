@@ -1,0 +1,9 @@
+[
+  {
+    "targets": [ "10.66.12.228:9114" ],
+    "labels": {
+      "env": "production",
+      "job": "elasticsearch"
+    }
+  }
+]
