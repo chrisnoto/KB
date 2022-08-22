@@ -1,5 +1,5 @@
-# postgres_exporter
-[root@worker2 ~]# cat pg_exporter.sh
+# postgres_exporter   port 9187
+[root@worker2 ~]# cat pg_exporter.sh    
 docker run -d \
   --net=host \
   -e "DATA_SOURCE_URI=10.67.36.61:5432/postgres?sslmode=disable" \
@@ -7,15 +7,21 @@ docker run -d \
   -e DATA_SOURCE_PASS='Foxconn123' \
   wrouesnel/postgres_exporter:latest
 
-
-# mysqld_exporter
+# nginx-prometheus-exporter     port 9113
+[root@repo web]# cat nginx-exporter.sh
+docker run -d \
+ -p 9113:9113 \
+ nginx/nginx-prometheus-exporter:latest \
+ -nginx.scrape-uri=http://10.67.51.164/nginx_status
+  
+# mysqld_exporter    port 9104
 [root@zbxdb ~]# cat exporter.sh
 docker run -d \
   -p 9104:9104 \
   -e DATA_SOURCE_NAME="root:vSTJ456@(10.67.51.162:3306)/" \
   prom/mysqld-exporter:latest
 
-# docker_exporter
+# docker_exporter     port 9417
 [root@rancher ~]# cat docker_exporter.sh
 docker run --name docker_exporter -d \
  --restart always \
@@ -23,7 +29,7 @@ docker run --name docker_exporter -d \
  --publish 9417:9417 \
  prometheusnet/docker_exporter
  
-# elasticsearch_exporter 
+# elasticsearch_exporter        port 9114
 [root@xtjcesbges01 ~]# cat es-exp.sh
 docker run -d \
  -p 9114:9114 \
@@ -32,4 +38,44 @@ docker run -d \
  prometheuscommunity/elasticsearch-exporter:latest \
  --es.uri=https://elastic:vSTJ456@xtjcesbges01.cesbg.foxconn:9200 \
  --es.ca=/tmp/ca.crt 
-  
+ 
+# mongo exporter              port 9216
+[root@rancher ~]# cat mongo.yaml
+# Use root/example as user/password credentials
+version: '3.1'
+
+services:
+
+  mongo:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongodb:/data/db
+    ports:
+      - 27017:27017
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+  mongo-exporter:
+    image: percona/mongodb_exporter:0.34-amd64
+    restart: always
+    ports:
+      - 9216:9216
+    command:
+      - '--mongodb.uri=mongodb://root:example@mongo:27017'
+      - '--mongodb.collstats-colls=test.staff,test.example'
+      - '--collect-all'
+      - '--compatible-mode'
+volumes:
+  mongodb:
+ 

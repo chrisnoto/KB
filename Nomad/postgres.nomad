@@ -102,7 +102,7 @@ job "mydb" {
 
       service {
         name = "postgres-exporter"
-        address_mode = "driver"
+        address_mode = "host"
         tags = [
           "metrics"
         ]

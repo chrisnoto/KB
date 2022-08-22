@@ -47,7 +47,8 @@ scrape_configs:
   - server: '10.67.50.63:8500'
     scheme: http
     services:
-    - postgres_exporter-9187
+    - postgres-exporter
+    - nginx-prometheus-exporter
   relabel_configs:
     - source_labels: [__meta_consul_service_port]
       regex: 9187

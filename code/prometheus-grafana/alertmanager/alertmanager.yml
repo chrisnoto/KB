@@ -7,13 +7,12 @@ route:
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
-  receiver: 'snmp_notifier'
+  receiver: 'alertsnitch'
   
 receivers:
-- name: 'snmp_notifier'
+- name: 'alertsnitch'
   webhook_configs:
-  - send_resolved: true
-    url: 'http://10.67.50.237:9464/alerts'
+  - url: 'http://10.67.50.237:9567/webhook'
   
 inhibit_rules:
   - source_match:
