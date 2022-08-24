@@ -4,28 +4,41 @@
 
 data_dir  = "/opt/nomad/data"
 bind_addr = "0.0.0.0"
-
 server {
   # license_path is required as of Nomad v1.1.1+
   #license_path = "/opt/nomad/license.hclic"
   enabled          = true
   bootstrap_expect = 1
 }
-
-#service {
-#  name = "api"
-#  provider = "nomad"
-#  port = "api"
-#}
-
 client {
   enabled = true
-  servers = ["127.0.0.1"]
+  servers = ["10.67.50.63:4647"]
+  server_join {
+    retry_join = ["10.67.50.63"]
+    retry_max = 3
+    retry_interval = "15s"
+  }
   host_volume "postgres" {
     path = "/opt/postgres/data"
     read_only = false
   }
 }
+plugin "docker" {
+    config {
+        endpoint = "unix:///var/run/docker.sock"
+        volumes {
+            enabled      = true
+            selinuxlabel = "z"
+        }
+    }
+}
+telemetry {                                                    #监控  兼容prometheus
+  collection_interval = "5s",
+  prometheus_metrics = true,
+  publish_allocation_metrics = true,
+  publish_node_metrics = true
+}
+
 
 如果要集成consul，默认是自动集成的，如果consul监听地址不一样的话，手动指定
 consul {
