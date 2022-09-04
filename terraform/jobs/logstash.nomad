@@ -4,7 +4,7 @@ job "es" {
   update {
     max_parallel =1
     min_healthy_time = "10s"
-    healthy_deadline = "3m"
+    healthy_deadline = "5m"
     progress_deadline = "10m"
     auto_revert = false
     canary = 0
@@ -44,26 +44,6 @@ job "es" {
         read_only = false
       }
 
-#      env {
-#        NODE_NAME = "xtjcesbglogstash99.cesbg.foxconn"
-#        LS_JAVA_OPTS = "-Xms2g -Xmx2g"
-#        PATH_CONFIG = "/usr/share/logstash/pipeline/logstash.conf"
-#        CONFIG_SUPPORT_ESCAPES = true
-#        PIPELINE_ORDERED = "auto"
-#        PIPELINE_BATCH_SIZE = 4000
-#        PIPELINE_BATCH_DELAY = 10
-#        CONFIG_RELOAD_AUTOMATICS = true
-#        HTTP_HOST = "0.0.0.0"
-#        HTTP_PORT = 9600
-#        QUEUE_TYPE = "persisted"
-#        QUEUE_PAGE_CAPACITY = "128mb"
-#        XPACK_MONITORING_ENABLED = true
-#        XPACK_MONITORING_ELASTICSEARCH_USERNAME = "logstash_system"
-#        XPACK_MONITORING_ELASTICSEARCH_PASSWORD = "vSTJ456"
-#        XPACK_MONITORING_ELASTICSEARCH_HOSTS = "['https://xtjcesbges04.cesbg.foxconn:9200']"
-#        XPACK_MONITORING_ELASTICSEARCH_SSL_CERTIFICATE_AUTHORITY = "/tmp/ca.crt"
-#      }
-      
       template {
         data        = <<EOF
           LS_JAVA_OPTS = "-Xms2g -Xmx2g"
@@ -71,7 +51,7 @@ job "es" {
           PATH_CONFIG = "/usr/share/logstash/pipeline/logstash.conf"
           CONFIG_SUPPORT_ESCAPES = true
           PIPELINE_ORDERED = "auto"
-          PIPELINE_BATCH_SIZE = 4000
+          PIPELINE_BATCH_SIZE = 2000
           PIPELINE_BATCH_DELAY = 10
           CONFIG_RELOAD_AUTOMATICS = true
           HTTP_HOST = "0.0.0.0"

@@ -1,0 +1,9 @@
+---
+- hosts: all
+  tasks:
+  - name: copy local ssh key to dest servers and write to login user's authorized_keys file
+    authorized_key:
+      user: lhadmin
+      state: present
+      key: "{{ lookup('file','/root/.ssh/id_rsa.pub') }}"
+

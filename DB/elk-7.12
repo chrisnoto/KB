@@ -128,6 +128,7 @@ xpack.security.transport.ssl.certificate_authorities: certs/ca.crt
 [root@xtjcesbges01 elasticsearch]# cd $ES_HOME
 bin/elasticsearch-setup-passwords interactive -u https://xtjcesbges01.cesbg.foxconn:9200
 
+bin/elasticsearch-setup-passwords interactive -u https://xlhcesbges03.cesbg.foxconn:9200
 使用ca证书和用户elastic测试ES
 [root@xtjcesbges01 elasticsearch]# curl -XGET --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/_cat/nodes?v
 Enter host password for user 'elastic':
