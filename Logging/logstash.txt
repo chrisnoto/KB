@@ -292,3 +292,89 @@ kafka.log
 
 #########logstash调试############
 echo "2020-04-24 16:18:43|http://www.baidu.com/" | /usr/share/logstash/bin/logstash -e "input { stdin {} } filter { grok { match => [ \"message\",[\"%{GREEDYDATA:customTimestamp}\|%{GREEDYDATA:url}\"] ]} date { match => [\"customTimestamp\",\"yyyy-MMM-dd HH:mm:ss\"]}}"
+
+
+
+######### logstash docker部署 #######
+#!/bin/bash
+name=xtjcesbglogstash04
+
+if [ ! -d "/data" ];then
+mkdir -p /data/{certs,logstash}
+curl -o /data/certs/ca.crt http://10.67.51.164/elk712_conf/ca.crt
+curl -o /data/certs/instance.crt http://10.67.51.164/elk712_conf/instance.crt
+curl -o /data/certs/instance.pkcs8.key http://10.67.51.164/elk712_conf/instance.pkcs8.key
+chown -R 1001:1001 /data
+fi
+
+pidof dockerd
+if [ $? -ne 0 ];then
+echo "Docker is not running ..."
+exit 1
+fi
+
+
+if [ ! -f "/root/bitnami.logstash7.12.0.tar" ];then
+curl -o /root/bitnami.logstash7.12.0.tar http://10.67.51.164/images/bitnami.logstash7.12.0.tar
+docker load -i /root/bitnami.logstash7.12.0.tar
+fi
+
+docker run -d \
+--name logstash \
+--dns 10.66.14.206 \
+-u 1001 \
+-e TZ='Asia/Shanghai' \
+-e NODE_NAME=${name}.cesbg.foxconn \
+-e "LS_JAVA_OPTS=-Xms8g -Xmx8g" \
+-e CONFIG_SUPPORT_ESCAPES=true \
+-e PIPELINE_ORDERED=auto \
+-e PIPELINE_BATCH_SIZE=4000 \
+-e PIPELINE_BATCH_DELAY=10 \
+-e CONFIG_RELOAD_AUTOMATICS=true \
+-e HTTP_HOST=0.0.0.0 \
+-e HTTP_PORT=9600 \
+-e QUEUE_TYPE=persisted \
+-e QUEUE_PAGE_CAPACITY=128mb \
+-e XPACK_MONITORING_ENABLED=true \
+-e XPACK_MONITORING_ELASTICSEARCH_USERNAME=logstash_system \
+-e XPACK_MONITORING_ELASTICSEARCH_PASSWORD=vSTJ456 \
+-e XPACK_MONITORING_ELASTICSEARCH_HOSTS=["https://xtjcesbges04.cesbg.foxconn:9200"] \
+-e XPACK_MONITORING_ELASTICSEARCH_SSL_CERTIFICATE_AUTHORITY="/tmp/ca.crt" \
+-v /data/logstash:/opt/bitnami/logstash/data \
+-v /data/certs:/tmp \
+-p 9600:9600 \
+-p 5044:5044 \
+-e LOGSTASH_CONF_STRING="input { beats { port => 5044 ssl => true ssl_key => '/tmp/instance.pkcs8.key' \
+ssl_certificate => '/tmp/instance.crt' } } \
+output { elasticsearch { hosts => ['https://xtjcesbges04.cesbg.foxconn:9200','https://xtjcesbges05.cesbg.foxconn:9200'] \
+ilm_enabled => false cacert => '/tmp/ca.crt' user => 'logstash_writer' password => vSTJ456 \
+index => '%{[@metadata][beat]}-%{[@metadata][version]}-%{+YYYY.MM.dd}' } }" \
+bitnami/logstash:7.12.0
+
+docker stop logstash
+
+if [  -f "/usr/lib/systemd/system/logstash.service" ];then
+systemctl disable logstash.service
+rm -rf /usr/lib/systemd/system/logstash.service
+systemctl daemon-reload
+fi
+
+
+cat >/usr/lib/systemd/system/logstash.service -<<EOF
+Requires=docker.service
+
+[Service]
+Type=simple
+TimeoutStartSec=5m
+
+ExecStart=/usr/bin/docker start -a logstash
+
+ExecStop=/usr/bin/docker stop -t 2 logstash
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy = multi-user.target
+EOF
+
+systemctl enable logstash.service

@@ -1,0 +1,20 @@
+{
+    "ES_JAVA_OPTS": "-Xms31g -Xmx31g",
+    "cluster.name": "lhes",
+    "node.master": true,
+    "node.data": true,
+    "discovery.seed_hosts": "xlhcesbges03.cesbg.foxconn,xlhcesbges04.cesbg.foxconn,xlhcesbges05.cesbg.foxconn",
+    "cluster.initial_master_nodes": "xlhcesbges03,xlhcesbges04,xlhcesbges05",
+    "bootstrap.memory_lock": true,
+    "xpack.security.enabled": true,
+    "xpack.security.http.ssl.enabled": true,
+    "xpack.security.transport.ssl.enabled": true,
+    "xpack.security.http.ssl.key": "/usr/share/elasticsearch/data/instance.key",
+    "xpack.security.http.ssl.certificate": "/usr/share/elasticsearch/data/instance.crt",
+    "xpack.security.http.ssl.certificate_authorities": "/usr/share/elasticsearch/data/ca.crt",
+    "xpack.security.http.ssl.verification_mode": "certificate",
+    "xpack.security.transport.ssl.key": "/usr/share/elasticsearch/data/instance.key",
+    "xpack.security.transport.ssl.certificate": "/usr/share/elasticsearch/data/instance.crt",
+    "xpack.security.transport.ssl.certificate_authorities": "/usr/share/elasticsearch/data/ca.crt",
+    "xpack.security.transport.ssl.verification_mode": "certificate"
+}

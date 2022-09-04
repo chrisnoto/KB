@@ -8,6 +8,9 @@ test> db.createUser({user:"root",pwd:"example",roles:["readWrite"]})
 test> db.auth("root","example")
 { ok: 1 }
 
+db.createUser({user:"mongodb_exporter",pwd:"password",roles:[{role:"clusterMonitor",db:"admin"},{role:"read",db:"test"}]})
+db.createUser({user:"root",pwd:"example",roles:["readWrite"]})
+
 Current Mongosh Log ID: 61273589b813596cfbd3a5ae
 Connecting to:          mongodb://<credentials>@10.67.36.58/test?directConnection=true
 Using MongoDB:          5.0.2

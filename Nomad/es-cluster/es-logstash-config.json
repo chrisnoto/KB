@@ -1,0 +1,18 @@
+{
+    "LS_JAVA_OPTS": "-Xms8g -Xmx8g",
+    "PATH_CONFIG": "/usr/share/logstash/pipeline/logstash.conf",
+    "CONFIG_SUPPORT_ESCAPES": true,
+    "PIPELINE_ORDERED": "auto",
+    "PIPELINE_BATCH_SIZE": 4000,
+    "PIPELINE_BATCH_DELAY": 10,
+    "CONFIG_RELOAD_AUTOMATICS": true,
+    "HTTP_HOST": "0.0.0.0",
+    "HTTP_PORT": 9600,
+    "QUEUE_TYPE": "persisted",
+    "QUEUE_PAGE_CAPACITY": "128mb",
+    "XPACK_MONITORING_ENABLED": true,
+    "XPACK_MONITORING_ELASTICSEARCH_USERNAME": "logstash_system",
+    "XPACK_MONITORING_ELASTICSEARCH_PASSWORD": "vSTJ456",
+    "XPACK_MONITORING_ELASTICSEARCH_HOSTS": "['https://xlhcesbges01.cesbg.foxconn:9200','https://xlhcesbges02.cesbg.foxconn:9200']",
+    "XPACK_MONITORING_ELASTICSEARCH_SSL_CERTIFICATE_AUTHORITY": "/usr/share/logstash/data/ca.crt"
+}

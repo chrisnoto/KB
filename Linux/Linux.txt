@@ -1,3 +1,17 @@
+=========================================================== Tips and tricks =================================================
+#  如何直接拷贝单个文件到服务器的任何地方，无视lhadmin没有root权限
+[root@repo ~]# ssh lhadmin@xlhcesbges01 sudo cp /dev/stdin /root/pg.conf <pg.conf
+查看结果
+[root@xlhcesbges01 ~]# cat pg.conf
+#wal_level = replica                     # minimal, replica, or logical
+#wal_log_hints = off                    # also do full page writes of non-critical updates
+#wal_buffers = -1                       # min 32kB, -1 sets based on shared_buffers
+#wal_keep_segments = 0          # in logfile segments; 0 disables
+#synchronous_standby_names = '' # standby servers that provide sync rep
+#archive_mode = off             # enables archiving; off, on, or always
+#synchronous_commit = on                # synchronization level;
+
+
 =========================================================== 命 令 ===========================================================
 # 网络管理工具
 发行版 				管理工具								默认配置文件 

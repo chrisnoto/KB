@@ -12,15 +12,24 @@ gpgkey=https://rpm.releases.hashicorp.com/gpg
 
 
 2 配置consul单机模式
+如需配置DNS PORT 53，则需要
+setcap CAP_NET_BIND_SERVICE=+eip /usr/bin/consul 
+ 
 [root@docker1 consul.d]# cat consul.hcl |egrep -v '^#|^$'
+datacenter = "dc1"
 data_dir = "/opt/consul"
-client_addr = "0.0.0.0"
+client_addr = "10.67.36.58"
 ui_config{
   enabled = true
 }
 server = true
-bind_addr = "0.0.0.0" # Listen on all IPv4
-advertise_addr = "127.0.0.1"
+bind_addr = "10.67.36.58" # Listen on all IPv4
+bootstrap_expect=1
+recursors = ["10.67.50.88","10.67.50.111"]
+ports {
+  dns = 53
+}
+
 
 3 配置ldap服务
 [root@docker1 consul.d]# cat ldap.json
@@ -283,7 +292,76 @@ docker run -d --network host \
   --service db-ingress \
   -address '{{ GetInterfaceIP "ens32" }}:8888'
 
- 
+consul rpm方式
+第一个master
+datacenter = "lh"
+data_dir = "/opt/consul"
+
+client_addr = "10.134.241.70"
+bind_addr = "10.134.241.70" 
+advertise_addr = "10.134.241.70"
+recursors = ["10.134.240.146","10.134.240.147"]
+ports {
+  dns = 53
+  grpc = 8502
+}
+server = true
+bootstrap_expect=3
+
+ui_config{
+  enabled = true
+}
+connect{
+  enabled = true
+}
+其他master
+datacenter = "lh"
+data_dir = "/opt/consul"
+
+client_addr = "10.134.241.75"
+bind_addr = "10.134.241.75" 
+advertise_addr = "10.134.241.75"
+recursors = ["10.134.240.146","10.134.240.147"]
+ports {
+  dns = 53
+  grpc = 8502
+}
+server = true
+bootstrap_expect=3
+retry_join = ["10.134.241.70"]
+
+ui_config{
+  enabled = true
+}
+connect{
+  enabled = true
+}
+客户端
+datacenter = "lh"
+data_dir = "/opt/consul"
+
+client_addr = "10.134.241.90"
+bind_addr = "10.134.241.90" 
+advertise_addr = "10.134.241.90"
+
+recursors = ["10.134.240.146","10.134.240.147"]
+ports {
+  dns = 53
+}
+
+retry_join = ["10.134.241.70"]
+
+setcap CAP_NET_BIND_SERVICE=+eip /usr/bin/consul
+启动服务后检查
+consul members --http-addr=http://10.134.241.86:8500
+Node          Address             Status  Type    Build   Protocol  DC  Partition  Segment
+xlhcesbges01  10.134.241.70:8301  alive   server  1.13.1  2         lh  default    <all>
+xlhcesbges02  10.134.241.75:8301  alive   server  1.13.1  2         lh  default    <all>
+xlhcesbges03  10.134.241.86:8301  alive   server  1.13.1  2         lh  default    <all>
+
+
+
+  
  [root@consul1 ~]# podman exec -t 3b0 consul members
 Node     Address             Status  Type    Build   Protocol  DC   Partition  Segment
 consul1  10.85.212.51:8301   alive   server  1.12.3  2         dc1  default    <all>
@@ -308,6 +386,95 @@ docker1.node.dc1.consul. 0      IN      TXT     "consul-network-segment="
 
 Consul 互连 这个特性最大的意义在于， 将访问控制与服务IP解耦 。
 
+### consul kv
+json格式
+[root@rancher ~]# curl -s --noproxy '*' http://10.67.36.58:8500/v1/kv/es/var?raw | jq .
+[
+  {
+    "key": "version",
+    "flags": 0,
+    "value": "7.16.0"
+  },
+  {
+    "key": "nodename",
+    "flags": 0,
+    "value": "rancher"
+  },
+  {
+    "key": "ip_addr",
+    "flags": 0,
+    "value": "10.67.36.58"
+  }
+]
+[root@zbxdb ~]# CONSUL_HTTP_ADDR=10.67.36.58:8500 consul kv get es/var
+[        {
+                "key": "version",
+                "flags": 0,
+                "value": "7.16.0"
+        },
+        {
+                "key": "nodename",
+                "flags": 0,
+                "value": "rancher"
+        },
+        {
+                "key": "ip_addr",
+                "flags": 0,
+                "value": "10.67.36.58"
+        }
+]
+[root@zbxdb ~]# consul kv get -http-addr=10.67.36.58:8500 es/var
+[        {
+                "key": "version",
+                "flags": 0,
+                "value": "7.16.0"
+        },
+        {
+                "key": "nodename",
+                "flags": 0,
+                "value": "rancher"
+        },
+        {
+                "key": "ip_addr",
+                "flags": 0,
+                "value": "10.67.36.58"
+        }
+]
+简单值
+[root@zbxdb ~]# consul kv get -http-addr=10.67.36.58:8500 es/config/conn
+25
+
+### consul snaptshot备份
+[root@xlhcesbges01 consul-backup]# consul snapshot save -http-addr=10.134.241.70:8500 backup20220830.snap
+Saved and verified snapshot to index 93024
+
+[root@xlhcesbges01 consul-backup]# export CONSUL_ADDR="10.134.241.70:8500"
+[root@xlhcesbges01 consul-backup]# consul snapshot inspect backup20220830.snap
+ ID           2-93024-1661818080911
+ Size         74675
+ Index        93024
+ Term         2
+ Version      1
+
+ Type                        Count      Size
+ ----                        ----       ----
+ Register                    57         48.3KB
+ KVS                         33         18.6KB
+ CoordinateBatchUpdate       8          1.4KB
+ ConnectCA                   1          1.2KB
+ Index                       33         1.1KB
+ ConnectCAProviderState      1          1.1KB
+ Session                     2          404B
+ Autopilot                   1          199B
+ ConnectCAConfig             1          195B
+ SystemMetadata              3          191B
+ FederationState             1          138B
+ ChunkingState               1          12B
+ ----                        ----       ----
+ Total                                  72.9KB
+
+# 当集群降级, 没有leader时，可以用在follower上备份，指定 -stale
+consul snapshot save -stale backup.snap 
  
 ###集成 prometheus using consul_sd_configs
 root@u1804:/var/snap/prometheus/18# cat prometheus.yml |egrep -v '#|^$'
@@ -330,3 +497,413 @@ scrape_configs:
       - server: 10.67.51.164:8500
         services:
           - node_exporter
+
+####### vault
+acl {
+  enabled = true,
+  default_policy = "deny",
+  enable_token_persistence = true
+}
+systemctl restart consul
+consul acl bootstrap -http-addr=10.67.36.58:8500
+[root@rancher consul.d]# consul acl bootstrap -http-addr=10.67.36.58:8500
+AccessorID:       432b1a4b-e36b-318f-1eb4-edea768685d4
+SecretID:         b0621531-2310-2151-d840-6d9340293ce5
+Description:      Bootstrap Token (Global Management)
+Local:            false
+Create Time:      2022-08-25 17:21:09.956274793 +0800 CST
+Policies:
+   00000000-0000-0000-0000-000000000001 - global-management
+
+[root@rancher vault.d]# export VAULT_ADDR='http://10.67.36.58:8200'
+[root@rancher vault.d]# vault operator init
+Unseal Key 1: 4XOlXBRZ2aEjY9TGQFZqz1hJ+qppa3xxUmB+tuMU/vFI
+Unseal Key 2: v9YHFXUEx0s6Y0GEIzM+WaXYBCWaiuWZQ48gak4ET99Q
+Unseal Key 3: jBDXZm8akEmEnGlPHe7UQ/DNif9QNPBff08lV0ySIIj0
+Unseal Key 4: 0jIk2LtuWRssLDxDJnb8/mFtkDydKYqQbIgFUpJ47qtH
+Unseal Key 5: 5YqTSjeyGnDdkVuDKSusLR3lp4l966ualkxhHAOpmDOX
+
+Initial Root Token: hvs.wjALRGdnWDWnUc2tO2XvAXkC
+
+Vault initialized with 5 key shares and a key threshold of 3. Please securely
+distribute the key shares printed above. When the Vault is re-sealed,
+restarted, or stopped, you must supply at least 3 of these keys to unseal it
+before it can start servicing requests.
+
+Vault does not store the generated root key. Without at least 3 keys to
+reconstruct the root key, Vault will remain permanently sealed!
+
+It is possible to generate new unseal keys, provided you have a quorum of
+existing unseal keys shares. See "vault operator rekey" for more information.
+
+[root@rancher vault.d]# export VAULT_TOKEN=hvs.wjALRGdnWDWnUc2tO2XvAXkC
+[root@rancher vault.d]# vault secrets list
+Path          Type         Accessor              Description
+----          ----         --------              -----------
+cubbyhole/    cubbyhole    cubbyhole_eb7b4132    per-token private secret storage
+identity/     identity     identity_40347d88     identity store
+sys/          system       system_25e145f3       system endpoints used for control, policy and debugging
+[root@rancher vault.d]# vault secrets enable -path=secret -version=2 kv
+Success! Enabled the kv secrets engine at: secret/
+
+[root@rancher vault.d]# cat groupa-policy.hcl
+# Normal servers have version 1 of KV mounted by default, so will need these
+# paths:
+path "secret/data/groupa/" {
+    capabilities = ["create", "update", "delete", "list", "read"]
+}
+# # Dev servers have version 2 of KV mounted by default, so will need these
+# # paths:
+path "secret/data/groupa/*" {
+    capabilities = ["create", "update", "delete", "list", "read"]
+}
+[root@rancher vault.d]# vault policy write groupa-policy groupa-policy.hcl
+Success! Uploaded policy: groupa-policy
+[root@rancher vault.d]# vault token create -policy groupa-policy
+WARNING! The following warnings were returned from Vault:
+
+  * Endpoint ignored these unrecognized parameters: [display_name entity_alias
+  explicit_max_ttl num_uses period policies renewable ttl type]
+
+Key                  Value
+---                  -----
+token                hvs.CAESIJ0fbH4OaSJvJzwcV2oK7gPpLS3ioBuE7gFtCll6TP6YGh4KHGh2cy43R0Q5TGE1WWZXamIyR2xMUFJJeGZHNVo
+token_accessor       6Qw37ZBOZbfsPDL4nfwhdoZo
+token_duration       768h
+token_renewable      true
+token_policies       ["default" "groupa-policy"]
+identity_policies    []
+policies             ["default" "groupa-policy"]
+
+
+### vault token based认证
+1 环境变量
+[root@rancher vault.d]# VAULT_TOKEN=hvs.CAESIJ0fbH4OaSJvJzwcV2oK7gPpLS3ioBuE7gFtCll6TP6YGh4KHGh2cy43R0Q5TGE1WWZXamIyR2xMUFJJeGZHNVo vault kv put secret/groupa/POSTGRES_PASSWORD value=Foxconn123
+或者
+先export VAULT_TOKEN 然后执行vault命令
+
+
+2 vault login
+[root@rancher vault.d]# vault login
+
+Success! You are now authenticated. The token information displayed below
+is already stored in the token helper. You do NOT need to run "vault login"
+again. Future Vault requests will automatically use this token.
+
+Key                  Value
+---                  -----
+token                hvs.wjALRGdnWDWnUc2tO2XvAXkC
+token_accessor       LFKWX6GMFHLPeEd2ZpIm6rSL
+token_duration       ∞
+token_renewable      false
+token_policies       ["root"]
+identity_policies    []
+policies             ["root"]
+[root@rancher vault.d]# vault secrets list
+Path          Type         Accessor              Description
+----          ----         --------              -----------
+cubbyhole/    cubbyhole    cubbyhole_eb7b4132    per-token private secret storage
+identity/     identity     identity_40347d88     identity store
+secret/       kv           kv_6d0fc179           n/a
+sys/          system       system_25e145f3       system endpoints used for control, policy and debugging
+[root@rancher vault.d]# vault kv get secret/groupa/POSTGRES_PASSWORD
+============ Secret Path ============
+secret/data/groupa/POSTGRES_PASSWORD
+
+======= Metadata =======
+Key                Value
+---                -----
+created_time       2022-08-26T01:02:50.602587603Z
+custom_metadata    <nil>
+deletion_time      n/a
+destroyed          false
+version            1
+
+==== Data ====
+Key      Value
+---      -----
+value    Foxconn123
+[root@rancher vault.d]#
+# 存储cert
+[root@rancher xtjcesbges04]# vault kv put secret/es/xtjcesbges04/cert cert=@xtjcesbges04.crt
+========== Secret Path ==========
+secret/data/es/xtjcesbges04/cert
+
+======= Metadata =======
+Key                Value
+---                -----
+created_time       2022-08-26T02:44:42.404071603Z
+custom_metadata    <nil>
+deletion_time      n/a
+destroyed          false
+version            1
+
+[root@rancher xtjcesbges04]# vault kv get -field=cert secret/es/xtjcesbges04/cert
+-----BEGIN CERTIFICATE-----
+MIIDTjCCAjagAwIBAgIVAOOShQFks/5in7XoGLVuIHkiBJ2aMA0GCSqGSIb3DQEB
+CwUAMDQxMjAwBgNVBAMTKUVsYXN0aWMgQ2VydGlmaWNhdGUgVG9vbCBBdXRvZ2Vu
+ZXJhdGVkIENBMB4XDTIyMDcwNjA1NTUxMloXDTI1MDcwNTA1NTUxMlowFzEVMBMG
+A1UEAxMMeHRqY2VzYmdlczA0MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
+AQEAu3xzm+vHkcPvGI24ij1y8nwGiV41BHKDpdke/ZDR2K2WNlQIHosGoQUKA2gV
+xELAMbwmEacZNjfA+6n5E5kdxU7MTp9eowa6xHrHfVQjIZOHPmiNuDGR2B78D9fo
+9y3BmLyyYoHCHzVXlSdw9QKqvPL5ADT1svl+plKeVXGlqxSZux5G4YMX6fXE5M03
+xBRXCRB+XDuEhDmN0g7cMYq5B4B1pJmg/Axb0cxQQUc7ZC0ADwJGd9VlrBWMt6lC
+qmrdkR3M4xnQdaGgzN2WRWDD9GdSx/DDKe5vqaW4+BggEK1hZ1w4ULChSXf30Tj3
+2U8AmrGCvDKJH8yDM/nBor+ogwIDAQABo3QwcjAdBgNVHQ4EFgQUtKC8l6UR8VRN
+DBnc9cZVQcvMJJ4wHwYDVR0jBBgwFoAUQyV8I54IAo9PCwVtShk7Kf9A9h4wJQYD
+VR0RBB4wHIIaeHRqY2VzYmdlczA0LmNlc2JnLmZveGNvbm4wCQYDVR0TBAIwADAN
+BgkqhkiG9w0BAQsFAAOCAQEAFDybGsGPmWFD+GtEU922KgvfzTqkhVNiJVUAsRSL
+hHXdGLiDbhJSwdFYphDEpGqCbbt/Awsrxym1x2e+kFmw1WTHWIz0loImRnOLrbgw
+fiwGVm5euvv26v/nSQ4WdF7HRBvD0qhBgTBu9KKzbwH92P/fdYdQsKqvX+K3qqAB
+EZOOy8Byds3OyDCVUlW4YZdvv8EnnVCYQqQa/88l+ymXxu0cuae40GpG2ljKM5jZ
+8mU5RhBPUSs7pAPbdKJlAsv/Ly2+QlK2Awin1Ucrk4DrpDuTa4OlLmPab3Luj1Ak
+56JUvrYUi56JF3JYBovKiotgnLcOgSS1GKUHzTNpyxOK8A==
+-----END CERTIFICATE-----
+
+
+# LH 云上  2 台vault
+
+[root@xlhcesbges01 nomad]# consul acl bootstrap -http-addr=10.134.241.70:8500
+AccessorID:       bdac76e4-ecec-85a8-d7e7-45032b977c88
+SecretID:         036d8261-22f2-f720-888a-4e0955acaa2c
+Description:      Bootstrap Token (Global Management)
+Local:            false
+Create Time:      2022-08-31 11:22:11.515919007 +0800 CST
+Policies:
+   00000000-0000-0000-0000-000000000001 - global-management
+
+
+[root@xlhcesbges04 ~]# vault operator init
+Unseal Key 1: Ow6MfmabLp4UpVF/k6LBwbkDASXaHglRZNcjQGtn1ztg
+Unseal Key 2: FjtJbKkbtxyeUJhUNJmIjgaEWPlbvasE7gqLeuhOMlf6
+Unseal Key 3: TpfVHNMD7vsKX0EthpnW/oW1u6ZUuMV67ha+QcRf1oDk
+Unseal Key 4: T5qk+pM19KxjC1I8JtfQH/eUT7jjkkBShPAtDnu57xiu
+Unseal Key 5: cefsYXqK47aVU7w5+roqn2DNL2T5LaELXZFb4J4j2n5Z
+
+Initial Root Token: hvs.TT5BgZoCQ54bMqWfz7DhX20g
+   59  vault operator unseal Ow6MfmabLp4UpVF/k6LBwbkDASXaHglRZNcjQGtn1ztg
+   60  vault operator unseal FjtJbKkbtxyeUJhUNJmIjgaEWPlbvasE7gqLeuhOMlf6
+   61  vault operator unseal TpfVHNMD7vsKX0EthpnW/oW1u6ZUuMV67ha+QcRf1oDk
+
+[root@xlhcesbges04 ~]# cat es-policy.hcl
+# Normal servers have version 1 of KV mounted by default, so will need these
+# paths:
+path "secret/data/es/" {
+    capabilities = ["create", "update", "delete", "list", "read"]
+}
+# # Dev servers have version 2 of KV mounted by default, so will need these
+# # paths:
+path "secret/data/es/*" {
+    capabilities = ["create", "update", "delete", "list", "read"]
+}
+# vault policy write es-policy es-policy.hcl   
+[root@xlhcesbges04 ~]# vault token create -policy es-policy
+WARNING! The following warnings were returned from Vault:
+
+  * Endpoint ignored these unrecognized parameters: [display_name entity_alias
+  explicit_max_ttl num_uses period policies renewable ttl type]
+
+Key                  Value
+---                  -----
+token                hvs.CAESIFllwr-W9q_9ToLQXiahuuMQDqWP3M_v4v0s7r52hgZFGh4KHGh2cy5xTmo5cmFEd1pqcDA2RkNENlI3UnlVS1M
+token_accessor       UKLQRJ0HYsHrjMG1Saq8XP5r
+token_duration       768h
+token_renewable      true
+token_policies       ["default" "es-policy"]
+identity_policies    []
+policies             ["default" "es-policy"]
+
+[root@xlhcesbges04 ~]# vault policy write nomad-server nomad-server-policy.hcl
+Success! Uploaded policy: nomad-server
+[root@xlhcesbges04 ~]# vault write /auth/token/roles/nomad-cluster @nomad-cluster-role.json
+Success! Data written to: auth/token/roles/nomad-cluster
+[root@xlhcesbges04 ~]# vault token create -policy nomad-server -policy es-policy -period 72h -orphan
+WARNING! The following warnings were returned from Vault:
+
+  * Endpoint ignored these unrecognized parameters: [display_name entity_alias
+  explicit_max_ttl no_parent num_uses period policies renewable ttl type]
+
+Key                  Value
+---                  -----
+token                hvs.CAESIDU0an_wnWnsNy7RDV7JPnmPxbW-kAXQ78c0r7Q-uziRGh4KHGh2cy5vMzhjOFBwcTB0SERXMVNDRkwxNzVCVHo
+token_accessor       RP27RVcouCIhBsUpLhxvcvOh
+token_duration       72h
+token_renewable      true
+token_policies       ["default" "es-policy" "nomad-server"]
+identity_policies    []
+policies             ["default" "es-policy" "nomad-server"]
+
+开启vault audit
+[root@xlhcesbges04 vault]# vault audit enable file file_path=/opt/vault/log/vault_audit.log -description="Vault audit log"
+Success! Enabled the file audit device at: file/
+
+   
+[root@xlhcesbges04 ~]# vault status
+Key             Value
+---             -----
+Seal Type       shamir
+Initialized     true
+Sealed          false
+Total Shares    5
+Threshold       3
+Version         1.11.2
+Build Date      2022-07-29T09:48:47Z
+Storage Type    consul
+Cluster Name    vault-cluster-d1b37bb1
+Cluster ID      84518b5c-42b6-1ad7-25cf-08b0cf402f22
+HA Enabled      true
+HA Cluster      https://10.134.241.90:8201
+HA Mode         active
+Active Since    2022-08-29T08:14:15.513712105Z
+
+[root@xlhcesbges05 vault.d]# history |tail -5
+vault operator unseal Ow6MfmabLp4UpVF/k6LBwbkDASXaHglRZNcjQGtn1ztg
+vault operator unseal FjtJbKkbtxyeUJhUNJmIjgaEWPlbvasE7gqLeuhOMlf6
+vault operator unseal TpfVHNMD7vsKX0EthpnW/oW1u6ZUuMV67ha+QcRf1oDk
+vault status
+[root@xlhcesbges05 vault.d]# vault status
+Key                    Value
+---                    -----
+Seal Type              shamir
+Initialized            true
+Sealed                 false
+Total Shares           5
+Threshold              3
+Version                1.11.2
+Build Date             2022-07-29T09:48:47Z
+Storage Type           consul
+Cluster Name           vault-cluster-d1b37bb1
+Cluster ID             84518b5c-42b6-1ad7-25cf-08b0cf402f22
+HA Enabled             true
+HA Cluster             https://10.134.241.90:8201
+HA Mode                standby
+Active Node Address    http://10.134.241.90:8200
+
+# vault api
+curl --header "X-Vault-Token:hvs.TT5BgZoCQ54bMqWfz7DhX20g" http://10.134.241.90:8200/v1/secret/data/es/masterconfig | jq .
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  1305  100  1305    0     0   887k      0 --:--:-- --:--:-- --:--:-- 1274k
+{
+  "request_id": "480cd408-283f-4e40-fd11-8be47a3bfa53",
+  "lease_id": "",
+  "renewable": false,
+  "lease_duration": 0,
+  "data": {
+    "data": {
+      "ES_JAVA_OPTS": "-Xms31g -Xmx31g",
+      "bootstrap.memory_lock": true,
+      "cluster.initial_master_nodes": "xlhcesbges03.cesbg.foxconn,xlhcesbges04.cesbg.foxconn,xlhcesbges05.cesbg.foxconn",
+      "cluster.name": "lhes",
+      "discovery.seed_hosts": "xlhcesbges03.cesbg.foxconn,xlhcesbges04.cesbg.foxconn,xlhcesbges05.cesbg.foxconn",
+      "node.data": true,
+      "node.master": true,
+      "xpack.security.enabled": true,
+      "xpack.security.http.ssl.certificate": "/usr/share/elasticsearch/data/instance/instance.crt",
+      "xpack.security.http.ssl.certificate_authorities": "/usr/share/elasticsearch/data/ca/ca.crt",
+      "xpack.security.http.ssl.enabled": true,
+      "xpack.security.http.ssl.key": "/usr/share/elasticsearch/data/instance/instance.key",
+      "xpack.security.transport.ssl.certificate": "/usr/share/elasticsearch/data/instance/instance.crt",
+      "xpack.security.transport.ssl.certificate_authorities": "/usr/share/elasticsearch/data/ca/ca.crt",
+      "xpack.security.transport.ssl.enabled": true,
+      "xpack.security.transport.ssl.key": "/usr/share/elasticsearch/data/instance/instance.key"
+    },
+    "metadata": {
+      "created_time": "2022-08-30T07:32:56.433302575Z",
+      "custom_metadata": null,
+      "deletion_time": "",
+      "destroyed": false,
+      "version": 2
+    }
+  },
+  "wrap_info": null,
+  "warnings": null,
+  "auth": null
+}
+
+[root@xlhcesbges01 consul.d]# export CONSUL_HTTP_ADDR=10.134.241.70:8500
+[root@xlhcesbges01 consul.d]# export CONSUL_HTTP_TOKEN=036d8261-22f2-f720-888a-4e0955acaa2c
+[root@xlhcesbges01 consul.d]# consul acl policy list
+ 
+[root@xlhcesbges01 consul.d]# consul acl policy create -name "consul-client" -description="Consul client policy" -rules @client-policy.hcl
+ID:           e1f30e3f-3d8a-2a47-ca4c-ce9c117a3699
+Name:         consul-client
+Description:  Consul client policy
+Datacenters:
+Rules:
+# client-policy.hcl
+
+node_prefix "" {
+   policy = "write"
+}
+
+agent_prefix "" {
+  policy = "write"
+}
+
+service_prefix "" {
+   policy = "read"
+}
+
+[root@xlhcesbges01 consul.d]# consul acl token create -description "Token for Consul Client" -policy-name consul-client
+AccessorID:       1bffb047-a6be-9a64-391c-a6b8a2aebcae
+SecretID:         77079cfa-f75c-9e89-daa0-e41e5cf026bf
+Description:      Token for Consul Client
+Local:            false
+Create Time:      2022-08-31 14:05:47.577964817 +0800 CST
+Policies:
+   e1f30e3f-3d8a-2a47-ca4c-ce9c117a3699 - consul-client
+
+#
+export CONSUL_HTTP_ADDR=10.134.241.70:8500
+export CONSUL_HTTP_TOKEN=036d8261-22f2-f720-888a-4e0955acaa2c
+consul acl policy list
+consul acl policy create -name "consul-agent" -description="Consul agent policy"  -rules @consul_agent_policy.hcl
+consul acl policy create -name "consul-server" -description="Consul server policy"  -rules @consul_server_policy.hcl
+consul acl policy create -name "vault-service" -description="Vault service policy"  -rules @vault_service_policy.hcl
+consul acl policy create -name "nomad-service" -description="Nomad service policy"  -rules @nomad_policy.hcl
+
+
+consul acl token list
+consul acl token create -description "Token for Consul Agent" -policy-name consul-agent
+consul acl token create -description "Token for Consul Server" -policy-name consul-server
+consul acl token create -description "Token for Vault Service" -policy-name vault-service
+consul acl token create -description "Token for Nomad Service" -policy-name nomad-service
+
+[root@xlhcesbges01 ~]# consul acl token create -description "Token for Consul Agent" -policy-name consul-agent
+AccessorID:       75cf07c5-bac8-50a0-4efc-7bcbd821fa1c
+SecretID:         54e8930a-c95e-72d8-6372-f127b99153fe
+Description:      Token for Consul Agent
+Local:            false
+Create Time:      2022-08-31 16:38:04.230927313 +0800 CST
+Policies:
+   77b7f381-3aff-e157-be22-d2f54bb4ac21 - consul-agent
+
+[root@xlhcesbges01 ~]# consul acl token create -description "Token for Consul Server" -policy-name consul-server
+AccessorID:       74602dbd-0292-aa0a-9bd8-b2579ba97729
+SecretID:         56fa4580-d337-1d9c-24b9-1bd6490f2e07
+Description:      Token for Consul Server
+Local:            false
+Create Time:      2022-08-31 16:38:16.69935708 +0800 CST
+Policies:
+   30852552-146a-c687-ffeb-52b8af21ce1c - consul-server
+
+[root@xlhcesbges01 ~]#
+[root@xlhcesbges01 ~]# consul acl token create -description "Token for Vault Service" -policy-name vault-service
+AccessorID:       cb5f40c1-5c81-b98c-ebda-9807470852b7
+SecretID:         0a21ea76-4911-78fb-daa8-512ce12ab804
+Description:      Token for Vault Service
+Local:            false
+Create Time:      2022-08-31 16:38:51.23204596 +0800 CST
+Policies:
+   550603a1-64de-837a-a539-e9a3a2bb339a - vault-service
+
+[root@xlhcesbges01 ~]# consul acl token create -description "Token for Nomad Service" -policy-name nomad-service
+AccessorID:       2a2a1af6-8a1f-3811-ad6a-024230278169
+SecretID:         8d8e6851-20f6-0683-1912-a47c3b1193f4
+Description:      Token for Nomad Service
+Local:            false
+Create Time:      2022-08-31 17:08:23.938335791 +0800 CST
+Policies:
+   7e910fdf-e004-84dd-e7ff-4920fa162066 - nomad-service
+   

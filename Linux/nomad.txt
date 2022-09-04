@@ -46,6 +46,7 @@ consul {
 }
 -----------------------------------------------------------------------------------------------
 有用的nomad命令
+export NOMAD_HTTP_ADDR=10.134.241.70:4646
 nomad stop -purge webiste   删除job及其部署的容器
 nomad job history -p website   查看job历史版本
 Version     = 5
@@ -159,3 +160,144 @@ config {
   load = "redis.tar"
   image = "redis"
 }
+
+
+nomad正式环境
+# server端
+
+datacenter = "lh"
+data_dir  = "/opt/nomad/data"
+
+server {
+  # license_path is required as of Nomad v1.1.1+
+  #license_path = "/opt/nomad/license.hclic"
+  enabled          = true
+  bootstrap_expect = 3
+}
+
+client {
+  enabled = true
+}
+consul {
+  address = "10.134.241.70:8500"
+}
+plugin "docker" {
+    config {
+        endpoint = "unix:///var/run/docker.sock"
+        volumes {
+            enabled      = true
+            selinuxlabel = "z"
+        }
+    }
+}
+
+# client端
+
+datacenter = "lh"
+data_dir  = "/opt/nomad/data"
+
+client {
+  enabled = true
+}
+consul {
+  address = "10.134.241.90:8500"
+}
+
+plugin "docker" {
+    config {
+        endpoint = "unix:///var/run/docker.sock"
+        volumes {
+            enabled      = true
+            selinuxlabel = "z"
+        }
+    }
+}
+
+# nomad与vault集成
+[root@rancher nomad]# cat /etc/nomad.d/nomad.hcl |egrep -v '#|^$'
+data_dir  = "/opt/nomad/data"
+server {
+  enabled          = true
+  bootstrap_expect = 1
+}
+client {
+  enabled = true
+  host_volume "logstash" {
+    path = "/data"
+    read_only = false
+  }
+}
+consul {
+  address = "10.67.36.58:8500"
+}
+vault {
+  enabled =true
+  address = "http://10.67.36.58:8200"
+  token = "hvs.wjALRGdnWDWnUc2tO2XvAXkC"
+}
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}
+plugin "docker" {
+    config {
+        endpoint = "unix:///var/run/docker.sock"
+        volumes {
+            enabled      = true
+            selinuxlabel = "z"
+        }
+    }
+}
+
+
+# nomad命令
+查看alloc产生的文件
+[root@rancher nomad]# nomad alloc fs 81b9729a task/secrets
+Mode        Size     Modified Time              Name
+-rw-r--r--  0 B      2022-08-26T15:28:20+08:00  .nomad-mount
+-rw-r--r--  1.2 KiB  2022-08-26T15:28:20+08:00  xtjcesges04.crt
+-rw-r--r--  1.6 KiB  2022-08-26T15:28:20+08:00  xtjcesges04.key
+[root@rancher nomad]# nomad alloc fs 81b9729a task/secrets/xtjcesges04.crt
+
+
+
+[root@rancher nomad]# curl -s --noproxy '*' http://10.67.36.58:4646/v1/node/1edb7008-db3f-ba8a-af3a-82c155e12a62 | jq .
+{
+  "Attributes": {
+    "cpu.frequency": "1599",
+    "vault.cluster_name": "vault-cluster-148a6ca6",
+    "driver.docker": "1",
+    "unique.cgroup.version": "v1",
+    "driver.exec": "1",
+    "cpu.arch": "amd64",
+    "driver.docker.os_type": "linux",
+    "os.name": "centos",
+    "cpu.totalcompute": "9594",
+    "cpu.modelname": "Intel(R) Xeon(R) CPU E5-2603 v3 @ 1.60GHz",
+    "os.version": "7.5.1804",
+    "driver.docker.volumes.enabled": "true",
+    "nomad.version": "1.3.3",
+    "driver.raw_exec": "1",
+    "unique.cgroup.mountpoint": "/sys/fs/cgroup/systemd",
+    "memory.totalbytes": "8201773056",
+    "driver.docker.bridge_ip": "172.17.0.1",
+    "os.signals": "SIGILL,SIGKILL,SIGSYS,SIGTTOU,SIGBUS,SIGCONT,SIGTRAP,SIGWINCH,SIGSTOP,SIGTERM,SIGTSTP,SIGHUP,SIGUSR2,SIGPIPE,SIGALRM,SIGIO,SIGNULL,SIGSEGV,SIGUSR1,SIGABRT,SIGIOT,SIGINT,SIGPROF,SIGQUIT,SIGFPE,SIGXFSZ,SIGTTIN,SIGXCPU",
+    "driver.docker.version": "18.09.2",
+    "unique.storage.volume": "/dev/mapper/centos-root",
+    "vault.cluster_id": "113a6276-ba6e-2e73-c7ef-935d153b8f56",
+    "unique.storage.bytestotal": "147355729920",
+    "kernel.version": "3.10.0-862.el7.x86_64",
+    "unique.network.ip-address": "10.67.36.58",
+    "nomad.service_discovery": "true",
+    "kernel.arch": "x86_64",
+    "driver.docker.runtimes": "runc",
+    "unique.storage.bytesfree": "110710599680",
+    "kernel.name": "linux",
+    "vault.accessible": "true",
+    "nomad.advertise.address": "10.67.36.58:4646",
+    "unique.hostname": "rancher",
+    "cpu.numcores": "6",
+    "vault.version": "1.11.2",
+    "nomad.revision": "428b2cd8014c48ee9eae23f02712b7219da16d30"
+  },

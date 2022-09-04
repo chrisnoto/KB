@@ -669,6 +669,8 @@ elasticsearch:7.16.3 \
 /usr/share/elasticsearch/bin/elasticsearch-certutil cert --keep-ca-key --pem --in /usr/share/elasticsearch/data/instance.yml --out /usr/share/elasticsearch/data/certs.zip
 unzip /data/certs.zip
 
+bin/elasticsearch-certutil cert --keep-ca-key --pem --out /usr/share/elasticsearch/data/escerts.zip
+
 # 各个节点也可以用同一份p12服务器证书 手动运行 elasticsearch-certutil cert --ca xxx.p12 --days 3650
 # 如果CA证书和服务器证书有设置密码的话  需要添加到keystore中
 elasticsearch-keystore add xpack.security.http.ssl.keystore.secure_password
