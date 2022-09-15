@@ -1,0 +1,33 @@
+version: "3.7"
+
+networks:
+  alertsnitch:
+    driver: bridge
+services:
+  postgresql-server:
+    restart: always
+    image: 'bitnami/postgresql:latest'
+    volumes:
+      - alertsnitch-db:/bitnami/postgresql
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRESQL_PASSWORD=Foxconn123
+    networks:
+      - alertsnitch
+
+  alertsnitch:
+    image: 'registry.gitlab.com/yakshaving.art/alertsnitch:latest'
+    environment:
+      ALERTSNITCH_DSN: user=postgres password=Foxconn123 host=10.67.50.237 dbname=postgres sslmode=disable
+      ALERTSNITCH_BACKEND: postgres
+    volumes:
+      - ~/alertsnitch/postgres:/docker-entrypoint-initdb.d
+    ports:
+      - 9567:9567
+    networks:
+      - alertsnitch
+    depends_on:
+      - postgresql-server
+volumes:
+  alertsnitch-db:    

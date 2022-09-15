@@ -11,6 +11,19 @@
 #archive_mode = off             # enables archiving; off, on, or always
 #synchronous_commit = on                # synchronization level;
 
+# 如何去掉特殊字符 “M-BM- ”
+sed -i 's/\xc2\xa0/ /g' proxmox-centos.json
+
+# awk内做乘法计算，并打印整型
+[root@rancher ~]# free -b |awk '/Mem/{printf "%d\n",$2 * 0.7}'
+5741241139
+
+# curl自动检测并断点续传
+[root@repo ISO]# curl -C - -O http://mirrors.aliyun.com/centos/7.9.2009/isos/x86_64/CentOS-7-x86_64-DVD-2207-02.iso
+** Resuming transfer from byte position 3530031104
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0 1160M    0 1745k    0     0  57495      0  5:52:44  0:00:31  5:52:13 57800
 
 =========================================================== 命 令 ===========================================================
 # 网络管理工具

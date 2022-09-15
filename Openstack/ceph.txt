@@ -387,3 +387,44 @@ root@node-6:/var/log/ceph# ceph -s
                   10 active+recovery_wait+degraded
                    1 active+recovering+degraded+remapped
                    1 active+degraded
+				   
+###### ceph 硬件准备 ######	
+The primary use cases for Ceph are:
+IOPS optimized: IOPS optimized deployments are suitable for cloud computing operations,
+such as running MYSQL or MariaDB instances as virtual machines on OpenStack. IOPS
+optimized deployments require higher performance storage such as 15k RPM SAS drives and
+separate SSD journals to handle frequent write operations. Some high IOPS scenarios use all
+flash storage to improve IOPS and total throughput.
+
+Throughput optimized: Throughput-optimized deployments are suitable for serving up
+significant amounts of data, such as graphic, audio and video content. Throughput-optimized
+deployments require networking hardware, controllers and hard disk drives with acceptable total
+throughput characteristics. In cases where write performance is a requirement, SSD journals will
+substantially improve write performance.
+
+Capacity-optimized: Capacity-optimized deployments are suitable for storing significant
+amounts of data as inexpensively as possible. Capacity-optimized deployments typically trade
+performance for a more attractive price point. For example, capacity-optimized deployments
+often use slower and less expensive SATA drives and co-locate journals rather than using SSDs
+for journaling.
+			   
+Throughput-optimized Solutions
+Throughput-optimized Ceph solutions are usually centered around semi-structured or unstructured
+data. Large-block sequential I/O is typical. Storage media on OSD hosts is commonly HDDs with write
+journals on SSD-based volumes. Typical server elements include:
+CPU: 0.5 cores per HDD, assuming a 2 GHz CPU.
+RAM: 16 GB baseline, plus 5 GB per OSD.
+Networking: 10 GbE per 12 OSDs (each for client- and cluster-facing networks).
+OSD media: 7,200 RPM enterprise HDDs.
+OSDs: One per HDD.
+Journal media:High-endurance, high-performance enterprise serial-attached SCSI (SAS) or
+NVMe SSDs.
+OSD-to-journal ratio:4-5:1 for an SSD journal, or 12-18:2 for an NVMe journal.
+Host bus adapter (HBA):Just a bunch of disks (JBOD).	
+
+For FileStore OSDs, Red Hat typically recommends a
+baseline of 16 GB of RAM per OSD host, with an additional 2
+GB of RAM per daemon. For BlueStore OSDs, Red Hat
+typically recommends a baseline of 16 GB of RAM per OSD
+host, with an additional 5 GB of RAM per daemon.
+			   

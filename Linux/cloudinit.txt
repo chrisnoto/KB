@@ -1,0 +1,159 @@
+# Cloud-init
+
+
+===============================================================================================================================
+在terraform proxmox provider中使用cloud-init
+第一种方式
+use the Proxmox variable ciuser, cipassword, ipconfig0, ipconfig1, ipconfig2, ipconfig3, ipconfig4, ipconfig5 , 
+searchdomain, nameserver and sshkeys.
+第二种方式
+You can use either the ciconfig parameter to create based on a Cloud-init configuration file
+
+data "template_file" "cloud_init_vm" {
+  template = "${file("${path.module}/files/cloud_init_vm.cloud_config")}"
+  vars = {
+    hostname = "app01"
+    domain   = "cesbg.foxconn"
+  }
+}
+
+# create a local copy of the file,to transfer to Proxmox
+resource "local_file" "cloud_init_vm" {
+  content      = data.template_file.cloud_init_vm.rendered
+  filename     = "${path.module}/files/user_data_cloud_init_vm.cfg"
+}
+
+# transfer the local copy to proxmox host
+resource "null_resource" "cloud_init_vm" {
+  connection {
+    type       = "ssh"
+    user       = "root"
+    host       = "10.67.50.162"
+    password   = "vSTJ456789"
+  }
+
+  provisioner "file" {
+    source = local_file.cloud_init_vm.filename
+    destination = "/var/lib/vz/snippets/cloud_init_vm.yml"
+  }
+}
+
+resource "proxmox_vm_qemu" "cloudinit06" {
+  depends_on = [
+    null_resource.cloud_init_vm
+  ]
+
+  name         = "cloudinit07"
+  target_node  = "pve1"
+  clone        = "centos7.9-cloudinit"
+  agent        = 1
+  full_clone   = false
+  cores        = 2
+  sockets      = 2
+  boot         = "order=scsi0;ide2"
+  kvm          = true
+  memory       = "8192"
+  disk {
+    storage    = "prod"
+    size       = "70G"
+    type       = "scsi"
+  }
+  network {
+    bridge     = "vmbr0"
+    firewall   = false
+    link_down  = false
+    model      = "virtio"
+  }
+  ipconfig0= "ip=10.67.51.44/23,gw=10.67.50.1"
+  cicustom = "user=local:snippets/cloud_init_vm.yml"
+  sshkeys = <<EOF
+  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHLfr76l7+34YD3yW9nbTKKV62qjKC4M78zxZz+4BJxH0Fa5cOx6pAy2x3NwNqd3kLAEybIMFF6AohB8F5RVuqaR3xq6XWxzW3tvkK3akCEY35cBpL7Zv2G+2sygnK4D167F1QojlKnWvi003S52yC5H9eRLVFv2jsVE7Flj0uWtlPhnnvEhhqQ2hrzixvH4dewPOY2pl8uylBb8H7GwcrtrEUQY77U9qhqws/7IzvR6JNszKq0IKkiJoZqIFevAwlI0K4d/czgrqUzK2bdrAsflBCe5RIEL+FQnuxyylHK6v/5l+TMHIhR72CMauUIU1Iiz2egC8UgchGA/VpGycV root@rancher
+  EOF
+}
+
+
+===============================================================================================================================
+在lxc profile中使用cloud-init userdata
+########## cloud-init 初始化 lxc容器 #####
+注意image必须是支持cloud-init的，如https://us.lxd.images.canonical.com/images/centos/8-Stream/amd64/cloud/
+
+lxc profile copy withproxy podman
+
+#容器里查看传入的user data
+[root@docker99 instance]# pwd
+/var/lib/cloud/instance
+[root@docker99 instance]# cat boothooks/part-002
+#!/bin/sh
+cat >> /etc/yum.conf <<EOF
+proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+EOF[root@docker99 instance]# cat cloud-config.txt
+#cloud-config
+
+# from 1 files
+# cloud-config.txt
+
+---
+package_upgrade: true
+packages:
+- podman
+
+# 准备好profile
+root@docker-chensen:~# lxc profile show podman
+config:
+  security.nesting: "true"
+  user.user-data: |
+    Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+    MIME-Version: 1.0
+
+    --==BOUNDARY==
+    Content-Type: text/cloud-config; charset="us-ascii"
+    MIME-Version: 1.0
+    Content-Transfer-Encoding: 7bit
+    Content-Disposition: attachment; filename="cloud-config.txt"
+
+    #cloud-config
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4LKva5JRpgiBqzI6XO7t8iARt6cai7q5PxDYSFS9zUvazn4hlqiCFh80eXjC231MNaemm1J+cigQ3/BMi9VPDnJXwS1K9lxxnm93x0U0NwlozWFAa1KbzJQkuP2cDbviPHrJ3IsecZFAAW6Z4XsZHkbPSe2rAr7jMS3XR+q6xk5NoHwgOrhoVHXe2pqs+DPZM8zLB4AIkHcXQRFYdfJytCVwcRYiSTzXhfn/TU5QNoFIPMJezAPnwkRatToZOUM2rlX2dWBoLgxh9mimzKZOuQnoxW6Q/VnK8HBoje30pZqrL/R5+ssveeYpFmC5jHSChVAG9eS0+jI5xktO8b9+J root@docker-chensen
+    timezone: Asia/Shanghai
+    write_files:
+    - content: |
+        export http_proxy=http://10.67.9.210:3128
+        export https_proxy=http://10.67.9.210:3128
+      path: /etc/profile.d/proxy.sh
+    --==BOUNDARY==
+    MIME-Version: 1.0
+    Content-Type: text/cloud-boothook; charset="us-ascii"
+    #cloud-boothook
+    #!/bin/sh
+    cat >> /etc/yum.conf <<EOF
+    proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+    EOF
+    --==BOUNDARY==
+    MIME-Version: 1.0
+    Content-Type: text/x-shellscript-per-instance; charset="us-ascii"
+    #!/bin/bash
+    yum makecache
+    yum install -y podman
+    sed -i '/^#mount_p/s/^#mount_p/mount_p/' /etc/containers/storage.conf
+    curl --noproxy '*' -o /root/consul.tar http://10.67.51.164/images/consul.tar
+    podman load -i /root/consul.tar
+    --==BOUNDARY==--
+description: Default LXD profile
+devices:
+  eth0:
+    name: eth0
+    network: lxdbr0
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+name: podman
+used_by:
+- /1.0/instances/docker99
+
+配置profile
+lxc profile set podman security.nesting true
+
+
+

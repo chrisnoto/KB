@@ -1,0 +1,18 @@
+# 更改local的content type
+pvesm set local --content images --content iso --content vztmpl --content backup --content snippets
+更改后
+cat /etc/pve/storage.cfg 
+dir: local
+        path /var/lib/vz
+        content backup,images,vztmpl,iso
+
+lvmthin: local-lvm
+        thinpool data
+        vgname pve
+        content images,rootdir
+
+lvmthin: prod
+        thinpool prod
+        vgname prod
+        content rootdir,images
+        nodes pve1
