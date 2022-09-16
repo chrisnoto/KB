@@ -1,0 +1,45 @@
+---
+
+- name: Provision PG14
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: find default yumrepo files
+      find:
+        paths: /etc/yum.repos.d
+        patterns: "*.repo"
+      register: repofiles_to_delete
+
+    - name: remove default yumrepo files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ repofiles_to_delete.files }}"
+
+    - name: get new yumrepofiles
+      uri:
+        url: http://10.67.51.164/repofile/centos7.repo
+        creates: centos7.repo
+        dest: /etc/yum.repos.d
+
+    - name: install pg14
+      yum: 
+        name:
+          - postgresql14
+          - postgresql14-server
+          - postgresql14-contrib
+          - iproute
+        state: present
+
+    - name: put entrypoint.sh
+      copy:
+        src: files/{{ item }}
+        dest: /usr/bin/{{ item }}
+        mode: 0755
+        owner: root
+        group: root
+      with_items:
+        - entrypoint.sh
+
+    - name: Remove yum cache
+      raw: rm -rf /var/cache/yum/*

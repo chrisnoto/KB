@@ -1,0 +1,39 @@
+{
+    "variables": {
+        "image": "centos:7",
+        "version": "14"
+    },
+    "builders": [
+        {
+            "type": "docker",
+            "image": "{{ user `image` }}",
+            "commit": true,
+            "changes": [
+                "ENV PGDATA /var/lib/pgsql/{{ user `version` }}/data",
+                "ENV PATH $PATH:/usr/pgsql-{{ user `version` }}/bin",
+                "USER postgres",
+                "ENTRYPOINT [\"entrypoint.sh\"]",
+                "CMD [\"postgres\"]",
+                "EXPOSE 5432",
+                "VOLUME /var/lib/pgsql/{{ user `version` }}/data"
+            ]    
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "ansible",
+            "user": "root",
+            "playbook_file": "provision.yml"
+        }
+    ],
+    "post-processors": [
+      [
+        {
+            "type":"docker-tag",
+            "repository": "pg14-packer",
+            "tag": "latest"
+        }
+      ]
+    ]
+}
+

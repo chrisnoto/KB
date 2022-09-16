@@ -1,0 +1,69 @@
+{
+    "variables": {
+        "username": "root@pam",
+        "password": "vSTJ456789",
+        "pmox_url": "https://10.67.50.162:8006/api2/json",
+        "guest_hostname": "centos7.9-cloudinit",
+        "ssh_user": "root",
+        "ssh_pass": "Foxconn123",
+        "iso_file": "local:iso/CentOS-7-x86_64-DVD-2207-02.iso"
+    },
+    "builders": [
+        {
+            "type": "proxmox",
+            "proxmox_url": "{{ user `pmox_url`}}",
+            "insecure_skip_tls_verify": true,
+            "username": "{{ user `username`}}",
+            "password": "{{ user `password`}}",
+            "node": "pve1",
+            "vm_name": "centos7-template",
+            "network_adapters": [
+                {
+                    "bridge": "vmbr0",
+                    "model": "virtio",
+                    "firewall": false
+                }
+            ],
+            "disks": [
+                {
+                    "type": "scsi",
+                    "disk_size": "60G",
+                    "storage_pool": "prod",
+                    "storage_pool_type": "lvm-thin",
+                    "format": "raw"
+                }
+            ],
+            "cores": 2,
+            "sockets": 1,
+            "memory": 4096,
+            "os": "l26",
+            "qemu_agent": true,
+            "scsi_controller": "virtio-scsi-single",
+            "iso_file": "{{ user `iso_file` }}",
+            "iso_storage_pool": "local",
+            "cloud_init": true,
+            "cloud_init_storage_pool": "local",
+            "http_directory": "http",
+            "boot": "order=scsi0;ide2",
+            "boot_wait": "10s",
+            "boot_command": [
+                "<tab><wait>",
+                " ip=10.67.50.133::10.67.50.1:255.255.254.0:packer01:eth0:none inst.cmdline inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/centos7-ks.cfg <enter>"
+            ],
+            "ssh_username": "{{ user `ssh_user` }}",
+            "ssh_timeout": "30m",
+            "ssh_password": "{{ user `ssh_pass`}}",
+            "unmount_iso": true,
+            "template_name": "{{ user `guest_hostname` }}",
+            "template_description": "CentOS 7.9 Template created by packer"
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell",
+            "execute_command": "chmod +x {{.Path}};bash {{.Path}}",
+            "script": "scripts/cloudinit.sh"
+        }
+    ]
+}
+
