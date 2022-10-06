@@ -53,3 +53,95 @@ resource "docker_container" "nginx" {
     external = 8001
   }
 }
+
+#terraform proxmox_qemu_vm 建虚拟机
+#版本1 
+定义了变量ipaddr, 执行时需要输入变量 terraform plan -out vm-cloud.plan -var='ipaddr=10.67.51.44'; terraform apply "vm-cloud.plan"
+定义了user-data，user-data里包含设置主机名。  因为proxmox虚拟机名称并没有传入cloud-init
+terraform会在建立vm后，调用ansible-playbook
+
+ciuser和cipassword、sshkeys没有起作用
+
+[root@rancher proxmox]# cat vm-cloud.tf
+variable "ipaddr" {
+  type        = string
+  description = "ip addr of vm"
+}
+
+data "template_file" "cloud_init_vm" {
+  template = "${file("${path.module}/files/cloud_init_vm.cloud_config")}"
+  vars = {
+    hostname = "app01"
+    domain   = "cesbg.foxconn"
+  }
+}
+
+# create a local copy of the file,to transfer to Proxmox
+resource "local_file" "cloud_init_vm" {
+  content      = data.template_file.cloud_init_vm.rendered
+  filename     = "${path.module}/files/user_data_cloud_init_vm.cfg"
+}
+
+# transfer the local copy to proxmox host
+resource "null_resource" "cloud_init_vm" {
+  connection {
+    type       = "ssh"
+    user       = "root"
+    host       = "10.67.50.162"
+    password   = "vSTJ456789"
+  }
+
+  provisioner "file" {
+    source = local_file.cloud_init_vm.filename
+    destination = "/var/lib/vz/snippets/cloud_init_vm.yml"
+  }
+}
+
+resource "proxmox_vm_qemu" "docker" {
+  depends_on = [
+    null_resource.cloud_init_vm
+  ]
+
+  name         = "app01"
+  target_node  = "pve1"
+  pool         = "chensen"
+  clone        = "centos7.9-cloudinit"
+  agent        = 1
+  full_clone   = false
+  cores        = 2
+  sockets      = 2
+  boot         = "order=scsi0;ide2"
+  kvm          = true
+  memory       = "8192"
+  disk {
+    storage    = "prod"
+    size       = "70G"
+    type       = "scsi"
+  }
+  network {
+    bridge     = "vmbr0"
+    firewall   = false
+    link_down  = false
+    model      = "virtio"
+  }
+  ipconfig0= "ip=${var.ipaddr}/23,gw=10.67.50.1"
+  cicustom = "user=local:snippets/cloud_init_vm.yml"
+  ciuser   = "centos"
+  cipassword = "vSTJ999"
+  sshkeys = file("~/.ssh/id_rsa.pub")
+}
+
+output "vm_dip_address" {
+  description = "The default IP of VM"
+  value = proxmox_vm_qemu.docker.*.default_ipv4_address
+}
+
+resource "null_resource" "ansible-playbook" {
+  depends_on = [
+    proxmox_vm_qemu.docker
+  ]
+
+  provisioner "local-exec" {
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u root -i ${var.ipaddr}, files/mysql.yaml -e 'ansible_ssh_pass=Foxconn123'"
+  }
+}

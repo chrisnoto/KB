@@ -3,7 +3,7 @@ groups:
   rules:
 
   - alert: Host out of memory
-    expr: 'node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 98'
+    expr: 'node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10'
     for: 30s
     labels:
       severity: warning

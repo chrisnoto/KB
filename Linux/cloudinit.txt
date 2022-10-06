@@ -6,6 +6,7 @@
 第一种方式
 use the Proxmox variable ciuser, cipassword, ipconfig0, ipconfig1, ipconfig2, ipconfig3, ipconfig4, ipconfig5 , 
 searchdomain, nameserver and sshkeys.
+起作用的就是ciuser和ipconfig*
 第二种方式
 You can use either the ciconfig parameter to create based on a Cloud-init configuration file
 

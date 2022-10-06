@@ -304,3 +304,26 @@ ssh -v h7108579@10.67.51.158
 
 
 dsconf localhost backend create --suffix dc=tj,dc=cesbg --be-name userRoot --create-entries --create-suffix
+
+
+# 389错误
+[root@xlhhrldap ~]# systemctl status dirsrv@389.service -l
+● dirsrv@389.service - 389 Directory Server 389.
+   Loaded: loaded (/usr/lib/systemd/system/dirsrv@.service; enabled; vendor preset: disabled)
+   Active: active (running) since 一 2022-09-26 15:41:53 CST; 22h ago
+  Process: 1179 ExecStartPre=/usr/sbin/ds_systemd_ask_password_acl /etc/dirsrv/slapd-%i/dse.ldif (code=exited, status=0/SUCCESS)
+ Main PID: 1194 (ns-slapd)
+   Status: "slapd started: Ready to process requests"
+   CGroup: /system.slice/system-dirsrv.slice/dirsrv@389.service
+           └─1194 /usr/sbin/ns-slapd -D /etc/dirsrv/slapd-389 -i /var/run/dirsrv/slapd-389.pid
+
+9月 26 15:41:52 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:52.913155558 +0800] - NOTICE - ldbm_back_start - cache autosizing: userRoot dn cache (2 total): 131072k
+9月 26 15:41:52 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:52.915775415 +0800] - NOTICE - ldbm_back_start - cache autosizing: NetscapeRoot entry cache (2 total): 1114112k
+9月 26 15:41:52 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:52.922900294 +0800] - NOTICE - ldbm_back_start - cache autosizing: NetscapeRoot dn cache (2 total): 131072k
+9月 26 15:41:52 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:52.925375556 +0800] - NOTICE - ldbm_back_start - total cache size: 3392634470 B;
+9月 26 15:41:52 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:52.934014266 +0800] - INFO - dblayer_start - Resizing db cache size: 842498252 -> 842497638
+9月 26 15:41:53 ldap.dms.foxconn ns-slapd[1194]: [26/Sep/2022:15:41:53.384163697 +0800] - INFO - slapd_daemon - slapd started.  Listening on All Interfaces port 389 for LDAP requests
+9月 26 15:41:53 ldap.dms.foxconn systemd[1]: Started 389 Directory Server 389..
+9月 27 09:13:08 ldap.dms.foxconn ns-slapd[1194]: [27/Sep/2022:09:13:08.161834351 +0800] - ERR - log_ber_too_big_error - conn=1 fd=64 Incoming BER Element was 72045495232364532 bytes, max allowable is 2097152 bytes. Change the nsslapd-maxbersize attribute in cn=config to increase.
+9月 27 09:19:28 ldap.dms.foxconn ns-slapd[1194]: [27/Sep/2022:09:19:28.988916407 +0800] - ERR - connection_read_operation - conn=2 received a non-LDAP message (tag 0x3, expected 0x30)
+9月 27 10:48:25 xlhhrldap ns-slapd[1194]: [27/Sep/2022:10:48:25.243304505 +0800] - ERR - log_ber_too_big_error - conn=4 fd=64 Incoming BER Element was 72045495232364532 bytes, max allowable is 2097152 bytes. Change the nsslapd-maxbersize attribute in cn=config to increase.

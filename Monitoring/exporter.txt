@@ -21,6 +21,9 @@ docker run -d \
   -e DATA_SOURCE_NAME="root:vSTJ456@(10.67.51.162:3306)/" \
   prom/mysqld-exporter:latest
 
+# redis_exporter  port 9121      容器里无法监控127.0.0.1，需要用主机IP地址
+docker run -d --name redis_exporter -p 9121:9121 oliver006/redis_exporter --redis.addr=10.67.50.225:6379 
+  
 # docker_exporter     port 9417
 [root@rancher ~]# cat docker_exporter.sh
 docker run --name docker_exporter -d \

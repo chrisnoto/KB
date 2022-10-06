@@ -1,27 +1,26 @@
-######redis-stat#######
-docker run --name redis-stat -p 63790:63790 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server 10.67.51.164 10.42.6.13 10.42.4.19 10.42.5.27
-kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service
-docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0.default.svc.cluster.local redis-ha-announce-1.default.svc.cluster.local redis-ha-announce-2.default.svc.cluster.local
-docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 --dns-search=default.svc.cluster.local -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0 redis-ha-announce-1 redis-ha-announce-2
-######redis-commander###
-docker run --name redis-commander -d --env REDIS_HOSTS=redis1:10.42.6.13:6379:1,redis2:10.42.4.19:6379:1,redis3:10.42.5.27:6379:1 -p 8081 rediscommander/redis-commander:latest
-docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.cluster.local \
-  --env REDIS_HOSTS=redis1:redis-ha-announce-0:6379:1,redis2:redis-ha-announce-1:6379:1,redis3:redis-ha-announce-2:6379:1 \
-  -p 8081 rediscommander/redis-commander:latest
-  
-docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
--p 8080:80 aidaho/haproxy-wi 
+Redis (Remote dictionary server) 
 
+### redis 密码认证
+方式一
+root@redis001 ~# export REDISCLI_AUTH=120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb
+root@redis001 ~# redis-cli ping
+PONG
+方式二  交互模式
+root@redis001 ~# redis-cli
+127.0.0.1:6379> AUTH 120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb
+OK
 
 
 ###########redis aof文件重写############
 Redis将生成一个新的AOF文件， 这个文件包含重建当前数据集所需的最少命令
 
-############  Redis 集群 ##################
-使用redis主從 + 哨兵（sentinel）+ 漂移VIP的方案搭建了一個redis高可用系統，但這個系統保證的是單個redis例項的高可用，所以適合業務比較小的應用。
-如果業務比較大，併發量比較高，建議搭建redis叢集，比如官方redis cluster，還有開源的codings叢集
+
 
 #####  redis 基本用法 ######
+连接本地unix socket
+redis-cli -s /var/run/redis/redis.sock
+
+#### 数据类型
 1 string
 keys '*'  查询所有健
 set mongo "it's document DB"
@@ -29,6 +28,31 @@ get mongo  查询mongo这个健的健值
 127.0.0.1:6379> mget mongo mysql
 1) "This is mongo cookbook"
 2) "I like mysql"
+
+127.0.0.1:6379> keys *
+1) "test07"
+2) "test02"
+3) "test01"
+4) "test06"
+5) "test05"
+6) "test04"
+7) "test03"
+8) "test"
+9) "test08"
+127.0.0.1:6379> scan 0 match test* count 2
+1) "10"
+2) 1) "test05"
+   2) "test02"
+127.0.0.1:6379> scan 5 match test* count 2
+1) "3"
+2) 1) "test01"
+   2) "test04"
+   3) "test03"
+   4) "test"
+127.0.0.1:6379> scan 3 match test* count 2
+1) "0"
+2) 1) "test08"
+
 
 2 hash
 set键为record1的hash表
@@ -47,6 +71,28 @@ set键为record1的hash表
 1) "chensen"
 2) "40"
 
+127.0.0.1:6379> hscan test05 0
+1) "0"
+2)  1) "uid"
+    2) "['test05']"
+    3) "objectClass"
+    4) "['top', 'person', 'organizationalPerson', 'inetorgperson']"
+    5) "userPassword"
+    6) "['{MD5}VI5MNrhB+cDSTa1w/A5x0g==']"
+    7) "sn"
+    8) "['test05']"
+    9) "givenName"
+   10) "['test05']"
+   11) "cn"
+   12) "['test05']"
+127.0.0.1:6379> hscan test05 0 match "*n"
+1) "0"
+2) 1) "sn"
+   2) "['test05']"
+   3) "cn"
+   4) "['test05']"
+
+
 3 集合
 127.0.0.1:6379> sadd os CentOS Windows Debian Ubuntu AIX HPUX Solaris
 (integer) 7
@@ -60,6 +106,7 @@ set键为record1的hash表
 5) "AIX"
 6) "Solaris"
 7) "HPUX"
+
 4 列表
 127.0.0.1:6379> lpush dept sa oa gscm b2b hr sap
 (integer) 6
@@ -79,3 +126,159 @@ set键为record1的hash表
 OK
 127.0.0.1:6379> lindex dept 4
 "OA"
+
+#### 查看中文
+root@redis001 ~# redis-cli --raw
+127.0.0.1:6379> get redisdba
+1 redis上线及升级
+2 redis用户权限管理
+3 redis监控及巡检
+4 redis集群及弹性伸缩
+5 redis故障排错、持续性能优化
+6 redis数据迁移、备份和还原
+
+
+########导入数据
+方法一    pipe
+root@redis001 ~# cat 22
+SET H7104398    邓智勇
+SET H7113074    孙佳伟
+SET H7114524    程路峰
+SET H7101057    邵玉雪
+
+#cat 22 | redis-cli --pipe
+
+方法2   shell 
+root@redis001 ~# head -2 3
+XTJ-B2B-IS-D1   10.66.12.56
+XTJ-ESB-IS-D1   10.66.12.40
+root@redis001 ~# while read name ip;do echo -en $ip | redis-cli -x set $name;done< <(cat 3 |awk '{print $1,$2}')
+OK
+OK
+
+
+################ lua 脚本 ############
+127.0.0.1:6379> eval "redis.call('SET',KEYS[1],ARGV[1])" 1 server2 10.67.9.200
+(nil)
+127.0.0.1:6379> get server2
+"10.67.9.200"
+
+############### python ###########
+----------------------------------mysql -> redis
+root@redis001 ~# cat mysql.py
+#!/usr/bin/python
+import MySQLdb
+import redis
+
+r = redis.Redis(host='10.67.50.131',port=6379,password='120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb')
+pipe = r.pipeline()
+
+db = MySQLdb.connect("10.67.51.162","root","vSTJ456","zabbix",charset='utf8')
+cursor = db.cursor()
+cursor.execute("select username,name from users")
+results = cursor.fetchall()
+
+for row in results:
+  key = row[0]
+  value = row[1]
+  pipe.set(key,value)
+
+db.close()
+pipe.execute()
+
+---------------------------------ldap -> redis
+[root@repo ~]# cat lsearch.py
+#!/usr/bin/python
+import ldap
+import redis
+
+r = redis.Redis(host='10.67.50.131',port=6379,password='120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb')
+
+pipe = r.pipeline()
+
+conn = ldap.initialize("ldap://xygjsldap01.cesbg.fii")
+conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT,ldap.OPT_X_TLS_NEVER)
+conn.start_tls_s()
+conn.simple_bind_s("cn=Directory Manager","Foxconn123321")
+
+searchScope = ldap.SCOPE_SUBTREE
+base_dn = 'dc=cesbg,dc=fii'
+result = conn.search_s(base_dn,searchScope,"uid=test*",None)
+
+for dn,entry in result:
+  pipe.set(entry['givenName'][0],dn)
+
+pipe.execute()
+
+######### redis 原理 ############
+### 1 输入缓冲区：qbuf、qbuf-free
+Redis为每个客户端分配了输入缓冲区，作用是将客户端发送的命令临时保存，同时会从输入缓冲区读取命令并执行，它为Redis服务器提供了缓冲功能。
+Redis无法配置输入缓冲区的大小，输入缓冲区会根据输入内容大小的不同动态调整，但是总体大小不能超过1G。
+
+输入缓存区使用不当产生的问题：
+客户端的输入缓冲区超过1G，客户端将会被强制关闭。
+输入缓冲区不受maxmemory控制，如果redis实例的maxmemory设置了1G，已经存储800M数据， 如果此时输入缓冲区使用了500M，将总内存将超过maxmemory，可能会产生数据丢失、键值淘汰、OOM等情况
+产生的原因：
+redis处理速度跟不上输入缓冲区的输入速度，例如存在bigkey，慢查询等原因导致命令执行的时间变长。
+写入命令量非常大，但此时redis服务器在执行持久化导致阻塞无法处理命令，导致命令大量积压在输入缓存区中。
+解决方案：
+client list 查看qbuf、qbuf-free来定位存在问题的客户端，分析原因加以处理。
+info clients定期监控client_biggest_input_buf，设置预警阀值超过时发送报警邮件或短信 。
+
+### 2 输出缓冲区：obl、oll、omem
+Redis为每个客户端分配了输出缓冲区，作用是保存命令执行的结果返回给客户端为Redi与客户端交互返回结果提供了缓冲功能。
+输出缓冲区的容量可以通过参数client-output-buffer-limit来进行设置。输出缓冲区不受maxmemory控制，如果redis使用内存总量+输出缓冲区的容量>maxmemory时，会产生数据丢失、键值淘汰、OOM等情况。
+配置:
+client-output-buffer-limit <class> <hard limit> <soft limit> <soft seconds>
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit slave 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+<class>：客户端类型，分为三种。a）normal：普通客户端；b）slave：slave客户端，用于复制；c）pubsub：发布订阅客户端。
+<hard limit>：如果客户端使用的输出缓冲区大于<hard limit>，客户端会被立即关闭。
+<soft limit>和<soft seconds>：如果客户端使用的输出缓冲区超过了<soft limit>并且持续了<soft limit>秒，客户端会被立即关闭。
+输出缓冲区按客户端的不同分为三种：普通客户端、发布订阅客户端、slave客户端：
+
+** 输出缓冲区有两部分组成：固定缓冲区（16KB）和动态缓冲区：**
+固定缓冲区用于保存那些长度比较小的回复，比如OK、简短的字符串值、整数值、错误回复等。
+可变大小的缓冲区用于保存那些长度比较大的回复，比如一个非常长的字符串值，一个有很多元素组成的集合或列表。
+client对象的结构：
+
+固定缓冲区使用的是字节数组，动态缓冲区使用的是链表。当固定缓冲区存满后会将Redis新的返回结果存放在动态缓冲区的队列中，队列中的每个对象就是每个返回结果。
+
+解决方案：
+通过定期执行client list命令，收集obl、oll、omem找到异常的连接记录并分析，最终找到可能出问题的客户端。
+info clients定期监控client_longest_output_list代表输出缓冲区列表最大对象数，设置预警阀值超过时发送报警邮件或短信 。
+合理配置普通客户端输出缓冲区的大小。
+如果master节点写入较大，适当增大slave的输出缓冲区的，slave客户端的输出缓冲区可能会比较大，一旦slave客户端连接因为输出缓冲区溢出被kill，会造成复制重连。
+限制容易让输出缓冲区增大的命令，例如，高并发下的monitor命令就是一个危险的命令。
+及时监控内存，一旦发现内存抖动频繁，可能就是输出缓冲区过大。
+客户端的存活状态
+client list中的age和idle分别代表当前客户端已经连接的时间和最近一次的空闲时间。当age等于idle时，说明连接一直处于空闲状态。
+客户端的限制maxclients和timeout
+maxclients参数来限制最大客户端连接数，一旦连接数超过maxclients，新的连接将被拒绝。maxclients默认值是10000，可以通过info clients来查询当前Redis的连接数。
+某些情况由于业务方使用不当（例如没有主动关闭连接）可能存在大量idle连接，因此Redis提供了timeout（单位为秒）参数来限制连接的最大空闲时间合理使用有限的资源，一旦客户端连接的idle时间超过了timeout，连接将会被关闭。
+Redis的默认配置给出的timeout=0,客户端不会因超时而关闭。
+客户端类型
+
+客户端监控
+
+connected_clients：代表当前Redis节点的客户端连接数，需要重点监控，一旦超过maxclients，新的客户端连接将被拒绝。
+client_longest_output_list：当前所有输出缓冲区中队列对象个数的最大值。
+client_biggest_input_buf：当前所有输入缓冲区中占用的最大容量。
+blocked_clients：正在执行阻塞命令（例如blpop、brpop、brpoplpush）的客户端个数。
+total_connections_received(info stats)：Redis自启动以来处理的客户端连接数总数。
+rejected_connections：Redis自启动以来拒绝的客户端连接数，需要重点监控。
+
+######redis-stat监控#######
+docker run --name redis-stat -p 63790:63790 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server 10.67.51.164 10.42.6.13 10.42.4.19 10.42.5.27
+kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service
+docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0.default.svc.cluster.local redis-ha-announce-1.default.svc.cluster.local redis-ha-announce-2.default.svc.cluster.local
+docker run --name redis-stat -p 63790:63790 --dns=10.43.0.10 --dns-search=default.svc.cluster.local -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server redis-ha-announce-0 redis-ha-announce-1 redis-ha-announce-2
+######redis-commander Redis操作UI ###
+docker run --name redis-commander -d --env REDIS_HOSTS=redis1:10.42.6.13:6379:1,redis2:10.42.4.19:6379:1,redis3:10.42.5.27:6379:1 -p 8081 rediscommander/redis-commander:latest
+docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.cluster.local \
+  --env REDIS_HOSTS=redis1:redis-ha-announce-0:6379:1,redis2:redis-ha-announce-1:6379:1,redis3:redis-ha-announce-2:6379:1 \
+  -p 8081 rediscommander/redis-commander:latest
+  
+docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
+-p 8080:80 aidaho/haproxy-wi 

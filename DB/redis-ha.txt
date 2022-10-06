@@ -1,0 +1,60 @@
+(1) 底层数据（例如mysql, hbase等等）允许被穿透，而且不考虑高可用性，可以考虑Redis-Standalone类型。
+缺点： 非高可用、受单机影响扩展性(容量，读写等)有限
+优点：结构简单
+(2) 如想保证Redis的高可用（通过主从和sentinel机制），可以选择Redis-Sentinel类型
+缺点：受单机影响扩展性(容量，读写等)有限   内存/QPS受限于单机
+优点：高可用，结构相对简单
+(3) 如想保证高可用、可扩展、大容量等要求，可以选择Redis-Cluster 下面给一些建议：
+并不是说Redis-Cluster比其他两种类型好，用户需要根据自己的需求选择（比如内存需求量不大，保证高可用选择Redis-Sentinel类型就足够了）
+如果当前或者未来需要的内存量超过6个G， 建议选择Redis-Cluster类型。
+
+############主从复制原理 ################
+1 Slave执行replicaof命令后，从节点根据当前状态，发送 psync命令给 master：
+
+如果从节点从未执行过 replicaof ，则从节点发送 psync ? -1，向主节点发送全量复制请求；
+如果从节点之前执行过 replicaof 则发送 psync <runID> <offset>, runID 是上次复制保存的主节点 runID，offset 是上次复制截至时从节点保存的复制偏移量。
+
+2 主节点根据接受到的psync命令和当前服务器状态，决定执行全量复制还是部分复制：
+
+runID 与从节点发送的 runID 相同，且从节点发送的 slave_repl_offset 之后的数据在 repl_backlog_buffer 缓冲区中都存在，则回复 CONTINUE，表示将进行部分复制，从节点等待主节点发送其缺少的数据即可；
+runID 与从节点发送的 runID 不同，或者从节点发送的 slave\_repl\_offset 之后的数据已不在主节点的 repl_backlog_buffer 缓冲区中 (在队列中被挤出了)，则回复从节点 FULLRESYNC <runid> <offset>，表示要进行全量复制，
+其中 runID 表示主节点当前的 runID，offset 表示主节点当前的 offset，从节点保存这两个值，以备使用。
+
+一个从库如果和主库断连时间过长，造成它在主库 repl_backlog_buffer 的 slave\_repl\_offset 位置上的数据已经被覆盖掉了，此时从库和主库间将进行全量复制。
+
+############  Redis 集群 ##################
+使用redis主從 + 哨兵（sentinel）+ 漂移VIP的方案搭建了一個redis高可用系統，但這個系統保證的是單個redis例項的高可用，所以適合業務比較小的應用。
+如果業務比較大，併發量比較高，建議搭建redis叢集，比如官方redis cluster，還有開源的codings叢集
+
+###############哨兵Sentnel高可用########
+
+哨兵主要任务
+1 监控 master 与 slave 运行状态，判断是否客观下线；
+2 master 客观下线后，选择一个 slave 切换成 master；
+3 通知 slave 和客户端新 master 信息。
+
+
+哨兵集群原理
+为了避免单个哨兵故障后无法进行主从切换，以及为了减少误判率，又引入了哨兵集群；哨兵集群又需要有一些机制来支撑它的正常运行：
+
+1 基于 pub/sub 机制实现哨兵集群之间的通信；
+2 基于 INFO 命令获取 slave 列表，帮助 哨兵与 slave 建立连接；
+3 通过哨兵的 pub/sub，实现了与客户端和哨兵之间的事件通知。
+
+主从切换，并不是随意选择一个哨兵就可以执行，而是通过投票仲裁，选择一个 Leader，由这个 Leader 负责主从切换。
+
+主观下线与客观下线的区别
+简单来说，主观下线是哨兵自己认为节点宕机，而客观下线是不但哨兵自己认为节点宕机，而且该哨兵与其他哨兵沟通后，达到一定数量的哨兵都认为该哥们嗝屁了。
+
+基于 pub/sub 机制实现哨兵集群之间的通信；  如 subscribe +sdown
+master 下线事件
++sdown：进入“主观下线”状态；
+-sdown：退出“主观下线”状态；
++odown：进入“客观下线”状态；
+-odown：退出“客观下线”状态；
+slave 重新配置事件
++slave-reconf-sent：哨兵发送 replicaof 命令重新配置从库；
++slave-reconf-inprog：slave 配置了新 master，但是尚未进行同步；
++slave-reconf-done：slave 配置了新 master，并与新 master 完成了数据同步；
+新主库切换
++switch-master：master 地址发生了变化。

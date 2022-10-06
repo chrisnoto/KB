@@ -1,0 +1,68 @@
+# mariadb
+
+[root@zbxdb ~]# cat zabbix-mysqld.sh
+docker run -d \
+      --name zabbix-mariadb-server \
+      -p 3306:3306 -t \
+      -e 'TZ=Asia/Shanghai' \
+      -e MARIADB_DATABASE="zabbix" \
+      -e MARIADB_USER="zabbix" \
+      -e MARIADB_PASSWORD="vSTJ456" \
+      -e MARIADB_ROOT_PASSWORD="vSTJ456" \
+      -v /data/mysql:/data/mysql \
+      --ulimit nofile=1024000 \
+      mariadb:10.3.18 \
+      --character-set-server=utf8 \
+      --collation-server=utf8_bin \
+      --datadir=/data/mysql \
+      --socket=/data/mysql/mysql.sock \
+      --default-storage-engine=InnoDB \
+      --innodb-autoinc-lock-mode=2 \
+      --slow-query-log=1 \
+      --slow-query-log-file=/data/mysql/mysql-slow.log \
+      --long-query-time=10 \
+      --log-error=/data/mysql/error.log \
+      --skip-name-resolve \
+      --skip-external-locking \
+      --connect-timeout=60 \
+      --wait-timeout=28800 \
+      --open-files-limit=65535 \
+      --back-log=500 \
+      --thread-cache-size=500 \
+      --max-allowed-packet=32M \
+      --max-connections=1000 \
+      --max-connect-errors=2000 \
+      --tmp-table-size=128M \
+      --max-heap-table-size=128M \
+      --query-cache-type=0 \
+      --innodb-buffer-pool-size=48G \
+      --innodb-buffer-pool-instances=8 \
+      --innodb-page-cleaners=8 \
+      --innodb-flush-method=O_DIRECT \
+      --innodb-log-file-size=1024M \
+      --innodb-log-buffer-size=128M \
+      --innodb-buffer-pool-dump-pct=75 \
+      --innodb-io-capacity=1500 \
+      --innodb-io-capacity-max=2500 \
+      --innodb-flush-log-at-trx-commit=2 \
+      --innodb-lru-scan-depth=256 \
+      --server-id=02 \
+      --gtid-domain-id=99 \
+      --log-bin=/data/mysql/slave-bin \
+      --log-bin-index=/data/mysql/slave-bin.index \
+      --binlog-format=mixed \
+      --expire-logs-days=30
+
+# postgres	  
+docker run -d \
+  --name mypg14-packer \
+  -p 15432:5432 \
+  -e PGDATABASE=wordpress \
+  -e PGUSERNAME=wordpress \
+  -e PGPASSWORD=vSTJ9876 \
+  -e PGADMPWD=Foxconn456 \
+  pg14-packer:latest \
+  --timezone='Asia/Shanghai' \
+  --archive-mode='on' \
+  --listen-addresses='*'
+	  

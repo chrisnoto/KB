@@ -681,7 +681,7 @@ Unseal Key 4: T5qk+pM19KxjC1I8JtfQH/eUT7jjkkBShPAtDnu57xiu
 Unseal Key 5: cefsYXqK47aVU7w5+roqn2DNL2T5LaELXZFb4J4j2n5Z
 
 Initial Root Token: hvs.TT5BgZoCQ54bMqWfz7DhX20g
-   59  vault operator unseal Ow6MfmabLp4UpVF/k6LBwbkDASXaHglRZNcjQGtn1ztg
+   59  vault operator unseal Ow6MfmabLp4UpVF/k6LBwbkDAcSXaHglRZNcjQGtn1ztg
    60  vault operator unseal FjtJbKkbtxyeUJhUNJmIjgaEWPlbvasE7gqLeuhOMlf6
    61  vault operator unseal TpfVHNMD7vsKX0EthpnW/oW1u6ZUuMV67ha+QcRf1oDk
 
@@ -732,6 +732,23 @@ token_renewable      true
 token_policies       ["default" "es-policy" "nomad-server"]
 identity_policies    []
 policies             ["default" "es-policy" "nomad-server"]
+
+[root@xlhcesbges04 ~]# vault token create -policy admin -period 144h -orphan
+WARNING! The following warnings were returned from Vault:
+
+  * Endpoint ignored these unrecognized parameters: [display_name entity_alias
+  explicit_max_ttl no_parent num_uses period policies renewable ttl type]
+
+Key                  Value
+---                  -----
+token                hvs.CAESIDETUE5Dj1jWo8R8t9P7kNFrVR0tahjL2iBJQJHQoZuHGh4KHGh2cy5USGdwb0VZRlBmblg1MWZwekZJWnFqUHU
+token_accessor       ylvBGaex8z1CBlFESeMPERRq
+token_duration       144h
+token_renewable      true
+token_policies       ["admin" "default"]
+identity_policies    []
+policies             ["admin" "default"]
+
 
 开启vault audit
 [root@xlhcesbges04 vault]# vault audit enable file file_path=/opt/vault/log/vault_audit.log -description="Vault audit log"
