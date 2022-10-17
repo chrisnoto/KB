@@ -1,0 +1,155 @@
+variable "vm_count" {
+  type        = number
+  description = "number of vm"
+  default     = 1
+}
+
+data "template_file" "user_data" {
+  count    = var.vm_count
+  template = "${file("${path.module}/files/user_data.cloud_config")}"
+  vars = {
+    pubkey   = file(pathexpand("~/.ssh/id_rsa.pub"))
+    hostname = "prom${count.index + 1}"
+    domain   = "cesbg.foxconn"
+  }
+}
+
+# create a local copy of the file,to transfer to Proxmox 
+resource "local_file" "cloud_init_user_data" {
+  count        = var.vm_count
+  content      = data.template_file.user_data[count.index].rendered
+  filename     = "${path.module}/files/user_data_${count.index}.cfg"
+}
+
+# transfer the local copy to proxmox host
+resource "null_resource" "cloud_init_user_data_files" {
+  count        = var.vm_count
+  connection {
+    type       = "ssh"
+    user       = "root"
+    host       = "10.67.50.162"
+    password   = "vSTJ456789"
+  }
+
+  provisioner "file" {
+    source = local_file.cloud_init_user_data[count.index].filename
+    destination = "/var/lib/vz/snippets/prom_user_data-${count.index}.yml"
+  }
+}
+
+resource "proxmox_vm_qemu" "prom" {
+  depends_on = [
+    null_resource.cloud_init_user_data_files
+  ]
+
+  count        = var.vm_count
+  name         = "prom${count.index + 1}"
+  target_node  = "pve1"
+  pool         = "chensen"
+  clone        = "centos7.9-cloudinit"
+  agent        = 1
+  full_clone   = false
+  cores        = 4
+  sockets      = 2
+  boot         = "order=scsi0;ide2"
+  kvm          = true
+  memory       = "16384"
+  disk {
+    storage    = "prod"
+    size       = "60G"
+    type       = "scsi"
+  }
+  disk {
+    storage    = "prod"
+    size       = "100G"
+    type       = "scsi"
+  }
+  network {
+    bridge     = "vmbr0"
+    firewall   = false
+    link_down  = false
+    model      = "virtio"
+  }
+  ipconfig0= "ip=10.67.50.5${count.index + 2}/23,gw=10.67.50.1"
+  cicustom = "user=local:snippets/promsrv_user_data-${count.index}.yml"
+  ciuser   = "centos"
+}
+
+output "vm_ip_address" {
+  description = "The IP addr of VM"
+  value = proxmox_vm_qemu.prom.*.default_ipv4_address
+}
+
+resource "local_file" "inventory" {
+  depends_on = [
+    proxmox_vm_qemu.prom
+  ]
+
+  filename = "files/hosts"
+  content = <<EOF
+  [app]
+  ${proxmox_vm_qemu.prom[0].default_ipv4_address}
+  EOF
+}
+
+resource "local_file" "prom_datasource" {
+  depends_on = [
+    proxmox_vm_qemu.prom
+  ]
+
+  filename = "files/promsrv/grafana/provisioning/datasources/datasource.yml"
+  content = <<EOF
+apiVersion: 1
+datasources:
+- name: prometheus
+  type: prometheus
+  url: http://${proxmox_vm_qemu.prom[0].default_ipv4_address}:9090
+  isDefault: true
+  access: proxy
+  editable: true
+EOF
+}
+
+resource "local_file" "alertmanager" {
+  depends_on = [
+    proxmox_vm_qemu.prom
+  ]
+
+  filename = "files/promsrv/alertmanager/alertmanager.yml"
+  content = <<EOF
+global:
+  # global parameter
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'alertsnitch'
+
+receivers:
+- name: 'alertsnitch'
+  webhook_configs:
+  - url: 'http://${proxmox_vm_qemu.prom[0].default_ipv4_address}:9567/webhook'
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+
+  ${proxmox_vm_qemu.prom[0].default_ipv4_address}
+  EOF
+}
+
+resource "null_resource" "ansible-playbook" {
+  depends_on = [
+    local_file.inventory
+  ]
+
+  provisioner "local-exec" {
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u root -i files/hosts files/docker.yaml -e 'ansible_ssh_pass=Foxconn123'"
+  }
+}

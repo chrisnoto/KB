@@ -1,0 +1,22 @@
+global:
+  # global parameter
+  resolve_timeout: 5m
+  
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'alertsnitch'
+  
+receivers:
+- name: 'alertsnitch'
+  webhook_configs:
+  - url: 'http://10.67.50.52:9567/webhook'
+  
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']

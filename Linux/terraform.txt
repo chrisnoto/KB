@@ -54,6 +54,21 @@ resource "docker_container" "nginx" {
   }
 }
 
+# terraform init时指定共同的plugin目录，避免重复下载
+terraform init -plugin-dir=/root/terraform/plugins          #有问题
+
+# 污染某个resource,让它再次运行
+[root@rancher prometheus-vm]# terraform state list
+data.template_file.user_data[0]
+local_file.cloud_init_user_data[0]
+local_file.inventory
+null_resource.ansible-playbook
+null_resource.cloud_init_user_data_files[0]
+proxmox_vm_qemu.promsrv[0]
+[root@rancher prometheus-vm]# terraform taint null_resource.ansible-playbook
+Resource instance null_resource.ansible-playbook has been marked as tainted.
+
+
 #terraform proxmox_qemu_vm 建虚拟机
 #版本1 
 定义了变量ipaddr, 执行时需要输入变量 terraform plan -out vm-cloud.plan -var='ipaddr=10.67.51.44'; terraform apply "vm-cloud.plan"

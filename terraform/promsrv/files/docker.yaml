@@ -1,0 +1,125 @@
+---
+- hosts: all
+  gather_facts: yes
+  tasks:
+    - name: install lvm tool and docker-ce
+      yum:
+        state: present
+        name:
+         - docker-ce
+         - python-docker-py
+         - lvm2
+
+    - name: Print disk result
+      set_fact:
+        disks: "{{ disks|default([]) + ['/dev/' + item.key] }}"
+      when:
+      - not item.value.partitions
+      - not item.value.holders
+      - item.key | regex_search ("sd")
+      with_dict: "{{ ansible_devices }}"
+
+    - name: create datavg
+      lvg:
+        vg: datavg
+        pvs: "{{ disks | join(',') }}"
+      when: disks is defined
+
+    - name: create docker LV
+      lvol:
+        vg: datavg
+        lv: docker
+        size: 100%VG
+      when: disks is defined
+
+    - name: format docker LV
+      filesystem:
+        dev: /dev/mapper/datavg-docker
+        fstype: xfs
+      when: disks is defined
+
+    - name: mount docker LV
+      mount:
+        fstype: xfs
+        src: /dev/mapper/datavg-docker
+        state: mounted
+        path: /docker
+      when: disks is defined
+
+    - name: change docker's data root
+      lineinfile:
+        path: /usr/lib/systemd/system/docker.service
+        regexp: '^ExecStart='
+        line: ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --data-root=/docker
+
+    - name: enable and start docker daemon
+      service:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: download image tarball files
+      get_url:
+        url: http://10.67.51.164/images/{{ item }}
+        dest: /root/
+      loop:
+        - prometheus.tar
+        - node-exporter.tar
+        - grafana.tar
+        - alertmanager.tar
+        - alertsnitch.tar
+        - postgres-14.tar
+        - vmstorage.1.82.0-cluster.tar
+        - vminsert.1.82.0-cluster.tar
+        - vmselect.1.82.0-cluster.tar
+      run_once: true
+
+    - name: load images from tarball files
+      docker_image:
+        name: /root/{{ item.image }}
+        source: load
+        load_path: /root/{{ item.tarball }}
+      with_items:
+        - {image: 'metrics/vminsert:v1.82.0-cluster',tarball: 'vminsert.1.82.0-cluster.tar'}
+        - {image: 'metrics/vmselect:v1.82.0-cluster',tarball: 'vmselect.1.82.0-cluster.tar'}
+        - {image: 'metrics/vmstorage:v1.82.0-cluster',tarball: 'vmstorage.1.82.0-cluster.tar'}
+        - {image: 'grafana/grafana:latest',tarball: 'grafana.tar'}
+        - {image: 'prom/prometheus:latest',tarball: 'prometheus.tar'}
+        - {image: 'prom/alertmanager:latest',tarball: 'alertmanager.tar'}
+        - {image: 'prom/node-exporter:latest',tarball: 'node-exporter.tar'}
+        - {image: 'bitnami/postgresql:latest',tarball: 'postgres-14.tar'}
+        - {image: 'registry.gitlab.com/yakshaving.art/alertsnitch:latest',tarball: 'alertsnitch.tar'}
+      run_once: true
+
+    - name: install docker-compose
+      get_url:
+        url: http://10.67.51.164/packages/docker-compose
+        dest: /usr/local/bin/
+        mode: '0755'
+
+    - name: transfter alertsnitch docker-compose files
+      copy:
+        src: alertsnitch
+        dest: /root
+
+    - name: change permission and owner of postgres sql files
+      file:
+        path: /root/alertsnitch/postgres/{{ item }}
+        mode: '0770'
+        owner: 1001
+      with_items:
+        - 0.0.1-bootstrap.sql
+        - 0.1.0-fingerprint.sql
+
+    - name: up alertsnitch
+      shell: |
+        docker-compose -f /root/alertsnitch/docker-compose.yml up -d
+
+    - name: transfter prometheus docker-compose file and configuration files
+      copy:
+        src: promsrv
+        dest: /root
+
+    - name: up prometheus
+      shell: |
+        docker-compose -f /root/promsrv/docker-compose.yml up -d

@@ -1,0 +1,58 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+alerting:
+  alertmanagers:
+    - static_configs:
+      - targets:
+        - alertmanager:9093
+      enable_http2: true
+      scheme: http
+      timeout: 10s
+      api_version: v1
+      follow_redirects: true
+rule_files:
+  - "rules/*.rule.yml"
+scrape_configs:
+- job_name: prometheus
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: /metrics
+  scheme: http
+  static_configs:
+  - targets: 
+    - localhost:9090
+    - node-exporter:9100
+- job_name: 'file_sd'
+  file_sd_configs:
+    - files:
+      - ./conf.d/*.json
+- job_name: 'nomad_sd'
+  params:
+    format: ['prometheus']
+  scheme: http
+  nomad_sd_configs:
+    - server: 'http://10.67.50.63:4646'
+- job_name: consul_sd
+  params:
+    format:
+    - prometheus
+  scrape_interval: 5s
+  scrape_timeout: 5s
+  metrics_path: /metrics
+  scheme: http
+  consul_sd_configs:
+  - server: '10.67.50.63:8500'
+    scheme: http
+    services:
+    - postgres-exporter
+    - nginx-prometheus-exporter
+  relabel_configs:
+    - source_labels: [__meta_consul_service_port]
+      regex: 9187
+      target_label: "job"
+      replacement: "postgres"
+    - target_label: "env"
+      replacement: "production"

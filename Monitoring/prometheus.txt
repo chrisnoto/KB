@@ -746,4 +746,22 @@ postgres=# select a.id,a.alertid,a.annotation,a.value,b.time from alertannotatio
     }
   ]
 }
+
+
+########### alert rules  ######
+rules热加载
+1 prometheus 进程启动时添加参数--web.enable-lifecycle
+2 prometheus.yml用通配符表示多个rules文件
+rule_files:
+  - "rules/*.rule.yml"
+3 使用API热加载rules
+ curl -X POST http://10.67.50.237:9090/-/reload
+检查rules是否有效 
+[root@promsrv dashboards]# docker exec -it cb6a758c9d8b sh
+/prometheus # promtool check rules /etc/prometheus/rules/*.yml
+Checking /etc/prometheus/rules/redis.rule.yml
+  SUCCESS: 3 rules found
+
+Checking /etc/prometheus/rules/test.rule.yml
+  SUCCESS: 1 rules found
  

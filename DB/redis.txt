@@ -269,6 +269,14 @@ blocked_clients：正在执行阻塞命令（例如blpop、brpop、brpoplpush）
 total_connections_received(info stats)：Redis自启动以来处理的客户端连接数总数。
 rejected_connections：Redis自启动以来拒绝的客户端连接数，需要重点监控。
 
+
+RDB运行后，开启AOF的正确方式
+1.在线修改配置
+config set appendonly=1
+2.检查appendonly.aof
+3.修改配置文件
+
+注意：如果配置文件开启AOF，默认从AOF启动，里面并没有任何数据
 ######redis-stat监控#######
 docker run --name redis-stat -p 63790:63790 -e 'TZ=Asia/Shanghai' -d insready/redis-stat --server 10.67.51.164 10.42.6.13 10.42.4.19 10.42.5.27
 kubernetes环境里,单独启动的docker可以利用指定dns来解析kubernetes service

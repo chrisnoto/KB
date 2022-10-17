@@ -297,6 +297,8 @@ lrwxrwxrwx. 1 root root       7 Dec 21 08:54 docker-thinpool_tmeta -> ../dm-0
 
 #######change docker data path #####
 ExecStart=/usr/bin/dockerd --graph=/data --insecure-registry=10.67.38.90         docker.service
+新版 20.10.12 参数已变
+ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock  --data-root=/data
 ########weave scope########
 scope launch 10.67.36.68 10.67.36.69 10.67.36.70 10.67.36.71
 ######docker healthcheck#######

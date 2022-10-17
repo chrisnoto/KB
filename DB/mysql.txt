@@ -584,3 +584,43 @@ stat("/root/.my.cnf", 0x7fff932d5b00)   = -1 ENOENT (No such file or directory)
 SET GLOBAL expire_logs_days=30;
 flush binary logs;
 同时修改配置文件，设置expire_logs_days=30
+
+# logrotate设置
+[root@zbxdb mysql]# cat /etc/logrotate.d/mysql
+# This logname can be set in /etc/my.cnf
+# by setting the variable "err-log"
+# in the [safe_mysqld] section as follows:
+#
+# [safe_mysqld]
+# err-log=/var/lib/mysql/mysqld.log
+#
+# If the root user has a password you have to create a
+# /root/.my.cnf configuration file with the following
+# content:
+#
+# [mysqladmin]
+# password = <secret>
+# user= root
+#
+# where "<secret>" is the password.
+#
+# ATTENTION: This /root/.my.cnf should be readable ONLY
+# for root !
+要配置/root/.my.cnf，并且只读
+/data/mysql/error.log {
+        create 640 mysql mysql
+        notifempty
+        weekly
+        rotate 3
+        missingok
+        compress
+    postrotate
+        # just if mysqld is really running
+        if test -x /usr/bin/mysqladmin && \
+           /usr/bin/mysqladmin ping &>/dev/null
+        then
+           /usr/bin/mysqladmin --local flush-error-log \
+              flush-engine-log flush-general-log flush-slow-log
+        fi
+    endscript
+}

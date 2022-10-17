@@ -14,6 +14,10 @@
 # 如何去掉特殊字符 “M-BM- ”
 sed -i 's/\xc2\xa0/ /g' proxmox-centos.json
 
+# 如何去掉特殊字符 ^M
+The easiest way is probably to use the stream editor sed to remove the ^M characters. Type this command: % sed -e "s/^M//" filename > newfilename
+To enter ^M, type CTRL-V, then CTRL-M. That is, hold down the CTRL key then press V and M in succession.
+
 # awk内做乘法计算，并打印整型
 [root@rancher ~]# free -b |awk '/Mem/{printf "%d\n",$2 * 0.7}'
 5741241139
