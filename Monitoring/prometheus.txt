@@ -677,7 +677,8 @@ services:
     restart: always
     image: 'bitnami/postgresql:latest'
     volumes:
-      - alertsnitch-db:/bitnami/postgresql        
+      - alertsnitch-db:/bitnami/postgresql   
+      - ~/postgres:/docker-entrypoint-initdb.d	  
     ports:
       - 5432:5432
     environment:
@@ -690,8 +691,6 @@ services:
     environment:
       ALERTSNITCH_DSN: user=postgres password=Foxconn123 host=10.67.50.237 dbname=postgres sslmode=disable
       ALERTSNITCH_BACKEND: postgres
-    volumes:
-      - ~/postgres:/docker-entrypoint-initdb.d       #这里 ~/postgres目录下的两个sql脚本并没有初始化时自动执行，需要去pg里手工执行建表等操作
     ports:
       - 9567:9567
     networks:

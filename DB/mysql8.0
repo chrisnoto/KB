@@ -19,3 +19,9 @@ create user 'test3'@'%' identified with caching_sha2_password AS '$A$005$THISISA
 使用明文密码
 mysql> create user 'test1'@'%' identified with mysql_native_password BY 'Foxconn123';
 create user 'test2'@'%' identified with caching_sha2_password BY 'Foxconn123';
+
+mysql表名忽略大小写  在mysql配置文件中添加
+lower_case_table_names =1
+
+
+

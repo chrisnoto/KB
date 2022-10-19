@@ -1,3 +1,4 @@
+\c postgres
 CREATE TABLE Model (
     ID INTEGER UNIQUE DEFAULT(1),
     version VARCHAR(20) NOT NULL,

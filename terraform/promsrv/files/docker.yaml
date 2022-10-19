@@ -69,6 +69,7 @@
         - alertmanager.tar
         - alertsnitch.tar
         - postgres-14.tar
+        - pg_exporter.tar
         - vmstorage.1.82.0-cluster.tar
         - vminsert.1.82.0-cluster.tar
         - vmselect.1.82.0-cluster.tar
@@ -88,6 +89,7 @@
         - {image: 'prom/alertmanager:latest',tarball: 'alertmanager.tar'}
         - {image: 'prom/node-exporter:latest',tarball: 'node-exporter.tar'}
         - {image: 'bitnami/postgresql:latest',tarball: 'postgres-14.tar'}
+        - {image: 'wrouesnel/postgres_exporter:latest',tarball: 'pg_exporter.tar'}
         - {image: 'registry.gitlab.com/yakshaving.art/alertsnitch:latest',tarball: 'alertsnitch.tar'}
       run_once: true
 
@@ -97,28 +99,19 @@
         dest: /usr/local/bin/
         mode: '0755'
 
-    - name: transfter alertsnitch docker-compose files
+    - name: transfter prometheus docker-compose file and configuration files
       copy:
-        src: alertsnitch
+        src: promsrv
         dest: /root
 
     - name: change permission and owner of postgres sql files
       file:
-        path: /root/alertsnitch/postgres/{{ item }}
+        path: /root/promsrv/postgres/{{ item }}
         mode: '0770'
         owner: 1001
       with_items:
         - 0.0.1-bootstrap.sql
         - 0.1.0-fingerprint.sql
-
-    - name: up alertsnitch
-      shell: |
-        docker-compose -f /root/alertsnitch/docker-compose.yml up -d
-
-    - name: transfter prometheus docker-compose file and configuration files
-      copy:
-        src: promsrv
-        dest: /root
 
     - name: up prometheus
       shell: |

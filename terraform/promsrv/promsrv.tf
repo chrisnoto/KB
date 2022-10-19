@@ -9,7 +9,7 @@ data "template_file" "user_data" {
   template = "${file("${path.module}/files/user_data.cloud_config")}"
   vars = {
     pubkey   = file(pathexpand("~/.ssh/id_rsa.pub"))
-    hostname = "prom${count.index + 1}"
+    hostname = "prom${count.index + 2}"
     domain   = "cesbg.foxconn"
   }
 }
@@ -43,7 +43,7 @@ resource "proxmox_vm_qemu" "prom" {
   ]
 
   count        = var.vm_count
-  name         = "prom${count.index + 1}"
+  name         = "prom${count.index + 2}"
   target_node  = "pve1"
   pool         = "chensen"
   clone        = "centos7.9-cloudinit"
@@ -92,57 +92,6 @@ resource "local_file" "inventory" {
   EOF
 }
 
-resource "local_file" "prom_datasource" {
-  depends_on = [
-    proxmox_vm_qemu.prom
-  ]
-
-  filename = "files/promsrv/grafana/provisioning/datasources/datasource.yml"
-  content = <<EOF
-apiVersion: 1
-datasources:
-- name: prometheus
-  type: prometheus
-  url: http://${proxmox_vm_qemu.prom[0].default_ipv4_address}:9090
-  isDefault: true
-  access: proxy
-  editable: true
-EOF
-}
-
-resource "local_file" "alertmanager" {
-  depends_on = [
-    proxmox_vm_qemu.prom
-  ]
-
-  filename = "files/promsrv/alertmanager/alertmanager.yml"
-  content = <<EOF
-global:
-  # global parameter
-  resolve_timeout: 5m
-
-route:
-  group_by: ['alertname']
-  group_wait: 10s
-  group_interval: 10s
-  repeat_interval: 1h
-  receiver: 'alertsnitch'
-
-receivers:
-- name: 'alertsnitch'
-  webhook_configs:
-  - url: 'http://${proxmox_vm_qemu.prom[0].default_ipv4_address}:9567/webhook'
-
-inhibit_rules:
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
-    equal: ['alertname', 'dev', 'instance']
-
-  ${proxmox_vm_qemu.prom[0].default_ipv4_address}
-  EOF
-}
 
 resource "null_resource" "ansible-playbook" {
   depends_on = [

@@ -1,7 +1,43 @@
 version: "3.7"
 services:
+  postgresql-server:
+    restart: always
+    image: 'bitnami/postgresql:latest'
+    container_name: mydb
+    volumes:
+      - alertsnitch-db:/bitnami/postgresql
+      - ./postgres/0.0.1-bootstrap.sql:/docker-entrypoint-initdb.d/0.0.1-bootstrap.sql
+      - ./postgres/0.1.0-fingerprint.sql:/docker-entrypoint-initdb.d/0.1.0-fingerprint.sql
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: "pg_isready -U postgres && psql 'user=postgres password=Foxconn123 host=mydb dbname=postgres sslmode=disable' --list"
+      interval: 10s
+      timeout: 10s
+      retries: 2
+    environment:
+      - POSTGRESQL_POSTGRES_PASSWORD=Foxconn123
+      - POSTGRESQL_DATABASE=grafana
+      - POSTGRESQL_USERNAME=grafana
+      - POSTGRESQL_PASSWORD=Foxconn123
+      - POSTGRESQL_INITSCRIPTS_USERNAME=postgres
+      - POSTGRESQL_INITSCRIPTS_PASSWORD=Foxconn123
+
+  alertsnitch:
+    image: 'registry.gitlab.com/yakshaving.art/alertsnitch:latest'
+    container_name: alertsnitch
+    environment:
+      ALERTSNITCH_DSN: user=postgres password=Foxconn123 host=mydb dbname=postgres sslmode=disable
+      ALERTSNITCH_BACKEND: postgres
+    ports:
+      - 9567:9567
+    depends_on:
+      postgresql-server:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus
     user: "0"
     volumes:
       - ~/promsrv/prometheus:/etc/prometheus
@@ -9,12 +45,14 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.size=490GB'
+      - '--storage.tsdb.retention.size=90GB'
       - '--web.enable-lifecycle'
     ports:
       - 9090:9090
+
   alertmanager:
     image: prom/alertmanager
+    container_name: alertmanager
     volumes:
       - ~/promsrv/alertmanager/alertmanager.yml:/etc/prometheus/alertmanager.yml
       - alertmanager:/data
@@ -27,8 +65,10 @@ services:
       - 9082:9082
     links:
       - prometheus
+
   grafana:
     image: grafana/grafana:latest
+    container_name: grafana
     volumes:
       - ~/promsrv/grafana/provisioning:/etc/grafana/provisioning
       - ~/promsrv/grafana/grafana.ini:/etc/grafana/grafana.ini
@@ -36,15 +76,15 @@ services:
     ports:
       - 3000:3000
     environment:
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_BASIC_ENABLED=false
+      - GF_AUTH_BASIC_ENABLED=true
       - GF_ENABLE_GZIP=true
       - GF_USERS_DEFAULT_THEME=light
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=Foxconn123
       - 'GF_PATHS_CONFIG=/etc/grafana/grafana.ini'
-    links:
-      - prometheus
+    depends_on:
+      postgresql-server:
+        condition: service_healthy
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -52,7 +92,23 @@ services:
     restart: unless-stopped
     expose:
       - 9100
+
+  pg-exporter:
+    image: wrouesnel/postgres_exporter:latest
+    container_name: pg-exporter
+    restart: unless-stopped
+    ports:
+      - 9187:9187
+    environment:
+      - DATA_SOURCE_URI=mydb:5432/postgres?sslmode=disable
+      - DATA_SOURCE_USER=postgres
+      - DATA_SOURCE_PASS=Foxconn123
+    depends_on:
+      postgresql-server:
+        condition: service_healthy
+
 volumes:
   prometheus: 
   alertmanager:
   grafana:
+  alertsnitch-db:

@@ -1,3 +1,4 @@
+\c postgres
 ALTER TABLE Alert 
     ADD fingerprint TEXT NOT NULL default ''
 ;
