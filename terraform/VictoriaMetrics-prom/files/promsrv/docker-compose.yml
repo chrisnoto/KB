@@ -45,7 +45,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.size=90GB'
+      - '--storage.tsdb.retention.time=2d'
       - '--web.enable-lifecycle'
     ports:
       - 9090:9090
@@ -85,6 +85,80 @@ services:
     depends_on:
       postgresql-server:
         condition: service_healthy
+      vmselect:
+        condition: service_started
+
+  vmstorage-1:
+    container_name: vmstorage-1
+    image: victoriametrics/vmstorage:v1.82.0-cluster
+    ports:
+      - 8482
+      - 8400
+      - 8401
+    volumes:
+      - strgdata-1:/storage
+    command:
+      - '--storageDataPath=/storage'
+    restart: always
+
+  vmstorage-2:
+    container_name: vmstorage-2
+    image: victoriametrics/vmstorage:v1.82.0-cluster
+    ports:
+      - 8482
+      - 8400
+      - 8401
+    volumes:
+      - strgdata-2:/storage
+    command:
+      - '--storageDataPath=/storage'
+    restart: always
+
+  vminsert:
+    container_name: vminsert
+    image: victoriametrics/vminsert:v1.82.0-cluster
+    depends_on:
+      - "vmstorage-1"
+      - "vmstorage-2"
+    command:
+      - '--storageNode=vmstorage-1:8400'
+      - '--storageNode=vmstorage-2:8400'
+    ports:
+      - 8480:8480
+    restart: always
+
+  vmselect:
+    container_name: vmselect
+    image: victoriametrics/vmselect:v1.82.0-cluster
+    depends_on:
+      - "vmstorage-1"
+      - "vmstorage-2"
+    command:
+      - '--storageNode=vmstorage-1:8401'
+      - '--storageNode=vmstorage-2:8401'
+      - '--vmalert.proxyURL=http://vmalert:8880'
+    ports:
+      - 8481:8481
+    restart: always
+  vmalert:
+    container_name: vmalert
+    image: victoriametrics/vmalert:v1.82.0
+    depends_on:
+      - "vmselect"
+      - "vminsert"
+      - "alertmanager"
+    ports:
+      - 8880:8880
+    volumes:
+      - ~/promsrv/vmalert/:/etc/alerts/
+    command:
+      - "-datasource.url=http://vmselect:8481/select/0/prometheus"
+      - "-remoteWrite.url=http://vminsert:8480/insert/0/prometheus"
+      - "-remoteRead.url=http://vmselect:8481/select/0/prometheus"
+      - "-notifier.url=http://alertmanager:9093"
+      - "-rule=/etc/alerts/*.yml"
+      - "-configCheckInterval=30s"
+
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -112,3 +186,5 @@ volumes:
   alertmanager:
   grafana:
   alertsnitch-db:
+  strgdata-1:
+  strgdata-2:

@@ -2,6 +2,10 @@ global:
   scrape_interval: 15s
   scrape_timeout: 10s
   evaluation_interval: 15s
+  external_labels:
+    datacenter: TJ
+remote_write:
+  - url: http://vminsert:8480/insert/0/prometheus/
 alerting:
   alertmanagers:
     - static_configs:

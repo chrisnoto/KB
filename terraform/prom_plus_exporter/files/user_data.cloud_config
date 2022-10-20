@@ -1,0 +1,7 @@
+#cloud-config
+
+fqdn: ${hostname}.${domain}
+ssh_authorized_keys:
+  - ${pubkey}
+runcmd: 
+  - [yum,install,"-y",qemu-guest-agent]

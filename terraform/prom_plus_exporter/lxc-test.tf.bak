@@ -1,0 +1,21 @@
+resource "proxmox_lxc" "pg01" {
+  hostname = "pg01"
+  cores    = 2
+  memory   = "4096"
+  swap     = "512"
+  network {
+    name     = "eth0"
+    bridge   = "vmbr0"
+    ip       = "10.67.50.59/23"
+    gw       = "10.67.50.1"
+  }
+  rootfs {
+    storage = "prod"
+    size    = "20G"
+  }
+  ostemplate   = "local:vztmpl/debian-10-turnkey-postgresql_16.1-1_amd64.tar.gz"
+  password     = "Foxconn123$%^"
+  target_node  = "pve1"
+  unprivileged = true
+  start        = true
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "targets": [ "10.67.36.61:9187" ],
+    "labels": {
+      "env": "production",
+      "job": "postgres"
+    }
+  },
+  {
+    "targets": [ "10.67.50.52:9187" ],
+    "labels": {
+      "env": "production",
+      "job": "postgres"
+    }
+  }
+]
+

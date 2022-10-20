@@ -1,0 +1,17 @@
+[
+  {
+    "targets": [ "10.67.50.51:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node-exporter"
+    }
+  },
+  {
+    "targets": [ "10.67.51.162:9100" ],
+    "labels": {
+      "env": "production",
+      "job": "node-exporter"
+    }
+  }
+]
+

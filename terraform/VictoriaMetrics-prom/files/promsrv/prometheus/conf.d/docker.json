@@ -1,0 +1,9 @@
+[
+  {
+    "targets": [ "10.67.36.58:9417" ],
+    "labels": {
+      "env": "production",
+      "job": "docker"
+    }
+  }
+]

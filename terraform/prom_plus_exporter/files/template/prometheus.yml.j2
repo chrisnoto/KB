@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    datacenter: {{ ansible_hostname }}
+remote_write:
+  - url: http://10.67.50.51:8480/insert/0/prometheus/
+scrape_configs:
+- job_name: prometheus
+  honor_timestamps: true
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  metrics_path: /metrics
+  scheme: http
+  static_configs:
+  - targets: 
+    - localhost:9090
+- job_name: 'file_sd'
+  file_sd_configs:
+    - files:
+      - ./conf.d/*.json

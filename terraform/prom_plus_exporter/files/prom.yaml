@@ -1,0 +1,137 @@
+---
+- hosts: all
+  gather_facts: yes
+  tasks:
+    - name: install lvm tool and docker-ce
+      yum:
+        state: present
+        name:
+         - docker-ce
+         - python-docker-py
+         - lvm2
+
+    - name: Print disk result
+      set_fact:
+        disks: "{{ disks|default([]) + ['/dev/' + item.key] }}"
+      when:
+      - not item.value.partitions
+      - not item.value.holders
+      - item.key | regex_search ("sd")
+      with_dict: "{{ ansible_devices }}"
+
+    - name: create datavg
+      lvg:
+        vg: datavg
+        pvs: "{{ disks | join(',') }}"
+      when: disks is defined
+
+    - name: create docker LV
+      lvol:
+        vg: datavg
+        lv: docker
+        size: 100%VG
+      when: disks is defined
+
+    - name: format docker LV
+      filesystem:
+        dev: /dev/mapper/datavg-docker
+        fstype: xfs
+      when: disks is defined
+
+    - name: mount docker LV
+      mount:
+        fstype: xfs
+        src: /dev/mapper/datavg-docker
+        state: mounted
+        path: /docker
+      when: disks is defined
+
+    - name: change docker's data root
+      lineinfile:
+        path: /usr/lib/systemd/system/docker.service
+        regexp: '^ExecStart='
+        line: ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --data-root=/docker
+
+    - name: enable and start docker daemon
+      service:
+        name: docker
+        enabled: yes
+        state: started
+
+    - name: download image tarball files
+      get_url:
+        url: http://10.67.51.164/images/{{ item }}
+        dest: /root/
+      loop:
+        - prometheus.tar
+        - node-exporter.tar
+        - docker-exporter.tar   
+        - postgres-14.tar
+        - pg_exporter.tar
+        - redis.tar
+        - oliver006-redis_exporter.tar
+        - mongo.tar
+        - mongo-express.tar
+        - mongodb-exporter.tar
+        - mysql5.7.26.tar
+        - mysqld-exporter.tar
+
+    - name: load images from tarball files
+      docker_image:
+        name: /root/{{ item.image }}
+        source: load
+        load_path: /root/{{ item.tarball }}
+      with_items:
+        - {image: 'prom/prometheus:latest',tarball: 'prometheus.tar'}
+        - {image: 'prom/node-exporter:latest',tarball: 'node-exporter.tar'}
+        - {image: 'prometheusnet/docker_exporter:latest',tarball: 'docker-exporter.tar'}
+        - {image: 'bitnami/postgresql:latest',tarball: 'postgres-14.tar'}
+        - {image: 'wrouesnel/postgres_exporter:latest',tarball: 'pg_exporter.tar'}
+        - {image: 'redis:latest',tarball: 'redis.tar'}
+        - {image: 'oliver006/redis_exporter:latest',tarball: 'oliver006-redis_exporter.tar'}
+        - {image: 'mongo:latest',tarball: 'mongo.tar'}
+        - {image: 'mongo-express:latest',tarball: 'mongo-express.tar'}
+        - {image: 'percona/mongodb_exporter:0.34-amd64',tarball: 'mongodb-exporter.tar'}
+        - {image: 'mysql:5.7.26',tarball: 'mysql5.7.26.tar'}
+        - {image: 'prom/mysqld-exporter:latest',tarball: 'mysqld-exporter.tar'}
+
+    - name: install docker-compose
+      get_url:
+        url: http://10.67.51.164/packages/docker-compose
+        dest: /usr/local/bin/
+        mode: '0755'
+
+    - name: transfter prometheus docker-compose file and configuration files
+      copy:
+        src: promsrv
+        dest: /root
+
+    - name: change permission and owner of postgres sql files
+      file:
+        path: promsrv/postgres/{{ item }}
+        mode: '0770'
+        owner: 1001
+      with_items:
+        - 0.0.1-bootstrap.sql
+
+    - name: copy prometheus.yml file
+      template:
+        src: template/prometheus.yml.j2
+        dest: /root/promsrv/prometheus/prometheus.yml
+
+    - name: copy prometheus file_sd template files
+      template:
+        src: template/{{ item.template }}
+        dest: /root/promsrv/prometheus/conf.d/{{ item.file }}
+      with_items:
+        - {template: 'linux.json.j2',file: 'linux.json'}
+        - {template: 'docker.json.j2',file: 'docker.json'}
+        - {template: 'mongo.json.j2',file: 'mongo.json'}
+        - {template: 'mysqld.json.j2',file: 'mysqld.json'}
+        - {template: 'postgres.json.j2',file: 'postgres.json'}
+        - {template: 'redis.json.j2',file: 'redis.json'}
+
+    - name: up prometheus
+      shell: |
+        docker-compose -f /root/promsrv/docker-compose.yml up -d
+

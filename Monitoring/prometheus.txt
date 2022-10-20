@@ -171,6 +171,13 @@ SendSIGKILL=no
 SyslogIdentifier=prometheus_haproxy_exporter
 Restart=always
 
+
+mysql dashboard  "buffer pool size of total ram"
+(mysql_global_variables_innodb_buffer_pool_size{instance="$host"} * 100) / on (instance) node_memory_MemTotal_bytes{instance="$host"} 替换为
+(label_replace(mysql_global_variables_innodb_buffer_pool_size{instance="$host"}, "nodename", "$1", "instance", "(.*):.*") * 100) / on(nodename) (label_replace(node_memory_MemTotal_bytes, "nodename", "$1", "instance", "(.*):.*"))
+
+
+
 [Install]
 WantedBy=multi-user.target
 
@@ -337,69 +344,6 @@ root@u1804:/var/snap/prometheus/18/conf.d# cat node_exporter.json
   },
   {
     "targets": [ "10.67.36.65:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.36.73:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.50.200:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.2:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.48.194:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.147:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.148:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.149:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.146:9100" ],
-    "labels": {
-      "env": "production",
-      "job": "node_exporter"
-    }
-  },
-  {
-    "targets": [ "10.67.51.145:9100" ],
     "labels": {
       "env": "production",
       "job": "node_exporter"
