@@ -1,0 +1,336 @@
+Top Redis Use Cases
+Below are the top use cases of redis as follows. There are multiple use cases defined in redis as follows:
+
+1 Session cache – This is the most important use case for redis. Redis is important when implementing an in-memory cache to reduce data latency. Redis serves requested items in milliseconds, allowing us to easily
+ scale high loads without expanding the backend. A database query will cache used objects such as images and metadata files.
+Queues, chat, and messaging – Redis will support the sub and pub by using pattern matching and data structures variety which are defined in sorted sets and lists. This allows the redis to support the feeds of s
+ocial media, chat rooms, and comments of real streams. The lightweight queue will be created and implemented by the redis data structure. List will offer the atomic operations.
+Gaming leaderboards – Redis is a very popular choice for developing game leaderboards. We need to use only data structures which provide unique elements while maintaining a list of sorted user scores. We can also
+ use the sorted sets for handling the data of time series at the time of using in timestamps.
+Session store – Redis stores data in the memory by using high availability, it is a very good choice for developers to manage and store the session data. Redis is responsible for user-specific personalization.
+Rich media streaming – Redis provides fast data storage in memory. Redis also stores user metadata about user profiles and will view user information to enable streaming video on multiple desktops or mobiles at the same time.
+Geospatial – Redis manages geospatial data in order to scale the speed. We use commands like GEODIST and GEOADD to store and process geospatial data in real-time. Using redis, we can also use the location-based feature.
+Machine learning – In data-driven applications, machine learning is required. For the application of fraud detection, a real-time binding that is processing data is live and will make decisions.
+Real-time analytics – Redis is used in streaming solutions such as Amazon Kinesis and Apache Kafka. It is a memory structure that stores data for ingesting processes with a specified latency.
+Redis Use Cases for Developers
+There are multiple use cases available for developers in redis. Below is the use case of redis for developers as follows:
+
+Fast fraud detection for decisions in real-time – The cost of fraud is increasing. Opportunities will follow the growth that has been leading the way in the digital space by utilizing retailers, fraudsters, and gaming. 
+Several companies are using ground-based biometrics to track down fraudsters. This is not a unique challenge; according to data, online transactions increased faster after Covid-19.
+Modern experiences in gaming – The successful gaming application requires user experience which posted challenges in infrastructure specifically for real-time games of multi-player. The user is launching the game connects
+ to the gaming server and collaborates with the players. Experience in gaming includes real-time transactions which involve money. In gaming applications, developers will rely on low latency and deliver the best performance
+ and unlimited scales. As we all know, the Indian team releases their game rosters prior to the start of the match. This contains massive data but does not include the impact on customer experience, particularly in terms of time.
+Ecommerce framework of omni channel – At the time of creating an online business digital presence, it will curve the massive experience. The modern multi-channel retailer is used real-time inventory for optimizing the
+ inventory. The developers who were developing applications found it difficult to maintain and build these systems.
+Real-time analytics with new revenue streams – In day-to-day life businesses requires software that instantly collects and stores large volumes of data. Many technologies support complex and large ingest for streaming 
+real-time data from the application and the internet. Data is analyzed quickly using these applications in order to make quick business decisions. The best example of using redis is a data ingestion, which demonstrated high
+ performance.
+Painless business scalability – Using a new work as an example, which is used to build cloud-based suites for the software industry. While pursuing extraordinary growth, organizations will stain their capability in 
+application architecture.
+=============================================================================Redis 4.0.0-RC1 release=============================================================================
+Redis 4.0.0-RC1 (version number 3.9.101) is the first release candidate of
+Redis 4.0. It is not a production quality release but all the major features
+received some testing at this point, the release in feature freeze excluding
+things that are considered in the middle ground between fixes and improvements.
+
+Redis 4.0 is not called 3.4 because it is a major release that adds a number
+of important and non trivial features. Many core functionalities of Redis were
+seriously reworked. In the next release candidates, with your help, we'll gain
+informations about the stability level of this release and will produce a new
+RC every 2-4 weeks. When the entity and frequency of bug reports will slow down
+under a certain level, Redis 4.0 final will be released.
+
+As usually, certain changes to Cluster and Sentinel may not follow the Redis
+release cycle and could be incorporated into Redis 4.0 at RC stage or even
+after the final version, every time the changes are considered to benefit
+the user base enough to be worth incorporating them ASAP without waiting
+for Redis 4.2.
+
+So, what's new in Redis 4.0?
+
+Major features
+---
+
+* Redis modules system. Redis now allows developers to write modules that can extend the Redis functionalities and implement new data types. The module API implements a complete abstraction layer
+ that separates the Redis core from the module implementation, allowing the same module to be loaded by different versions of Redis without modifications. See the modules documentation here for 
+ more info: https://github.com/antirez/redis/blob/unstable/src/modules/INTRO.md
+
+* Partial Replication (PSYNC) version 2. The replication protocol was enhanced (in a backward compatible way, so that 4.0 can still act as a slave of older instances) in order to be able to partially
+ resynchronize slaves and masters in conditions where it was impossible in the past: after a master switch because of a failover and when a slave instance is restared. Even masters turned into slaves 
+ will usually be able to partially resynchronize with the new master, if the new master was a former slave of the old master instance. The way the replication work for chained slaves (sub-slaves) is 
+ now very different, and each slave receives the same replication stream generated by the top-level master.
+
+* Cache eviction improvements. Redis 4.0 implements LFU (Least Frequently Used) as a new eviction algorithm, and improves the functionality, performances and precision of the existing algorithms. This 
+blog post contains info about the changes: http://antirez.com/news/109
+
+* Lazy freeing of keys. Redis is now able to delete keys in the background in a different thread without blocking the server. The new `UNLINK` command is the same as `DEL` but working in a non blocking
+ way. Similarly an `ASYNC` option was added to `FLUSHALL` and `FLUSHDB` in order to let the entire dataset or a single database to be freed asynchronously.
+
+* Mixed RDB-AOF format. If enabled the new format is used when rewriting the AOF file: the rewrite uses the more compact and faster to generate RDB format, and an AOF stream is appended to the file. This
+ allows faster rewrites and reloads when using the AOF persistence.
+
+* A new MEMORY command, able to perform memory analysis of different kinds: troubleshooting of memory issues (with MEMORY DOCTOR, similar to LATENCY DOCTOR), reporting of the amount of memory used by a 
+single key, more in-depth reporting of Redis memory usage compared to what the INFO command offers.
+
+* Redis Cluster support for NAT / Docker. There are new functionalities in order to force cluster instances to announce specific sets of IP address, client and bus ports, to the rest of the cluster, regardless
+ of the auto detected IP. This required a bus protocol change that will force users to mass-restart all the nodes of a Redis 3.2 installation in order to upgrade to 4.0.
+
+* Redis uses now less memory in order to store the same amount of data. The gain depends a lot on the kind of dataset stored.
+
+* Redis is now able to defragment the used memory and reclaim space incrementally
+while running. See the example `redis.conf` for more information.
+
+Smaller features
+---
+
+* Improvements to the RDB format to support 64 bit lengths, binary sorted set scores, and more. The RDB file check utility now uses the same code base of the one used by Redis itself in order to load the RDB file in memory.
+
+* SWAPDB command: ability to completely and immediately (no latency) replace two Redis databases.
+
+* Improvements to `dict.c`, the Redis hash table implementation.
+
+* Security improvements mapping POST and Host: commands to QUIT in order to prevent cross protocol scripting attacks.
+
+* RPUSHX and LPUSHX now accept a variable number of elements.
+
+* Reporting of additional memory used by copy on write in the INFO output.
+
+* Serious refactoring of many core parts of Redis.
+
+Migrating from 3.2 to 4.0
+=========================
+
+Redis 3.2 is mostly a strict subset of 4.0, you should not have any problem
+upgrading your application from 3.2 to 4.0. However this is a list of small
+non-backward compatible changes introduced in the 4.0 release:
+
+* The Redis Cluster bus protocol of 4.0 is no longer compatible with Redis 3.2.
+  This was needed in order to provide Docker / NAT compatibility to Redis
+  Cluster. SO in order to upgrade a Redis Cluster to 4.0, a mass restart of
+  all the instances is needed.
+
+* Redis Cluster CLUSTER NODES output is now slightly different. Nodes
+  addresses are now in the form host:port@bus-port instead of host:port.
+  Clients should use CLUSTER SLOTS in order to fetch the cluster configuration
+  however if they are still using CLUSTER NODES, they should be modified in
+  order to ignore the @bus-port part.
+
+* Writable slaves do not propagate writes to their sub-slaves, so writes to
+  writable slaves remain just local.
+
+* The RDB format changed. Redis 4.0 is still able to read 3.2 (and all the
+  past versions) files, but not the other way around.
+
+* Certain log formats and sentences are different in Redis 4.0.
+
+* Certain INFO fields, especially related to replication, are now different.
+
+* GEODIST, GEOPOS and GEOHASH return values changed for non existing keys:
+  Previously the return value was inconsistent between non existing key
+  and non existing elements. Now the return is always like if the key
+  contains no elements if the key does not exist. So, for instance,
+  "GEOHASH non_existing_key A B C" now returns an array of 3 NULL values
+  as it should. In general this change should not break compatibility with
+  the past since in the past two different forms were provided by the server
+  and the new behavior is one of the two.
+
+* The SLOWLOG command entires contain additional two fields: the client address
+  and name. This is documented in the SLOWLOG command online documentation.
+=============================================================================Redis 5 release=============================================================================
+Redis 5 is a release focused on a few important features. While Redis 4
+was very very focused on operations, Redis 5 changes are mostly user-facing,
+with the implementation of new data types and operations on top of existing
+types. The following are the major features of this release:
+
+1. The new Stream data type. https://redis.io/topics/streams-intro
+2. New Redis modules APIs: Timers, Cluster and Dictionary APIs.
+3. RDB now store LFU and LRU information.
+4. The cluster manager was ported from Ruby (redis-trib.rb) to C code
+   inside redis-cli. Check `redis-cli --cluster help` for more info.
+5. New sorted set commands: ZPOPMIN/MAX and blocking variants.
+6. Active defragmentation version 2.
+7. Improvemenets in HyperLogLog implementations.
+8. Better memory reporting capabilities.
+9. Many commands with sub-commands now have an HELP subcommand.
+10. Better performances when clients connect and disconnect often.
+11. Many bug fixes and other random improvements.
+12. Jemalloc was upgraded to version 5.1
+13. CLIENT UNBLOCK and CLIENT ID.
+14. The LOLWUT command was added. http://antirez.com/news/123
+15. We no longer use the "slave" word if not for API backward compatibility.
+16. Differnet optimizations in the networking layer.
+17. Lua improvements:
+    - Better propagation of Lua scripts to slaves / AOF.
+    - Lua scripts can now timeout and get in -BUSY state in the slave as well.
+18. Dynamic HZ to balance idle CPU usage with responsiveness.
+19. The Redis core was refactored and improved in many ways.
+Migrating from 4.0 to 5.0
+=========================
+
+Redis 4.0 is mostly a strict subset of 5.0, you should not have any problem
+upgrading your application from 4.0 to 5.0. However this is a list of small
+non-backward compatible changes introduced in the 5.0 release:
+
+* redis-cli now implements the cluster management tool. We still ship the
+  old redis-trib, but new fixes will be implemented only in redis-cli.
+  See `redis-cli --cluster help` for more info.
+
+* The RDB format changed. Redis 5.0 is still able to read 4.0 (and all the
+  past versions) files, but not the other way around.
+
+* Certain log formats and sentences are different in Redis 5.0.
+
+* Now by default maxmemory is ignored by slaves, and used only once a slave
+  is promoted to master. It means that in setups where you want slaves to
+  enforce maxmemory in an independent way from the master (that will anyway
+  stream the key eviction DEL commands), you should active this feature manually
+  and make sure you understand that it breaks consistency if writes are not
+  always idempotent. TLDR: the new behavior is much better for 99.999% of use
+  cases, revert it if you really know what you are doing.
+
+* Scripts are only replicated by their *effects* and not by sending EVAL/EVALSHA
+  to slaves or the AOF log itself. This is much better in the general case
+  and in the future we want to totally remove the other possiblity of
+  propagating scripts the old way (as EVAL). However you can still turn this
+  back to the default via the non-documented (if not here) Redis configuration
+  directive "lua-replicate-commands yes" or
+  "DEBUG lua-always-replicate-commands 0". However note that Redis 6 may
+  completely remove such feature.
+
+* Because of the above change related to scripts replication, certain Redis
+  commands that in Redis 4 had their result ordered lexicographically before
+  being passed to Lua via the return value of redis.call(), now have a behavior
+  more similar to calling the commands directly from a normal client. For
+  instance the ordering of elements returned by SMEMBERS or SDIFF is now
+  undetermined in Lua, exactly as it is by default when calling the commands
+  from a non-scripting context.
+  
+=============================================================================Redis 6 release=============================================================================
+
+Redis 6 improves Redis in a number of key areas and is one of the largest
+Redis releases in the history of the project, so here we'll list only
+the biggest features in this release:
+
+* The modules system now has a number of new APIs that allow module authors
+  to make things otherwise not possible in the past. It is possible to
+  store arbitrary module private data in RDB files, to hook on different
+  server events, capture and rewrite commands executions, block clients on
+  keys, and so forth. 
+* The Redis active expire cycle was rewritten for much faster eviction of keys
+  that are already expired. Now the effort is tunable.
+* Redis now supports SSL on all channels.
+* ACL support, you can define users that can run only certain commands and/or
+  can only access only certain keys patterns.
+* Redis now supports a new protocol called RESP3, which returns more
+  semantical replies: new clients using this protocol can understand just
+  from the reply what type to return to the calling program.
+* There is server-side support for client-side caching of key values. This
+  feature is still experimental and will get more changes during the next
+  release candidates, but you can already test it and read about it here:
+  https://redis.io/topics/client-side-caching
+* Redis can now optionally use threads to handle I/O, allowing to serve
+  2 times as much operations per second in a single instance when
+  pipelining cannot be used.
+* Diskless replication is now supported even on replicas: a replica is now
+  able, under certain conditions the user can configure, to load the RDB
+  in the first synchronization directly from the socket to the memory.
+* Redis-benchmark now supports a Redis Cluster mode.
+* SRANDMEMBER and similar commands have a better distribution.
+* Redis-cli improvements.
+* Systemd support rewritten.
+* A Redis Cluster proxy was released here:
+  https://github.com/artix75/redis-cluster-proxy
+* A Disque module for Redis was released here:
+  https://github.com/antirez/disque-module
+  
+Migrating from 5.0 to 6.0
+=========================
+
+Redis 6.0 is mostly a strict superset of 5.0, you should not have any problem
+upgrading your application from 5.0 to 6.0. However this is a list of small
+non-backward compatible changes introduced in the 6.0 release:
+
+* The SPOP <count> command no longer returns null when the set key does not
+  exist. Now it returns the empty set as it should and as happens when it is
+  called with a 0 argument. This is technically a fix, however it changes the
+  old behavior.  
+  
+=============================================================================Redis 7.0 GA=============================================================================
+Redis 7.0 includes several new user-facing features, significant performance
+optimizations, and many other improvements. It also includes changes that
+potentially break backwards compatibility with older versions. We urge users to
+review the release notes carefully before upgrading.
+
+In particular, users should be aware of the following changes:
+
+1. Redis 7 stores AOF as multiple files in a folder; see Multi-Part AOF below.
+2. Redis 7 uses a new version 10 format for RDB files, which is incompatible
+   with older versions.
+3. Redis 7 converts ziplist encoded keys to listpacks on the fly when loading
+   an older RDB format. Conversion applies to loading a file from disk or
+   replicating from a Redis master and will slightly increase loading time.
+4. See sections about breaking changes mentioned below.
+
+Here is a comprehensive list of changes in this release compared to 6.2.6.
+Each one includes the PR number that added it so that you can get more details
+at https://github.com/redis/redis/pull/<number>
+New Features
+============
+
+* Redis Functions: A new way to extend Redis with server-side scripts (#8693)
+  see https://redis.io/topics/functions-intro
+* ACL: Fine-grained key-based permissions and allow users to support multiple
+  sets of command rules with selectors (#9974)
+  see https://redis.io/topics/acl#key-permissions and https://redis.io/topics/acl#selectors.
+* Cluster: Sharded (node-specific) Pub/Sub support (#8621)
+  see https://redis.io/topics/pubsub#sharded-pubsub
+* First-class handling of sub-commands in most contexts (affecting ACL
+  categories, INFO commandstats, etc.) (#9504, #10147)
+* Command metadata and documentation (#10104)
+  see https://redis.io/commands/command-docs, https://redis.io/topics/command-tips
+* Command key-specs. A better way for clients to locate key arguments and their
+  read/write purpose (#8324, #10122, #10167)
+  see https://redis.io/topics/key-specs
+* Multi-Part AOF mechanism to avoid AOF rewrite overheads (#9788)
+* Cluster: Support for hostnames, instead of IP addresses only (#9530)
+* Improved management of memory consumed by network buffers, and an option to
+  drop clients when total memory exceeds a limit  (#8687)
+* Cluster: A mechanism for disconnecting cluster bus connections to prevent
+  uncontrolled buffer growth (#9774)
+* AOF: Timestamp annotations and support for point-in-time recovery (#9326)
+* Lua: support Function flags in EVAL scripts (#10126)
+  see https://redis.io/topics/eval-intro#eval-flags
+* Lua: Support RESP3 reply for Verbatim and Big-Number types (#9202)
+* Lua: Get Redis version via redis.REDIS_VERSION, redis.REDIS_VERSION_NUM (#10066)
+
+New user commands or command arguments
+--------------------------------------
+
+* ZMPOP, BZMPOP commands (#9484)
+* LMPOP, BLMPOP commands (#9373)
+* SINTERCARD, ZINTERCARD commands (#8946, #9425)
+* SPUBLISH, SSUBSCRIBE, SUNSUBSCRIBE, PUBSUB SHARDCHANNELS/SHARDNUMSUB (#8621)
+* EXPIRETIME and PEXPIRETIME commands (#8474)
+* EXPIRE command group supports NX/XX/GT/LT options (#2795)
+* SET command supports combining NX and GET flags (#8906)
+* BITPOS, BITCOUNT accepts BIT index (#9324)
+* EVAL_RO, EVALSHA_RO command variants, to run on read-only replicas (#8820)
+* SORT_RO command, to run on read-only replicas (#9299)
+* SHUTDOWN arguments: NOW, FORCE, ABORT (#9872)
+* FUNCTION *, FCALL, FCALL_RO - https://redis.io/commands/function-load
+* CONFIG SET/GET can handle multiple configs atomically, in one call (#9748, #9914)
+* QUIT promoted to be a proper command, HOST: and POST demoted (#9798)
+* XADD supports auto sequence number via <ms>-* (#9217)
+
+New administrative and introspection commands and command arguments
+-------------------------------------------------------------------
+
+* COMMAND DOCS (#9656, #10056, #10104)
+* COMMAND LIST (#9504)
+* COMMAND INFO accepts sub-commands as args, and no args too (#9504, #10056)
+* LATENCY HISTOGRAM (#9462)
+* CLUSTER LINKS (#9774)
+* CLUSTER DELSLOTSRANGE and CLUSTER ADDSLOTSRANGE (#9445)
+* CLIENT NO-EVICT (#8687)
+* ACL DRYRUN (#9974)
+* SLOWLOG GET supports passing in -1 to get all entries (#9018)

@@ -58,3 +58,193 @@ slave 重新配置事件
 +slave-reconf-done：slave 配置了新 master，并与新 master 完成了数据同步；
 新主库切换
 +switch-master：master 地址发生了变化。
+
+30s(主观下线)或者50s（客观下线）
+
+channel
+订阅 __sentinel__:hello
+127.0.0.1:6379> subscribe __sentinel__:hello
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"
+2) "__sentinel__:hello"
+3) (integer) 1
+1) "message"
+2) "__sentinel__:hello"
+3) "172.28.0.4,26379,b501bcf10228d3a08d3969854595573181812d5b,2,mymaster,172.28.0.2,6379,0"
+1) "message"
+2) "__sentinel__:hello"
+3) "172.28.0.6,26379,9f69b40aed4db5fd43772bd32c43e4de6017b14c,2,mymaster,172.28.0.2,6379,0"
+1) "message"
+2) "__sentinel__:hello"
+3) "172.28.0.5,26379,37fe7a7a5cc397f8ddf6436bdc03e811b9e212e0,2,mymaster,172.28.0.2,6379,0"
+
+
+
+############################## sentinel
+1 容器快速部署
+[root@rancher sentinel]# cat docker-compose.yml
+version: '3.7'
+
+networks:
+  app-tier:
+    driver: bridge
+
+services:
+  redis:
+    image: 'bitnami/redis:latest'
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - REDIS_PASSWORD=Foxconn123
+    networks:
+      - app-tier
+    ports:
+      - '6379'
+  redis-slave:
+    image: 'bitnami/redis:latest'
+    environment:
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_MASTER_HOST=redis
+      - REDIS_MASTER_PASSWORD=Foxconn123
+      - REDIS_PASSWORD=Foxconn456
+    ports:
+      - '6379'
+    depends_on:
+      - redis
+    networks:
+      - app-tier
+  redis-sentinel:
+    image: 'bitnami/redis-sentinel:latest'
+    environment:
+      - REDIS_MASTER_PASSWORD=Foxconn123
+    depends_on:
+      - redis
+      - redis-slave
+    ports:
+      - '26379-26381:26379'
+    networks:
+      - app-tier
+
+docker-compose up -d	  快速启动
+docker-compose up --scale redis-sentinel=3 --scale redis-slave=2 -dsentinel扩容至3节点 slave扩容至2节点
+   
+
+1.1 源码安装redis-stable v7
+tar zxvf redis-stable.tar.gz
+cd redis-stable
+yum install systemd-devel make gcc -y
+make PREFIX=/usr/local/redis/ USE_SYSTEMD=yes install
+#如需要TLS，则添加BUILD_TLS=yes
+2 测试	  
+127.0.0.1:26379> help @sentinel
+127.0.0.1:26379> SENTINEL SENTINELS mymaster       #查看mymaster有多少sentinel
+127.0.0.1:26379> SENTINEL REPLICAS mymaster
+127.0.0.1:26379> SENTINEL slaves mymaster
+127.0.0.1:26379> info sentinel
+# Sentinel
+sentinel_masters:1
+sentinel_tilt:0
+sentinel_tilt_since_seconds:-1
+sentinel_running_scripts:0
+sentinel_scripts_queue_length:0
+sentinel_simulate_failure_flags:0
+master0:name=mymaster,status=ok,address=172.28.0.2:6379,slaves=2,sentinels=3
+127.0.0.1:26379>
+
+
+
+
+
+
+
+
+
+
+
+################# redis cluster 执行命令
+-c    Enable cluster mode (follow -ASK and -MOVED redirections).
+[root@389dsbak ~]# redis-cli -a 123456 -h 10.67.50.146 -p 6002 -c hgetall server:1{TJ}
+Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+ 1) "name"
+ 2) "vStianjin{TJ}1"
+ 3) "sn"
+ 4) "110001"
+ 5) "ip"
+ 6) "10.66.13.12"
+ 7) "location"
+ 8) "Tianjin"
+ 9) "owner"
+10) "senchen"
+11) "department"
+12) "IT"
+
+-- cluster   Cluster Manager command and arguments
+[root@389dsbak ~]# redis-cli --cluster-only-masters --cluster call 10.67.50.146:6003 cluster keyslot server:2
+>>> Calling cluster keyslot server:2
+10.67.50.146:6003: 939
+10.67.50.146:6002: 939
+10.67.50.146:6005: 939
+
+[root@389dsbak ~]# redis-cli --cluster-only-masters --cluster call 10.67.50.146:6003 hgetall server:2
+>>> Calling hgetall server:2
+10.67.50.146:6003: MOVED 939 10.67.50.146:6005
+
+10.67.50.146:6002: MOVED 939 10.67.50.146:6005
+
+10.67.50.146:6005: name
+server2
+sn
+1000012115
+ip
+10.66.7.5
+location
+Tianjin
+rack
+r3599
+owner
+chensen
+owner_email
+sen.chen@mail.foxconn.com
+department
+IT
+[root@389dsbak ~]# redis-cli --cluster-only-replicas --cluster call 10.67.50.146:6003 hgetall server:2
+>>> Calling hgetall server:2
+10.67.50.146:6001: MOVED 939 10.67.50.146:6005
+
+10.67.50.146:6006: MOVED 939 10.67.50.146:6005
+
+10.67.50.146:6004: MOVED 939 10.67.50.146:6005
+
+[root@389dsbak ~]# redis-cli --cluster-only-masters --cluster info 10.67.50.146:6001
+10.67.50.146:6005 (684478ab...) -> 47241 keys | 6462 slots | 1 slaves.
+10.67.50.146:6002 (36ca73ad...) -> 47241 keys | 4461 slots | 1 slaves.
+10.67.50.146:6003 (924b336f...) -> 47235 keys | 5461 slots | 1 slaves.
+[OK] 141717 keys in 3 masters.
+
+[root@389dsbak ~]# redis-cli --cluster-only-replicas --cluster fix 10.67.50.146:6005
+10.67.50.146:6005 (684478ab...) -> 47211 keys | 6462 slots | 1 slaves.
+10.67.50.146:6002 (36ca73ad...) -> 47220 keys | 4461 slots | 1 slaves.
+10.67.50.146:6003 (924b336f...) -> 47217 keys | 5461 slots | 1 slaves.
+[OK] 141648 keys in 3 masters.
+8.65 keys per slot on average.
+>>> Performing Cluster Check (using node 10.67.50.146:6005)
+M: 684478ab1cca356a7b22273ad98166bb36a9c31a 10.67.50.146:6005
+   slots:[0-5460],[6000-7000] (6462 slots) master
+   1 additional replica(s)
+S: a5d28b73594017d24ebbf4d0680ace853c7ea0b2 10.67.50.146:6006
+   slots: (0 slots) slave
+   replicates 36ca73ad5ee6b887cf8f9ce740a33947cb6f2f71
+M: 36ca73ad5ee6b887cf8f9ce740a33947cb6f2f71 10.67.50.146:6002
+   slots:[5461-5999],[7001-10922] (4461 slots) master
+   1 additional replica(s)
+S: 898d44ab2f8f85aa9a9e4672c99e88cd4e469ba6 10.67.50.146:6001
+   slots: (0 slots) slave
+   replicates 684478ab1cca356a7b22273ad98166bb36a9c31a
+M: 924b336f8b951106ec682145c06895e7c2c1c307 10.67.50.146:6003
+   slots:[10923-16383] (5461 slots) master
+   1 additional replica(s)
+S: 28f63312adf4a873bce001e74c3e8e7846deeb68 10.67.50.146:6004
+   slots: (0 slots) slave
+   replicates 924b336f8b951106ec682145c06895e7c2c1c307
+[OK] All nodes agree about slots configuration.
+>>> Check for open slots...
+ 

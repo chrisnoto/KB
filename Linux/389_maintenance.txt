@@ -1,0 +1,148 @@
+# 修改查找条目数限制
+dn: uid=sso,ou=user,ou=system,dc=cesbg,dc=fii
+changetype: modify
+add: nssizelimit
+nssizelimit: -1
+-
+add: nslookthroughlimit
+nslookthroughlimit: -1
+
+#创建OU
+ldapadd -x -W -D "cn=Directory Manager" -f ou.ldif
+
+dn: ou=system,dc=cesbg,dc=fii
+changetype: add
+objectClass: top
+objectClass: organizationalUnit
+description: 用户
+ou:system
+
+dn: ou=user,ou=system,dc=cesbg,dc=fii
+changetype: add
+objectClass: top
+objectClass: organizationalUnit
+description: 用户
+ou:user
+
+# 创建账号
+ldapadd -x -W -D "cn=Directory Manager" -f user.ldif
+
+dn: uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetorgperson
+objectClass: posixAccount
+homeDirectory: /var/empty
+modifiersname:cn=directory manager
+cn: nextcloud
+sn: nextcloud
+uid: nextcloud
+givenname: nextcloud
+userPassword: Foxconn456&*(
+gidnumber:1
+uidNumber: 201
+displayName: nextcloud
+
+dn: uid=sso,ou=user,ou=system,dc=cesbg,dc=fii
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetorgperson
+objectClass: posixAccount
+homeDirectory: /var/empty
+modifiersname:cn=directory manager
+cn: sso
+sn: sso
+uid: sso
+givenname: sso
+userPassword: Foxconn456&*(
+gidnumber:1
+uidNumber: 202
+displayName:sso
+
+# 给用户赋权限
+ldapmodify -x -W -D "cn=Directory Manager" -f permission.ldif
+文件内容
+dn: cn=configuration administrators,ou=groups,ou=topologymanagement,o=netscaperoot
+changetype: modify
+add: uniqueMember
+uniqueMember:  uid=IG1527,ou=user,ou=foxconn,dc=dms,dc=foxconn
+ 
+dn: cn=configuration administrators,ou=groups,ou=topologymanagement,o=netscaperoot
+changetype: modify
+add: uniqueMember
+uniqueMember: uid=F2147826,ou=user,ou=foxconn,dc=dms,dc=foxconn 
+
+# 删除用户的属性
+dn:uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii
+changetype: modify
+delete:passwordRetryCount
+-
+delete:accountUnlockTime
+
+# reindex操作
+dsconf -D "cn=Directory Manager" ldap://XTJJSLdap01.cesbg.fii backend index reindex --wait --attr=gidnumber dc=cesbg,dc=fii
+
+### time-based account lockout policies
+1 启用基于时间的账号锁定策略插件
+dsconf -D "cn=Directory Manager" ldap://XTJJSLdap01.cesbg.fii plugin account-policy enable
+
+2 增加插件配置
+dsconf -D "cn=Directory Manager" ldap://XTJJSLdap01.cesbg.fii plugin account-policy \
+config-entry add "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config" \
+--always-record-login yes \
+--state-attr lastLoginTime \
+--alt-state-attr createtimestamp \
+--spec-attr acctPolicySubentry \
+--limit-attr accountInactivityLimit
+
+3 重启实例使插件生效
+
+
+4 在OU=Foxconn里建立账户不活跃策略，定义了accountInactivityLimit:2592000
+ldapadd -x -ZZ -W -D "cn=Directory Manager" -f
+
+dn: cn=Account Inactivation Policy,ou=Foxconn,dc=cesbg,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectClass: extensibleObject
+objectClass: accountpolicy
+accountInactivityLimit:2592000
+cn: Account Inactivation Policy
+
+/*  每个服务定义(COS)都由目录中的两类条目组成，COS定义条目和模板条目 */
+/* COS的作用是逻辑生成一些属性给指定范围内的entry(dn),减少存储在每个entry里的属性值，对应用透明*/
+/* COS提供的是虚拟的属性*/
+/* Classes of service use one entry as a template; whenever that attribute value changes, 
+then all other entries within the scope of the CoS automatically have the same attribute on their entries changed. 
+(The entries affected by the CoS are identified through a definition entry.)*/
+
+5 在OU=Foxconn里建立模板条目，这个模板条目
+定义了键值对 acctPolicySubentry: cn=Account Inactivation Policy,ou=Foxconn,dc=cesbg,dc=fii
+从而关联上面的account inactivation policy
+
+ldapadd -x -ZZ -W -D "cn=Directory Manager" -f zjmb.ldif
+
+dn: cn=TempltCoS,ou=Foxconn,dc=cesbg,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectClass: extensibleObject
+objectClass: cosTemplate
+acctPolicySubentry: cn=Account Inactivation Policy,ou=Foxconn,dc=cesbg,dc=fii
+
+6 在OU=Foxconn里建立定义条目，首先定义了它是pointer类型的COS, 然后关联模板条目，使acctPolicySubentry属性出现在
+每个user entry里，并且值设置为 “cn=Account Inactivation Policy,ou=Foxconn,dc=cesbg,dc=fii”
+ldapadd -x -ZZ -W -D "cn=Directory Manager" -f zjfwl.ldif
+
+dn: cn=DefnCoS,ou=Foxconn,dc=cesbg,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectclass: cosSuperDefinition
+objectclass: cosPointerDefinition
+cosTemplateDn: cn=TempltCoS,ou=Foxconn,dc=cesbg,dc=fii
+cosAttribute: acctPolicySubentry default operational-default   
+
+
+
+

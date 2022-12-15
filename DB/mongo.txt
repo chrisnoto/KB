@@ -157,3 +157,10 @@ query:{"details.age":{$gt:26}},
 out:"average"
 }
 )
+
+# mongo客户端命令
+root@35d51112cc40:/# mongo -u "root" -p "openIM123" --authenticationDatabase "admin"
+MongoDB shell version v4.0.28
+connecting to: mongodb://127.0.0.1:27017/?authSource=admin&gssapiServiceName=mongodb
+Implicit session: session { "id" : UUID("82f45096-7f3d-4fcb-99b9-3c3a3cb0b153") }
+MongoDB server version: 4.0.28

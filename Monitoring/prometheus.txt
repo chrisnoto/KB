@@ -707,4 +707,40 @@ Checking /etc/prometheus/rules/redis.rule.yml
 
 Checking /etc/prometheus/rules/test.rule.yml
   SUCCESS: 1 rules found
- 
+
+
+# victoriametric兼容prometheus api 
+查询tsdb
+[root@promsrv0 promsrv]# curl -s http://10.67.50.51:8481/select/0/prometheus/api/v1/status/tsdb | jq .
+{
+  "status": "success",
+  "isPartial": false,
+  "data": {
+    "totalSeries": 15685,
+    "totalLabelValuePairs": 96934,
+    "seriesCountByMetricName": [
+      {
+        "name": "flag",
+        "value": 401
+      },
+      {
+        "name": "mysql_global_status_commands_total",
+        "value": 315
+      },
+      {
+        "name": "vm_index_search_duration_seconds_bucket",
+        "value": 285
+      },
+      {
+        "name": "node_cpu_seconds_total",
+        "value": 256
+      },
+      {
+        "name": "prometheus_http_request_duration_seconds_bucket",
+        "value": 210
+      },
+      {
+        "name": "prometheus_http_response_size_bytes_bucket",
+        "value": 189
+      },
+  

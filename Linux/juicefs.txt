@@ -1,0 +1,68 @@
+# s3ql使用
+后端为minio
+mkfs.s3ql --plain --backend-options no-ssl -L s3ql s3c://10.67.51.164:9000/es-snapshot/
+mkdir /s3ql
+mount.s3ql --compress none --backend-options no-ssl s3c://10.67.51.164:9000/es-snapshot/ /s3ql
+df -h结果
+s3c://10.67.51.164:9000/es-snapshot/  1.0T  118M  1.0T   1% /s3ql
+  
+  
+# juicefs  
+metadata为sqlite3数据库，storage为本地 /var/jfs/myjfs
+[root@repo ~]# juicefs format sqlite3://juice.db myjfs --trash-days 1
+2022/11/08 17:19:09.833315 juicefs[28049] <INFO>: Meta address: sqlite3://juice.db [interface.go:402]
+2022/11/08 17:19:09.835704 juicefs[28049] <INFO>: Data use file:///var/jfs/myjfs/ [format.go:435]
+2022/11/08 17:19:10.052009 juicefs[28049] <INFO>: Volume is formatted as {
+  "Name": "myjfs",
+  "UUID": "c49a3e6b-a71a-42ff-b905-49fe629a725d",
+  "Storage": "file",
+  "Bucket": "/var/jfs/",
+  "BlockSize": 4096,
+  "Compression": "none",
+  "TrashDays": 1,
+  "MetaVersion": 1
+} [format.go:472]
+  
+
+[root@repo ~]# juicefs mount -d sqlite3://juice.db /juice/
+2022/11/08 17:21:11.727706 juicefs[28322] <INFO>: Meta address: sqlite3://juice.db [interface.go:402]
+2022/11/08 17:21:11.730951 juicefs[28322] <INFO>: Data use file:///var/jfs/myjfs/ [mount.go:422]
+2022/11/08 17:21:11.731459 juicefs[28322] <INFO>: Disk cache (/var/jfsCache/c49a3e6b-a71a-42ff-b905-49fe629a725d/): capacity (102400 MB), free ratio (10%), max pending pages (15) [disk_cache.go:94]
+2022/11/08 17:21:12.232864 juicefs[28322] <INFO>: OK, myjfs is ready at /juice/ [mount_unix.go:45]  
+
+df -h结果
+JuiceFS:myjfs            1.0P   85M  1.0P   1% /juice
+
+查看juicefs
+juicefs status sqlite3://juice.db
+{
+  "Setting": {
+    "Name": "myjfs",
+    "UUID": "c49a3e6b-a71a-42ff-b905-49fe629a725d",
+    "Storage": "file",
+    "Bucket": "/var/jfs/",
+    "BlockSize": 4096,
+    "Compression": "none",
+    "TrashDays": 1,
+    "MetaVersion": 1
+  },
+  "Sessions": [
+    {
+      "Sid": 2,
+      "Expire": "2022-11-10T15:06:07+08:00",
+      "Version": "1.0.2+2022-10-13.514ef03",
+      "HostName": "repo",
+      "MountPoint": "/juice",
+      "ProcessID": 28346
+    }
+  ]
+}
+
+umount和删除juicefs存储
+umount /juice
+juicefs destroy sqlite3://juice.db c49a3e6b-a71a-42ff-b905-49fe629a725d
+
+# redis作为metadata数据库
+[root@repo ~]# juicefs format redis://:Foxconn123@10.67.50.41:6379/1 myjfs --trash-days 1
+
+

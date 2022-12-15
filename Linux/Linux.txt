@@ -1,3 +1,12 @@
+#  pip更换阿里云的源
+pip配置文件的位置
+全局的位于 /etc/pip.conf
+用户级别的位于 $HOME/.pip/pip.conf
+每个 virtualenv 也可以有自己的配置文件 $VIRTUAL_ENV/pip.conf
+配置文件的内容
+[global]
+trusted-host=mirrors.aliyun.com
+index-url=http://mirrors.aliyun.com/pypi/simple
 =========================================================== Tips and tricks =================================================
 #  如何直接拷贝单个文件到服务器的任何地方，无视lhadmin没有root权限
 [root@repo ~]# ssh lhadmin@xlhcesbges01 sudo cp /dev/stdin /root/pg.conf <pg.conf

@@ -1,0 +1,55 @@
+# hash tag
+写到redis cluster里时，要用hash tag保证写到同一节点，否则出错
+当参数为 {LH}时写到一个节点，当参数为{TJ}时写到另一个节点
+[root@389dsbak ~]# cat cluster.lua
+local l = ARGV[1]
+local a = "vS" .. l .. KEYS[1]
+--local start = KEYS[2]
+--local ending = ARGV[2]
+
+local detail = {ip='10.66.13.12',location='Tianjin',owner='senchen',email='sen.chen@mail.foxconn.com',department='IT'}
+for u = 1, 10
+do
+  redis.call('hset','server:' .. u .. KEYS[1], 'name', a .. u)
+  redis.call('hset','server:' .. u .. KEYS[1], 'sn','11000' .. u)
+  redis.call('hset','server:' .. u .. KEYS[1], 'ip', detail['ip'])
+  redis.call('hset','server:' .. u .. KEYS[1], 'location', detail['location'])
+  redis.call('hset','server:' .. u .. KEYS[1], 'owner', detail['owner'])
+  redis.call('hset','server:' .. u .. KEYS[1], 'department', detail['department'])
+  redis.call('expire','server:' .. u .. KEYS[1], math.random(100000))
+end
+[root@389dsbak ~]# redis-cli -a 123456 -h 10.67.50.146 -p 6002 -c  --eval cluster.lua {LH} , longhua
+[root@389dsbak ~]# redis-cli -a 123456 -h 10.67.50.146 -p 6002 -c  --eval cluster.lua {TJ} , tianjin
+
+# 非集群时
+[root@389dsbak ~]# cat test.lua
+local l = ARGV[1]
+local a = "vS" .. l .. KEYS[1]
+local start = KEYS[2]
+local ending = ARGV[2]
+
+local detail = {ip='10.66.13.12',location='Tianjin',owner='senchen',email='sen.chen@mail.foxconn.com',department='IT'}
+for u = start, ending
+do
+  redis.call('hset','server:' .. u, 'name', a .. u)
+  redis.call('hset','server:' .. u, 'sn','11000' .. u)
+  redis.call('hset','server:' .. u, 'ip', detail['ip'])
+  redis.call('hset','server:' .. u, 'location', detail['location'])
+  redis.call('hset','server:' .. u, 'owner', detail['owner'])
+  redis.call('hset','server:' .. u, 'department', detail['department'])
+  redis.call('expire','server:' .. u, math.random(100000))
+end
+
+[root@389dsbak ~]# redis-cli -a 123456 -h 10.67.50.146 -p 6002 --eval test.lua  k8s 1 , LH 30001
+
+hash tag Example:
+
+Key	                 Hashing Pseudocode	                    Hash Slot
+user-profile:1234	CRC16(‘user-profile:1234’) mod 16384	15990
+user-session:1234	CRC16(‘user-session:1234’) mod 16384	2963
+user-profile:5678	CRC16(‘user-profile:5678’) mod 16384	9487
+user-session:5678	CRC16(‘user-session:5678’) mod 16384	4330
+user-profile:{1234}	CRC16(‘1234’) mod 16384	                6025
+user-session:{1234}	CRC16(‘1234’) mod 16384              	6025
+user-profile:{5678}	CRC16(‘5678’) mod 16384	                3312
+user-profile:{5678}	CRC16(‘5678’) mod 16384              	3312

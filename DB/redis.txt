@@ -127,6 +127,255 @@ OK
 127.0.0.1:6379> lindex dept 4
 "OA"
 
+5 有序集合
+127.0.0.1:6379> zadd db 1 redis
+(integer) 1
+127.0.0.1:6379> zadd db 2 mongo
+(integer) 1
+127.0.0.1:6379> zadd db 3 elasticsearch
+(integer) 1
+127.0.0.1:6379> zadd db 3 clickhouse
+(integer) 1
+127.0.0.1:6379> zadd db 9 Oracle
+(integer) 1
+127.0.0.1:6379> zadd db 8 Postgres
+(integer) 1
+
+127.0.0.1:6379> zrange db 0 5 withscores
+ 1) "redis"
+ 2) "1"
+ 3) "mongo"
+ 4) "2"
+ 5) "clickhouse"
+ 6) "3"
+ 7) "elasticsearch"
+ 8) "3"
+ 9) "Postgres"
+10) "8"
+11) "Oracle"
+12) "9"
+127.0.0.1:6379> zrevrange db 0 5 withscores
+ 1) "Oracle"
+ 2) "9"
+ 3) "Postgres"
+ 4) "8"
+ 5) "elasticsearch"
+ 6) "3"
+ 7) "clickhouse"
+ 8) "3"
+ 9) "mongo"
+10) "2"
+11) "redis"
+12) "1"
+
+# 查看redis版本
+LOLWUT
+hello
+
+# 客户端登录option
+[root@rancher ~]# redis-cli -h 10.67.50.41
+10.67.50.41:6379> hello 3 auth default Foxconn123 setname senchen
+1# "server" => "redis"
+2# "version" => "7.0.5"
+3# "proto" => (integer) 3
+4# "id" => (integer) 250911
+5# "mode" => "standalone"
+6# "role" => "master"
+7# "modules" => (empty array)
+10.67.50.41:6379>
+10.67.50.41:6379>
+10.67.50.41:6379>
+10.67.50.41:6379>
+10.67.50.41:6379> client info
+id=250911 addr=10.67.36.58:50090 laddr=172.18.0.9:6379 fd=11 name=senchen age=30 idle=0 flags=N db=0 sub=0 psub=0 ssub=0 multi=-1 qbuf=26 qbuf-free=20448 argv-mem=10 multi-mem=0 rbs=1024 rbp=0 obl=0 oll=0 omem=0 tot-mem=22298 events=r cmd=client|info user=default redir=-1 resp=3
+
+[root@rancher ~]# redis-cli -h 10.67.50.41
+10.67.50.41:6379> hello 2 auth default Foxconn123 setname senchen
+ 1) "server"
+ 2) "redis"
+ 3) "version"
+ 4) "7.0.5"
+ 5) "proto"
+ 6) (integer) 2
+ 7) "id"
+ 8) (integer) 250918
+ 9) "mode"
+10) "standalone"
+11) "role"
+12) "master"
+13) "modules"
+14) (empty array)
+
+# client tracking on 通知key失效信息  
+1 key过期了
+2 key的值更新了
+10.67.50.41:6379> client tracking on bcast prefix dns
+OK
+
+10.67.50.41:6379> get dns11
+"1.11"
+10.67.50.41:6379> get dns11
+-> invalidate: 'dns10'
+"1.11"
+10.67.50.41:6379> get dns11
+"1.11"
+10.67.50.41:6379> get dns11
+-> invalidate: 'dns11'
+(nil)
+10.67.50.41:6379> get dns11
+(nil)
+10.67.50.41:6379> get dns11
+-> invalidate: 'dns12'
+(nil)
+10.67.50.41:6379> get dns11
+(nil)
+10.67.50.41:6379> get dns11
+(nil)
+10.67.50.41:6379> get dns11
+-> invalidate: 'dns13'
+(nil)
+
+#实验数据  大批key,每秒很多过期
+10.67.50.41:6379> get user:1:name
+-> invalidate: 'user:177895:name'
+-> invalidate: 'user:654696:name', 'user:871205:name'
+-> invalidate: 'user:596536:name'
+-> invalidate: 'user:682011:name'
+-> invalidate: 'user:444096:name', 'user:559951:name'
+-> invalidate: 'user:298408:name', 'user:350012:name'
+-> invalidate: 'user:447868:name', 'user:694866:name', 'user:858568:name'
+-> invalidate: 'user:259858:name'
+-> invalidate: 'user:521533:name'
+-> invalidate: 'user:55161:name'
+-> invalidate: 'user:671212:name'
+-> invalidate: 'user:238150:name', 'user:951223:name'
+-> invalidate: 'user:909353:name'
+-> invalidate: 'user:903835:name'
+-> invalidate: 'user:743293:name'
+-> invalidate: 'user:728264:name'
+-> invalidate: 'user:161534:name'
+-> invalidate: 'user:475947:name'
+-> invalidate: 'user:185845:name'
+-> invalidate: 'user:133876:name'
+-> invalidate: 'user:887408:name'
+-> invalidate: 'user:187153:name'
+
+
+普通模式
+当tracking开启时， Redis会「记住」每个客户端请求的 key，当 key的值发现变化时会发送失效信息给客户端 (invalidation message)。
+失效信息可以通过 RESP3协议发送给请求的客户端，或者转发给一个不同的连接 (支持 RESP2 + Pub/Sub) 的客户端。
+Server 端将 Client 访问的 key以及该 key 对应的客户端 ID 列表信息存储在全局唯一的表(TrackingTable)，当表满了，回移除最老的记录，同时触发该记录已过期的通知给客户端。
+每个 Redis 客户端又有一个唯一的数字 ID，TrackingTable 存储着每一个 Client ID，当连接断开后，清除该 ID 对应的记录。
+TrackingTable 表中记录的 Key 信息不考虑是哪个 database 的，虽然访问的是 db1 的 key，db2 同名 key 修改时会客户端收到过期提示，但这样做会减少系统的复杂性，以及表的存储数据量。
+
+广播模式(BCAST)
+当广播模式 (broadcasting) 开启时，服务器不会记住给定客户端访问了哪些键，因此这种模式在服务器端根本不消耗任何内存。
+在这个模式下，服务端会给客户端广播所有 key 的失效情况，如果 key 被频繁修改，服务端会发送大量的失效广播消息，这就会消耗大量的网络带宽资源。
+所以，在实际应用中，我们设置让客户端注册只跟踪指定前缀的 key，当注册跟踪的 key 前缀匹配被修改，服务端就会把失效消息广播给所有关注这个 key前缀的客户端。
+
+client tracking on bcast prefix user
+1.
+这种监测带有前缀的 key 的广播模式，和我们对 key 的命名规范非常匹配。我们在实际应用时，会给同一业务下的 key 设置相同的业务名前缀，所以，我们就可以非常方便地使用广播模式。Redis 6.0 新特性篇：Client Side Cache 是嘛玩意？-开源基础软件社区
+广播模式与普通模式类似，Redis 使用 PrefixTable 存储广播模式下的客户端数据，它存储**前缀字符串指针和(需要通知的 key 和客户端 ID)**的映射关系。
+
+转发模式
+普通模式与广播模式，需要客户端使用 RESP 3 协议，他是 Redis 6.0 新启用的协议。
+对于使用 RESP 2 协议的客户端来说，实现客户端缓存则需要另一种模式：重定向模式(redirect)。
+RESP 2 无法直接 PUSH 失效消息，所以 需要另一个支持 RESP 3 协议的客户端 告诉 Server 将失效消息通过 Pus/Sub 通知给 RESP 2 客户端。
+在重定向模式下，想要获得失效消息通知的客户端，就需要执行订阅命令 SUBSCRIBE，专门订阅用于发送失效消息的频道 _redis_:invalidate。
+
+同时，再使用另外一个客户端，执行 CLIENT TRACKING 命令，设置服务端将失效消息转发给使用 RESP 2 协议的客户端。
+假设客户端 B 想要获取失效消息，但是客户端 B 只支持 RESP 2 协议，客户端 A 支持 RESP 3 协议。我们可以分别在
+客户端 B 和 A 上执行 SUBSCRIBE 和 CLIENT TRACKING，如下所示：
+//客户端B执行，客户端 B 的 ID 号是 606
+SUBSCRIBE _redis_:invalidate
+
+//客户端 A 执行
+CLIENT TRACKING ON BCAST REDIRECT 606
+1.
+2.
+3.
+4.
+5.
+B 客户端就可以通过 _redis_:invalidate 频道获取失效消息了。
+
+# 查看 channel
+10.66.14.103:6379> pubsub channels
+1) "__sentinel__:hello"
+2) "__keyevent@4__:expired"
+3) "__keyevent@1__:expired"
+4) "__keyevent@4__:del"
+5) "__keyevent@3__:del"
+6) "__keyevent@1__:del"
+7) "__keyevent@3__:expired"
+查看 channel的客户端数量
+10.66.14.103:6379> pubsub numsub __keyevent@4__:expired
+1) "__keyevent@4__:expired"
+2) (integer) 1
+10.66.14.103:6379> pubsub numsub __keyevent@3__:expired
+1) "__keyevent@3__:expired"
+2) (integer) 3
+
+# 查看bigkey
+[root@xtjqaredis01 redis]# redis-cli -h 10.66.14.103 --bigkeys
+
+# Scanning the entire keyspace to find biggest keys as well as
+# average sizes per key type.  You can use -i 0.1 to sleep 0.1 sec
+# per 100 SCAN commands (not usually needed).
+
+[00.00%] Biggest string found so far '"account:IGA1-03205"' with 64 bytes
+[01.54%] Biggest hash   found so far '"register:60C19DF5-F398-4355-9343-EA86501D1A8E"' with 17 fields
+[11.58%] Biggest set    found so far '"client_api_auth_list:6C4105B7-AC72-48EB-8992-042B41AAA193"' with 46 members
+[47.96%] Biggest hash   found so far '"register:44421C46-9BD0-4158-A492-95C57AA5FB8B"' with 19 fields
+
+-------- summary -------
+
+Sampled 10891 keys in the keyspace!
+Total key length in bytes is 176298 (avg len 16.19)
+
+Biggest   hash found '"register:44421C46-9BD0-4158-A492-95C57AA5FB8B"' has 19 fields
+Biggest string found '"account:IGA1-03205"' has 64 bytes
+Biggest    set found '"client_api_auth_list:6C4105B7-AC72-48EB-8992-042B41AAA193"' has 46 members
+
+0 lists with 0 items (00.00% of keys, avg size 0.00)
+112 hashs with 1788 fields (01.03% of keys, avg size 15.96)
+10776 strings with 689100 bytes (98.94% of keys, avg size 63.95)
+0 streams with 0 entries (00.00% of keys, avg size 0.00)
+3 sets with 52 members (00.03% of keys, avg size 17.33)
+0 zsets with 0 members (00.00% of keys, avg size 0.00)
+
+# 查看命令统计
+10.66.14.103:6379> info commandstats
+# Commandstats
+cmdstat_sync:calls=2,usec=1729,usec_per_call=864.50,rejected_calls=0,failed_calls=0
+cmdstat_psync:calls=2,usec=1538,usec_per_call=769.00,rejected_calls=0,failed_calls=0
+cmdstat_select:calls=56367,usec=123258,usec_per_call=2.19,rejected_calls=0,failed_calls=78
+cmdstat_hset:calls=16829,usec=101992,usec_per_call=6.06,rejected_calls=0,failed_calls=0
+cmdstat_renamenx:calls=1,usec=26,usec_per_call=26.00,rejected_calls=0,failed_calls=0
+cmdstat_slowlog:calls=26627,usec=122887,usec_per_call=4.62,rejected_calls=0,failed_calls=0
+cmdstat_command:calls=7,usec=5523,usec_per_call=789.00,rejected_calls=0,failed_calls=0
+cmdstat_scard:calls=25,usec=112,usec_per_call=4.48,rejected_calls=0,failed_calls=0
+cmdstat_pubsub:calls=7,usec=106,usec_per_call=15.14,rejected_calls=0,failed_calls=0
+cmdstat_replconf:calls=32356063,usec=88062829,usec_per_call=2.72,rejected_calls=0,failed_calls=0
+cmdstat_hmset:calls=1890833,usec=15507059,usec_per_call=8.20,rejected_calls=0,failed_calls=0
+
+# 查看cache命中率
+命中率= keyspace_hits/(keyspace_hits + keyspace_misses)
+[root@xtjqaredis01 redis]# redis-cli -h 10.66.14.103 info stats |grep keyspace
+keyspace_hits:4625545
+keyspace_misses:3306808
+
+# 内存碎片
+Memory RSS (Resident Set Size) is the number of bytes that the operating system has allocated to Redis. If the ratio of ‘memory_rss’ to ‘memory_used’ is greater than ~1.5, 
+then it signifies memory fragmentation. The fragmented memory can be recovered by restarting the server.
+
+# 查看健的内部编码方式
+127.0.0.1:6379> object encoding db
+"skiplist"
+127.0.0.1:6379> object encoding filebeat
+"quicklist"
+https://web-tj-1.fixo.cloud   sen.chen@mail.foxconn.com
+
 #### 查看中文
 root@redis001 ~# redis-cli --raw
 127.0.0.1:6379> get redisdba
@@ -137,9 +386,12 @@ root@redis001 ~# redis-cli --raw
 5 redis故障排错、持续性能优化
 6 redis数据迁移、备份和还原
 
+# grafana插件redis-datasource
+先export http_proxy
+再grafana-cli plugins install redis-datasource
 
 ########导入数据
-方法一    pipe
+方法一    pipe   批量
 root@redis001 ~# cat 22
 SET H7104398    邓智勇
 SET H7113074    孙佳伟
@@ -290,3 +542,66 @@ docker run --name redis-commander -d --dns=10.43.0.10 --dns-search=default.svc.c
   
 docker run -d --name haproxy-wi -v haproxy-wi:/var/www/haproxy-wi/app \
 -p 8080:80 aidaho/haproxy-wi 
+####### redis管理工具##########
+redis insight
+docker run -d -v redisinsight:/db -p 8001:8001 redislabs/redisinsight:latest
+
+并非所有的业务场景都适合用缓存，读多写少、不要求一致性、时效要求越低、访问频率越高、对最终一致性和数据丢失有一定程度的容忍的场景
+才适合使用缓存，缓存并不能解决所有的性能问题，倘若滥用缓存会带来额外的维护成本，使得系统架构更复杂更难以维护。
+缓存与数据库一致性策略
+1. Cache Aside模式：先写DB再删Cache
+2. Read/Write Through模式在上面的Cache Aside中，应用代码需要维护两个数据存储，一个是缓存（Cache），一个是数据库（Repository）。
+所以，应用程序代码比较复杂。而Read/Write Through是把更新数据库（Repository）的操作由缓存服务自己代理，对于应用层来说，就简单很多了。
+可以理解为，应用认为后端就是一个单一的存储，而存储自己维护自己的Cache。
+3. Write Behind Caching模式Write Behind也叫 Write Back。其实Linux文件系统的Page Cache算法用的也是这个，所以说底层的东西很多时候是相通。
+Write Behind的思想是：在更新数据时，只更新缓存，不更新数据库，而我们的缓存会异步地批量更新数据库。
+3.1 Redisson includes functionality for write-through and write-behind caching in Redis by using the RMap interface.
+3.2 RGSync:  https://github.com/RedisGears/rgsync
+Python-based recipe
+Programmable
+
+3.3 rghibernate:  https://github.com/RedisGears/rghibernate
+Java-based recipe
+Uses the Hibernate framework
+Configurable rather than programmable
+
+# redis各版本新增特性
+Stream 是 Redis 5.0 引入的一种专门为消息队列设计的数据类型
+Redis 6.0推出了Access Control List (ACL)特性
+Redis 6.0支持了基于Transport Layer Security (TLS)的通信加密
+RedisGears 要求最低 Redis 5.0 的支持
+Redis v7.0 introduces Redis Functions
+
+RedisMod簡介
+首先介紹下RedisMod這個東西，它是一系列Redis的增強模塊。有了RedisMod的支持，Redis的功能將變得非常強大。目前RedisMod中包含了如下增強模塊：
+
+RediSearch：一個功能齊全的搜尋引擎；
+RedisJSON：對JSON類型的原生支持；
+RedisTimeSeries：時序資料庫支持；
+RedisGraph：圖資料庫支持；
+RedisBloom：概率性數據的原生支持；
+RedisGears：可編程的數據處理；
+RedisAI：機器學習的實時模型管理和部署。
+
+In addition to all of the features of Redis OSS, Redis Stack supports:
+
+Probabilistic data structures
+Queryable JSON documents
+Querying across hashes and JSON documents
+Time series data support (ingestion & querying)
+Graph data models with the Cypher query language
+
+# lua script  被认为是application的一部分，而不是redis的一部分，所以不被redis server长期管理
+By design, Redis only caches the loaded scripts. That means that the script cache can become lost at any time, such as after calling SCRIPT FLUSH,
+ after restarting the server, or when failing over to a replica. The application is responsible for reloading scripts during runtime if any are 
+ missing. The underlying assumption is that scripts are a part of the application and not maintained by the Redis server.
+
+# hotkeys  需要开启 lfu 策略
+redis-cli  -h 10.67.50.225 --hotkeys
+-------- summary -------
+Sampled 8280 keys in the keyspace!
+hot key found with counter: 7   keyname: "filebeat"
+hot key found with counter: 2   keyname: "\xe7\x9f\xb3\xe6\xaf\x85"
+hot key found with counter: 2   keyname: "\xe6\x9f\xb4\xe6\xa3\xae"
+
+

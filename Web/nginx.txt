@@ -60,6 +60,54 @@ server {
     }
 }
 
+# 安全类的header
+X-Frame-Options 用来告诉浏览器，页面能不能以 frame、 iframe、 object 形式嵌套在其他站点中，用来避免点击劫持(clickjacking)攻击。
+例如用下面代码将百度以 iframe 嵌入到自己的站点，然后监听 iframe 事件做些其他事情，用户如果不看URL估计以为自己在用百度。
+
+<iframe src="https://www.baidu.com/" width="100%" height="100%" frameborder="no"></iframe>
+
+举例： 允许nginx嵌入后端grafana的监控panel
+1 nginx前端配置
+X-XSS-Protection: 0
+X-Frame-Options: ALLOW-FROM http://10.67.50.237:3000
+
+2 以下代码将grafana panel以iframe嵌入到静态页面
+<iframe src="http://10.67.50.237:3000/d-solo/SIwpPZiVk/elasticsearch_v2?orgId=1&panelId=53" width="450" height="200" frameborder="0"></iframe>
+
+
+X-XSS-Protection
+用于处理跨站脚本攻击 (XSS)。
+
+可选值：
+
+0：禁止XSS过滤
+1：启用XSS过滤。 如果检测到跨站脚本攻击，浏览器将清除页面中不安全的部分，但页面仍然可以访问。
+1;mode=block：启用XSS过滤。 如果检测到攻击，浏览器将直接阻止页面加载。
+
+# 反向代理grafana  以uri方式
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ~/prometheus-grafana/grafana/provisioning:/etc/grafana/provisioning
+      - /opt/grafana/data:/var/lib/grafana
+    ports:
+      - 3000:3000
+    environment:
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+      - GF_ENABLE_GZIP=true
+      - GF_SERVER_ROOT_URL=/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_USERS_DEFAULT_THEME=light
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+
+nginx配置：	  
+     location /grafana/ {
+         proxy_set_header Host $http_host;
+         proxy_pass http://10.67.50.237:3000;
+     }
+
 ######## http -> https ######
 server {
 listen 80;
@@ -166,3 +214,128 @@ As you can see in /test4 url the proxied server only sees /abc/test
                     sub_filter 'src="/'  'src="/app1/';
                     sub_filter_once off;
             }
+
+# 亦驰nginx配置			
+user  nobody nobody;
+worker_processes auto;
+worker_cpu_affinity auto;
+worker_rlimit_nofile 102400;
+
+error_log  /var/log/nginx/error.log;
+pid        /var/run/nginx.pid;
+
+events {
+   use epoll;
+   worker_connections  65535;
+}
+
+http {
+       server_tokens off;
+       server_info off;
+       server_tag FOXCONN_LB;
+       sendfile on;
+       keepalive_timeout  45;
+
+       include mime.types;
+       default_type  application/octet-stream;
+       add_header LB_NODE $hostname;
+
+       log_format  main  '$http_host $remote_addr ${request_time}s $upstream_addr [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent"';
+
+       log_format mainjson '{"@timestamp":"$time_iso8601",'
+                        '"host":"$hostname",'
+                        '"server_ip":"$server_addr",'
+                        '"client_ip":"$remote_addr",'
+                        '"xff":"$http_x_forwarded_for",'
+                        '"domain":"$host",'
+                        '"url":"$uri",'
+                        '"referer":"$http_referer",'
+                        '"args":"$args",'
+                        '"upstreamtime":"$upstream_response_time",'
+                        '"responsetime":"$request_time",'
+                        '"request_method":"$request_method",'
+                        '"status":"$status",'
+                        '"size":"$body_bytes_sent",'
+                        '"request_body":"$request_body",'
+                        '"request_length":"$request_length",'
+                        '"protocol":"$server_protocol",'
+                        '"upstreamhost":"$upstream_addr",'
+                        '"file_dir":"$request_filename",'
+                        '"http_user_agent":"$http_user_agent"'
+                        '}';
+
+       access_log off;
+
+       client_header_buffer_size 4k;
+       large_client_header_buffers 8 4k;
+       client_max_body_size 8m;
+       server_names_hash_max_size 512;
+       server_names_hash_bucket_size 128;
+       req_status_zone server "$server_name" 30M;
+       req_status server;
+
+       client_header_timeout 30s;
+       client_body_timeout 60s;
+       send_timeout 60s;
+
+       lingering_close off;
+       underscores_in_headers on;
+       resolver_timeout 3s;
+
+       proxy_http_version 1.1;
+       check_shm_size 30M;
+
+       proxy_buffering on;
+       proxy_buffer_size 8k;
+       proxy_buffers 256 8k;
+       proxy_busy_buffers_size 128k;
+
+       proxy_connect_timeout 120s;
+       proxy_send_timeout 120s;
+       proxy_read_timeout 120s;
+       proxy_ignore_client_abort on;
+
+server {
+        listen       81;
+        server_name  status-localhost localhost;
+
+        location / {
+                        return 403;
+        }
+        location /nginx_status {
+                        stub_status on;
+                        access_log   off;
+                        allow 10.0.0.0/8;
+                        allow 127.0.0.1/32;
+                        deny all;
+        }
+        location /nginx_counter {
+                        req_status_show server;
+                        access_log   off;
+                        allow 10.0.0.0/8;
+                        allow 127.0.0.1/32;
+                        deny all;
+        }
+        location /check_status {
+                        check_status;
+                        access_log   off;
+                        allow 10.0.0.0/8;
+                        allow 127.0.0.1/32;
+                        deny all;
+        }
+}
+
+       include conf.d/*.conf;
+
+}
+
+[root@xtjnginx01 conf]# /usr/local/nginx/sbin/nginx -V
+Tengine version: Tengine/2.3.3
+nginx version: nginx/1.18.0
+built by gcc 4.8.5 20150623 (Red Hat 4.8.5-44) (GCC)
+built with OpenSSL 1.1.1k  25 Mar 2021
+TLS SNI support enabled
+configure arguments: --prefix=/usr/local/nginx --user=nobody --group=nobody --with-cc-opt=-I/usr/local/openssl/include/ --with-ld-opt=-L/usr/local/openssl/lib/ --with-http_sub_module --with-http_stub_status_module --with-http_realip_module --with-http_ssl_module --with-http_v2_module --with-http_gzip_static_module --with-stream --with-stream_realip_module --with-stream=dynamic --add-module=./modules/ngx_http_upstream_check_module --add-module=./modules/ngx_http_upstream_consistent_hash_module --add-module=./modules/ngx_http_reqstat_module --add-module=./modules/ngx_http_upstream_dynamic_module --add-module=./modules/ngx_http_upstream_dyups_module --add-module=./modules/ngx_http_upstream_session_sticky_module --add-module=./modules/ngx_http_user_agent_module --add-module=./modules/ngx_slab_stat --add-module=./modules/ngx_http_lua_module --with-pcre=/usr/local/src/pcre-8.45 --with-jemalloc
+			

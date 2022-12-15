@@ -1,0 +1,69 @@
+grafana配置
+
+[database]
+url = postgres://grafana:Foxconn123@mydb:5432/grafana
+ssl_mode = disable
+
+[dashboards]
+default_home_dashboard_path = /etc/grafana/provisioning/dashboards/server/node-exporter-full_rev27.json
+
+# 与ldap集成
+
+[auth.ldap]
+enabled = true
+config_file = /etc/grafana/ldap.toml
+allow_sign_up = true
+
+
+/etc/grafana/ldap.toml
+[[servers]]
+host = "10.66.14.163"
+port = 636
+use_ssl = true
+start_tls = false
+ssl_skip_verify = true
+bind_dn = "uid=prometheus,ou=user,ou=system,dc=cesbg,dc=fii"
+bind_password = 'ext566-32081'
+search_filter = "(uid=%s)"
+search_base_dns = ["dc=cesbg,dc=fii"]
+
+## Group search filter, to retrieve the groups of which the user is a member (only set if memberOf attribute is not available)
+#group_search_filter = "(&(objectClass=posixGroup)(memberUid=%s))"
+## An array of the base DNs to search through for groups. Typically uses ou=groups
+#group_search_base_dns = ["ou=groups,dc=cesbg,dc=fii"]
+## the %s in the search filter will be replaced with the attribute defined below
+#group_search_filter_user_attribute = "uid"
+
+[servers.attributes]
+name = "cn"
+username = "uid"
+member_of = "memberOf"
+email =  "mail"
+
+
+## 超级管理员
+[[servers.group_mappings]]
+group_dn = "cn=monitor_admin,ou=groups,dc=cesbg,dc=fii"
+org_role = "Admin"
+grafana_admin = true
+org_id = 1
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_基礎架構規劃部_系統規劃課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Admin"
+grafana_admin = true
+org_id = 1
+
+
+## 管理员
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_基礎架構規劃部_基礎架構運維課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Admin"
+org_id = 1
+
+
+### 只读用户
+#[[servers.group_mappings]]
+#group_dn = "*"
+#org_role = "Viewer"
+#org_id =1

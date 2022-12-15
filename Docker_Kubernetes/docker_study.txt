@@ -12,6 +12,18 @@ docker pull registry.aliyuncs.com/google_containers/csi-node-driver-registrar:v2
 ExecStart=
 ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2376
 
+# docker-compose 设置变量到 .env 文件
+The .env file feature only works when you use the docker-compose up command and does not work with docker stack deploy
+
+# docker-compose scale service
+docker-compose up --scale redis-sentinel=3 -d
+docker-compose up --scale redis-slave=2 -d
+
+# dockerfile里取消环境变量
+ENV http_proxy=
+ENV https_proxy=
+
+
 ####### docker api #####
 curl -Ss --unix-socket /var/run/docker.sock http:/containers/json |jq .
 拉鏡像
@@ -77,6 +89,7 @@ cat > /etc/docker/daemon.json <<EOF
     }
 }
 EOF
+
 ############多阶段构建##########
 FROM golang:1.9.4 as build
 WORKDIR /go/src/github.com/openfaas/faas/gateway
@@ -140,7 +153,8 @@ Unpacking objects: 100% (99/99), done.
  unix:   /var/run/docker.sock   dockerd -H unix:///var/run/docker.sock
  tcp:    tcp://0.0.0.0:2375     docker -H tcp://0.0.0.0:2375
  fd:     fd://                  dockerd -H fd://
- 
+
+######## docker stack 
 ###find containers in some namespace
 [root@worker1 ~]# docker service ps yum_repo
 ID                  NAME                IMAGE               NODE                DESIRED STATE       CURRENT STATE          ERROR               PORTS
@@ -184,8 +198,11 @@ CONTAINER ID        IMAGE                       COMMAND             CREATED     
 ####docker清理####
 docker system prune
 docker volume prune
+docker image prune
+
 #########docker清除无用的volume####
 docker volume rm $(docker volume ls -qf dangling=true)
+
 ########docker volume dirver local ##########
 # create a reusable volume
   $ docker volume create --driver local \
@@ -213,6 +230,7 @@ docker volume rm $(docker volume ls -qf dangling=true)
         type: nfs
         o: nfsvers=4,addr=192.168.1.1,rw
         device: ":/path/to/dir"
+		
 ########docker plugin####
 [root@worker2 docker]# cat daemon.json
 {
@@ -299,8 +317,10 @@ lrwxrwxrwx. 1 root root       7 Dec 21 08:54 docker-thinpool_tmeta -> ../dm-0
 ExecStart=/usr/bin/dockerd --graph=/data --insecure-registry=10.67.38.90         docker.service
 新版 20.10.12 参数已变
 ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock  --data-root=/data
+
 ########weave scope########
 scope launch 10.67.36.68 10.67.36.69 10.67.36.70 10.67.36.71
+
 ######docker healthcheck#######
 自 1.12 版本之后，Docker 引入了原生的健康检查实现，可以在 Dockerfile 中声明应用自身的健康检测配置。 HEALTHCHECK 指令声明了健康检测命令，
 用这个命令来判断容器主进程的服务状态是否正常，从而比较真实的反应容器实际状态。
@@ -335,6 +355,7 @@ $ docker service create -d \
     --health-retries=12 \
     --health-timeout=2s \
     elasticsearch  
+	
 Docker service update	
 [root@worker1 ~]# docker service update \
 > --health-cmd "curl --silent -f http://10.67.36.71/ubuntu/ || exit 1" \
