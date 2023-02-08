@@ -11,7 +11,7 @@ ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com'
 
 ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -W -D "cn=陳森,ou=tj-fiwo,ou=vdiusers,ou=cesbgusers,dc=cesbg,dc=foxconn" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(sAMAccountName=H7104398)"
 
-显示隐藏属性
+显示隐藏属性  Foxconn456&*( 
 root@xygjsldap01:~# ldapsearch -D 'uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii' -b 'dc=cesbg,dc=fii' "(uid=nextcloud)" + -Z -W
 Enter LDAP Password:
 # extended LDIF

@@ -1,5 +1,7 @@
 grafana配置
 
+http://monitor.cesbg.foxconn/api/admin/settings    #API查看setting
+
 [database]
 url = postgres://grafana:Foxconn123@mydb:5432/grafana
 ssl_mode = disable

@@ -1,3 +1,26 @@
+# 查看coredns的配置
+[root@rancher ~]# kubectl -n kube-system get cm coredns -o yaml
+apiVersion: v1
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          upstream
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+        }
+        prometheus :9153
+        forward . 10.66.12.206 10.66.14.206
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+kind: ConfigMap
+
 #############Pod的Volume与PV的区别################
 Volume的生命周期和Pod相同，Pod被删除时，Volume和保存在Volume中的数据就被删除了；
 普通Volume和使用它的Pod之间是一种静态绑定关系，在定义Pod的文件里，同时定义了它使用的Volume。

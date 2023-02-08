@@ -459,3 +459,135 @@ pod/coredns-bdffbc666-7pwzx evicted
 pod/default-http-backend-5954bd5d8c-6886s evicted
 pod/logstash-8d7469656-hrmwx evicted
 node/vstjk8s07 evicted
+
+#  2023年1月8日
+2023/01/07 11:38:45 [error] 17#0: *550495 connect() to unix:/tmp/php-fpm.sock failed (11: Resource temporarily unavailable) while connecting to upstream, client: 10TP/1.1", upstream: "fastcgi://unix:/tmp/php-fpm.sock:", host: "monitoring.cesbg.foxconn", referrer: "http://monitoring.cesbg.foxconn/zabbix.php?action=dashboard.vie
+10.42.0.0 - - [07/Jan/2023:11:38:45 +0800] "POST /zabbix.php?sid=7b2bb18af464bffc&action=widget.problemhosts.view HTTP/1.1" 502 568 "http://monitoring.cesbg.foxconnke Gecko) Chrome/108.0.0.0 Safari/537.36" "10.61.146.18"
+2023/01/07 11:38:45 [error] 17#0: *550495 connect() to unix:/tmp/php-fpm.sock failed (11: Resource temporarily unavailable) while connecting to upstream, client: 10TP/1.1", upstream: "fastcgi://unix:/tmp/php-fpm.sock:", host: "monitoring.cesbg.foxconn", referrer: "http://monitoring.cesbg.foxconn/zabbix.php?action=dashboard.vie
+10.42.0.0 - - [07/Jan/2023:11:38:45 +0800] "POST /zabbix.php?sid=7b2bb18af464bffc&action=widget.problemsbysv.view HTTP/1.1" 502 568 "http://monitoring.cesbg.foxconnke Gecko) Chrome/108.0.0.0 Safari/537.36" "10.61.146.18"
+2023/01/07 11:38:46 [error] 17#0: *550311 connect() to unix:/tmp/php-fpm.sock failed (11: Resource temporarily unavailable) while connecting to upstream, client: 101.1", upstream: "fastcgi://unix:/tmp/php-fpm.sock:", host: "monitoring.cesbg.foxconn", referrer: "http://monitoring.cesbg.foxconn/zabbix.php?action=dashboard.view"
+10.42.6.0 - - [07/Jan/2023:11:38:46 +0800] "POST /zabbix.php?sid=7d4c913d8d6de344&action=widget.hostavail.view HTTP/1.1" 502 568 "http://monitoring.cesbg.foxconn/zaGecko) Chrome/108.0.0.0 Safari/537.36" "10.61.129.4"
+2023/01/07 11:38:46 [error] 17#0: *550495 connect() to unix:/tmp/php-fpm.sock failed (11: Resource temporarily unavailable) while connecting to upstream, client: 10.1", upstream: "fastcgi://unix:/tmp/php-fpm.sock:", host: "monitoring.cesbg.foxconn", referrer: "http://monitoring.cesbg.foxconn/zabbix.php?action=dashboard.view"
+10.42.0.0 - - [07/Jan/2023:11:38:46 +0800] "POST /zabbix.php?sid=7b2bb18af464bffc&action=widget.problems.view HTTP/1.1" 502 568 "http://monitoring.cesbg.foxconn/zabecko) Chrome/108.0.0.0 Safari/537.36" "10.61.146.18"
+10.42.6.0 - - [07/Jan/2023:11:39:05 +0800] "POST /zabbix.php?sid=7d4c913d8d6de344&action=widget.problemsbysv.view HTTP/1.1" 200 4832 "http://monitoring.cesbg.foxconike Gecko) Chrome/108.0.0.0 Safari/537.36" "10.61.129.4"
+
+需要增加net.core.somaxconn的值，配置sysctl，结果
+
+[root@rancher zabbix]# kubectl get po --field-selector 'status.phase=Failed'
+NAME                                      READY   STATUS            RESTARTS   AGE
+zabbix-web-nginx-mysql-5fb7f9d9d4-222sn   0/1     SysctlForbidden   0          116m
+zabbix-web-nginx-mysql-5fb7f9d9d4-22m6x   0/1     SysctlForbidden   0          112m
+zabbix-web-nginx-mysql-5fb7f9d9d4-22w5l   0/1     SysctlForbidden   0          112m
+zabbix-web-nginx-mysql-5fb7f9d9d4-22wpk   0/1     SysctlForbidden   0          112m
+zabbix-web-nginx-mysql-5fb7f9d9d4-24g5s   0/1     SysctlForbidden   0          115m
+zabbix-web-nginx-mysql-5fb7f9d9d4-24qnx   0/1     SysctlForbidden   0          111m
+zabbix-web-nginx-mysql-5fb7f9d9d4-25hzf   0/1     SysctlForbidden   0          116m
+
+
+[root@rancher zabbix]# kubectl get po -o wide |grep -c zabbix-web-nginx-mysql
+1001
+
+[root@rancher zabbix]# kubectl delete po --field-selector 'status.phase=Failed'
+pod "zabbix-web-nginx-mysql-5fb7f9d9d4-222sn" deleted
+pod "zabbix-web-nginx-mysql-5fb7f9d9d4-22m6x" deleted
+pod "zabbix-web-nginx-mysql-5fb7f9d9d4-22w5l" deleted
+pod "zabbix-web-nginx-mysql-5fb7f9d9d4-22wpk" deleted
+
+
+use ResourceQuota to limit continuously pods creating.
+
+[root@rancher zabbix]# cat resourcequota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+ name: pod-object-count
+spec:
+  hard:
+    count/pods: 50
+	
+限制pod总数
+[root@rancher zabbix]# kubectl get quota -o yaml
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"ResourceQuota","metadata":{"annotations":{},"name":"pod-object-count","namespace":"default"},"spec":{"hard":{"count/pods":50}}}
+    creationTimestamp: "2023-01-07T05:18:57Z"
+    name: pod-object-count
+    namespace: default
+    resourceVersion: "224547215"
+    selfLink: /api/v1/namespaces/default/resourcequotas/pod-object-count
+    uid: c94e36f1-8e4a-11ed-94be-000c29cec870
+  spec:
+    hard:
+      count/pods: "50"
+  status:
+    hard:
+      count/pods: "50"
+    used:
+      count/pods: "4"
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""
+
+# 配置kubelet 动态修改配置
+修改rke的cluster-prod.yml，然后rke up --config cluster-prod.yml
+  kubelet:
+    image: ""
+    extra_args:
+      max-pods: "250"
+      max-open-files: '2000000'
+      sync-frequency: '3s'
+      kube-api-burst: '30'
+      kube-api-qps: '15'
+      enforce-node-allocatable: 'pods'
+      system-reserved: 'cpu=0.25,memory=200Mi'
+      kube-reserved: 'cpu=0.25,memory=1500Mi'
+      dynamic-config-dir: '/var/lib/kubelet/dynamic-config/store'            <-- 增加这句
+  
+[root@rancher zabbix]# cat kubelet-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-config
+  namespace: kube-system
+data:
+  kubelet: |+
+    apiVersion: kubelet.config.k8s.io/v1beta1
+    kind: KubeletConfiguration
+    allowedUnsafeSysctls:
+    - "net.*"
+  
+  
+kubectl patch node vstjk8s06 -p "{\"spec\":{\"configSource\":{\"configMap\":{\"name\":\"node-config\",\"namespace\":\"kube-system\",\"kubeletConfigKey\":\"kubelet\"}}}}"
+kubectl patch node vstjk8s05 -p "{\"spec\":{\"configSource\":{\"configMap\":{\"name\":\"node-config\",\"namespace\":\"kube-system\",\"kubeletConfigKey\":\"kubelet\"}}}}"
+kubectl patch node vstjk8s04 -p "{\"spec\":{\"configSource\":{\"configMap\":{\"name\":\"node-config\",\"namespace\":\"kube-system\",\"kubeletConfigKey\":\"kubelet\"}}}}"
+
+验证
+[root@rancher zabbix]# kubectl get no vstjk8s06 -o yaml
+  config:
+    active:                                               <-- 这个状态就是激活了
+      configMap:
+        kubeletConfigKey: kubelet
+        name: node-config
+        namespace: kube-system
+        resourceVersion: "224880117"
+        uid: 56f4b270-8e6c-11ed-b4d5-000c29cec870
+    assigned:
+      configMap:
+        kubeletConfigKey: kubelet
+        name: node-config
+        namespace: kube-system
+        resourceVersion: "224880117"
+        uid: 56f4b270-8e6c-11ed-b4d5-000c29cec870
+    lastKnownGood:
+      configMap:
+        kubeletConfigKey: kubelet
+        name: node-config
+        namespace: kube-system
+        resourceVersion: "224880117"
+        uid: 56f4b270-8e6c-11ed-b4d5-000c29cec870

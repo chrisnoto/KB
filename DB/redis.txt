@@ -1,5 +1,16 @@
 Redis (Remote dictionary server) 
 
+1 redis上线及升级
+2 redis用户权限管理
+3 redis监控及巡检
+4 redis集群及弹性伸缩
+5 redis故障排错、持续性能优化
+6 redis数据导入、导出、迁移、备份和还原
+
+### 远程连接
+redis-cli -u redis://10.67.50.41:6379
+redis-cli -h 10.67.50.41 -p 6379
+
 ### redis 密码认证
 方式一
 root@redis001 ~# export REDISCLI_AUTH=120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb
@@ -9,8 +20,15 @@ PONG
 root@redis001 ~# redis-cli
 127.0.0.1:6379> AUTH 120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb
 OK
+方式三  输入密码
+root@redis001 ~# redis-cli -a 120hzPpmK616xYMYLwxXPyxV+FQvsGdJrDpZEDMelScN1ayzLXkLs3vlZvM+g7wa8LFTqSc60uW2cxaQPJ2WSlh1DlYOPROGnOUY4BRHD7yHWClEi0xMxRAb
 
+# 客户端登录option   默认是 version 3
+[root@rancher ~]# redis-cli -h 10.67.50.41
+10.67.50.41:6379> hello 3 auth default Foxconn123 setname senchen
 
+[root@rancher ~]# redis-cli -h 10.67.50.41
+10.67.50.41:6379> hello 2 auth default Foxconn123 setname senchen
 ###########redis aof文件重写############
 Redis将生成一个新的AOF文件， 这个文件包含重建当前数据集所需的最少命令
 
@@ -168,6 +186,73 @@ OK
 11) "redis"
 12) "1"
 
+6 stream
+Redis Stream 是 Redis 5.0 版本新增加的数据结构。
+Redis Stream 主要用于消息队列（MQ，Message Queue），Redis 本身是有一个 Redis 发布订阅 (pub/sub) 来实现消息队列的功能，但它有个缺点就是消息无法持久化，如果出现网络断开、Redis 宕机等，消息就会被丢弃。
+简单来说发布订阅 (pub/sub) 可以分发消息，但无法记录历史消息。
+而 Redis Stream 提供了消息的持久化和主备复制功能，可以让任何客户端访问任何时刻的数据，并且能记住每一个客户端的访问位置，还能保证消息不丢失。
+
+每个 Stream 都有唯一的名称，它就是 Redis 的 key
+
+同一个group的消费者不能重复读消息
+last_delivered_id ：游标，每个消费组会有个游标 last_delivered_id，任意一个消费者读取了消息都会使游标 last_delivered_id 往前移动。
+
+6.1 首先xadd建立stream
+
+6.2 接着建立stream的consumer group      消费组从第一条消息开始消费，如果从最后开始消费，则用$
+>> xgroup create sensor group2 0
+"OK"
+
+6.3 消费者cs从group2消费消息  每次消费2条
+xreadgroup group group2 cs count 2 streams sensor >
+
+1) 1) "sensor"
+   2) 1) 1) "1675842547425-0"
+         2) 1) "f1"
+            2) "v1"
+            3) "f2"
+            4) "v2"
+            5) "f3"
+            6) "v3"
+      2) 1) "1675842584792-0"
+         2) 1) "f1"
+            2) "v11"
+            3) "f2"
+            4) "v21"
+            5) "f3"
+            6) "v31"
+>> xreadgroup group group2 cs count 2 streams sensor >
+
+1) 1) "sensor"
+   2) 1) 1) "1675842926111-0"
+         2) 1) "f1"
+            2) "v13"
+            3) "f2"
+            4) "v23"
+            5) "f3"
+            6) "v33"
+      2) 1) "1675843746295-0"
+         2) 1) "f1"
+            2) "v14"
+            3) "f2"
+            4) "v24"
+            5) "f3"
+            6) "v34"
+>> xreadgroup group group2 cs count 2 streams sensor >
+
+1) 1) "sensor"
+   2) 1) 1) "1675843788224-0"
+         2) 1) "f1"
+            2) "v15"
+            3) "f2"
+            4) "v25"
+            5) "f3"
+            6) "v35"
+
+>> xreadgroup group group2 csm count 2 streams sensor >
+
+(nil)			
+			
 # 查看redis版本
 LOLWUT
 hello
@@ -512,14 +597,7 @@ maxclients参数来限制最大客户端连接数，一旦连接数超过maxclie
 Redis的默认配置给出的timeout=0,客户端不会因超时而关闭。
 客户端类型
 
-客户端监控
 
-connected_clients：代表当前Redis节点的客户端连接数，需要重点监控，一旦超过maxclients，新的客户端连接将被拒绝。
-client_longest_output_list：当前所有输出缓冲区中队列对象个数的最大值。
-client_biggest_input_buf：当前所有输入缓冲区中占用的最大容量。
-blocked_clients：正在执行阻塞命令（例如blpop、brpop、brpoplpush）的客户端个数。
-total_connections_received(info stats)：Redis自启动以来处理的客户端连接数总数。
-rejected_connections：Redis自启动以来拒绝的客户端连接数，需要重点监控。
 
 
 RDB运行后，开启AOF的正确方式
@@ -604,4 +682,19 @@ hot key found with counter: 7   keyname: "filebeat"
 hot key found with counter: 2   keyname: "\xe7\x9f\xb3\xe6\xaf\x85"
 hot key found with counter: 2   keyname: "\xe6\x9f\xb4\xe6\xa3\xae"
 
+# 运维关注的重要指标
+sync_full:11          累计Master full sync的次数;如果值比较大，说明常常出现全量复制，就得分析原因，或调整repl-backlog-size
+                      repl_backlog的长度(repl-backlog-size)，网络环境不稳定的，建议调整大些。(主从之间如何网络延时过大可以调整此参数，避免重复的触发全量同步)
+evicted_keys:0        因内存used_memory达到maxmemory后，每秒被驱逐的key个数
 
+客户端相关
+connected_clients：代表当前Redis节点的客户端连接数，需要重点监控，一旦超过maxclients，新的客户端连接将被拒绝。
+client_longest_output_list：当前所有输出缓冲区中队列对象个数的最大值。
+client_biggest_input_buf：当前所有输入缓冲区中占用的最大容量。
+blocked_clients：正在执行阻塞命令（例如blpop、brpop、brpoplpush）的客户端个数。
+total_connections_received(info stats)：Redis自启动以来处理的客户端连接数总数。
+rejected_connections：Redis自启动以来拒绝的客户端连接数，需要重点监控。
+
+# 有用的命令
+查看主从同步什么数据
+[root@389dsbak ~]# redis-cli -h 10.67.50.41 -a Foxconn123 --slave     

@@ -947,3 +947,148 @@ sql> select '@timestamp',host,message from "syslog-2022.01.18" limit 5;
 @timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.064Z A21VSAN18 Vpxa: verbose vpxa[6D8CB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-1124d8de] Starting next WaitForUpdates() call to hostd
 
 @timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.072Z A21VSAN18 Vpxa: verbose vpxa[6D6BB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-a19df9d] Received WaitForUpdatesDone callback
+
+# 天津ES正式环境查询
+1 term查询
+ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search -H 'Content-Type: application/json' -d '
+{
+     "query": {
+        "term": {
+          "domain.keyword": {
+             "value": "ehs.cesbg.efoxconn.com"
+            }
+        }
+    }
+}'
+
+count查询条数
+ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_count -H 'Content-Type: application/json' -d '
+{
+     "query": {
+        "term": {
+          "domain.keyword": {
+             "value": "ehs.cesbg.efoxconn.com"
+            }
+        }
+    }
+}'
+
+[root@xtjcesbges01 ~]# curl -s -XGET --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_count?q=domain.keyword:ehs.cesbg.efoxconn.com | jq .
+Enter host password for user 'elastic':
+{
+  "count": 2657,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  }
+}
+
+
+
+
+regexp查询条数
+{
+     "query": {
+        "regexp": {
+          "domain.keyword": {
+             "value": ".*"
+            }
+        }
+    }
+}'
+
+
+查询client_ip.keyword总记录数，去重记录数
+curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search?size=0 -H 'Content-Type: application/json' -d '
+{
+  "aggs": {
+    "Value_Count": {
+      "value_count": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_Default": {
+      "cardinality": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_40K": {
+      "cardinality": {
+        "field": "client_ip.keyword",
+        "precision_threshold": 40000
+      }
+    }
+  }
+}'
+结果
+{
+  "took": 81,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 10000,
+      "relation": "gte"
+    },
+    "max_score": null,
+    "hits": []
+  },
+  "aggregations": {
+    "Value_Count": {
+      "value": 542690
+    },
+    "Cardinality_Default": {
+      "value": 8
+    },
+    "Cardinality_40K": {
+      "value": 8
+    }
+  }
+}
+
+ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search -H 'Content-Type: application/json' -d '
+{
+     "query": {
+        "term": {
+          "domain.keyword": {
+             "value": "hr.cesbg.efoxconn.com"
+            }
+        }
+    },
+	  "aggs": {
+    "Value_Count": {
+      "value_count": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_Default": {
+      "cardinality": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_40K": {
+      "cardinality": {
+        "field": "client_ip.keyword",
+        "precision_threshold": 400000
+      }
+    }
+  }
+}'
+
+curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search?size=0 -H 'Content-Type: application/json' -d '
+{
+  "aggs": {
+    "Cardinality_Default": {
+      "cardinality": {
+        "field": "domain.keyword"
+      }
+    }
+  }
+}'

@@ -64,5 +64,8 @@ juicefs destroy sqlite3://juice.db c49a3e6b-a71a-42ff-b905-49fe629a725d
 
 # redis作为metadata数据库
 [root@repo ~]# juicefs format redis://:Foxconn123@10.67.50.41:6379/1 myjfs --trash-days 1
+[root@repo ~]# juicefs format redis://:Foxconn123@10.67.50.41:6379/2 hisjfs --trash-days 1
+2022/11/10 15:15:24.710134 juicefs[29645] <INFO>: Meta address: redis://:****@10.67.50.41:6379/2 [interface.go:402]
+
 
 

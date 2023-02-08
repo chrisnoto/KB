@@ -90,6 +90,43 @@ cat > /etc/docker/daemon.json <<EOF
 }
 EOF
 
+
+1 收集所有docker容器日志
+
+docker默认日志为json-file, filebeat收集所有容器的json日志
+
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*json.log*
+  json.message_key: log
+  json.key_under_root: true
+  processors:
+  - add_docker_metadata: ~
+
+
+2 收集指定docker容器日志
+
+2.1 容器指定gelf地址
+docker run --log-driver gelf --log-opt gelf-address=udp://localhost:12201
+
+2.2 logstash开启gelf端口
+
+logstash.conf
+input {
+  gelf {
+    type => docker
+    port => 12201
+  }
+}
+output {
+  stdout {}
+  elasticsearch {
+    hosts => ["http://elasticsearch:9200"]
+  }
+}
+
 ############多阶段构建##########
 FROM golang:1.9.4 as build
 WORKDIR /go/src/github.com/openfaas/faas/gateway

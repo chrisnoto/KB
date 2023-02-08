@@ -1,0 +1,502 @@
+# 容器化389ds
+
+1 Dockerfile
+[root@worker1 389ds-2]# cat Dockerfile
+FROM opensuse/leap:15.3
+MAINTAINER sen.chen@mail.foxconn.com
+
+EXPOSE 3389 3636
+
+RUN zypper mr -da && \
+    zypper ar -fc https://mirrors.aliyun.com/opensuse/distribution/leap/15.3/repo/oss openSUSE-Aliyun-OSS && \
+    zypper ar -fc https://mirrors.aliyun.com/opensuse/distribution/leap/15.3/repo/non-oss openSUSE-Aliyun-NON-OSS && \
+    zypper ar -fc https://mirrors.aliyun.com/opensuse/update/leap/15.3/oss openSUSE-Aliyun-UPDATE-OSS && \
+    zypper ar -fc https://mirrors.aliyun.com/opensuse/update/leap/15.3/non-oss openSUSE-Aliyun-UPDATE-NON-OSS && \
+    zypper ref
+
+RUN zypper install -y --oldpackage krb5-1.16.3-3.18.1.x86_64
+
+RUN zypper install -y 389-ds
+
+RUN mkdir -p /data/config && \
+    mkdir -p /data/ssca && \
+    mkdir -p /data/run && \
+    mkdir -p /var/run/dirsrv && \
+    ln -s /data/config /etc/dirsrv/slapd-localhost && \
+    ln -s /data/ssca /etc/dirsrv/ssca && \
+    ln -s /data/run /var/run/dirsrv && \
+    chmod -R 777 /data /etc/dirsrv
+
+ENV DS_DM_PASSWORD=""
+ENV SUFFIX_NAME=""
+
+VOLUME /data
+
+HEALTHCHECK --start-period=5m --timeout=5s --interval=5s --retries=2 \
+    CMD /usr/lib/dirsrv/dscontainer -H
+
+CMD [ "/usr/lib/dirsrv/dscontainer", "-r" ]
+
+2 build镜像
+[root@worker1 389ds-2]# cat build.sh
+#!/bin/bash
+
+docker build \
+ --build-arg http_proxy=http://h7108579:pqhkr99ctw@10.67.9.210:3128 \
+ --build-arg https_proxy=http://h7108579:pqhkr99ctw@10.67.9.210:3128 \
+ -t "389ds:1.4.4.14" .
+
+执行build.sh脚本 
+ 
+3 起容器
+[root@worker1 389ds-2]# cat docker-compose.yml
+version: "3"
+
+services:
+  389ds:
+    image: 389ds:1.4.4.14
+    ports:
+      - 3389:3389
+      - 3636:3636
+    volumes:
+      - ./data:/data
+    environment:
+      - SUFFIX_NAME=dc=tj,dc=fii
+      - DS_DM_PASSWORD=Foxconn123
+
+docker-compose up -d	
+  
+4 建立和初始化数据库backend
+docker-compose exec 389ds dsconf localhost backend create --suffix="dc=tj,dc=fii" --be-name="tj"
+docker-compose exec 389ds dsidm localhost initialise
+
+[root@worker1 389ds-2]# docker-compose exec 389ds dsctl localhost healthcheck
+Beginning lint report, this could take a while ...
+Checking config:hr_timestamp ...
+Checking config:passwordscheme ...
+Checking backends:tj:cl_trimming ...
+Checking backends:tj:mappingtree ...
+Checking backends:tj:search ...
+Checking backends:tj:virt_attrs ...
+Checking encryption:check_tls_version ...
+Checking fschecks:file_perms ...
+Checking refint:attr_indexes ...
+Checking refint:update_delay ...
+Checking monitor-disk-space:disk_space ...
+Checking replication:agmts_status ...
+Checking replication:conflicts ...
+Checking dseldif:nsstate ...
+Checking tls:certificate_expiration ...
+Checking logs:notes ...
+Healthcheck complete.
+
+sh-4.4# dsctl localhost tls list-ca
+Self-Signed-CA
+sh-4.4# dsctl localhost tls show-server-cert
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            00:be:76:84:df
+
+# dsidm命令
+1 account
+root@xygjsldap01:~# dsidm 389server -b "ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii" account get-by-dn "uid=H7108579,ou=[天津]IT系統規劃處_基礎架構規劃部_系統規劃課,ou=[天津]IT系統規劃處_基礎架構規劃部,ou=[天津]IT系統規劃處,ou=資訊管理處_天津,ou=資訊管理處,ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii"
+dn:: dWlkPUg3MTA4NTc5LG91PVvlpKnmtKVdSVTns7vntbHopo/lioPomZVf5Z+656SO5p625qeL6KaP5YqD6YOoX+ezu+e1seimj+WKg+iqsixvdT1b5aSp5rSlXUlU57O757Wx6KaP5YqD6JmVX+Wfuuekjuaetuani+imj+WKg+mDqCxvdT1b5aSp5rSlXUlU57O757Wx6KaP5YqD6JmVLG91Peizh+ioiueuoeeQhuiZlV/lpKnmtKUsb3U96LOH6KiK566h55CG6JmVLG91PUbkuK3lpK7lkajpgoosb3U9Q0VTQkcsb3U95LqS6YCj6Zuy5Y+K6Zuy6KiI566X5Y+K6Zuy56uv5pyN5YuZKOS4gOmbsiksb3U9Rm94Y29ubixkYz1jZXNiZyxkYz1maWk=
+cn:: 6Zmz5qOu
+displayName:: 6Zmz5qOu
+employeeType: 1
+gidNumber: 955
+homeDirectory: /var/empty
+mail: sen.chen@mail.foxconn.com
+memberOf:: Y249W+Wkqea0pV1JVOezu+e1seimj+WKg+iZlV/ln7rnpI7mnrbmp4vopo/lioPpg6hf57O757Wx6KaP5YqD6KqyLG91PWdyb3VwcyxkYz1jZXNiZyxkYz1maWk=
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: organizationalPerson
+objectClass: top
+objectClass: person
+objectClass: nsmemberof
+ou:: W+Wkqea0pV1JVOezu+e1seimj+WKg+iZlV/ln7rnpI7mnrbmp4vopo/lioPpg6hf57O757Wx6KaP5YqD6Kqy
+sn: sn
+uid: H7108579
+uidNumber: 54797108579
+userPassword: {MD5}VcyDZpKfODmyuNs8gS8lSg==
+
+2 group
+group需要的object class     有基本类才能被group list命令列出来
+objectClass: posixGroup    # 基本类
+objectClass: top      # 基本类
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames     # 基本类
+objectClass: nsMemberOf
+
+查询
+root@xygjsldap01:~# dsidm 389server -b "dc=cesbg,dc=fii" group list
+测试群组
+monitor_admin
+[天津]IT系統規劃處_基礎架構規劃部_系統規劃課
+[天津]IT系統規劃處_周邊系統部_辦公自動化系統課
+[天津]IT系統規劃處_周邊系統部_新系統開發課
+
+新增
+root@xygjsldap01:~# dsidm 389server -b "dc=cesbg,dc=fii" posixgroup create --cn "[天津]IT系統規劃處_移動應用開發部_APP開發課" --gidNumber 50379
+Successfully created [天津]IT系統規劃處_移動應用開發部_APP開發課
+
+修改 给group add属性
+root@xygjsldap01:~# dsidm 389server -b "dc=cesbg,dc=fii" posixgroup modify "[天津]IT系統規劃處_移動應用開發部_APP開發課" add:objectclass:groupOfUniqueNames
+Successfully modified cn=[天津]IT系統規劃處_移動應用開發部_APP開發課,ou=groups,dc=cesbg,dc=fii
+
+
+
+
+# dsconf命令
+root@xygjsldap01:~# dsconf 389server plugin memberof show
+dn: cn=MemberOf Plugin,cn=plugins,cn=config
+cn: MemberOf Plugin
+memberofallbackends: on
+memberofattr: memberOf
+memberofautoaddoc: nsmemberof
+memberofentryscope: dc=cesbg,dc=fii
+memberofgroupattr: uniquemember
+memberofskipnested: off
+nsslapd-plugin-depends-on-type: database
+nsslapd-pluginDescription: memberof plugin
+nsslapd-pluginEnabled: on
+nsslapd-pluginId: memberof
+nsslapd-pluginInitfunc: memberof_postop_init
+nsslapd-pluginPath: libmemberof-plugin
+nsslapd-pluginType: betxnpostoperation
+nsslapd-pluginVendor: 389 Project
+nsslapd-pluginVersion: 1.4.4.11
+objectClass: top
+objectClass: nsSlapdPlugin
+objectClass: extensibleObject
+	
+
+# memberof
+启用memberof
+sh-4.4# dsconf localhost plugin memberof enable
+Enabled plugin 'MemberOf Plugin'
+重启389ds
+
+设置memberof属性
+sh-4.4# dsconf localhost plugin memberof set --scope dc=tj,dc=fii --groupattr uniquemember --autoaddoc nsmemberof
+Successfully changed the cn=MemberOf Plugin,cn=plugins,cn=config
+
+给组增加属性
+sh-4.4# dsidm localhost posixgroup modify demo_group add:objectclass:groupOfUniqueNames
+Successfully modified cn=demo_group,ou=groups,dc=tj,dc=fii
+
+建立用户            gidnumber 对应OU的gid
+sh-4.4# dsidm localhost user create --uid H7108579 --cn "陈森" --displayName "陈森" --uidNumber 100001 --gidNumber 99999 --homeDirectory "/var/empty"
+Successfully created H7108579
+sh-4.4# dsidm localhost user create --uid H7114570 --cn "张亦驰" --displayName "张亦驰" --uidNumber 100002 --gidNumber 99999 --homeDirectory "/var/empty"
+
+设置用户密码
+sh-4.4# dsidm localhost account reset_password uid=H7108579,ou=people,dc=tj,dc=fii Foxconn123
+reset password for uid=H7108579,ou=people,dc=tj,dc=fii
+
+
+查看用户和组的关系
+sh-4.4# dsidm localhost group get demo_group
+dn: cn=demo_group,ou=groups,dc=tj,dc=fii
+cn: demo_group
+gidNumber: 99999
+objectClass: top
+objectClass: groupOfNames
+objectClass: posixGroup
+objectClass: nsMemberOf
+objectClass: groupOfUniqueNames
+uniqueMember: uid=H7108579,ou=people,dc=tj,dc=fii
+uniqueMember: uid=H7114570,ou=people,dc=tj,dc=fii
+
+
+sh-4.4# dsidm localhost user get H7114570
+dn: uid=H7114570,ou=people,dc=tj,dc=fii
+cn:: 5byg5Lqm6amw
+displayName:: 5byg5Lqm6amw
+gidNumber: 99999
+homeDirectory: /var/empty
+memberOf: cn=demo_group,ou=groups,dc=tj,dc=fii
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+objectClass: nsmemberof
+uid: H7114570
+uidNumber: 100002
+
+# 用户加到组  方法一 group add_member命令
+sh-4.4# dsidm localhost user create --uid H7114546 --cn "刘星鏖" --displayName "刘星鏖" --uidNumber 100003 --gidNumber 99999 --homeDirectory "/var/empty"
+Successfully created H7114546
+sh-4.4# dsidm localhost group add_member demo_group uid=H7114546,ou=people,dc=tj,dc=fii
+added member: uid=H7114546,ou=people,dc=tj,dc=fii
+这个命令
+sh-4.4# dsidm localhost group get demo_group
+dn: cn=demo_group,ou=groups,dc=tj,dc=fii
+cn: demo_group
+gidNumber: 99999
+member: uid=H7114546,ou=people,dc=tj,dc=fii          # group add_member 命令添加的是member这个属性，不是uniquemember
+objectClass: top
+objectClass: groupOfNames
+objectClass: posixGroup
+objectClass: nsMemberOf
+objectClass: groupOfUniqueNames
+uniqueMember: uid=H7114570,ou=people,dc=tj,dc=fii
+uniqueMember: uid=H7108579,ou=people,dc=tj,dc=fii
+
+sh-4.4# dsidm localhost group members demo_group
+dn: uid=H7114546,ou=people,dc=tj,dc=fii
+
+# 用户加到组  方法二 直接给组增加uniquemember属性     *****目前环境使用这个方法*****
+dsidm localhost user create --uid H7114427 --cn "王东泽" --displayName "王东泽" --uidNumber 100004 --gidNumber 99999 --homeDirectory "/var/empty"
+sh-4.4# dsidm localhost posixgroup modify demo_group add:uniqueMember:uid=H7114427,ou=people,dc=tj,dc=fii
+Successfully modified cn=demo_group,ou=groups,dc=tj,dc=fii
+
+sh-4.4# dsidm localhost group get demo_group | grep 7114427
+uniqueMember: uid=H7114427,ou=people,dc=tj,dc=fii
+sh-4.4# dsidm localhost user get H7114427 |grep memberOf
+memberOf: cn=demo_group,ou=groups,dc=tj,dc=fii
+
+# 配置全局密码策略
+dsconf localhost pwpolicy set \
+  --pwdlocal on \
+  --pwdisglobal on \
+  --pwdallowhash on \
+  --pwpinheritglobal on \
+  --pwdadmin cn=admin,dc=tj,dc=fii \
+  --pwdscheme MD5 \
+  --pwdhistory on \
+  --pwdhistorycount 12 \
+  --pwdtrack on \
+  --pwdlockout off \
+  --pwdmaxage 3110400 \
+  --pwdlockoutduration 1800 \
+  --pwdmaxfailure 5 \
+  --pwdresetfailcount 600 \
+  --pwdchecksyntax off \
+  --pwdminlen 12 \
+  --pwdmindigits 1 \
+  --pwdminalphas 0 \
+  --pwdminuppers 1 \
+  --pwdminlowers 1 \
+  --pwdminspecials 1 
+# 配置本地密码策略
+列出本地policy
+root@xygjsldap01:~# dsconf 389server localpwp list
+ou=foxconn,dc=cesbg,dc=fii (subtree policy)
+查看具体的策略
+root@xygjsldap01:~# dsconf 389server localpwp get ou=foxconn,dc=cesbg,dc=fii
+Local Subtree Policy Policy for "ou=foxconn,dc=cesbg,dc=fii": cn=cn\3DnsPwPolicyEntry_subtree\2Cou\3DFoxconn\2Cdc\3Dcesbg\2Cdc\3Dfii,cn=nsPwPolicyContainer,ou=Foxconn,dc=cesbg,dc=fii
+------------------------------------
+passwordstoragescheme: MD5
+passwordchange: on
+passwordmustchange: off
+passwordhistory: on
+passwordinhistory: 12
+passwordtrackupdatetime: on
+passwordwarning: 86400
+passwordexp: on
+passwordmaxage: 3110400
+passwordminage: 0
+passwordlockout: off
+passwordunlock: on
+passwordlockoutduration: 1800
+passwordmaxfailure: 5
+passwordresetfailurecount: 600
+passwordchecksyntax: on
+passwordminlength: 12
+passwordmindigits: 1
+passwordminuppers: 1
+passwordminlowers: 1
+passwordminspecials: 1
+passwordmincategories: 0
+passwordmintokenlength: 0
+
+为某个OU创建local policy
+sh-4.4# dsconf localhost localpwp addsubtree "ou=SA,dc=tj,dc=fii"
+Successfully created subtree password policy
+
+dsconf localhost localpwp set \
+  --pwdscheme MD5 \
+  --pwdhistory on \
+  --pwdhistorycount 12 \
+  --pwdtrack on \
+  --pwdlockout off \
+  --pwdexpire on \
+  --pwdwarning 86400 \
+  --pwdmaxage 3110400 \
+  --pwdlockoutduration 1800 \
+  --pwdmaxfailure 5 \
+  --pwdresetfailcount 600 \
+  --pwdchecksyntax on \
+  --pwdminlen 12 \
+  --pwdmindigits 1 \
+  --pwdminalphas 0 \
+  --pwdminuppers 1 \
+  --pwdminlowers 1 \
+  --pwdminspecials 1 \
+  --pwdmincatagories 0 \
+  --pwdmintokenlen 0 \
+  "ou=SA,dc=tj,dc=fii"
+
+查看local policy  
+sh-4.4# dsconf localhost localpwp get "ou=SA,dc=tj,dc=fii"  
+  
+修改用户passwordExpirationTime为几天前的时间，测试显示密码过期  
+[root@repo test]# ldapsearch -H ldap://10.67.36.62:3389 -D "uid=H7114546,ou=SA,dc=tj,dc=fii" -x -b "ou=SA,dc=tj,dc=fii" -W
+Enter LDAP Password:
+ldap_bind: Invalid credentials (49)
+        additional info: password expired!
+  
+# 基于时间锁定账户
+sh-4.4# dsconf localhost plugin account-policy enable
+Enabled plugin 'Account Policy Plugin'
+
+sh-4.4# dsconf localhost plugin account-policy set --config-entry "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config"
+Successfully changed the cn=Account Policy Plugin,cn=plugins,cn=config
+
+dsconf localhost plugin account-policy \
+config-entry set "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config" \
+--always-record-login yes \
+--state-attr lastLoginTime \
+--alt-state-attr createtimestamp \
+--spec-attr acctPolicySubentry \
+--limit-attr accountInactivityLimit  
+
+重启实例
+
+在OU=SA里建立账户不活跃策略，定义了accountInactivityLimit:2592000
+
+[root@repo test]# ldapadd -H ldap://10.67.36.62:3389 -x -W -D "cn=Directory Manager"
+Enter LDAP Password:
+dn: cn=Account Inactivation Policy,ou=SA,dc=tj,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectClass: extensibleObject
+objectClass: accountpolicy
+accountInactivityLimit:2592000
+cn: Account Inactivation Policy
+
+adding new entry "cn=Account Inactivation Policy,ou=SA,dc=tj,dc=fii"
+
+
+
+dn: cn=TempltCoS,ou=SA,dc=tj,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectClass: extensibleObject
+objectClass: cosTemplate
+acctPolicySubentry: cn=Account Inactivation Policy,ou=SA,dc=tj,dc=fii
+
+adding new entry "cn=TempltCoS,ou=SA,dc=tj,dc=fii"
+
+dn: cn=DefnCoS,ou=SA,dc=tj,dc=fii
+objectClass: top
+objectClass: ldapsubentry
+objectclass: cosSuperDefinition
+objectclass: cosPointerDefinition
+cosTemplateDn: cn=TempltCoS,ou=SA,dc=tj,dc=fii
+cosAttribute: acctPolicySubentry default operational-default
+
+adding new entry "cn=DefnCoS,ou=SA,dc=tj,dc=fii"
+
+验证
+修改H7114570的lastlogintime为2个月前，测试显示Account inactivity limit exceeded
+[root@repo test]# ldapsearch -H ldap://10.67.36.62:3389 -D "uid=H7114570,ou=SA,dc=tj,dc=fii" -x -b "ou=SA,dc=tj,dc=fii" -W
+Enter LDAP Password:
+ldap_bind: Constraint violation (19)
+        additional info: Account inactivity limit exceeded. Contact system administrator to reset.
+
+
+# 配置组的权限
+ldapsearch -D "cn=Directory Manager" -W -H ldap://10.67.36.62:3389 -x \
+     -b "dc=tj,dc=fii" -s sub '(aci=*)' aci
+1 添加admin组，给admin权限
+[root@repo test]# cat admin_perm.ldif
+dn: cn=admin,dc=tj,dc=fii
+changetype: add
+objectClass: top
+objectClass: posixGroup
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames
+objectClass: nsMemberOf
+gidNumber: 1
+description: admin group
+
+dn: dc=tj,dc=fii
+changetype: modify
+add: aci
+aci: (targetattr = "*") (version 3.0;acl "Allow user to manage all the entries";allow (all) (groupdn = "ldap:/// cn=admin,dc=tj,dc=fii");)
+
+2 添加readonly组，给read,search权限
+[root@repo test]# cat read_only.ldif
+dn: cn=readonly,dc=tj,dc=fii
+changetype: add
+objectClass: top
+objectClass: posixGroup
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames
+objectClass: nsMemberOf
+gidNumber: 1
+description: readonly group
+
+dn: dc=tj,dc=fii
+changetype: modify
+add: aci
+aci: (targetattr = "*") (version 3.0;acl "Allow user to read and search";allow (search,read) (groupdn = "ldap:/// cn=readonly,dc=tj,dc=fii");)
+
+[root@repo test]# ldapmodify -H ldap://10.67.36.62:3389 -x -W -D "cn=Directory Manager" -f perm.ldif
+Enter LDAP Password:
+adding new entry "cn=admin,dc=tj,dc=fii"
+
+modifying entry "dc=tj,dc=fii"
+
+[root@repo test]# ldapmodify -H ldap://10.67.36.62:3389 -x -W -D "cn=Directory Manager" -f read_only.ldif
+Enter LDAP Password:
+adding new entry "cn=readonly,dc=tj,dc=fii"
+
+modifying entry "dc=tj,dc=fii"
+
+#ACI 权限
+查看ACI  ACI是可以基于dc，ou
+ldapsearch -D "cn=Directory Manager" -W -H ldap://10.67.36.62:3389 -x \
+ -b "dc=tj,dc=fii" -s sub '(aci=*)' aci
+
+# tj.fii
+dn: dc=tj,dc=fii
+aci: (targetattr="dc || description || objectClass")(targetfilter="(objectClas
+ s=domain)")(version 3.0; acl "Enable anyone domain read"; allow (read, search
+ , compare)(userdn="ldap:///anyone");)
+aci: (targetattr="ou || objectClass")(targetfilter="(objectClass=organizationa
+ lUnit)")(version 3.0; acl "Enable anyone ou read"; allow (read, search, compa
+ re)(userdn="ldap:///anyone");)
+aci: (targetattr = "*") (version 3.0;acl "<Unnamed ACI>";allow (all) (groupdn
+ = "ldap:/// cn=admin,dc=tj,dc=fii");)
+aci: (targetattr = "*") (version 3.0;acl "Allow user to read and search";allow
+  (search,read) (groupdn = "ldap:/// cn=readonly,dc=tj,dc=fii");)
+
+匿名访问只能查看dc自身，OU列表,group列表，people OU里的entry
+  
+
+# 备份
+The dsctl command makes offline database backups, and the dsconf command makes online database backups.
+dsctl需要关闭实例再备份
+
+sh-4.4# dsconf localhost backup create
+The backup create task has finished successfully
+sh-4.4# ls /data/bak
+localhost-2023_02_03_08_28_29
+在线还原
+dsconf localhost backup restore localhost-2023_02_03_08_28_29
+
+#dsrc
+dsctl localhost dsrc create \
+ --uri ldapi://%%2fdata%%2frun%%2fslapd-localhost.socket \
+ --basedn "dc=tj,dc=fii" \
+ --binddn "cn=Directory Manager"
+ 
+ 
+ 
+

@@ -1,4 +1,9 @@
-# 修改查找条目数限制
+# 负责查询
+ (|(!(gidNumber=*))(!(mail=*)))
+ (!(employeeType=*))
+ (&(uid=*)(lastlogintime>=20221127000000Z))
+
+# 修改binddn的查找条目数限制
 dn: uid=sso,ou=user,ou=system,dc=cesbg,dc=fii
 changetype: modify
 add: nssizelimit
@@ -99,7 +104,6 @@ config-entry add "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config" \
 
 3 重启实例使插件生效
 
-
 4 在OU=Foxconn里建立账户不活跃策略，定义了accountInactivityLimit:2592000
 ldapadd -x -ZZ -W -D "cn=Directory Manager" -f
 
@@ -143,6 +147,70 @@ objectclass: cosPointerDefinition
 cosTemplateDn: cn=TempltCoS,ou=Foxconn,dc=cesbg,dc=fii
 cosAttribute: acctPolicySubentry default operational-default   
 
+# agreement
+root@XTJJSLdap01:/var/log/dirsrv/slapd-389server# dsconf -D "cn=Directory Manager" ldap://XTJJSLdap01.cesbg.fii repl-agmt list --suffix="dc=cesbg,dc=fii"
+Enter password for cn=Directory Manager on ldap://XTJJSLdap01.cesbg.fii:
+dn: cn=repl163_172,cn=replica,cn=dc\3Dcesbg\2Cdc\3Dfii,cn=mapping tree,cn=config
+cn: repl163_172
+description: repl163_172
+nsDS5ReplicaBindDN: cn=repltj2,cn=config
+nsDS5ReplicaBindMethod: simple
+nsDS5ReplicaCredentials: {AES-TUhNR0NTcUdTSWIzRFFFRkRUQm1NRVVHQ1NxR1NJYjNEUUVGRERBNEJDUTJNemc1TnpCa05DMDFOMk5rTXpBdw0KT1MwNU1EZGlObVJoTkMxak1XTmxOREExT1FBQ0FRSUNBU0F3Q2dZSUtvWklodmNOQWdjd0hRWUpZSVpJQVdVRA0KQkFFcUJCQVd3bTllSWxGSjM1Vk16bnpQUmRrdg==}O8o5fRaGwFfA5m5hrUIqCw==
+nsDS5ReplicaHost: XTJJSLdap02.cesbg.fii
+nsDS5ReplicaPort: 636
+nsDS5ReplicaRoot: dc=cesbg,dc=fii
+nsDS5ReplicaTransportInfo: LDAPS
+nsds50ruv: {replicageneration} 632d6d14000000010000
+nsds50ruv: {replica 6 ldap://XTJJSLdap02.cesbg.fii:389} 634ad5b2000000060000 63a9648b000200060000
+nsds50ruv: {replica 4 ldap://XLHJSLdap02.cesbg.fii:389} 634ad56b000100040000 63a96489ed9300040000
+nsds50ruv: {replica 3 ldap://XLHJSLdap01.cesbg.fii:389} 634d7ad6000000030000 63a96486edaf00030000
+nsds50ruv: {replica 1 ldap://xygjsldap01.cesbg.fii:389} 632d77ce000000010000 63b7e05b878200010000
+nsds50ruv: {replica 2 ldap://xygjsldap02.cesbg.fii:389} 632d74e3000100020000 63b7deee814400020000
+nsds50ruv: {replica 5 ldap://XTJJSLdap01.cesbg.fii:389} 634ad5e4000100050000 63b691f2000100050000
+nsds5ReplicaEnabled: on
+nsds5replicaChangesSentSinceStartup:: MTo0MjQvMCAyOjEvMCA=
+nsds5replicaLastInitEnd: 19700101000000Z
+nsds5replicaLastInitStart: 19700101000000Z
+nsds5replicaLastUpdateEnd: 20230106010255Z
+nsds5replicaLastUpdateStart: 20230106010255Z
+nsds5replicaLastUpdateStatus: Error (1) Can't acquire busy replica (Unable to acquire replica: the replica is currently being updated by another supplier.)
+nsds5replicaLastUpdateStatusJSON: {"state": "amber", "ldap_rc": "0", "ldap_rc_text": "Success", "repl_rc": "1", "repl_rc_text": "replica busy", "date": "2023-01-06T01:03:06Z", "message": "Error (1) Can't acquire busy replica (Unable to acquire replica: the replica is currently being updated by another supplier.)"}
+nsds5replicaUpdateInProgress: FALSE
+nsds5replicareapactive: 0
+nsruvReplicaLastModified: {replica 6 ldap://XTJJSLdap02.cesbg.fii:389} 00000000
+nsruvReplicaLastModified: {replica 4 ldap://XLHJSLdap02.cesbg.fii:389} 00000000
+nsruvReplicaLastModified: {replica 3 ldap://XLHJSLdap01.cesbg.fii:389} 00000000
+nsruvReplicaLastModified: {replica 1 ldap://xygjsldap01.cesbg.fii:389} 00000000
+nsruvReplicaLastModified: {replica 2 ldap://xygjsldap02.cesbg.fii:389} 00000000
+nsruvReplicaLastModified: {replica 5 ldap://XTJJSLdap01.cesbg.fii:389} 00000000
+objectClass: top
+objectClass: nsds5replicationagreement
+
+
+dn: cn=repl163_28,cn=replica,cn=dc\3Dcesbg\2Cdc\3Dfii,cn=mapping tree,cn=config
+cn: repl163_28
+description: repl163_28
+nsDS5ReplicaBindDN: cn=repl3,cn=config
+nsDS5ReplicaBindMethod: simple
+nsDS5ReplicaCredentials: {AES-TUhNR0NTcUdTSWIzRFFFRkRUQm1NRVVHQ1NxR1NJYjNEUUVGRERBNEJDUTJNemc1TnpCa05DMDFOMk5rTXpBdw0KT1MwNU1EZGlObVJoTkMxak1XTmxOREExT1FBQ0FRSUNBU0F3Q2dZSUtvWklodmNOQWdjd0hRWUpZSVpJQVdVRA0KQkFFcUJCQ2M3Z25EZy9iNkxpZDVPeTRyRmUxWQ==}8ysEonvZC7IYh01K62pj7Q==
+nsDS5ReplicaHost: xygjsldap02.cesbg.fii
+nsDS5ReplicaPort: 636
+nsDS5ReplicaRoot: dc=cesbg,dc=fii
+nsDS5ReplicaTransportInfo: LDAPS
+nsds5ReplicaEnabled: on
+nsds5replicaChangesSentSinceStartup:: MToxOS8wIA==
+nsds5replicaLastInitEnd: 19700101000000Z
+nsds5replicaLastInitStart: 20230106005624Z
+nsds5replicaLastInitStatus: Error (1) Replication error acquiring replica: replica busy
+nsds5replicaLastInitStatusJSON: {"state": "red", "ldap_rc": "0", "ldap_rc_text": "Success", "repl_rc": "1", "repl_rc_text": "replica busy", "conn_rc": "0", "conn_rc_text": "operation success", "date": "2023-01-06T00:56:25Z", "message": "Error (1) Replication error acquiring replica: replica busy"}
+nsds5replicaLastUpdateEnd: 20230106010257Z
+nsds5replicaLastUpdateStart: 20230106010257Z
+nsds5replicaLastUpdateStatus: Error (1) Can't acquire busy replica (Unable to acquire replica: the replica is currently being updated by another supplier.)
+nsds5replicaLastUpdateStatusJSON: {"state": "amber", "ldap_rc": "0", "ldap_rc_text": "Success", "repl_rc": "1", "repl_rc_text": "replica busy", "date": "2023-01-06T01:03:06Z", "message": "Error (1) Can't acquire busy replica (Unable to acquire replica: the replica is currently being updated by another supplier.)"}
+nsds5replicaUpdateInProgress: FALSE
+nsds5replicareapactive: 0
+objectClass: top
+objectClass: nsds5replicationagreement
 
 
 
