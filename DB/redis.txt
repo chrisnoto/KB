@@ -252,7 +252,63 @@ xreadgroup group group2 cs count 2 streams sensor >
 >> xreadgroup group group2 csm count 2 streams sensor >
 
 (nil)			
-			
+
+# Pending Entries List
+从stream角度看
+10.67.50.41:6379> xinfo groups sensor
+1) 1# "name" => "cg-1"
+   2# "consumers" => (integer) 1
+   3# "pending" => (integer) 0
+   4# "last-delivered-id" => "0-0"
+   5# "entries-read" => (nil)
+   6# "lag" => (integer) 5
+2) 1# "name" => "group1"
+   2# "consumers" => (integer) 1
+   3# "pending" => (integer) 2
+   4# "last-delivered-id" => "1675843788224-0"
+   5# "entries-read" => (integer) 5
+   6# "lag" => (integer) 0
+3) 1# "name" => "group2"
+   2# "consumers" => (integer) 1
+   3# "pending" => (integer) 4
+   4# "last-delivered-id" => "1675843788224-0"
+   5# "entries-read" => (integer) 5
+   6# "lag" => (integer) 0
+4) 1# "name" => "mygroup"
+   2# "consumers" => (integer) 1
+   3# "pending" => (integer) 0
+   4# "last-delivered-id" => "0-0"
+   5# "entries-read" => (nil)
+   6# "lag" => (integer) 5
+ 
+从消费组的角度看 
+10.67.50.41:6379> xinfo consumers sensor group2
+1) 1# "name" => "cs"
+   2# "pending" => (integer) 4
+   3# "idle" => (integer) 1832214
+10.67.50.41:6379> xpending sensor group2
+1) (integer) 5
+2) "1675842547425-0"
+3) "1675843788224-0"
+4) 1) 1) "cs"
+      2) "5"   
+确认一条消息
+10.67.50.41:6379> xack sensor group2 1675843788224-0
+(integer) 1
+10.67.50.41:6379> xinfo consumers sensor group2
+1) 1# "name" => "cs"
+   2# "pending" => (integer) 3
+   3# "idle" => (integer) 2162663
+10.67.50.41:6379> xpending sensor group2
+1) (integer) 3
+2) "1675842584792-0"   头
+3) "1675843746295-0"   尾
+4) 1) 1) "cs"
+      2) "3"
+   
+
+
+   
 # 查看redis版本
 LOLWUT
 hello

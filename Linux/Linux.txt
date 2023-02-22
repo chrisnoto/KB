@@ -1,4 +1,7 @@
-#  pip更换阿里云的源
+# top只查看redis-server
+top -p $(pgrep -d, redis-server)
+
+#  pip更换源
 pip配置文件的位置
 全局的位于 /etc/pip.conf
 用户级别的位于 $HOME/.pip/pip.conf
@@ -7,6 +10,12 @@ pip配置文件的位置
 [global]
 trusted-host=mirrors.aliyun.com
 index-url=http://mirrors.aliyun.com/pypi/simple
+
+# npm配置代理和更换源
+[root@389dsbak ~]# npm config set proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
+[root@389dsbak ~]# npm config set registry  https://registry.npmmirror.com
+[root@389dsbak ~]# npm config set https-proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
+[root@389dsbak ~]# npm install redis-rdb-analyze -g
 =========================================================== Tips and tricks =================================================
 #  如何直接拷贝单个文件到服务器的任何地方，无视lhadmin没有root权限
 [root@repo ~]# ssh lhadmin@xlhcesbges01 sudo cp /dev/stdin /root/pg.conf <pg.conf
@@ -2369,6 +2378,35 @@ web03[192.168.2.102]: mysqld ok httpd ok
 [sam@oc1181188062 Test]$ awk 'NR==FNR{s[$1]=$2;next}{print $0,s[$1]}' 10 11
 [sam@oc1181188062 Test]$ sudo awk -F: 'NR==FNR{u[$1]=$4":"$5;next}{print $0":"u[$1]}' /etc/shadow /etc/passwd
 
+# 另一个例子
+[root@389dsbak ~]# cat 1.log | head -n 14
+ 1) 1) (integer) 196
+    2) (integer) 1675999215
+    3) (integer) 26278
+    4) 1) "get"
+       2) "usedSpace"
+    5) "10.67.50.42:57232"
+    6) ""
+ 2) 1) (integer) 195
+    2) (integer) 1675957419
+    3) (integer) 21765
+    4) 1) "INFO"
+       2) "ALL"
+    5) "172.18.0.5:54398"
+    6) "redis_exporter"
+[root@389dsbak ~]# cat 1.log | awk '{if ($3~ "(integer)") printf "\n"$NF;else printf " "$NF}'
+
+196 1675999215 26278 "get" "usedSpace" "10.67.50.42:57232" ""
+195 1675957419 21765 "INFO" "ALL" "172.18.0.5:54398" "redis_exporter"
+194 1675773969 13951 "INFO" "ALL" "172.18.0.5:39110" "redis_exporter"
+193 1675759149 15557 "INFO" "ALL" "172.18.0.5:52422" "redis_exporter"
+192 1675741329 12391 "INFO" "ALL" "172.18.0.5:34482" "redis_exporter"
+191 1675528659 10541 "INFO" "ALL" "172.18.0.5:46230" "redis_exporter"
+190 1675473789 17635 "INFO" "ALL" "172.18.0.5:47444" "redis_exporter"
+189 1675337139 10112 "INFO" "ALL" "172.18.0.5:51026" "redis_exporter"
+188 1675300989 12855 "CONFIG" "GET" "*" "172.18.0.5:42854" "redis_exporter"
+187 1675160499 14238 "INFO" "ALL" "172.18.0.5:42594" "redis_exporter"[root@389dsbak ~]#
+
 ############# find 命令汇总 #############
 # 按类型查找
 find /usr -type f |xargs ls -l |grep '^-......rwx'
@@ -3070,8 +3108,16 @@ shift
 done
 }
 
+-----------------------------------------
+#here document
+cat > file <<EOF
+123
+456
+EOF
 
-
+cat << EOF | awk 'BEGIN{OFS="=>"}{print $1,$2}'
+ver 2.7.0
+EOF
 ############## secondary log ################
 # START Secondary Logging
 if [[ `tty` ]] 
