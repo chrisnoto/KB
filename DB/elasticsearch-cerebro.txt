@@ -46,3 +46,28 @@ root@xtjcesbges01:/opt/cerebro# cat /etc/hosts
 10.66.12.214  xtjcesbges02 xtjcesbges02.cesbg.foxconn
 10.66.12.230  xtjcesbges03 xtjcesbges03.cesbg.foxconn
 10.66.12.122  kibana.cesbg.foxconn kibana
+
+# 龙华ES cerebro配置
+[root@xlhcesbges01 ~]# cat application.conf
+secret = "ki:s:[[@=Ag?QI`W2jMwkY:eqvrJ]JqoJyi2axj3ZvOv^/KavOT4ViJSv?6YY5[N"
+
+play.ws.ssl.loose.acceptAnyCertificate = true          # 接受任何证书，龙华ES的证书是同一个，不匹配主机名
+
+hosts = [
+  {
+    host = "http://xlhcesbges01.cesbg.foxconn:9200"
+    name = "ELK Cluster - LH"
+    auth = {
+      username = "elastic"
+      password = "vSTJ456"
+    }
+  }
+]
+
+[root@xlhcesbges01 ~]# cat cerebro.sh
+docker run -d \
+--net=host \
+--name cerebro \
+--dns 10.134.241.70 \
+-v /root/application.conf:/opt/cerebro/conf/application.conf \
+yannart/cerebro:latest

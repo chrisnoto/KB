@@ -743,4 +743,9 @@ Checking /etc/prometheus/rules/test.rule.yml
         "name": "prometheus_http_response_size_bytes_bucket",
         "value": 189
       },
-  
+
+label_replace(probe_success, "system", "$1", "instance", "http://(.+)")
+
+query_result(label_replace(probe_success, "system", "$1", "instance", "http://(.+)"))
+
+label_values(query_result(label_replace(probe_success{group="http"}, "system", "$1", "instance", "http://(.+)")),system)	  

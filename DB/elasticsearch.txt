@@ -163,6 +163,20 @@ curl -X POST "http://10.67.51.150:9200/_reindex" -H 'Content-Type: application/j
     "index": "docker-2022.01"
   }
 }'
+
+curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic:vSTJ456 https://xtjcesbges01.cesbg.foxconn:9200/_reindex -H 'Content-Type: application/json' -d '
+{
+  "source": {
+    "index": "filebeat-7.12.0-2022.03.*"
+  },
+  "dest": {
+    "index": "filebeat-7.12.0-2022.03"
+  }
+}'
+
+# 查看reindex的status
+GET /_tasks?detailed=true&actions=*reindex&group_by=parents
+
 ############repository-s3 与minio ###############
 minio 配置
 [root@repo ~]# cat minio.sh
@@ -1092,3 +1106,67 @@ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesb
     }
   }
 }'
+
+curl -XPUT --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/library/book/_bulk?refresh&pretty" -H 'Content-Type: application/json' -d'
+{"index":{"_id": "Leviathan Wakes"}}
+{"name": "Leviathan Wakes", "author": "James S.A. Corey", "release_date": "2011-06-02", "page_count": 561}
+{"index":{"_id": "Hyperion"}}
+{"name": "Hyperion", "author": "Dan Simmons", "release_date": "1989-05-26", "page_count": 482}
+{"index":{"_id": "Dune"}}
+{"name": "Dune", "author": "Frank Herbert", "release_date": "1965-06-01", "page_count": 604}
+'
+
+get /cloudmes-wms-ims-2023.03/_search
+{
+  "query": { 
+    "bool": { 
+      "must": [
+        { "match": { "agent.hostname":"XTJCloudMES-SaaS01"        }}
+            ],
+      "filter": [ 
+                { "range": { "@timestamp": { "gte": "2023-03-01" }}}
+      ]
+    }
+  },
+  "sort": [
+    {"@timestamp":"desc"}
+    ],
+  "_source": [
+  "@timestamp",
+  "container.labels.io_kubernetes_container_name",
+  "message"
+  ]
+}
+
+get /filebeat-7.12.0-2023.03*/_search
+{
+  "query": { 
+    "bool": { 
+      "must": [
+        { "match": { "agent.hostname":"xtjbasecache01"        }}
+            ],
+      "filter": [ 
+                { "term":  { "event.dataset": "redis.slowlog" }},
+                { "range": { "@timestamp": { "gte": "2023-03-01" }}}
+      ]
+    }
+  },
+  "sort": [
+    {"@timestamp":"desc"}
+    ],
+  "_source": [
+  "@timestamp",
+  "redis.slowlog.cmd",
+  "redis.slowlog.key",
+  "redis.slowlog.duration.us"
+  ]
+}
+
+
+# 龙华 ES
+[root@xlhcesbges01 ~]# curl -XGET -k -u elastic:vSTJ456 https://xlhcesbges01.cesbg.foxconn:9200/_cat/nodes
+10.134.241.75 52 74 0 0.01 0.03 0.05 ilr         - xlhcesbges02
+10.134.241.95 22 95 0 0.26 0.29 0.31 cdfhilmrstw - xlhcesbges05
+10.134.241.90 48 92 0 0.39 0.43 0.50 cdfhilmrstw * xlhcesbges04
+10.134.241.86 24 98 0 1.06 0.98 0.72 cdfhilmrstw - xlhcesbges03
+10.134.241.70 32 74 0 0.10 0.09 0.06 ilr         - xlhcesbges01

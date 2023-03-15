@@ -499,4 +499,12 @@ dsctl localhost dsrc create \
  
  
  
+root@xygjsldap01:/tmp# dsconf 389server replication get-changelog --suffix dc=cesbg,dc=fii
+dn: cn=changelog,cn=userRoot,cn=ldbm database,cn=plugins,cn=config
+cn: changelog
+nsslapd-changelogmaxage: 7d
+nsslapd-changelogmaxentries: 100000
+nsslapd-changelogtrim-interval: 30
+objectClass: top
+objectClass: extensibleObject
 

@@ -653,8 +653,21 @@ maxclients参数来限制最大客户端连接数，一旦连接数超过maxclie
 Redis的默认配置给出的timeout=0,客户端不会因超时而关闭。
 客户端类型
 
+内存碎片
+Memory fragmentation in Redis is calculated as the ratio of used_memory_rss to used_memory.
 
+used_memory_rss - It is defined as the number of bytes allocated by the operating system.
 
+used_memory - It is defined as the number of bytes allocated by Redis.
+
+A memory fragmentation ratio greater than and closer to 1 is considered healthy. If it is lower than 1, it means you need to allocate more memory to Redis immediately,
+ or it will start to swap memory. Memory fragmentation ratio greater than 1.5 indicates excessive memory fragmentation. You will have to restart your Redis server to 
+ fix excessive memory fragmentation.
+
+Increase	maxmemory limit: If	you	are	using	snapshots,	maxmemory can	be
+set	as	high	as 45%	of	available	physical	memory	with	little	risk	of	causing	
+memory	swaps.	Without	snapshots	(but	AOF),	it	makes	sense	to	set	
+maxmemory to	95%	of	available	memory 
 
 RDB运行后，开启AOF的正确方式
 1.在线修改配置

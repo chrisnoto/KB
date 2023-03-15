@@ -129,6 +129,48 @@ output.kafka:
   max_message_bytes: 1000000
   
 filebeat可以增加metadata，如cloud, kubernetes, docker, host
+
+# filebeat for cloudmes docker/k8s
+root@XTJCloudMES-SaaS01:~# cat /etc/filebeat/filebeat.yml
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0640
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /data/docker/containers/*/*json.log*
+- type: filestream
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+#filebeat.modules:
+#- module: system
+#  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+setup.kibana:
+output.logstash:
+  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044","xtjcesbglogstash02.cesbg.foxconn:5044","xtjcesbglogstash03.cesbg.foxconn:5044"]
+  loadbalance: true
+  ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata:
+      match_source_index: 3
+  - include_fields:
+      fields: ["agent.hostname","container.labels.io_kubernetes_container_name","log.file.path","message"]
+
+match_source_index的作用
+(Optional) Index in the source path split by / to look for container ID. It defaults to 4 to match /var/lib/docker/containers/<container_id>/*.log
 ###########filebeat for openstack instance########
   instance必须能get 169.254.169.254
   root@ostjpcasdev01:/etc/filebeat# cat filebeat.yml |egrep -v '#|^$'
