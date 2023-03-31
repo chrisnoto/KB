@@ -3,6 +3,8 @@
  (!(employeeType=*))
  (&(uid=*)(lastlogintime>=20221127000000Z))
 
+(|(!(gidNumber=*))(!(mail=*)))(!(employeeType=*))(&(uid=*)(lastlogintime>=20221127000000Z)) 
+ 
 # 修改binddn的查找条目数限制
 dn: uid=sso,ou=user,ou=system,dc=cesbg,dc=fii
 changetype: modify
@@ -213,4 +215,10 @@ objectClass: top
 objectClass: nsds5replicationagreement
 
 
+# 错误日志
+[22/Mar/2023:17:23:19.287899912 +0800] conn=72 op=46 MOD dn="uid=demo_user,ou=people,dc=cesbg,dc=fii"
+[22/Mar/2023:17:23:19.340744353 +0800] conn=72 op=46 RESULT err=65 tag=103 nentries=0 wtime=0.000187179 optime=0.052877128 etime=0.053055137 - attribute "sn" not allowed     这个用户sn属性不存在
+
+[22/Mar/2023:17:19:51.355459605 +0800] conn=72 op=5 SRCH base="cn=server,cn=plugins,cn=config" scope=0 filter="(objectClass=*)" attrs="hasSubordinates objectClass"            对象不存在 noSuchObject
+[22/Mar/2023:17:19:51.355681087 +0800] conn=72 op=5 RESULT err=32 tag=101 nentries=0 wtime=0.000176973 optime=0.000233712 etime=0.000386838
 

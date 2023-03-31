@@ -170,6 +170,28 @@ git fetch 拿到了远程所有分支的更新，我用 cat .git/FETCH_HEAD 可�
 merge 动作的默认目标是当前分支，若要切换目标，可以直接切换分支
 merge 动作的来源则取决于你是否有 tracking，若有则读取配置自动完成，若无则请指明【来源】
 
+# git命令
+hash-object：创建 blob 对象
+cat-file -t: 查看对象类型
+cat-file -p: 查看对象内容
+update-index: 更新暂存区
+commit-tree: 创建 commit 节点
+write-tree: 暂存区写入版本库
+update-ref：创建和更新 ref
+
+例子：
+H7108579@TJCESIT-150 MINGW32 ~/Desktop/KB/.git/objects/aa (GIT_DIR!)
+$ git cat-file -p aa3c33a8527acd92ab0c04214ad9c26ccdc251c8
+git guide reference  https://www.liaoxuefeng.com/wiki/0013739516305929606dd18361248578c67b8067c8c017b000/0013743256916071d599b3aed534aaab22a0db6c4e07fd0000
+
+git config --global http.proxy 10.67.124.99:808
+git config --global https.proxy 10.67.124.99:808
+
+
+##################撤销修改
+场景1：当你改乱了工作区某个文件的内容，想直接丢弃工作区的修改时，用命令git checkout -- file。
+
+
 #####getconfig.sh#########
 #!/bin/bash
 

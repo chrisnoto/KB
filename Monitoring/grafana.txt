@@ -69,3 +69,29 @@ org_id = 1
 #group_dn = "*"
 #org_role = "Viewer"
 #org_id =1
+
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_移動應用開發部_APP開發課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Viewer"
+org_id =1
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津[天津]IT系統規劃處_ERP部_GSCM課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Viewer"
+org_id =1
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_ERP部_B2B課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Viewer"
+org_id =1
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_PLM及品質系統部_RD系統課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Viewer"
+org_id =1
+
+[[servers.group_mappings]]
+group_dn = "cn=[天津]IT系統規劃處_PLM及品質系統部_製造系統課,ou=groups,dc=cesbg,dc=fii"
+org_role = "Viewer"
+org_id =1

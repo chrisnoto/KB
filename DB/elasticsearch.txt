@@ -153,6 +153,29 @@ curl -X POST "http://10.67.39.81:9200/clm_20220112/_split/clm_3" -H 'Content-Typ
    }
 }'
 
+PUT filebeat-7.12.0-2022.08/_settings
+{
+  "blocks.write": true
+}
+
+POST filebeat-7.12.0-2022.08/_split/filebeat-7.12.0-202208
+{
+  "settings": {
+    "index.number_of_shards": 2
+  }
+}
+
+GET _cat/recovery/filebeat-7.12.0-202208
+
+GET filebeat-7.12.0-2022.08/_count
+GET filebeat-7.12.0-202208/_count
+GET _cat/shards/filebeat-7.12.0-202208?v
+index                  shard prirep state          docs  store ip           node
+filebeat-7.12.0-202208 1     p      STARTED    76785201 84.6gb 10.66.12.214 xtjcesbges02
+filebeat-7.12.0-202208 1     r      UNASSIGNED                              
+filebeat-7.12.0-202208 0     p      STARTED    76776210 84.6gb 10.66.12.214 xtjcesbges02
+filebeat-7.12.0-202208 0     r      UNASSIGNED
+
 # 将多个index写到一个新的index
 curl -X POST "http://10.67.51.150:9200/_reindex" -H 'Content-Type: application/json' -d'
 {
@@ -702,6 +725,43 @@ curl -XGET localhost:9200/_cat获取所有_cat系列的操作：
 /_cat/fielddata
 /_cat/fielddata/{fields}
 可以后面加一个v，让输出内容表格显示表头
+
+常用查询
+# 按shard大小給shard倒排序
+GET _cat/shards?v=true&h=index,shard,pr,rep,state,sto,node,ur&s=sto:desc
+index                               shard pr state       sto node                       ur
+cloudmes-jobs-2023.03               0     r  STARTED 161.6gb xtjcesbges01               
+cloudmes-jobs-2023.03               0     p  STARTED 161.5gb xtjcesbges03               
+filebeat-7.12.0-2022.12-3           0     r  STARTED  62.2gb xtjcesbges07.cesbg.foxconn 
+filebeat-7.12.0-2022.12-3           0     p  STARTED  62.1gb xtjcesbges06.cesbg.foxconn 
+filebeat-7.12.0-202208              0     r  STARTED  53.6gb xtjcesbges06.cesbg.foxconn 
+
+# 按主副本大小給index倒排序
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size&s=pri.store.size:desc
+index                           health pri rep pri.store.size
+cloudmes-jobs-2023.03           green    1   1        161.5gb
+filebeat-7.12.0-202208          green    2   1        107.3gb
+filebeat-7.12.0-2022.12-3       green    1   1         62.1gb
+filebeat-7.12.0-2022.11-3       green    1   1         49.7gb
+filebeat-7.12.0-2022.12-1       green    1   1         48.7gb
+
+# 按index名稱給index倒排序
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size&s=index:desc
+index                           health pri rep pri.store.size
+winlogbeat-7.12.0-2023.03.31    green    1   1           10gb
+winlogbeat-7.12.0-2023.03.30    green    1   1           24gb
+winlogbeat-7.12.0-2023.03.29    green    1   1         25.6gb
+winlogbeat-7.12.0-2023.03.28    green    1   1         25.5gb
+winlogbeat-7.12.0-2023.03.27    green    1   1         28.3gb
+
+# 按running time給task倒排序
+GET _cat/tasks?v=true&h=action,type,running_time,node&s=running_time:desc
+action                         type      running_time node
+indices:data/write/reindex     transport 4.9h         xtjcesbges04.cesbg.foxconn
+indices:data/write/bulk        transport 298ms        xtjcesbges04.cesbg.foxconn
+indices:data/write/bulk[s]     transport 296.6ms      xtjcesbges04.cesbg.foxconn
+indices:data/write/bulk[s]     transport 277ms        xtjcesbges06.cesbg.foxconn
+indices:data/write/bulk[s][p]  direct    276.5ms      xtjcesbges06.cesbg.foxconn
 --------------------- 
 nodes系列
 1、查询节点的状态
@@ -1162,7 +1222,20 @@ get /filebeat-7.12.0-2023.03*/_search
   ]
 }
 
+agent.hostname:"xtjbasecacheap*"
 
+filter {
+  ruby {
+    code => "
+      wanted_fields = ['agent.hostname', 'event.dataset','redis.slowlog.cmd','redis.slowlog.key','redis.slowlog.duration.us']
+      event.to_hash.keys.each { |k|
+        event.remove(k) unless wanted_fields.include? k
+      }
+    "
+  }
+}
+
+{"find":"terms","field":"event.dataset","query":"redis.slowlog"}        event.dataset:"redis.slowlog"
 # 龙华 ES
 [root@xlhcesbges01 ~]# curl -XGET -k -u elastic:vSTJ456 https://xlhcesbges01.cesbg.foxconn:9200/_cat/nodes
 10.134.241.75 52 74 0 0.01 0.03 0.05 ilr         - xlhcesbges02

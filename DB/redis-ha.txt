@@ -78,6 +78,18 @@ Reading messages... (press Ctrl-C to quit)
 2) "__sentinel__:hello"
 3) "172.28.0.5,26379,37fe7a7a5cc397f8ddf6436bdc03e811b9e212e0,2,mymaster,172.28.0.2,6379,0"
 
+>>> import redis
+>>> r=Redis(host='10.67.50.152',port="5002",password="123456")
+>>> p=r.pubsub()
+>>> p.subscribe('__sentinel__:hello')
+>>> p.get_message()
+{'type': 'subscribe', 'pattern': None, 'channel': b'__sentinel__:hello', 'data': 1}
+>>> print(p.get_message())
+{'type': 'message', 'pattern': None, 'channel': b'__sentinel__:hello', 'data': b'10.67.50.152,26379,dc077620a27341aaf6d24ef94a4c7cf420032fae,3,redis-master,10.67.50.152,5002,3'}
+>>> print(p.get_message())
+{'type': 'message', 'pattern': None, 'channel': b'__sentinel__:hello', 'data': b'10.67.50.152,26380,0f1a5180deefc738a26af72742bffe799db3c192,3,redis-master,10.67.50.152,5002,3'}
+>>> print(p.get_message())
+{'type': 'message', 'pattern': None, 'channel': b'__sentinel__:hello', 'data': b'10.67.50.152,26381,afe1f4e1aedfae73c097e1b4e35c72dd27e650e5,3,redis-master,10.67.50.152,5002,3'}
 
 
 ############################## sentinel

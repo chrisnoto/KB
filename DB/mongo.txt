@@ -158,6 +158,76 @@ out:"average"
 }
 )
 
+# 限定输出字段
+ansible> db.cache.find({"data.ansible_system":'Linux'},{"data.ansible_system":1});
+[
+  { _id: 'ansible_factslocalhost', data: { ansible_system: 'Linux' } },
+  {
+    _id: 'ansible_facts10.67.51.164',
+    data: { ansible_system: 'Linux' }
+  }
+]
+ansible> db.cache.find({"data.ansible_system":"Linux"},{"data.ansible_distribution":1,"data.ansible_distribution_version":1,"data.ansible_hostname":1,"data.ansible_default_ipv4.address":1});
+[
+  {
+    _id: 'ansible_factslocalhost',
+    data: {
+      ansible_distribution: 'AlmaLinux',
+      ansible_distribution_version: '9.0',
+      ansible_hostname: '389dsbak',
+      ansible_default_ipv4: { address: '10.67.50.225' }
+    }
+  },
+  {
+    _id: 'ansible_facts10.67.51.164',
+    data: {
+      ansible_distribution_version: '7.5',
+      ansible_default_ipv4: { address: '10.67.51.164' },
+      ansible_distribution: 'CentOS',
+      ansible_hostname: 'repo'
+    }
+  }
+]
+
+[root@repo ~]# mongosh --quiet mongodb://10.67.51.164:27017/ansible --eval 'db.cache.find({"data.ansible_system":"Linux"},{"data.ansible_distribution":1,"data.ansible_distribution_version":1,"data.ansible_hostname":1,"data.ansible_default_ipv4.address":1})'
+[
+  {
+    _id: 'ansible_factslocalhost',
+    data: {
+      ansible_distribution: 'AlmaLinux',
+      ansible_distribution_version: '9.0',
+      ansible_hostname: '389dsbak',
+      ansible_default_ipv4: { address: '10.67.50.225' }
+    }
+  },
+  {
+    _id: 'ansible_facts10.67.51.164',
+    data: {
+      ansible_distribution_version: '7.5',
+      ansible_default_ipv4: { address: '10.67.51.164' },
+      ansible_distribution: 'CentOS',
+      ansible_hostname: 'repo'
+    }
+  }
+]
+
+[root@repo ~]# mongosh --quiet mongodb://10.67.51.164:27017/ansible <demo.js
+ansible> use ansible
+already on db ansible
+ansible> show collections
+cache
+ansible> [root@repo ~]# cat demo.js
+use ansible
+show collections
+
+# 查看索引
+ansible> db.cache.getIndexes();
+[
+  { v: 2, key: { _id: 1 }, name: '_id_' },
+  { v: 2, key: { date: 1 }, name: 'ttl', expireAfterSeconds: 8640000 }
+]
+
+
 # mongo客户端命令
 root@35d51112cc40:/# mongo -u "root" -p "openIM123" --authenticationDatabase "admin"
 MongoDB shell version v4.0.28
