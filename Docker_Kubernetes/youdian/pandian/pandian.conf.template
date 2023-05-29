@@ -1,0 +1,13 @@
+Listen 8080
+
+<VirtualHost *:8080>
+    DocumentRoot "/var/www/youdian_v107"
+    ServerName $DOMAIN
+    <Directory "/var/www/youdian_v107">
+        Options All
+        AllowOverride None
+        Order allow,deny
+        Allow from all
+    </Directory>
+</VirtualHost>
+

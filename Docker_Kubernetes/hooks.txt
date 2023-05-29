@@ -1,0 +1,58 @@
+Hooks
+1 kubernetes hooks
+PostStart 在容器啟動之後, 會立即的觸發 PostStart hook, 但是無法保證 PostStart 會先被觸發, 或者是容器的 ENTRYPOINT 會先被觸發, 因為這個動作是非同步的
+PreStop 在容器被結束之前, 會觸發 PreStop, 這個動作是同步的, 所以 PreStop 必須在刪除容器的請求送出之前先完成  
+
+
+2 helm hooks
+在 Helm 中定义了如下一些可供我们使用的 Hooks：
+
+预安装pre-install：在模板渲染后，kubernetes 创建任何资源之前执行
+安装后post-install：在所有 kubernetes 资源安装到集群后执行
+预删除pre-delete：在从 kubernetes 删除任何资源之前执行删除请求
+删除后post-delete：删除所有 release 的资源后执行
+升级前pre-upgrade：在模板渲染后，但在任何资源升级之前执行
+升级后post-upgrade：在所有资源升级后执行
+预回滚pre-rollback：在模板渲染后，在任何资源回滚之前执行
+回滚后post-rollback：在修改所有资源后执行回滚请求
+crd-install：在运行其他检查之前添加 CRD 资源，只能用于 chart 中其他的资源清单定义的 CRD 资源。
+
+如果开发人员在 install 的生命周期中定义了两个 hook：pre-install和post-install，那么我们安装一个 chart 包的生命周期就会多一些步骤了：
+
+用户运行helm install foo
+chart 被加载到服务端 Tiller Server 中
+经过一些验证，Tiller Server 渲染 foo 模板
+Tiller 将 hook 资源加载到 kubernetes 中，准备执行pre-install hook
+Tiller 会根据权重对 hook 进行排序（默认分配权重0，权重相同的 hook 按升序排序）
+Tiller 然后加载最低权重的 hook
+Tiller 等待，直到 hook 准备就绪
+Tiller 将产生的资源加载到 kubernetes 中
+Tiller 执行post-install hook
+Tiller 等待，直到 hook 准备就绪
+Tiller 将 release 名称和其他数据返回给客户端
+Helm 客户端退出
+
+3 Helmfile hook
+Helmfile hook 是一个每次发布的扩展点，它由以下部分组成：
+
+events
+command
+args
+showlogs
+helmfile 在运行时，会触发各种事件，一旦事件触发，相关的 hook 就会被执行，目前支持的如下事件：
+
+prepare
+presync
+preuninstall
+postuninstall
+postsync
+cleanup
+
+Helmfile:同步与应用
+现在我们了解了 helm 升级的工作原理,让我们深入了解 helmfile 同步与应用。
+
+helmfile sync命令将在所有版本上运行helm upgrade。这意味着所有版本的修订版都将增加一。然而,由于 Helm 进行三向战略合并,如果 live 和期望状态之间没有变化,则实际上不会应用任何补丁:只是创建了一个新的 helm-release secret。
+
+helmfile apply命令将仅在有更改时运行helm upgrade。但是,为了检测变化,helmfile 使用helm-diff插件,它只计算 old 与 desired state 之间的差异;它不查看 live 状态(类似于 Helm 2)。如果在 Helm 之外发生了某些变化,helm-diff 将返回 "no change",并且版本不会升级。
+
+换句话说,apply的优点是不会创建无用的新修订,但不能保证 live state 的一致性,因为手动更改可能无法检测到。sync正好相反:它总是为 all 版本创建新修订,但会检测并撤消发生在 Helm 管理的字段上的任何手动更改。

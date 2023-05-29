@@ -1,0 +1,32 @@
+<?php
+/*
+ * @Author: CESBG\H7112347 yao.lei@mail.foxconn.com
+ * @Date: 2022-06-06 17:20:51
+ * @LastEditors: CESBG\H7112347 yao.lei@mail.foxconn.com
+ * @LastEditTime: 2022-06-10 09:49:24
+ * @FilePath: \youdian_old_web\Application\Admin\Conf\config.php
+ * @Description: youdian admin config
+ */
+return array(
+        //'配置项'=>'配置值'
+        'DB_TYPE'   => 'mysql', // 数据库类型
+        'DB_HOST'   => 'youdian_db', // 服务器地址
+        'DB_NAME'   => 'youdian_pandian_auth', // 数据库名
+        'DB_USER'   => 'centos', // 用户名
+        'DB_PWD'    => 'Foxconn123', // 密码
+        'DB_PORT'   => 3306, // 端口
+        'DB_PREFIX' => 'ccard_', // 数据库表前缀
+        'WEB_TITLE' => '优点固资盘点管理系统',
+        'WEB_VERSION' => '',
+        'AUTH_CONFIG'=>array(
+        'AUTH_ON' => true, //认证开关
+        'AUTH_TYPE' => 1, // 认证方式，1为时时认证；2为登录认证。
+        'AUTH_GROUP' => 'auth_group', //用户组数据表名
+        'AUTH_GROUP_ACCESS' => 'auth_access', //用户组明细表
+        'AUTH_RULE' => 'auth_rule', //权限规则表
+        'AUTH_USER' => 'auth_user'//用户信息表
+    ),
+        'INTERFACE_HOST' => 'http://youdian_api:8082/v1/',
+        'WEB_HOST' => 'http://$DOMAIN:8080',
+);
+
