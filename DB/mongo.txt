@@ -280,3 +280,123 @@ MongoDB server version: 4.0.28
 > db.runCommand({ addshard: 'rs1/localhost:27030,localhost:27031'})
 > db.runCommand({ enablesharding: 'test'})
 > db.runCommand({ shardcollection: 'test.user', key: {name: 1}})
+
+
+# 10.67.51.164  mongo
+/etc/mongod.conf增加下面两行后，重启mongodb
+replication:
+  replSetName: rs0
+
+[root@repo ~]# mongosh mongodb://10.67.51.164:27017  
+test> rs.initiate({ _id : "rs0",members: [{ _id: 0, host: "10.67.51.164:27017" }]})
+{ ok: 1 }
+rs0 [direct: other] test> rs.isMaster()
+{
+  topologyVersion: {
+    processId: ObjectId("643752baa09515e8b89dd2d5"),
+    counter: Long("6")
+  },
+  hosts: [ '10.67.51.164:27017' ],
+  setName: 'rs0',
+  setVersion: 1,
+  ismaster: true,
+  secondary: false,
+  primary: '10.67.51.164:27017',
+  me: '10.67.51.164:27017',
+  electionId: ObjectId("7fffffff0000000000000001"),
+  lastWrite: {
+    opTime: { ts: Timestamp({ t: 1681347351, i: 1 }), t: Long("1") },
+    lastWriteDate: ISODate("2023-04-13T00:55:51.000Z"),
+    majorityOpTime: { ts: Timestamp({ t: 1681347351, i: 1 }), t: Long("1") },
+    majorityWriteDate: ISODate("2023-04-13T00:55:51.000Z")
+  },
+  maxBsonObjectSize: 16777216,
+  maxMessageSizeBytes: 48000000,
+  maxWriteBatchSize: 100000,
+  localTime: ISODate("2023-04-13T00:55:51.481Z"),
+  logicalSessionTimeoutMinutes: 30,
+  connectionId: 2,
+  minWireVersion: 0,
+  maxWireVersion: 17,
+  readOnly: false,
+  ok: 1,
+  '$clusterTime': {
+    clusterTime: Timestamp({ t: 1681347351, i: 1 }),
+    signature: {
+      hash: Binary(Buffer.from("0000000000000000000000000000000000000000", "hex"), 0),
+      keyId: Long("0")
+    }
+  },
+  operationTime: Timestamp({ t: 1681347351, i: 1 }),
+  isWritablePrimary: true
+}
+
+rs0 [direct: primary] cmdb> rs.isMaster()
+{
+  topologyVersion: {
+    processId: ObjectId("643752baa09515e8b89dd2d5"),
+    counter: Long("6")
+  },
+  hosts: [ '10.67.51.164:27017' ],
+  setName: 'rs0',
+  setVersion: 1,
+  ismaster: true,
+  secondary: false,
+  primary: '10.67.51.164:27017',
+  me: '10.67.51.164:27017',
+  electionId: ObjectId("7fffffff0000000000000001"),
+  lastWrite: {
+    opTime: { ts: Timestamp({ t: 1681347421, i: 1 }), t: Long("1") },
+    lastWriteDate: ISODate("2023-04-13T00:57:01.000Z"),
+    majorityOpTime: { ts: Timestamp({ t: 1681347421, i: 1 }), t: Long("1") },
+    majorityWriteDate: ISODate("2023-04-13T00:57:01.000Z")
+  },
+  maxBsonObjectSize: 16777216,
+  maxMessageSizeBytes: 48000000,
+  maxWriteBatchSize: 100000,
+  localTime: ISODate("2023-04-13T00:57:04.164Z"),
+  logicalSessionTimeoutMinutes: 30,
+  connectionId: 12,
+  minWireVersion: 0,
+  maxWireVersion: 17,
+  readOnly: false,
+  ok: 1,
+  '$clusterTime': {
+    clusterTime: Timestamp({ t: 1681347421, i: 1 }),
+    signature: {
+      hash: Binary(Buffer.from("0000000000000000000000000000000000000000", "hex"), 0),
+      keyId: Long("0")
+    }
+  },
+  operationTime: Timestamp({ t: 1681347421, i: 1 }),
+  isWritablePrimary: true
+}
+
+rs0 [direct: primary] monstache> rs.printReplicationInfo();
+actual oplog size
+'3906.177978515625 MB'
+---
+configured oplog size
+'3906.177978515625 MB'
+---
+log length start to end
+'440 secs (0.12 hrs)'
+---
+oplog first event time
+'Thu Apr 13 2023 08:55:31 GMT+0800 (China Standard Time)'
+---
+oplog last event time
+'Thu Apr 13 2023 09:02:51 GMT+0800 (China Standard Time)'
+---
+now
+'Thu Apr 13 2023 09:02:56 GMT+0800 (China Standard Time)'
+rs0 [direct: primary] monstache> db.getReplicationInfo();
+{
+  configuredLogSizeMB: 3906.177978515625,
+  logSizeMB: 3906.177978515625,
+  usedMB: 0.01,
+  timeDiff: 470,
+  timeDiffHours: 0.13,
+  tFirst: 'Thu Apr 13 2023 08:55:31 GMT+0800 (China Standard Time)',
+  tLast: 'Thu Apr 13 2023 09:03:21 GMT+0800 (China Standard Time)',
+  now: 'Thu Apr 13 2023 09:03:23 GMT+0800 (China Standard Time)'

@@ -138,6 +138,20 @@ curl -X POST "http://10.67.39.81:9200/_reindex" -H 'Content-Type: application/js
 }'
 
 ### split index
+
+How splitting works
+A split operation:
+
+1 Creates a new target index with the same definition as the source index, but with a larger number of primary shards.
+2 Hard-links segments from the source index into the target index. (If the file system doesn’t support hard-linking, 
+then all segments are copied into the new index, which is a much more time consuming process.)
+3 Hashes all documents again, after low level files are created, to delete documents that belong to a different shard.
+4 Recovers the target index as though it were a closed index which had just been re-opened.
+
+split操作前提
+1 集群health状态为绿色
+2 待split的index设为只读
+
 1 set it read only
 curl -X PUT "http://10.67.39.81:9200/clm_20220112/_settings" -H 'Content-Type: application/json' -d'
 {
@@ -1022,6 +1036,19 @@ sql> select '@timestamp',host,message from "syslog-2022.01.18" limit 5;
 
 @timestamp     |10.67.51.18    |<167>2022-01-18T01:00:43.072Z A21VSAN18 Vpxa: verbose vpxa[6D6BB70] [Originator@6876 sub=VpxaHalCnxHostagent opID=WFU-a19df9d] Received WaitForUpdatesDone callback
 
+
+POST /_sql?format=txt
+{
+    "query" : "select \"@timestamp\",responsetime/1000/1000,url from \"tomcat-access-plm-2023.04\" where domain.keyword = 'cesbgpdm.efoxconn.com' order by responsetime desc"
+}
+       @timestamp       |responsetime/1000/1000|                                                                             url                                                                             
+------------------------+----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+2023-04-10T06:00:00.523Z|1514.2126             |/Windchill/ptc1/foxconn/action/bom/pcbabom/PCBABOMReleaseAction/createOrUpdateBOM                                                                            
+2023-04-10T06:12:38.002Z|1494.759              |/Windchill/ptc1/comp/folderbrowser_table                                                                                                                     
+2023-04-10T06:08:37.713Z|1460.2518             |/Windchill/ptc1/comp/folderbrowser_table                                                                                                                     
+2023-04-10T06:08:37.713Z|1449.283              |/Windchill/ptc1/comp/netmarkets.product.list                                                                                                                 
+2023-04-10T06:08:15.678Z|1442.6688             |/Windchill/servlet/ActionsMenu                                                                                                                               
+
 # 天津ES正式环境查询
 1 term查询
  curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search -H 'Content-Type: application/json' -d '
@@ -1073,6 +1100,8 @@ regexp查询条数
     }
 }'
 
+
+GET /tomcat-access-hr*/_search?q=domain:(mongodb.flownet.efoxconn.com or flownet.efoxconn.com) AND @timestamp:[2023-04-09 TO 2023-04-10]
 
 查询client_ip.keyword总记录数，去重记录数
 curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search?size=0 -H 'Content-Type: application/json' -d '
@@ -1156,6 +1185,68 @@ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesb
   }
 }'
 
+# count 并且group by domain.keyword
+post /tomcat-access-hr*/_search?size=0
+{
+  "aggs": {
+    "genres": {
+      "terms": {
+        "field": "domain.keyword",
+        "order": { "_count": "desc"}
+      }
+    }
+  }
+}
+"aggregations" : {
+    "genres" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 328538,
+      "buckets" : [
+        {
+          "key" : "sso.cesbg.efoxconn.com",
+          "doc_count" : 46981599
+        },
+        {
+          "key" : "hr.cesbg.efoxconn.com",
+          "doc_count" : 12722132
+        },
+        {
+          "key" : "flownet.efoxconn.com",
+          "doc_count" : 7682784
+        },
+        {
+          "key" : "amp.cesbg.efoxconn.com",
+          "doc_count" : 5812613
+        },
+        {
+          "key" : "hredu.cesbg.efoxconn.com",
+          "doc_count" : 2150857
+        },
+        {
+          "key" : "ssoqa.cesbg.efoxconn.com",
+          "doc_count" : 966118
+        },
+        {
+          "key" : "hrreport.cesbg.efoxconn.com",
+          "doc_count" : 884088
+        },
+        {
+          "key" : "flowable.flownet.efoxconn.com",
+          "doc_count" : 669064
+        },
+        {
+          "key" : "ehs.cesbg.efoxconn.com",
+          "doc_count" : 618110
+        },
+        {
+          "key" : "Api.flownet.efoxconn.com",
+          "doc_count" : 156227
+        }
+      ]
+    }
+  }
+
+
 curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search?size=0 -H 'Content-Type: application/json' -d '
 {
   "aggs": {
@@ -1236,6 +1327,70 @@ filter {
 }
 
 {"find":"terms","field":"event.dataset","query":"redis.slowlog"}        event.dataset:"redis.slowlog"
+
+
+# filter
+curl -q --noproxy '*' -XPOST -k -u "logstash_writer:vSTJ456" https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-plm-2023.04/_search -H 'Content-Type: application/json' -d \
+'{
+     "query": {
+        "bool": {
+          "filter": [
+          {"term": {"url.keyword":"/Windchill/servlet/RPC"}}
+          ]
+         }
+    },
+     "size":500,
+     "_source": [
+         "domain",
+         "url",
+         "status"
+      ]
+
+}' | jq .hits.hits
+
+# query_string (lucene query)
+curl -q --noproxy '*' -XGET -k -u "logstash_writer:vSTJ456" https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-plm-2023.04/_search?pretty -H 'Content-Type: application/json' -d \
+'{
+     "query": {
+        "query_string": {
+          "query": "(url.keyword: \\/Windchill\\/servlet\\/RPC)"
+         }
+    },
+     "size":500,
+     "_source": [
+         "domain",
+         "url",
+         "status"
+      ]
+
+}' | jq .hits.hits
+
+
+#  query 
+curl -q --noproxy '*' -XPOST -k -u "logstash_writer:vSTJ456" https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-plm-2023.04/_search -H 'Content-Type: application/json' -d \
+'{
+     "query": {
+        "term": {
+          "url.keyword": {
+             "value": "/Windchill/servlet/RPC"
+            }
+        }
+    },
+     "size":500,
+     "_source": [
+         "domain",
+         "url",
+         "status"
+      ]
+
+}' | jq .hits.hits
+
+# uri中用lucene query
+curl --noproxy '*' -XGET -k -u "logstash_writer:vSTJ456" "https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-plm-2023.04/_search?q=url.keyword:\\/Windchill\\/servlet\\/RPC&_source=domain,url" | jq .hits.hits
+
+
+
+
 # 龙华 ES
 [root@xlhcesbges01 ~]# curl -XGET -k -u elastic:vSTJ456 https://xlhcesbges01.cesbg.foxconn:9200/_cat/nodes
 10.134.241.75 52 74 0 0.01 0.03 0.05 ilr         - xlhcesbges02
@@ -1243,3 +1398,6 @@ filter {
 10.134.241.90 48 92 0 0.39 0.43 0.50 cdfhilmrstw * xlhcesbges04
 10.134.241.86 24 98 0 1.06 0.98 0.72 cdfhilmrstw - xlhcesbges03
 10.134.241.70 32 74 0 0.10 0.09 0.06 ilr         - xlhcesbges01
+
+
+

@@ -1,0 +1,140 @@
+# 安装蓝鲸
+1 不要配置全局代理，只给pip配置代理
+2 不要给yum配置代理，使用本地源
+3 执行到install usermgr时会卡住。有个requirement.txt指向tecent.com，需要手动修改为aliyun.com，并手动执行以下
+/opt/bk/.envs/usermgr-api/bin/python /opt/bk/.envs/usermgr-api/bin/pip install -r /opt/bk/usermgr/api/requirements.txt --no-cache-dir --no-use-pep517 --find-links=/opt/bk/usermgr/support-files/pkgs --no-index --no-cache-dir
+执行完后再 ./install_minibk -y 继续后面安装
+
+bk重启后
+1  /etc/resolv.conf  缺失127.0.0.1
+2 docker容器没有起来
+3 gse服务状态有问题，需要./bkcli check gse 查看状态，如有error，则重启 ./bkcli restart gse
+
+
+# 节点管理
+给客户端安装agent，最后一步总失败的原因
+
+需要先给job所在机器安装agent(这里是10.67.50.236本机)，这个agent可以为客户端提供资源
+
+
+
+# 容器管理
+/data/install/bin/gen_etcd_certs.sh
+
+将这个脚本最后一行注释去掉
+
+./bkcli sync common
+
+然后重新部署bcs
+
+
+http://paas.cesbg.foxconn/console/?app=bk_ci
+
+# ES访问
+[root@bk 04-final]# curl -u "elastic:RnkkC2kxNzU6" http://es7.service.consul:9200/_cat/indices
+yellow open bkfta_log_alert_20230426_0              bfxhTIf-QRSw9mzY3-u5oQ 3 1 0 0   678b   678b
+green  open .security-7                             qPY18FTMQMe7OdyUfOfjcA 1 0 7 1 30.5kb 30.5kb
+yellow open v2_2_bkmonitor_event_1572868_20230426_0 gt9BTfoPSOaJtQYvjPRS9w 1 1 0 0   226b   226b
+yellow open bkfta_action_20230426_0                 ZOrCqoccT2qcEyEaiCFjSQ 3 1 0 0   678b   678b
+yellow open v2_3_bkapm_trace_tianjin_20230504_0     4Y9Yx8w7R6WLTAU0Vm7gSw 3 1 0 0   678b   678b
+yellow open bkfta_alert_20230426_0                  Q0R-ncVVSWC4n5Q_Ltxsug 3 1 0 0   678b   678b
+yellow open bkfta_event_20230426_0                  eMsCJAM2Q5Ooim0aNHKZAA 3 1 0 0   678b   678b
+
+# influxdb访问
+influx -host 10.67.50.238 -port 8086 -username admin -password 'oVuTGvdjisRG'
+
+# mysql访问
+mysql --login-path=mysql-default
+
+SELECT table_name AS 'Table', data_length + index_length AS 'Size (Bytes)'
+FROM information_schema.TABLES
+WHERE table_schema = 'bk_nodeman'
+ORDER BY data_length + index_length DESC
+LIMIT 10;
+
+
+#内存调优
+调优前
+[root@bk install]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          52           0           2           9           7
+Swap:            14           5           9
+
+[root@bk install]# pwd
+/data/install
+[root@bk install]# bash bin/single_host_low_memory_config.sh tweak all
+Before optimize: blueking user consumed RSS memory: 43806.6 MB
+in Details:
+paas                  7096  MB
+job                   4909  MB
+nodeman               3962  MB
+bk_log_search(SaaS)   2543  MB
+bk_monitorv3(SaaS)    2334  MB
+bk_sops(SaaS)         2192  MB
+usermgr               1857  MB
+bk_itsm(SaaS)         1517  MB
+bk_bcs_app(SaaS)      998   MB
+bk_iam(SaaS)          597   MB
+cmdb                  554   MB
+bk_nodeman(SaaS)      418   MB
+bk_bcs_monitor(SaaS)  355   MB
+bk_user_manage(SaaS)  296   MB
+gse                   196   MB
+iam                   65    MB
+ssm                   52    MB
+license               11    MB
+-----------------------------------------------
+tweak all
+Change JAVA_OPTS in /etc/sysconfig/bk-job-*
+Restart job process
+Restart paas process
+Adjust worker number in bk_sops container
+Restarted supervisord
+Adjust worker number in bk_itsm container
+Restarted supervisord
+Adjust worker number in bk_iam container
+Restarted supervisord
+Adjust worker number in bk_user_manage container
+Restarted supervisord
+Adjust worker number in bk_nodeman container
+Restarted supervisord
+restart bk-nodeman
+restart bk-usermgr
+-----------------------------------------------
+After optimize: blueking user consumed RSS memory: 22563.5 MB
+in Details:
+job                   3944  MB
+bk_log_search(SaaS)   2545  MB
+bk_monitorv3(SaaS)    2330  MB
+nodeman               2142  MB
+bk_sops(SaaS)         1561  MB
+bk_bcs_app(SaaS)      975   MB
+cmdb                  560   MB
+bk_itsm(SaaS)         560   MB
+paas                  430   MB
+bk_bcs_monitor(SaaS)  355   MB
+bk_iam(SaaS)          217   MB
+gse                   195   MB
+bk_nodeman(SaaS)      89    MB
+bk_user_manage(SaaS)  69    MB
+iam                   65    MB
+ssm                   52    MB
+usermgr               14    MB
+license               11    MB
+
+调优后
+[root@bk install]# free -g
+              total        used        free      shared  buff/cache   available
+Mem:             62          41          12           0           9          20
+Swap:            14           3          11
+
+
+
+
+# helm部署v7
+environments/default/bkrepo-values.yaml.gotmpl:    publicImageUrl: https://hub.bktencent.com/blueking
+environments/default/bkrepo-values.yaml.gotmpl:    publicChartUrl: https://hub.bktencent.com/chartrepo/blueking
+environments/default/bcs/values.yaml.gotmpl:      bkrepo_helm_url: https://hub.bktencent.com/chartrepo/blueking
+environments/default/bcs/values.yaml.gotmpl:      CLUSTER_TOOLS_REPO_PREFIX: "https://hub.bktencent.com/chartrepo/blueking/charts"
+
+/root/.cache/bkdl/ce7/helmfile/blueking/environments/default/values.yaml

@@ -1,0 +1,117 @@
+# elasticsearch as data source
+
+1 建index mapping
+PUT /dc_location
+{
+    "aliases" : {
+            "datacenter_location" : {}
+        },
+    "mappings": {
+        "properties": {
+		      "@timestamp": {
+                    "type": "date"
+                },
+               "datacenter":{
+                    "type": "text",
+					"fields": {
+                      "keyword": {
+                         "type": "keyword",
+                         "ignore_above": 256
+            }
+          }
+                },
+				"alerts":{
+				    "type": "integer"
+				},
+              "location": {
+                "type": "geo_point"
+              }
+            }
+        }
+}
+
+2 插入数据 
+PUT dc_location/_doc/2
+{
+  "@timestamp":"2023-04-06T10:44:13Z",
+  "alerts":"30",
+  "datacenter": "LH",
+     "location": { 
+        "lat": 22.69236,
+        "lon": 114.05227
+      }
+}
+
+3 修改数据
+POST dc_location/_doc/1
+{
+  "@timestamp":"2023-04-05T10:44:13Z",
+  "alerts":"50",
+  "datacenter": "TJ",
+     "location": { 
+        "lat": 39.09407,
+        "lon": 117.51061
+      }
+}
+
+Query:
+
+Query  空
+Metric (1)： Max  alerts   Options
+Group By：  Terms   datacenter.keyword     Top 10, Min Doc Count: 1, Order by: Term value
+Then By：   Geo Hash Grid      location     Precision: 5
+
+worldmap插件:
+
+Map Data Options
+Location Data:  geohash
+Field Mapping
+Location Name Field:  datacenter.keyword
+geo_point/geohash Field:  location
+Metric Field:  Max
+
+
+# mysql as data source
+1 建表
+create table loc(id int not null auto_increment,dc varchar(15),alert int,location point,mytime timestamp,primary key(id));
+desc loc;
+2 插入数据
+insert into alert_location values(1,'TJ',60,ST_PointFromText('point(39.09407 117.51061)'),now());
+insert into loc values(1,'TJ',60,ST_PointFromText('point(39.09407 117.51061)'),now());
+insert into loc values(2,'LH',60,ST_PointFromText('point(22.69236 114.05227)'),now());
+insert into loc values(3,'YG',30,ST_PointFromText('point(22.58561 120.31768)'),now());
+
+MariaDB [location]> select dc,alert,ST_AsText(location) from loc;
++------+-------+---------------------------+
+| dc   | alert | ST_AsText(location)       |
++------+-------+---------------------------+
+| TJ   |    60 | POINT(39.09407 117.51061) |
+| LH   |    60 | POINT(22.69236 114.05227) |
+| YG   |    30 | POINT(22.58561 120.31768) |
++------+-------+---------------------------+
+3 rows in set (0.001 sec)
+
+Query:
+
+SELECT
+  mytime AS "time",
+  alert AS metric,
+  dc AS "datacenter",
+  ST_X(location) AS "latitude",
+  ST_Y(location) AS "longitude"
+FROM loc
+GROUP BY location,2
+ORDER BY mytime
+
+worldmap插件:
+
+Map Data Options
+Location Data:   table
+Aggregation:    current
+Field Mapping
+Table Query Format:  coordinates
+Location Name Field:  datacenter
+Metric Field:  metric
+Latitude Field:  latitude
+Longitude Field: longitude
+

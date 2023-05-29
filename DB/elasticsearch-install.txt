@@ -1,0 +1,245 @@
+---------------------------------------------------ES7-------------------------------------------
+# es docker 安装
+[root@xtjcesbges05 ~]# cat es.sh
+#!/bin/bash
+name=xtjcesbges05
+
+cat >/usr/lib/systemd/system/elasticsearch.service -<<EOF
+[Unit]
+Description=Elasticsearch Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+TimeoutStartSec=5m
+ExecStartPre=-/usr/bin/docker rm -f es
+
+ExecStart=/usr/bin/docker run \
+    --name es \
+    --dns 10.67.50.88 \
+    -e node.name=${name}.cesbg.foxconn \
+    -e network.publish_host=${name}.cesbg.foxconn \
+    -e node.master=false \
+    -e node.data=false \
+    -e node.ingest=false \
+    -e cluster.name=elk4Fixo \
+    -e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+    -e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+    -e bootstrap.memory_lock=true \
+    --ulimit memlock=-1:-1 \
+    -e "ES_JAVA_OPTS=-Xms8G -Xmx8G" \
+    -v /data:/usr/share/elasticsearch/data \
+    -e xpack.security.enabled=true \
+    -e xpack.security.http.ssl.enabled=true \
+    -e xpack.security.transport.ssl.enabled=true \
+    -e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/certs/${name}.key \
+    -e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/certs/${name}.crt \
+    -e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/certs/ca.crt \
+    -e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/certs/${name}.key \
+    -e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/certs/${name}.crt \
+    -e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/certs/ca.crt \
+    -p 9200:9200 \
+    -p 9300:9300 \
+    elasticsearch:7.12.0
+
+ExecReload=-/usr/bin/docker stop es
+ExecReload=-/usr/bin/docker rm es
+ExecStop=-/usr/bin/docker stop es
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy = multi-user.target
+
+EOF
+
+systemctl enable elasticsearch.service
+
+---------------------------------------------------ES6-------------------------------------------
+#########合理配置主节点和数据节点######
+配置文件：conf/elasticsearch.yaml
+node.master: true
+node.data: true
+
+1) 当master为false，而data为true时，会对该节点产生严重负荷；
+2) 当master为true，而data为false时，该节点作为一个协调者；
+3) 当master为false，data也为false时，该节点就变成了一个负载均衡器
+
+#为index k8s-*更改replica数量
+curl -X PUT "http://10.67.36.53:9200/k8s-*/_settings" -H 'Content-Type: application/json' -d'
+{
+    "index" : {
+        "number_of_replicas" : 2
+    }
+}
+'
+
+
+Kibana配置文件
+[root@es kibana]# cat kibana.yml |egrep -v '#|^$'
+server.port: 5601
+server.host: "10.67.51.123"
+elasticsearch.url: "http://10.67.51.123:9200"
+kibana.index: ".kibana"
+pid.file: /var/run/kibana.pid
+
+###ES集群搭建
+环境： centos7.5
+ES版本： 6.4
+三台ES节点
+0 装系统时不需要swap分区
+1 cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.67.36.53 es1
+10.67.36.52 es2
+10.67.36.51 es3
+
+configure resolv.conf  ntp.conf 
+disable firewalld,  selinux
+[root@es4 elasticsearch]# pvcreate /dev/sdb
+[root@es4 elasticsearch]# vgcreate es /dev/sdb
+[root@es4 elasticsearch]# lvcreate -l +100%FREE -n data es
+[root@es4 elasticsearch]# mkfs.xfs /dev/mapper/es-data
+[root@es4 elasticsearch]# mkdir /data
+[root@es4 elasticsearch]# mount /dev/mapper/es-data /data
+
+[root@es4 elasticsearch]# cat /etc/fstab |grep noatime
+/dev/mapper/es-data     /data                   xfs     defaults,noatime   0 0
+
+2 安装Java8 (oracle java or openjdk)
+java -version
+vi /etc/bashrc
+export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64/jre"
+export CLASSPATH=${JAVA_HOME}/lib
+export PATH=${JAVA_HOME}/bin:$PATH
+
+echo $JAVA_HOME
+
+3 安装ES   (实际是手动rpm安装的)
+  Download and install the public signing key:
+  rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+  repo文件
+[elasticsearch-6.x]
+name=Elasticsearch repository for 6.x packages
+baseurl=https://artifacts.elastic.co/packages/6.x/yum
+gpgcheck=1
+gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
+enabled=1
+autorefresh=1
+type=rpm-md
+
+yum -y install elasticsearch
+systemctl enable elasticsearch
+
+***optional 安装es plugins
+例如filebeat apache2模块收集日志，需要es安装 ingest-geoip ingest-user-agent
+    bin/elasticsearch-plugin install ingest-user-agent
+    bin/elasticsearch-plugin install ingest-geoip
+代理:  (没成功, 不确定是不是代理问题)
+ES_JAVA_OPTS="-Dhttp.proxyHost=10.67.214.210 -Dhttp.proxyPort=808 -Dhttps.proxyHost=10.67.214.210 -Dhttps.proxyPort=808" /usr/share/elasticsearch/bin/elasticsearch-plugin install ingest-user-agent
+手动下载 plugin地址
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-geoip/ingest-geoip-6.4.0.zip
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-user-agent/ingest-user-agent-6.4.0.zip
+https://artifacts.elastic.co/downloads/elasticsearch-plugins/repository-s3/repository-s3-6.4.0.zip
+***
+[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.8.1.zip
+[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-geoip-6.4.0.zip
+[root@es1 ~]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-user-agent-6.4.0.zip
+
+4 System properties参数设置
+#/etc/systemd/system/elasticsearch.service.d/override.conf
+[Service]
+LimitMEMLOCK=infinity
+LimitNOFILE=131070
+LimitNPROC=8192
+
+systemctl daemon-reload
+
+/etc/sysctl.d/elasticsearch.conf   #检查6.4是否达到262144,没有的话再做sysctl设置
+vm.max_map_count=262144
+
+
+
+
+5 配置ES
+#/etc/elasticsearch/jvm.options
+-Xms8g
+-Xmx8g
+#/etc/elasticsearch/log4j2.properties
+appender.rolling.policies.size.size = 256MB
+appender.rolling.strategy.action.condition.nested_condition.type = IfLastModified
+appender.rolling.strategy.action.condition.nested_condition.age = 7D
+or
+appender.rolling.strategy.action.condition.nested_condition.type = IfAccumulatedFileSize
+appender.rolling.strategy.action.condition.nested_condition.exceeds = 2GB
+
+#/etc/elasticsearch/elasticsearch.yml  (es1)
+cluster.name: logging
+node.name: es1
+node.master: true
+node.data: true
+path.data: /data
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 10.67.36.53
+http.port: 9200
+http.enabled: true
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+http.max_content_length: 500mb
+discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
+discovery.zen.minimum_master_nodes: 2
+gateway.recover_after_nodes: 2
+gateway.expected_nodes: 3
+gateway.recover_after_time: 1m
+action.destructive_requires_name: true
+indices.recovery.max_bytes_per_sec: 200mb
+indices.memory.index_buffer_size: 20%
+
+#/etc/elasticsearch/elasticsearch.yml  (es2)
+cluster.name: logging
+node.name: es2
+node.master: true
+node.data: true
+path.data: /data
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 10.67.36.52
+http.port: 9200
+http.enabled: false
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+http.max_content_length: 500mb
+discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
+discovery.zen.minimum_master_nodes: 2
+gateway.recover_after_nodes: 2
+gateway.expected_nodes: 3
+gateway.recover_after_time: 1m
+action.destructive_requires_name: true
+indices.recovery.max_bytes_per_sec: 200mb
+indices.memory.index_buffer_size: 20%
+
+#/etc/elasticsearch/elasticsearch.yml  (es3)
+cluster.name: logging
+node.name: es3
+node.master: true
+node.data: true
+path.data: /data
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: 10.67.36.51
+http.port: 9200
+http.enabled: true
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+http.max_content_length: 500mb
+discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
+discovery.zen.minimum_master_nodes: 2
+gateway.recover_after_nodes: 2
+gateway.expected_nodes: 3
+gateway.recover_after_time: 1m
+action.destructive_requires_name: true
+indices.recovery.max_bytes_per_sec: 200mb
+indices.memory.index_buffer_size: 20%

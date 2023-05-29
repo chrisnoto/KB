@@ -325,3 +325,85 @@ filebeat-7.12.0-2021.08.06          0     p      STARTED     33929   9.1mb 10.66
 filebeat-7.12.0-2021.08.06          0     r      UNASSIGNED
 filebeat-7.12.0-2021.06.26          0     p      STARTED     34248   8.9mb 10.66.12.230 xtjcesbges03
 filebeat-7.12.0-2021.06.26          0     r      UNASSIGNED
+
+# 有用的日志
+[root@xtjcesbges01 elasticsearch]# cat elk4Fixo.log |grep IndexService
+[2023-04-04T07:59:50,748][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.04.04] creating index, cause [auto(bulk api)], templates [filebeat-7.12.0], shards [1]/[1]
+[2023-04-04T08:00:01,928][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [winlogbeat-7.12.0-2023.04.04] creating index, cause [auto(bulk api)], templates [winlogbeat-7.12.0], shards [1]/[1]
+[2023-04-04T08:00:07,937][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [docker-2023.04.04] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2023-04-04T08:00:22,048][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [filebeat-7.14.0-2023.04.04] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2023-04-04T08:09:24,577][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.13/d2CXIGgIRbGVaf0lmqqvzA] deleting index
+[2023-04-04T08:09:24,577][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.17/UKKzrEQAS1eSaUnP7iHr3A] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.18/nD3ImtfeREykU2WjOscMxA] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.19/QbEWjbR-SISMfn8qKafqGA] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.10/muRzEe-yTjejDIfQLgE-cg] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.12/5m2a_g_vSamfoNfnzHf8IA] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.15/9-8JY2gxSeaS53_cG9vsrQ] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.11/9nOaZ7VBTMibDFg0u0BCUA] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.16/0lv6UoAITne3ZrL27pQQKA] deleting index
+[2023-04-04T08:09:24,578][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01.14/tb7tN7pgQ1q7lzkttwVmew] deleting index
+[2023-04-04T08:09:52,171][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [filebeat-7.12.0-2023.01-3] creating index, cause [auto(bulk api)], templates [filebeat-7.12.0], shards [1]/[1]
+[2023-04-04T08:13:11,059][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] applying create index request using existing index [cloudmes-jobs-2023.03] metadata
+[2023-04-04T08:13:11,081][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [cloudmes-jobs-2023-03] creating index, cause [split_index], templates [], shards [4]/[1]
+[2023-04-04T14:23:27,670][INFO ][o.e.c.m.MetadataCreateIndexService] [xtjcesbges01] [winlogbeat-7.12.0-2022.10.08] creating index, cause [auto(bulk api)], templates [winlogbeat-7.12.0], shards [1]/[1]
+[2023-04-04T15:07:06,629][INFO ][o.e.c.m.MetadataDeleteIndexService] [xtjcesbges01] [winlogbeat-7.12.0-2022.10.08/y1ggivkQQwioShsPdHApng] deleting index
+[root@xtjcesbges01 elasticsearch]# cat elk4Fixo.log |grep AllocationService
+[2023-04-04T07:59:52,378][INFO ][o.e.c.r.a.AllocationService] [xtjcesbges01] Cluster health status changed from [YELLOW] to [GREEN] (reason: [shards started [[filebeat-7.12.0-2023.04.04][0]]]).
+[2023-04-04T08:00:04,567][INFO ][o.e.c.r.a.AllocationService] [xtjcesbges01] Cluster health status changed from [YELLOW] to [GREEN] (reason: [shards started [[winlogbeat-7.12.0-2023.04.04][0]]]).
+[2023-04-04T08:00:08,940][INFO ][o.e.c.r.a.AllocationService] [xtjcesbges01] Cluster health status changed from [YELLOW] to [GREEN] (reason: [shards started [[docker-2023.04.04][0]]]).
+[2023-04-04T08:00:22,955][INFO ][o.e.c.r.a.AllocationService] [xtjcesbges01] Cluster health status changed from [YELLOW] to [GREEN] (reason: [shards started [[filebeat-7.14.0-2023.04.04][0]]]).
+[2023-04-04T08:09:53,044][INFO ][o.e.c.r.a.AllocationService] [xtjcesbges01] Cluster health status changed from [YELLOW] to [GREEN] (reason: [shards started [[filebeat-7.12.0-2023.01-3][0]]]).
+[root@xtjcesbges01 elasticsearch]# zcat elk4Fixo-2021-05-13-1.log.gz |grep  o.e.c.s
+[2021-05-13T05:31:32,365][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] elected-as-master ([1] nodes joined)[{xtjcesbges01}{FJyFQgpNQRmvcVn-Lxt8WA}{0r9YAKaWQQ-rz8hoSB0bWA}{xtjcesbges01.cesbg.foxconn}{10.66.12.228:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, xpack.installed=true, transform.node=true, ml.max_open_jobs=20, ml.max_jvm_size=1073741824} elect leader, _BECOME_MASTER_TASK_, _FINISH_ELECTION_], term: 1, version: 1, delta: master node changed {previous [], current [{xtjcesbges01}{FJyFQgpNQRmvcVn-Lxt8WA}{0r9YAKaWQQ-rz8hoSB0bWA}{xtjcesbges01.cesbg.foxconn}{10.66.12.228:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, xpack.installed=true, transform.node=true, ml.max_open_jobs=20, ml.max_jvm_size=1073741824}]}
+[2021-05-13T05:31:32,486][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] master node changed {previous [], current [{xtjcesbges01}{FJyFQgpNQRmvcVn-Lxt8WA}{0r9YAKaWQQ-rz8hoSB0bWA}{xtjcesbges01.cesbg.foxconn}{10.66.12.228:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, xpack.installed=true, transform.node=true, ml.max_open_jobs=20, ml.max_jvm_size=1073741824}]}, term: 1, version: 1, reason: Publication{term=1, version=1}
+[2021-05-13T05:58:54,347][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] node-join[{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false} join existing leader], term: 1, version: 39, delta: added {{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}
+[2021-05-13T05:58:54,710][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] added {{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}, term: 1, version: 39, reason: Publication{term=1, version=39}
+[2021-05-13T06:16:57,485][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] node-left[{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false} reason: disconnected], term: 1, version: 40, delta: removed {{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}
+[2021-05-13T06:16:57,504][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] removed {{kibana}{r1rez6MXQf65M-9pzTfiag}{wfVzkewlR52JOaGrfr0Fqg}{kibana.cesbg.foxconn}{10.66.12.122:9300}{ilr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}, term: 1, version: 40, reason: Publication{term=1, version=40}
+[2021-05-13T06:18:10,231][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] node-join[{kibana}{r1rez6MXQf65M-9pzTfiag}{Xvzi-r2GTI-uKVWSrSkC8g}{kibana.cesbg.foxconn}{10.66.12.122:9300}{lr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false} join existing leader], term: 1, version: 41, delta: added {{kibana}{r1rez6MXQf65M-9pzTfiag}{Xvzi-r2GTI-uKVWSrSkC8g}{kibana.cesbg.foxconn}{10.66.12.122:9300}{lr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}
+[2021-05-13T06:18:10,611][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] added {{kibana}{r1rez6MXQf65M-9pzTfiag}{Xvzi-r2GTI-uKVWSrSkC8g}{kibana.cesbg.foxconn}{10.66.12.122:9300}{lr}{ml.machine_memory=8200822784, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=false}}, term: 1, version: 41, reason: Publication{term=1, version=41}
+[2021-05-13T08:48:17,087][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] node-join[{xtjcesbges02}{iKAD5XKiRLudboqMv5rqIQ}{DSkvj5tgSua6EjDg6AxJJA}{xtjcesbges02.cesbg.foxconn}{10.66.12.214:9300}{cdfhilmrstw}{ml.machine_memory=135024889856, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true} join existing leader], term: 1, version: 82, delta: added {{xtjcesbges02}{iKAD5XKiRLudboqMv5rqIQ}{DSkvj5tgSua6EjDg6AxJJA}{xtjcesbges02.cesbg.foxconn}{10.66.12.214:9300}{cdfhilmrstw}{ml.machine_memory=135024889856, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true}}
+[2021-05-13T08:48:17,618][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] added {{xtjcesbges02}{iKAD5XKiRLudboqMv5rqIQ}{DSkvj5tgSua6EjDg6AxJJA}{xtjcesbges02.cesbg.foxconn}{10.66.12.214:9300}{cdfhilmrstw}{ml.machine_memory=135024889856, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true}}, term: 1, version: 82, reason: Publication{term=1, version=82}
+[2021-05-13T08:54:33,460][INFO ][o.e.c.s.MasterService    ] [xtjcesbges01] node-join[{xtjcesbges03}{8-M7KEmrRu6ss_wYUNi8_A}{tbB28yfCTJa2vdc6TXRxZQ}{xtjcesbges03.cesbg.foxconn}{10.66.12.230:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true} join existing leader], term: 1, version: 101, delta: added {{xtjcesbges03}{8-M7KEmrRu6ss_wYUNi8_A}{tbB28yfCTJa2vdc6TXRxZQ}{xtjcesbges03.cesbg.foxconn}{10.66.12.230:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true}}
+[2021-05-13T08:54:34,002][INFO ][o.e.c.s.ClusterApplierService] [xtjcesbges01] added {{xtjcesbges03}{8-M7KEmrRu6ss_wYUNi8_A}{tbB28yfCTJa2vdc6TXRxZQ}{xtjcesbges03.cesbg.foxconn}{10.66.12.230:9300}{cdfhilmrstw}{ml.machine_memory=135024881664, ml.max_open_jobs=20, xpack.installed=true, ml.max_jvm_size=1073741824, transform.node=true}}, term: 1, version: 101, reason: Publication{term=1, version=101}
+
+
+# split索引，索引变化
+索引cloudmes-jobs-2023.03原本为1个shard,2 replica, 161.6gb
+将其split为4个shard后，新索引cloudmes-jobs-2023-03初始大小为719多G，此时有4个主分片，4个副本分片还未allocate
+4个副本分片allocate之后，索引变为238GB，但shard大小不太一样
+再用cat shard api查询之后，将2个大小仍为161.6GB的副本分片重新allocate之后，新索引大小恢复为原索引大小，161.6gb
+GET _cat/shards/cloudmes-jobs-2023-03?v&s=shard
+index                 shard prirep state           docs   store ip           node
+cloudmes-jobs-2023-03 0     p      STARTED    144870363  59.7gb 10.66.12.230 xtjcesbges03
+cloudmes-jobs-2023-03 0     r      STARTED    144870363  59.7gb 10.66.13.105 xtjcesbges06.cesbg.foxconn
+cloudmes-jobs-2023-03 1     r      RELOCATING 144874094 161.6gb 10.66.13.105 xtjcesbges06.cesbg.foxconn -> 10.66.12.228 FJyFQgpNQRmvcVn-Lxt8WA xtjcesbges01
+cloudmes-jobs-2023-03 1     p      STARTED    144874094  59.7gb 10.66.12.214 xtjcesbges02
+cloudmes-jobs-2023-03 2     p      STARTED    144884195  58.8gb 10.66.12.230 xtjcesbges03
+cloudmes-jobs-2023-03 2     r      STARTED    144884195  58.8gb 10.66.12.214 xtjcesbges02
+cloudmes-jobs-2023-03 3     p      STARTED    144874112  59.7gb 10.66.12.228 xtjcesbges01
+cloudmes-jobs-2023-03 3     r      STARTED    144874112  59.7gb 10.66.14.241 xtjcesbges07.cesbg.foxconn
+
+allocate之后
+index                 shard prirep state        docs  store ip           node
+cloudmes-jobs-2023-03 0     p      STARTED 144870363 59.7gb 10.66.12.230 xtjcesbges03
+cloudmes-jobs-2023-03 0     r      STARTED 144870363 59.7gb 10.66.13.105 xtjcesbges06.cesbg.foxconn
+cloudmes-jobs-2023-03 1     r      STARTED 144874094 59.7gb 10.66.12.228 xtjcesbges01
+cloudmes-jobs-2023-03 1     p      STARTED 144874094 59.7gb 10.66.12.214 xtjcesbges02
+cloudmes-jobs-2023-03 2     p      STARTED 144884195 58.8gb 10.66.12.230 xtjcesbges03
+cloudmes-jobs-2023-03 2     r      STARTED 144884195 58.8gb 10.66.12.214 xtjcesbges02
+cloudmes-jobs-2023-03 3     p      STARTED 144874112 59.7gb 10.66.12.228 xtjcesbges01
+cloudmes-jobs-2023-03 3     r      STARTED 144874112 59.7gb 10.66.14.241 xtjcesbges07.cesbg.foxconn
+
+说明split的过程
+1 clone/hard link原索引到新索引，每个新索引的shard大小跟原索引shard相同
+2 在allocate shard的过程中，新索引会删除documents，大小逐渐与原索引一致。   这个过程称为 delete_by_query
+
+
+# 内存不够，触发parent熔断      加内存
+o.e.i.b.HierarchyCircuitBreakerService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "attempting to trigger G1GC due to high heap usage [4174708808]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
+o.e.i.b.HierarchyCircuitBreakerService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "GC did bring memory usage down, before [4174708808], after [4156393544], allocations [19], duration [33]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw"
+o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022625] overhead, spent [1.3s] collecting in the last [2.1s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
+o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022626] overhead, spent [1.2s] collecting in the last [1.4s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
+o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022627] overhead, spent [1.1s] collecting in the last [1.2s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
+o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022628] overhead, spent [1.1s] collecting in the last [1.1s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }

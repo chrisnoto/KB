@@ -1,6 +1,44 @@
+# install命令
+拷贝文件到指定目录并chmod
+[root@bk ~]# install -v -m 644 -D /etc/hosts /etc/passwd /etc/shadow /tmp/
+removed ‘/tmp/hosts’
+‘/etc/hosts’ -> ‘/tmp/hosts’
+removed ‘/tmp/passwd’
+‘/etc/passwd’ -> ‘/tmp/passwd’
+removed ‘/tmp/shadow’
+‘/etc/shadow’ -> ‘/tmp/shadow’
+
+[root@bk ~]# install -D /etc/hosts /chensen3/a
+[root@bk ~]# ls -l /chensen3/a
+-rwxr-xr-x 1 root root 331 May 17 17:30 /chensen3/a
+
+
+创建目录并chown,chmod
+[root@bk ~]# install -v -o chensen -g chensen -m 700 -d /chensen1
+install: creating directory ‘/chensen1’
+[root@bk ~]# ls -ld /chensen1
+drwx------ 2 chensen chensen 6 May 17 17:26 /chensen1
+
+只有最后一个子目录被chown,chmod
+[root@bk ~]# install -v -o chensen -g chensen -m 700 -d /chensen2/a/b/c
+install: creating directory ‘/chensen2’
+install: creating directory ‘/chensen2/a’
+install: creating directory ‘/chensen2/a/b’
+install: creating directory ‘/chensen2/a/b/c’
+[root@bk ~]# ls -ld /chensen2
+drwxr-xr-x 3 root root 15 May 17 17:28 /chensen2
+[root@bk ~]# ls -ld /chensen2/a
+drwxr-xr-x 3 root root 15 May 17 17:28 /chensen2/a
+[root@bk ~]# ls -ld /chensen2/a/b
+drwxr-xr-x 3 root root 15 May 17 17:28 /chensen2/a/b
+[root@bk ~]# ls -ld /chensen2/a/b/c
+drwx------ 2 chensen chensen 6 May 17 17:28 /chensen2/a/b/c
+
+
 # top只查看redis-server
 top -p $(pgrep -d, redis-server)
 
+=========================================================== python,go,npm设置代理和repository =================================================
 #  pip更换源
 pip配置文件的位置
 全局的位于 /etc/pip.conf
@@ -12,10 +50,14 @@ trusted-host=mirrors.aliyun.com
 index-url=http://mirrors.aliyun.com/pypi/simple
 
 # npm配置代理和更换源
-[root@389dsbak ~]# npm config set proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
-[root@389dsbak ~]# npm config set registry  https://registry.npmmirror.com
-[root@389dsbak ~]# npm config set https-proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
+npm config set proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
+npm config set registry  https://registry.npmmirror.com
+npm config set https-proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
 [root@389dsbak ~]# npm install redis-rdb-analyze -g
+
+# git配置dialing
+git config --global http.proxy 10.67.124.99:808
+git config --global https.proxy 10.67.124.99:808
 =========================================================== Tips and tricks =================================================
 #  如何直接拷贝单个文件到服务器的任何地方，无视lhadmin没有root权限
 [root@repo ~]# ssh lhadmin@xlhcesbges01 sudo cp /dev/stdin /root/pg.conf <pg.conf
@@ -2028,6 +2070,117 @@ grep default ~/hihi.log |tee >&5
 grep default ~/hihi.log |tee -a >&5
 exec 5>&-
 
+# set
+Linux shell脚本内的set -x set +x set -e set -u set -n的应用
+set命令可以定义脚本的运行方式，变量的获取方式，脚本的执行过程，脚本的测试。
+
+1，set -u （检查脚本内的变量，如果有变量未被定义将终止脚本）（脚本的自检测功能）
+
+#!/bin/bash
+set -u
+echo $A
+这是一个极为简单的shell脚本，功能为输出变量abc的值，但可以看到在脚本内并没有给定变量a的值，如果执行，将会报错。脚本名称为test.sh。执行后输出如下（也就是变量没有赋值）：
+
+[root@centos7 ~]# bash test.sh 
+test.sh: line 3: A: unbound variable
+如果不使用set -u，那么脚本将会忽略错误，完整执行，并不会报错，也就是说默认是不检测变量是否赋值。
+
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+echo $A
+[root@centos7 ~]# bash test.sh 
+
+[root@centos7 ~]# 
+2，set -e
+
+没有使用set -e的时候，脚本即使遇到错误也可以继续执行下去，例如：
+
+#!/bin/bash
+cat hello.sh
+echo "this is my script file"
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+cat hello.sh
+echo "this is my script file"
+[root@centos7 ~]# bash test.sh 
+cat: hello.sh: No such file or directory
+this is my script file
+很明显，我随便写了一个cat 文件，这个文件当然必定不存在的，第三行仍然执行了，如果是在编写其它的脚本时，希望脚本遇到返回值非零的情况，也就是错误就退出，那么，请在脚本的首行加 set -e，（可以认为这个是debug模式开启命令）。
+
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+set -e
+cat hello.sh
+echo "this is my script file"
+[root@centos7 ~]# bash test.sh 
+cat: hello.sh: No such file or directory
+可以看到，相当于打了一个debug断点，遇到错误就停止执行脚本了，那么不难想象，set -e 可以看做是安装类脚本的必备了。（如果前面的安装就有错误了，那么，后面的执行毫无意义，脚本需要十分强的健壮性）
+
+3，set -o pipefail
+
+检测脚本内的组合命令----管道命令的debug模式，也就是需要配合set -e先行开启debug模式，然后在单独针对管道命令检测shell脚本的健壮性
+
+如第二小节部分所示，现在脚本更改为如下，你认为会执行到最后吗？
+
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+set -e
+cat hello.sh |echo "second command is success!"
+echo "this is my script file"
+[root@centos7 ~]# bash test.sh 
+second command is success!
+cat: hello.sh: No such file or directory
+this is my script file
+可以看到，管道命令前面部分cat hello.sh是失败的，后面echo "second command is success!"是成功的，因为管道命令确实成功执行完了，因此，shell脚本认为第二行命令整体是成功的，返回值是0，第三行命令也就可以继续了，此时，即使有set -e也检测不到错误了，这肯定不是我们所希望的（脚本执行的内容并不准确了，对吧~~）
+
+在以上脚本内添加 set -o pipefail,脚本内容和执行结果如下：
+
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+set -e
+set -o pipefail
+cat hello.sh |echo "second command is success!"
+echo "this is my script file"
+[root@centos7 ~]# bash test.sh 
+second command is success!
+cat: hello.sh: No such file or directory
+可以看到，脚本到第二行就执行完毕，管道命令正确的部分仍然执行，但先于报错。
+
+4，set -x 和set +x 
+
+这两个为什么放到一起说呢？因为，这其实是一个显示脚本执行过程并将脚本内的变量的值暴露出来的一个开关，-x 是开，+x等于是默认的关闭，一般情况下，脚本是关闭这个显示过程的。
+
+[root@centos7 ~]# cat test.sh 
+#!/bin/bash
+set -e
+set -x
+set -o pipefail
+echo $PWD
+cat hello.sh |echo "second command is success!"
+echo "this is my script file"
+[root@centos7 ~]# bash test.sh 
++ set -o pipefail
++ echo /root
+/root
++ cat hello.sh
++ echo 'second command is success!'
+second command is success!
+cat: hello.sh: No such file or directory
+以上脚本，加了set -x 后，我们可以清晰的看到$PWD 这个变量的值了，对吗？？执行后，并没有看到任何PWD，但我们知道，$PWD的值就是 /root ，如果现在删除掉set -x 这一行或者 改写成set +x，那么将不会看到脚本的执行过程啦。
+
+
+总结来啦：
+set -u 专门针对变量的模式，如果有未赋值定义的变量，通常对程序意味着冗余，无效，这不是我们所希望的事情。（如果，shell使用了大量的变量的话），或者，某个变量为空，而在脚本内rm -rf 变量，此时，set -u将会保护你，因为，如果为空，而又没有-u，rm -rf 命令将会删除一切，这个时候，你设置了set -u 可能会救你一命！！！
+
+set -e         debug断点模式，这个在脚本的流程控制中常常用到，比如，某一个脚本，不希望见到任何错误（返回值非零表示错误），因为这个错误对于脚本工作很重要，比如安装脚本，前面都错了，后面的行还在执行，有可能造成灾难性的后果，这将大大的提高脚本的健壮性。
+
+set -o pipefail 管道命令参与debug断点模式，shell默认会认为管道命令是一个整体，是与 | 的关系，set -o pipefail 更改为与或||，也就是管道命令参与。
+
+set -x 显示脚本执行过程，并显示脚本对变量的处理结果。如果，某一个脚本使用了大量的变量，而我们希望能看到这些变量的传递，使用是否正确，那么，set -x 将是你很好的选择。（快速定位问题，尤其是变量所产生的问题）
+
+综上，set -ue 和 set -o pipefail 可以保证shell脚本的健壮性！！！set -x 可以为你提供可视化的变量值检查。如果有危险命令，比如> 重定向，rm -rf 删除，这些，请尽量使用这些set。
+
+脚本内set -x  等于 脚本执行时， bash -x 脚本名或者 source -x 脚本名
 
 ############# crontab 每5秒执行一次脚本 ######
 ## For excuting scripts.sh every 3 seconds##on 2014-10-15
