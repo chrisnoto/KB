@@ -1,0 +1,87 @@
+############# Traditional Jobs
+
+#调用jenkins api
+1 前提
+CSRF tokens (crumbs) are now only valid for the web session they were created in to limit the impact of attackers obtaining them. 
+Scripts that obtain a crumb using the /crumbIssuer/api URL will now fail to perform actions protected from CSRF unless 
+the scripts retain the web session ID in subsequent requests.
+
+Scripts could instead use an API token, which has not required a CSRF token (crumb) since Jenkins 2.96.
+To disable this improvement you can set the system property hudson.security.csrf.DefaultCrumbIssuer.EXCLUDE_SESSION_ID to true. 
+
+新版本2.96之后，只用api token就可以了，不需要csrf token,用了也会报错
+
+禁用csrf保护
+在script console里执行： hudson.security.csrf.GlobalCrumbIssuerConfiguration.DISABLE_CSRF_PROTECTION = true
+
+2 给用户添加token，如mytoken
+3 在job里的“构建触发器”中勾选 “触发远程构建”，填入“mytoken”
+
+两种方式都可以调用api
+curl -v --user chensen:Foxconn123 -X POST "http://10.67.36.64:8080/job/youdian/buildWithParameters" --data DOMAIN=youdian-test.cesbg.foxconn
+curl -v --user chensen:Foxconn123 -X POST "http://10.67.36.64:8080/job/youdian/buildWithParameters?DOMAIN=youdian-test.cesbg.foxconn"
+curl -v --user chensen:Foxconn123 -X POST "http://10.67.36.64:8080/job/youdianv3/buildWithParameters?DOMAIN=youdian-test.cesbg.foxconn&IP=10.67.36.62"
+
+查看lastbuild的状态
+curl -s --user chensen:Foxconn123 -X POST "http://10.67.36.64:8080/job/youdianv2/lastBuild/api/json" |jq .result
+"SUCCESS"
+
+
+############# pipeline
+parameter和触发远程构建需要单独配置，接下来配置pipeline
+
+pipeline {
+    agent {
+        label 'docker'    
+    }
+    parameters {
+        string(name: 'DOMAIN', defaultValue: 'localhost', description: 'the domain name of pandian website')
+    }
+    stages {
+        stage('Build') {
+            steps {
+
+                // Run docker-compose on docker agent.
+                sh "docker-compose -f /root/pandian/docker-compose.yml up -d"
+
+            }
+        post { 
+        always { 
+            sh "docker-compose -f /root/pandian/docker-compose.yml ps -a"
+            sh "curl -s -I http://${params.DOMAIN}/admin.php/Welcome/index"
+        }
+    }
+        }   
+    }
+}
+
+
+pipeline {
+    agent any
+        parameters {
+        string(name: 'DOMAIN', defaultValue: 'localhost', description: 'the domain name of pandian website')
+        string(name: 'IP', defaultValue: 'localhost', description: 'the IP of deployment server')
+    }
+    stages {
+        stage('Build') {
+            steps {
+
+                git credentialsId: 'git_h7108579', url: 'https://gitlab.ces.efoxconn.com/H7108579/pandian_v107.git'
+                sh """
+				docker build -t httpd2.4.6-php:7.3.33v3 docker/
+                docker tag httpd2.4.6-php:7.3.33v3 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3
+                docker push 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3
+				"""
+                }
+            }   
+        stage('deploy') {
+            steps {
+                sh """
+				echo \"docker run -d --name php-apache2 -p 8082:8081 -e DOMAIN=${params.DOMAIN} 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3\" > start.sh
+                chmod +x start.sh;sshpass -p ext566-32081 scp -o StrictHostKeyChecking=no start.sh root@${params.IP}:~
+                sshpass -p ext566-32081 ssh -o StrictHostKeyChecking=no root@${params.IP} 'sh /root/start.sh'
+				"""
+                  } 
+            }  
+    }
+}
