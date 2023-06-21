@@ -17,6 +17,15 @@ translog 每个分片一个事务日志，文档写入 ES 时会同步写 Transl
 当发生refresh时（数据从index buffer中进入filesystem cache的过程）translog中的操作记录并不会被清除，而是当数据从filesystem cache中被写入磁盘之后才会将translog中清空。
 而从filesystem cache写入磁盘的过程就是flush。
 
+bucket（桶） 表示一个数据分组，类似 mysql 中的 group
+metric  表示对一个数据分组执行的统计操作，比如说求平均值、求最大值、求最小值
+
+使用如下 sql 来理解这两个概念
+select count(*) from access_log group by user_id
+    
+bucket：group by user_id，那些 user_id 相同的数据，就会被划分到一个 bucket 中
+metric：count(*)，对每个 user_id bucket 中所有的数据，计算一个数量
+
 ######### translog都有哪些操作
 translog中定义了index，create，delete及deletebyquery四种操作它们都继承自Operation。这四种操作也是四种能够改变索引数据的操作。operation代码如下所示：
 
@@ -552,9 +561,22 @@ filebeat-6.4.0- 70990681
 fluentd- 659574
 winlogbeat-6.4.0- 588537
 
+### rollover
+# rollover 使用api方式可以手动触发，使用ILM可以自动触发
 
+POST /dc_location-000001/_alias/dc_location-rollover
 
-
+POST /dc_location-rollover/_rollover   (未达到条件时，不触发，api返回的也都是false, 触发后api返回的是true)
+{
+  "conditions": {
+    "max_docs": 100
+  }
+}
+后续应该写到索引dc_location-rollover
+如果继续往dc_location-000001写，则dc_location-000002不会新增数据
+默认索引命名规则是 name-000001, rollover后的索引是name-000002
+即使当前索引是 name-1, rollover后的索引仍然是name-000002
+另外，api方式每次得手动触发，不会自动触发
 
 
 
@@ -1249,7 +1271,8 @@ curl --noproxy '*' -XGET -k -u "logstash_writer:vSTJ456" "https://xtjcesbges01.c
 10.134.241.86 24 98 0 1.06 0.98 0.72 cdfhilmrstw - xlhcesbges03
 10.134.241.70 32 74 0 0.10 0.09 0.06 ilr         - xlhcesbges01
 
-
+# 查看docs.deleted
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size,docs.count,docs.deleted&s=index:desc
 winlogbeat-7.12.0-2023.06.15                            green    1   1         26.6gb   39177248     16657706
 winlogbeat-7.12.0-2023.06.14                            green    1   1           24gb   51522228      1994624
 winlogbeat-7.12.0-2023.06.13                            green    1   1         22.9gb   49239994      1886164
