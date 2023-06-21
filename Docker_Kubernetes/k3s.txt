@@ -1,0 +1,4 @@
+[root@master k3s]# k3s crictl pull --creds chrisnoto:pqhkr88ctw mariadb:latest
+
+[root@master ~]# ctr i pull --plain-http  10.67.51.164:5000/youdian/web:v1
+10.67.51.164:5000/youdian/web:v1:                                                 resolved

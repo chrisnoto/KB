@@ -248,3 +248,32 @@ curl -X PUT "10.67.51.150:9200/_all/_settings" -H 'Content-Type: application/jso
         }
     }
 }
+
+
+#算索引总大小
+[root@xtjcesbges01 ~]# cat cal_indices.sh
+#!/bin/bash
+
+indice_prefix=$1
+url="https://xtjcesbges01.cesbg.foxconn:9200/_cat/indices/${indice_prefix}*?bytes=kb&v=true&h=store.size"
+
+curl -s -XGET --cacert /etc/elasticsearch/certs/ca.crt  -u logstash_writer:vSTJ456 $url | sed -e 's/gb//g' -e 's/mb//g' -e 's/kb//g'|sed -n '2,$p' |awk '{sum+=$NF}END{print sum/1024/1024 "GB"}'
+
+
+[root@xtjcesbges01 ~]# for u in winlogbeat filebeat tomcat platform nginx cloudmes backend apache;do echo "The total size of indices $u is: ";./cal_indices.sh $u;done
+The total size of indices winlogbeat is:
+10249.1GB
+The total size of indices filebeat is:
+3303.45GB
+The total size of indices tomcat is:
+64.6032GB
+The total size of indices platform is:
+379.319GB
+The total size of indices nginx is:
+13.4891GB
+The total size of indices cloudmes is:
+1136.34GB
+The total size of indices backend is:
+2.94109GB
+The total size of indices apache is:
+8.68778GB

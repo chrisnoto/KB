@@ -6,7 +6,7 @@ baseurl=http://archive.mariadb.org/mariadb-10.3.18/yum/centos7-amd64
 gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
 gpgcheck=0
 
-
+使用gtid mode
 ####### empty database ########
 change master to master_host = '10.67.38.253', master_user = 'repl', master_password = 'copy', master_port = 3306, master_use_gtid = slave_pos;
 start slave;
@@ -23,7 +23,15 @@ start slave;
 # on master
 set @@global.read_only=0;
 
-
+GTID的缺点(限制)
+1、不支持非事务引擎;
+2、不支持create table ... select 语句复制(主库直接报错);(原理: 会生成两个sql, 一个是DDL创建表SQL, 一个是insert into 插入数据的sql; 由于DDL会导致自动提交, 所以这个sql至少需要两个GTID, 但是GTID模式下, 只能给这个sql生成一个GTID)
+3、不允许一个SQL同时更新一个事务引擎表和非事务引擎表;
+4、在一个复制组中，必须要求统一开启GTID或者是关闭GTID;
+5、开启GTID需要重启 (mysql5.7除外);
+6、 开启GTID后，就不再使用原来的传统复制方式;
+7、 对于create temporary table 和 drop temporary table语句不支持;
+8、不支持sql_slave_skip_counter;
 ###### mysql partitioning #######
 #  mysql -uroot -pFoxconn123 zabbix <partition_call.sql
 #  mysql -uroot -pFoxconn123 zabbix <partition_all.sql

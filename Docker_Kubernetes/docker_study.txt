@@ -23,6 +23,14 @@ docker-compose up --scale redis-slave=2 -d
 ENV http_proxy=
 ENV https_proxy=
 
+# json format
+[root@worker1 docker]# docker info --format '{{json .}}' | jq .DockerRootDir
+"/var/lib/docker"
+
+[root@worker1 docker]# docker ps --format '{{json .}}' | jq .Names
+"youdian_web"
+"myidb"
+
 
 ####### docker api #####
 curl -Ss --unix-socket /var/run/docker.sock http:/containers/json |jq .

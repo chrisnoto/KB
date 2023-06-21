@@ -30,6 +30,7 @@ curl -s --user chensen:Foxconn123 -X POST "http://10.67.36.64:8080/job/youdianv2
 ############# pipeline
 parameter和触发远程构建需要单独配置，接下来配置pipeline
 
+# docker-compose部署到jenkins agent自身上
 pipeline {
     agent {
         label 'docker'    
@@ -55,7 +56,7 @@ pipeline {
     }
 }
 
-
+# 在jenkins机器上build管理后台镜像并且部署到另一台VM
 pipeline {
     agent any
         parameters {
@@ -68,20 +69,57 @@ pipeline {
 
                 git credentialsId: 'git_h7108579', url: 'https://gitlab.ces.efoxconn.com/H7108579/pandian_v107.git'
                 sh """
-				docker build -t httpd2.4.6-php:7.3.33v3 docker/
-                docker tag httpd2.4.6-php:7.3.33v3 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3
-                docker push 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3
+				docker build --no-cache -t 10.67.51.164:5000/youdian/web:v1 docker/
+                docker push 10.67.51.164:5000/youdian/web:v1
 				"""
                 }
             }   
         stage('deploy') {
             steps {
                 sh """
-				echo \"docker run -d --name php-apache2 -p 8082:8081 -e DOMAIN=${params.DOMAIN} 10.67.51.164:5000/youdian/httpd2.4.6-php:7.3.33v3\" > start.sh
+				cat >start.sh <<-EOF
+				docker rm -f youdian_web
+				docker run --pull always -d --name youdian_web -p 8082:8080 -e DOMAIN=${params.DOMAIN} 10.67.51.164:5000/youdian/web:v1
+				EOF
                 chmod +x start.sh;sshpass -p ext566-32081 scp -o StrictHostKeyChecking=no start.sh root@${params.IP}:~
                 sshpass -p ext566-32081 ssh -o StrictHostKeyChecking=no root@${params.IP} 'sh /root/start.sh'
 				"""
                   } 
             }  
+    }
+}
+
+# 在proxmox上创建单个VM
+pipeline {
+    agent any
+    parameters {
+        string(name: 'vm_name', defaultValue: 'test', description: 'the name of VM')
+        string(name: 'vm_ip', defaultValue: '10.67.50.42', description: 'the ip addr of VM')
+        string(name: 'vm_netmask', defaultValue: '23', description: 'the netmask of VM')
+        string(name: 'vm_gateway', defaultValue: '10.67.50.1', description: 'the gateway of VM')
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'git_h7108579', url: 'https://gitlab.ces.efoxconn.com/H7108579/createvm.git'
+            }
+        }
+        stage('Terraform init') {
+            steps {
+                sh """
+                export http_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+                export https_proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+                /var/lib/jenkins/tools/org.jenkinsci.plugins.terraform.TerraformInstallation/terraform-chensen/terraform init
+                """
+            }
+        }
+        stage('Terraform apply') {
+            steps {
+                sh """
+                /var/lib/jenkins/tools/org.jenkinsci.plugins.terraform.TerraformInstallation/terraform-chensen/terraform apply -var=\"vm_name=${params.vm_name}\" -var=\"vm_ip=${params.vm_ip}\" -var=\"vm_netmask=${params.vm_netmask}\" -var=\"vm_gateway=${params.vm_gateway}\" --auto-approve
+                """
+            }
+        }
+        
     }
 }

@@ -5,6 +5,19 @@ git config --global https.proxy 10.67.124.99:808
 
 git config --global credential.helper store  #可用来保存git用户密码，只需第一次输入
 
+
+[root@worker4 ~]# git clone 'https://H7108579:F0xc0nn!23456@gitlab.ces.efoxconn.com/H7108579/pandian_v107.git' youdian_v107
+Cloning into 'youdian_v107'...
+remote: Enumerating objects: 2651, done.
+remote: Counting objects: 100% (47/47), done.
+remote: Compressing objects: 100% (44/44), done.
+remote: Total 2651 (delta 17), reused 0 (delta 0), pack-reused 2604
+Receiving objects: 100% (2651/2651), 72.03 MiB | 2.43 MiB/s, done.
+Resolving deltas: 100% (482/482), done.
+Checking out files: 100% (2968/2968), done.
+
+
+
 ##################撤销修改
 场景1：当你改乱了工作区某个文件的内容，想直接丢弃工作区的修改时，用命令git checkout -- file。
 
@@ -372,3 +385,95 @@ etckeeper commit -m ""
 git checkout -b `uname -n`
 
 git push -u origin `uname -n`
+
+
+
+# using git with docker build
+In this tutorial, we’ll learn a few solutions to combine these two technologies. We’ll go into details of each solution and cover its pros and cons.
+
+2. Dockerfile Inside a Git Repository
+The easiest solution for always having access to the Git repository inside a Dockerfile is to keep the Dockerfile directly in the Git repository:
+
+ProjectFolder/
+  .git/
+  src/
+  pom.xml
+  Dockerfile
+  ...
+Copy
+The above setup we'll give us access to the whole project source directory. Next, we can include it in our container with an ADD command, for example:
+
+ADD . /project/
+Copy
+We can of course limit the scope of copying to a build directory:
+
+
+freestar
+ADD /build/ /project/
+Copy
+or a build output like .jar file:
+
+ADD /output/project.jar /project/
+Copy
+The greatest advantage of this solution is that we can test any code changes without committing them to the repository. Everything will live in the same local directory.
+
+One thing to remember here is to create a .dockerignore file. It's similar to the .gitignore file, but in this case, it excludes files and directories that match patterns in it from the Docker context. This helps us avoid unnecessarily sending large or sensitive files and directories to the Docker build process and potentially adding them to images.
+
+3. Clone the Git Repository
+Another easy solution is to just fetch our git repository during the image build process. We can achieve it by simply adding the SSH key to the local store and invoking the git clone command:
+
+ADD ssh-private-key /root/.ssh/id_rsa
+RUN git clone git@github.com:eugenp/tutorials.git
+Copy
+The above command will fetch the whole repository and place it in the ./tutorials directory in our container.
+
+
+Unfortunately, this solution has some downsides as well.
+
+First of all, we'll store our private SSH key in the Docker image that may bring potential security issues. We can apply a workaround by using username and password for the git repository:
+
+ARG username=$GIT_USERNAME
+ARG password=$GIT_PASSWORD
+RUN git clone https://username:password@github.com:eugenp/tutorials.git
+Copy
+and pass them as environment variables from our machine. This way we'll keep the git credentials outside of our image.
+
+Secondly, this step will be cached on later builds, even when our repository changes. That's because the line with a RUN command is unchanged unless you break the cache on an earlier step. Although, we can resolve it by adding –no-cache parameter to the docker build command.
+
+Another minor drawback is that we have to install the git package in our container.
+
+
+4. Volume Mapping
+A third solution we could use is volume mapping. It brings us the ability to mount directories from our machine into the Docker container. It's a preferred mechanism for storing data used by Docker containers.
+
+We can do it by adding the following line in our Dockerfile:
+
+VOLUME /build/ /project/
+Copy
+This will create /project directory on the container and mount it to the /build directory on our machine.
+
+Volume mapping will be the best choice when our Git repository is used just for the building process. By keeping the repository outside of the container we don't increase its size and allow the repository content to outside the lifecycle of a given container.
+
+One thing that we need to keep in mind is that volume mapping gives the Docker container write access to mounted directories. Improper usage of this feature may lead to some unwanted changes in the git repository directory.
+
+5. Git Submodules
+In cases when we keep the Dockerfile and source code in separate repositories or our Docker build requires multiple source repositories, we might consider using Git submodules.
+
+Firstly we'll have to create a new Git repository and place our Dockerfile in there. Next, we can define our submodules by adding them to the .gitmodules file:
+
+[submodule "project"]
+  path = project
+  url = https://github.com/eugenp/tutorials.git
+  branch = master
+Copy
+Now, we can use the submodule like a standard directory. For example, we can copy its content to our container:
+
+
+ADD /build/ /project/
+
+Remember that submodules are not updated automatically. We need to run the following git command to fetch the latest changes:
+
+git submodule update --init --recursive
+Copy
+6. Overview
+In this tutorial, we’ve learned a few ways to use a Git repository inside a Dockerfile. As always, all the source code is available over on GitHub.

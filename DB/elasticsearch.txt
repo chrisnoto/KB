@@ -1,3 +1,36 @@
+########## ES的重要概念
+ES 的 shard 实质为一个 Lucene 的 index，其中包含多个 Lucene Segments。
+
+Lucene ReOpen：当调用 Lucene Reopen 时，将使累积的数据可用于搜索。 尽管可以搜索最新数据，但这不能保证数据的持久性或未将其写入磁盘。 我们可以调用 n 次重新打开功能，并使最新数据可搜索，但不能确定磁盘上是否存在数据。
+
+Lucene Flush：将堆内存的数据写入文件系统缓存，相当于 es 的 refresh。
+
+Lucene Commits：Segment 数据合并写入磁盘。
+
+ES Translog：
+
+ES Refresh：Index Buffer Memory(堆内存) 中的数据复制到filesystem cache中新建的 Segment 中，然后数据可以查询。这个过程会产生 Lucene Flush 操作，生成一个新的 Segment 。堆内存数据清空，但是 Translog 不会清空。
+
+ES Flush：filesystem cache的 Segments 写入写合并的 Segment 后落盘，清空 Translog。对应 Lucene Commit 操作。
+
+translog 每个分片一个事务日志，文档写入 ES 时会同步写 Translog 和 Index Buffer Memory(堆内存)。当向elasticsearch发送创建document索引请求的时候，document数据会先进入到index buffer之后，与此同时会将操作记录在translog之中，
+当发生refresh时（数据从index buffer中进入filesystem cache的过程）translog中的操作记录并不会被清除，而是当数据从filesystem cache中被写入磁盘之后才会将translog中清空。
+而从filesystem cache写入磁盘的过程就是flush。
+
+######### translog都有哪些操作
+translog中定义了index，create，delete及deletebyquery四种操作它们都继承自Operation。这四种操作也是四种能够改变索引数据的操作。operation代码如下所示：
+
+static interface Operation extends Streamable {
+
+static enum Type {
+
+CREATE((byte) 1),
+
+SAVE((byte) 2),
+
+DELETE((byte) 3),
+
+DELETE_BY_QUERY((byte) 4);
 ###########  elasticsearch 7 新功能之 Visualize data from a log file ########
 介绍
 The File Data Visualizer helps you understand the fields and metrics in a log file. 
@@ -12,6 +45,8 @@ log with timestamp格式不会解析log内容的
 1 从postgresql :  select row_to_json(pglog) from pglog \g 111.json
 编辑111.json去掉头和尾
 2 在kibana中 home-> upload a file 
+
+
 
 ###########  elasticsearch 7 新功能之 remote cluster query ########
 1 create a single node cluster
@@ -520,192 +555,7 @@ winlogbeat-6.4.0- 588537
 
 
 
-#########合理配置主节点和数据节点######
-配置文件：conf/elasticsearch.yaml
-node.master: true
-node.data: true
 
-1) 当master为false，而data为true时，会对该节点产生严重负荷；
-2) 当master为true，而data为false时，该节点作为一个协调者；
-3) 当master为false，data也为false时，该节点就变成了一个负载均衡器
-
-#为index k8s-*更改replica数量
-curl -X PUT "http://10.67.36.53:9200/k8s-*/_settings" -H 'Content-Type: application/json' -d'
-{
-    "index" : {
-        "number_of_replicas" : 2
-    }
-}
-'
-
-
-Kibana配置文件
-[root@es kibana]# cat kibana.yml |egrep -v '#|^$'
-server.port: 5601
-server.host: "10.67.51.123"
-elasticsearch.url: "http://10.67.51.123:9200"
-kibana.index: ".kibana"
-pid.file: /var/run/kibana.pid
-
-###ES集群搭建
-环境： centos7.5
-ES版本： 6.4
-三台ES节点
-0 装系统时不需要swap分区
-1 cat /etc/hosts
-127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
-::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
-10.67.36.53 es1
-10.67.36.52 es2
-10.67.36.51 es3
-
-configure resolv.conf  ntp.conf 
-disable firewalld,  selinux
-[root@es4 elasticsearch]# pvcreate /dev/sdb
-[root@es4 elasticsearch]# vgcreate es /dev/sdb
-[root@es4 elasticsearch]# lvcreate -l +100%FREE -n data es
-[root@es4 elasticsearch]# mkfs.xfs /dev/mapper/es-data
-[root@es4 elasticsearch]# mkdir /data
-[root@es4 elasticsearch]# mount /dev/mapper/es-data /data
-
-[root@es4 elasticsearch]# cat /etc/fstab |grep noatime
-/dev/mapper/es-data     /data                   xfs     defaults,noatime   0 0
-
-2 安装Java8 (oracle java or openjdk)
-java -version
-vi /etc/bashrc
-export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64/jre"
-export CLASSPATH=${JAVA_HOME}/lib
-export PATH=${JAVA_HOME}/bin:$PATH
-
-echo $JAVA_HOME
-
-3 安装ES   (实际是手动rpm安装的)
-  Download and install the public signing key:
-  rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
-  repo文件
-[elasticsearch-6.x]
-name=Elasticsearch repository for 6.x packages
-baseurl=https://artifacts.elastic.co/packages/6.x/yum
-gpgcheck=1
-gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
-enabled=1
-autorefresh=1
-type=rpm-md
-
-yum -y install elasticsearch
-systemctl enable elasticsearch
-
-***optional 安装es plugins
-例如filebeat apache2模块收集日志，需要es安装 ingest-geoip ingest-user-agent
-    bin/elasticsearch-plugin install ingest-user-agent
-    bin/elasticsearch-plugin install ingest-geoip
-代理:  (没成功, 不确定是不是代理问题)
-ES_JAVA_OPTS="-Dhttp.proxyHost=10.67.214.210 -Dhttp.proxyPort=808 -Dhttps.proxyHost=10.67.214.210 -Dhttps.proxyPort=808" /usr/share/elasticsearch/bin/elasticsearch-plugin install ingest-user-agent
-手动下载 plugin地址
-https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-geoip/ingest-geoip-6.4.0.zip
-https://artifacts.elastic.co/downloads/elasticsearch-plugins/ingest-user-agent/ingest-user-agent-6.4.0.zip
-https://artifacts.elastic.co/downloads/elasticsearch-plugins/repository-s3/repository-s3-6.4.0.zip
-***
-[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/repository-s3-6.8.1.zip
-[root@es4 elasticsearch]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-geoip-6.4.0.zip
-[root@es1 ~]# /usr/share/elasticsearch/bin/elasticsearch-plugin install file:///root/ingest-user-agent-6.4.0.zip
-
-4 System properties参数设置
-#/etc/systemd/system/elasticsearch.service.d/override.conf
-[Service]
-LimitMEMLOCK=infinity
-LimitNOFILE=131070
-LimitNPROC=8192
-
-systemctl daemon-reload
-
-/etc/sysctl.d/elasticsearch.conf   #检查6.4是否达到262144,没有的话再做sysctl设置
-vm.max_map_count=262144
-
-
-
-
-5 配置ES
-#/etc/elasticsearch/jvm.options
--Xms8g
--Xmx8g
-#/etc/elasticsearch/log4j2.properties
-appender.rolling.policies.size.size = 256MB
-appender.rolling.strategy.action.condition.nested_condition.type = IfLastModified
-appender.rolling.strategy.action.condition.nested_condition.age = 7D
-or
-appender.rolling.strategy.action.condition.nested_condition.type = IfAccumulatedFileSize
-appender.rolling.strategy.action.condition.nested_condition.exceeds = 2GB
-
-#/etc/elasticsearch/elasticsearch.yml  (es1)
-cluster.name: logging
-node.name: es1
-node.master: true
-node.data: true
-path.data: /data
-path.logs: /var/log/elasticsearch
-bootstrap.memory_lock: true
-network.host: 10.67.36.53
-http.port: 9200
-http.enabled: true
-http.cors.enabled: true
-http.cors.allow-origin: "*"
-http.max_content_length: 500mb
-discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
-discovery.zen.minimum_master_nodes: 2
-gateway.recover_after_nodes: 2
-gateway.expected_nodes: 3
-gateway.recover_after_time: 1m
-action.destructive_requires_name: true
-indices.recovery.max_bytes_per_sec: 200mb
-indices.memory.index_buffer_size: 20%
-
-#/etc/elasticsearch/elasticsearch.yml  (es2)
-cluster.name: logging
-node.name: es2
-node.master: true
-node.data: true
-path.data: /data
-path.logs: /var/log/elasticsearch
-bootstrap.memory_lock: true
-network.host: 10.67.36.52
-http.port: 9200
-http.enabled: false
-http.cors.enabled: true
-http.cors.allow-origin: "*"
-http.max_content_length: 500mb
-discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
-discovery.zen.minimum_master_nodes: 2
-gateway.recover_after_nodes: 2
-gateway.expected_nodes: 3
-gateway.recover_after_time: 1m
-action.destructive_requires_name: true
-indices.recovery.max_bytes_per_sec: 200mb
-indices.memory.index_buffer_size: 20%
-
-#/etc/elasticsearch/elasticsearch.yml  (es3)
-cluster.name: logging
-node.name: es3
-node.master: true
-node.data: true
-path.data: /data
-path.logs: /var/log/elasticsearch
-bootstrap.memory_lock: true
-network.host: 10.67.36.51
-http.port: 9200
-http.enabled: true
-http.cors.enabled: true
-http.cors.allow-origin: "*"
-http.max_content_length: 500mb
-discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]
-discovery.zen.minimum_master_nodes: 2
-gateway.recover_after_nodes: 2
-gateway.expected_nodes: 3
-gateway.recover_after_time: 1m
-action.destructive_requires_name: true
-indices.recovery.max_bytes_per_sec: 200mb
-indices.memory.index_buffer_size: 20%
 
 
 
@@ -1400,4 +1250,68 @@ curl --noproxy '*' -XGET -k -u "logstash_writer:vSTJ456" "https://xtjcesbges01.c
 10.134.241.70 32 74 0 0.10 0.09 0.06 ilr         - xlhcesbges01
 
 
+winlogbeat-7.12.0-2023.06.15                            green    1   1         26.6gb   39177248     16657706
+winlogbeat-7.12.0-2023.06.14                            green    1   1           24gb   51522228      1994624
+winlogbeat-7.12.0-2023.06.13                            green    1   1         22.9gb   49239994      1886164
+winlogbeat-7.12.0-2023.06.12                            green    1   1           22gb   48108944      1930224
+winlogbeat-7.12.0-2023.06.11                            green    1   1         17.8gb   43065519      2628022
+winlogbeat-7.12.0-2023.06.10                            green    1   1         21.9gb   50581158      2005738
+winlogbeat-7.12.0-2023.06.09                            green    1   1         22.7gb   50398392      2182926
+winlogbeat-7.12.0-2023.06.08                            green    1   1         20.9gb   45179953      2533172
+winlogbeat-7.12.0-2023.06.07                            green    1   1          7.5gb   15203896      2753887
+winlogbeat-7.12.0-2023.06.06                            green    1   1          9.9gb   20277319      2287820
+winlogbeat-7.12.0-2023.06.05                            green    1   1         22.8gb   51864321      1829834
+winlogbeat-7.12.0-2023.06.04                            green    1   1           18gb   42761280      4407292
+winlogbeat-7.12.0-2023.06.03                            green    1   1         22.2gb   50121309      2975845
+winlogbeat-7.12.0-2023.06.02                            green    1   1         23.9gb   47658617     11758094
+winlogbeat-7.12.0-2023.06.01                            green    1   1         25.2gb   47360457     17174131
+winlogbeat-7.12.0-2023.05.31                            green    1   1         23.4gb   51364945      3000142
+winlogbeat-7.12.0-2023.05.30                            green    1   1         22.3gb   48670263      3080294
+winlogbeat-7.12.0-2023.05.29                            green    1   1         22.4gb   49151590      2971724
+winlogbeat-7.12.0-2023.05.28                            green    1   1         17.7gb   43537224      3603010
+winlogbeat-7.12.0-2023.05.27                            green    1   1         20.1gb   47844601      3100448
+winlogbeat-7.12.0-2023.05.26                            green    1   1           22gb   49268745      3017946
+winlogbeat-7.12.0-2023.05.25                            green    1   1         25.9gb   56788565      2766916
+winlogbeat-7.12.0-2023.05.24                            green    1   1         23.7gb   50116372      2753916
+winlogbeat-7.12.0-2023.05.23                            green    1   1         22.9gb   49344869      2428838
+winlogbeat-7.12.0-2023.05.22                            green    1   1         22.7gb   49478309      2779936
+winlogbeat-7.12.0-2023.05.21                            green    1   1         17.5gb   42526588      3329988
+winlogbeat-7.12.0-2023.05.20                            green    1   1         22.6gb   56145150      2114856
+winlogbeat-7.12.0-2023.05.19                            green    1   1         26.1gb   63922215      1161776
+winlogbeat-7.12.0-2023.05.18                            green    1   1         24.8gb   52745714      2580880
+winlogbeat-7.12.0-2023.05.17                            green    1   1         23.7gb   55100399      2687440
+winlogbeat-7.12.0-2023.05.16                            green    1   1         27.1gb   65428125      2259578
+winlogbeat-7.12.0-2023.05.15                            green    1   1         24.4gb   52523444      2527360
+winlogbeat-7.12.0-2023.05.14                            green    1   1         18.2gb   43987600      3772552
+winlogbeat-7.12.0-2023.05.13                            green    1   1         22.3gb   51754467      2859844
+winlogbeat-7.12.0-2023.05.12                            green    1   1         23.6gb   52084182      2480404
+winlogbeat-7.12.0-2023.05.11                            green    1   1         23.8gb   51705737      2547924
+winlogbeat-7.12.0-2023.05.10                            green    1   1           25gb   55801443      2691832
+winlogbeat-7.12.0-2023.05.09                            green    1   1         24.2gb   55455263      2764248
+winlogbeat-7.12.0-2023.05.08                            green    1   1         23.1gb   50212000      2777868
+winlogbeat-7.12.0-2023.05.07                            green    1   1         18.4gb   44824811      1828331
+winlogbeat-7.12.0-2023.05.06                            green    1   1         22.9gb   52982617      2955750
+winlogbeat-7.12.0-2023.05.05                            green    1   1         24.9gb   54708784      2583342
+winlogbeat-7.12.0-2023.05.04                            green    1   1         26.4gb   64621066      2923422
+winlogbeat-7.12.0-2023.05.03                            green    1   1         23.3gb   63885318      1271182
+winlogbeat-7.12.0-2023.05.02                            green    1   1         18.3gb   45652792      3605096
+winlogbeat-7.12.0-2023.05.01                            green    1   1         16.1gb   40362380      3695662
 
+# delete by query
+POST winlogbeat-7.12.0-2023.03.*/_delete_by_query?wait_for_completion=false&scroll_size=10000
+{
+  "query": {
+    "term": {
+	  "agent.hostname": "vSTJEPDIWeb"
+    }
+  }
+}
+
+GET _cat/tasks?v
+
+GET _tasks?detailed=true&actions=*/delete/byquery
+
+GET /_tasks/jZf1uR1mQN2JQdNs5kTFng:4457949
+
+
+POST _tasks/task_id:3801434/_cancel 

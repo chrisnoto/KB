@@ -107,6 +107,10 @@ ExecStart=
 ExecStart=systemd-nspawn --quiet --keep-unit --boot --link-journal=try-guest -U --machine=%i
 
 以上例子是host networking，跟主机共享网络
+[root@389dsbak systemd-nspawn@mysql8.service.d]# cat override.conf
+[Service]
+ExecStart=
+ExecStart=systemd-nspawn --quiet --keep-unit --boot --link-journal=try-guest -U --machine=%i --network-veth --network-bridge=br0
 
 # image 克隆
 machinectl clone alma9.0 mysql8

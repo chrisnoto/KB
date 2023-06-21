@@ -2,7 +2,7 @@
  (|(!(gidNumber=*))(!(mail=*)))
  (!(employeeType=*))
  (&(uid=*)(lastlogintime>=20221127000000Z))
-
+(&(uid=*)(employeeType=0))
 (|(!(gidNumber=*))(!(mail=*)))(!(employeeType=*))(&(uid=*)(lastlogintime>=20221127000000Z)) 
  
 # 修改binddn的查找条目数限制
