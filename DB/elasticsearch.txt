@@ -40,6 +40,18 @@ SAVE((byte) 2),
 DELETE((byte) 3),
 
 DELETE_BY_QUERY((byte) 4);
+
+# index名字含特殊字符，如何跳脱
+%{[@metadata][beat]}-%{[@metadata][version]}-2023.06.27
+=>
+get /%%%7B%5B@metadata%5D%5Bbeat%5D%7D-%%%7B%5B@metadata%5D%5Bversion%5D%7D-2023.06.27/_search
+其中% 用%% 跳脱
+    { 用%7B  
+	} 用%7D
+	[ 用%5B
+	] 用%5D
+	@ 不用跳脱
+
 ###########  elasticsearch 7 新功能之 Visualize data from a log file ########
 介绍
 The File Data Visualizer helps you understand the fields and metrics in a log file. 
@@ -566,7 +578,7 @@ winlogbeat-6.4.0- 588537
 
 POST /dc_location-000001/_alias/dc_location-rollover
 
-POST /dc_location-rollover/_rollover   (未达到条件时，不触发，api返回的也都是false, 触发后api返回的是true)
+POST /dc_location-rollover/_rollover   
 {
   "conditions": {
     "max_docs": 100
@@ -576,7 +588,7 @@ POST /dc_location-rollover/_rollover   (未达到条件时，不触发，api返�
 如果继续往dc_location-000001写，则dc_location-000002不会新增数据
 默认索引命名规则是 name-000001, rollover后的索引是name-000002
 即使当前索引是 name-1, rollover后的索引仍然是name-000002
-另外，api方式每次得手动触发，不会自动触发
+另外，api方式每次得手动触发，不会自动触发。(未达到条件时，api返回的也都是false，不会生成新索引, 达到条件后api返回的是true，会生成新索引)
 
 
 
@@ -680,6 +692,7 @@ ip          heap.percent ram.percent cpu load_1m load_5m load_15m node.role mast
 10.67.36.51            4          70   0    0.00    0.02     0.05 di        -      es3
 10.67.36.53            4          69   2    0.10    0.05     0.05 mdi       *      es1
 10.67.36.52            3          70   0    0.07    0.05     0.05 mdi       -      es2
+
 列出ES集群中所有的index信息
 [root@cobbler ~]# curl -X GET 'http://10.67.36.53:9200/_cat/indices?v'
 health status index          uuid                   pri rep docs.count docs.deleted store.size pri.store.size
@@ -759,6 +772,7 @@ sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 beats_stats.beat.type   
         },
         "_type": "container_log"
       },
+	  
 #####node features usage######
 [root@vstjlogstash01 logstash]# curl -XGET http://10.67.51.150:9200/_nodes/stjes2/usage | python -m json.tool
 {

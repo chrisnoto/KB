@@ -55,3 +55,31 @@ xtrabackup: Starting 6 threads for parallel data files transfer
 [01] Copying /var/lib/mysql/ibdata1 to /backup/2019-12-20_14-41-59/ibdata1
 [02] Copying ./mysql/slave_master_info.ibd to /backup/2019-12-20_14-41-59/mysql/slave_master_info.ibd
 [04] Copying ./mysql/innodb_table_stats.ibd to /backup/2019-12-20_14-41-59/mysql/innodb_table_stats.ibd
+
+#验证备份数据是否一致
+mysql -uroot -p -B --disable-column-names -e "SELECT CONCAT('CHECKSUM TABLE ', table_schema, '.', table_name, ';') AS statement FROM information_schema.tables WHERE table_schema = 'grafana';" >grafana.sql
+ mysql -uroot -p < grafana.sql
+Table   Checksum
+grafana.alert   0
+Table   Checksum
+grafana.alert_configuration     2895442153
+Table   Checksum
+grafana.alert_image     0
+Table   Checksum
+grafana.alert_instance  3713906341
+Table   Checksum
+grafana.alert_rule      218205381
+Table   Checksum
+grafana.alert_rule_tag  0
+Table   Checksum
+grafana.alert_rule_version      1881738788
+Table   Checksum
+grafana.annotation      1461903425
+Table   Checksum
+grafana.annotation_tag  4099095606
+Table   Checksum
+grafana.api_key 0
+Table   Checksum
+grafana.builtin_role    2351006243
+
+

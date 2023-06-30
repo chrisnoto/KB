@@ -458,3 +458,34 @@ podman run -d --net=host \
   -bind=0.0.0.0 -bootstrap-expect=3 \ 
   -dns-port=53 -client=0.0.0.0 \
   -recursor 10.67.50.88 
+  
+root@docker-chensen:~# lxc profile show withproxy
+config:
+  user.user-data: |
+    #cloud-boothook
+    #!/bin/sh
+    cat >> /etc/yum.conf <<EOF
+    proxy=http://h7108579:pqhkr99ctw@10.36.6.66:3128
+    EOF
+    cat >> /etc/profile.d/proxy.sh <<EOF
+    export http_proxy=http://10.67.9.210:3128
+    export https_proxy=http://10.67.9.210:3128
+    #cloud-config
+    package_upgrade: true
+    packages:
+      - openssh-server
+      - podman
+    timezone: Asia/Shanghai
+description: Default LXD profile
+devices:
+  eth0:
+    name: eth0
+    network: lxdbr0
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+name: withproxy
+used_by: []
+  

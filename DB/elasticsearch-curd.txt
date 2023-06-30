@@ -1,0 +1,428 @@
+#################### 管理集群、节点类操作
+
+# 查看各节点的线程池
+GET /_cat/thread_pool/search?v&h=node_name,name,active,rejected,completed
+
+------- task类
+
+# 查看运行的task
+GET _cat/tasks?v
+get _tasks?group_by=parents
+
+# 查看pending task
+get _cat/pending_tasks
+
+# cancel运行的task
+POST _tasks/task_id:3801434/_cancel 
+
+# 按running time給task倒排序
+GET _cat/tasks?v=true&h=action,type,running_time,node&s=running_time:desc
+
+# 查看节点磁盘使用情况 allocation
+GET /_cat/allocation?v=true&h=shards,disk.used,disk.total,node
+
+
+------- 节点类
+# 查看节点状态
+GET /_cat/nodes?v=true
+
+# 查看节点角色
+GET /_cat/nodeattrs?v=true
+
+# 查看节点breaker
+GET /_nodes/stats/breaker?
+
+GET _nodes/stats?filter_path=nodes.*.jvm.mem.pools.old
+GET /_nodes/stats/indices/fielddata?level=indices&fields=*
+
+GET /_nodes/stats/indices/search
+
+# 查看 ilm 状态
+GET _ilm/status
+
+
+------- 集群类
+# 查看集群health
+get _cluster/health
+get _cat/health?v
+
+# 查看集群health，level为indices
+get _cluster/health?level=indices&pretty
+
+# 查看集群health，level为shards
+get _cluster/health?level=shards&pretty
+
+# 查看集群health，并过滤显示结果
+GET _cluster/health?filter_path=status,*_shards
+
+#################### 索引类操作
+------- 查看索引
+# 按shard大小給shard倒排序
+GET _cat/shards?v=true&h=index,shard,pr,rep,state,sto,node,ur&s=sto:desc
+
+# 按主副本大小給index倒排序
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size&s=pri.store.size:desc
+
+# 按index名稱給index倒排序
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size&s=index:desc
+
+# 查看索引内容
+get /docker-2023.05.05/_search
+
+# 查看某个索引的健康状态
+GET _cat/indices/filebeat-7.12.0-202208
+
+# 查看索引状态
+GET /alert-api-log-2023/_stats
+
+# 查看索引状态 level为shards
+GET winlogbeat-7.12.0-2023.04.10/_stats?level=shards
+
+# 查看索引的segment
+GET winlogbeat-7.12.0-2023.04.10/_segments
+
+# 查看索引mapping
+GET /alert-api-log-2023/_mapping
+
+# 查看索引setting
+GET /alert-api-log-2023/_settings
+
+# 查看正在recovery的索引
+GET _cat/recovery?active_only=true
+
+GET _cat/recovery?v=true&active_only=true&index=[a-z]*
+
+# 查看某个索引的recovery状态
+GET _cat/recovery/filebeat-7.12.0-202208?v=true
+GET _cat/recovery/cloudmes-jobs-2023-03?v=true&h=index,shard,type,stage,files_percent,bytes_percent,translog_ops_percent
+
+# 查看某个索引的shard分布
+GET _cat/shards/filebeat-7.12.0-202208?v
+GET _cat/shards/cloudmes-jobs-2023-03?v&s=shard
+
+# 查看索引别名
+get _cat/aliases
+
+# 查看索引 docker为前缀的所有索引列表
+get _cat/indices/docker*
+
+# 查看索引 cloudmes为前缀的所有索引列表，并按pri.store.size降序排序
+get _cat/indices/cloudmes*?s=pri.store.size:desc
+
+# count 索引
+GET cloudmes-jobs-2023-05-00/_count
+
+
+------- 查询索引
+1 query DSL
+get alert-api-log-2023/_search
+{
+  "sort": [
+    {"@timestamp":"desc"}
+    ],
+    "_source": [
+  "@timestamp",
+  "alertname"
+  ]
+}
+
+get /cloudmes-wms-ims-2023.03/_search
+{
+  "query": { 
+    "bool": { 
+      "must": [
+        { "match": { "agent.hostname":"XTJCloudMES-SaaS01"        }}
+            ],
+      "filter": [ 
+                { "range": { "@timestamp": { "gte": "2023-03-01" }}}
+      ]
+    }
+  },
+  "sort": [
+    {"@timestamp":"desc"}
+    ],
+  "_source": [
+  "@timestamp",
+  "container.labels.io_kubernetes_container_name",
+  "message"
+  ]
+}
+
+post /tomcat-access-hr*/_search?size=0
+{
+     "query": {
+        "term": {
+          "domain.keyword": {
+             "value": "hr.cesbg.efoxconn.com"
+            }
+        }
+    },
+	  "aggs": {
+    "Value_Count": {
+      "value_count": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_Default": {
+      "cardinality": {
+        "field": "client_ip.keyword"
+      }
+    },
+    "Cardinality_40K": {
+      "cardinality": {
+        "field": "client_ip.keyword",
+        "precision_threshold": 400000
+      }
+    }
+  }
+}
+
+get /filebeat-7.12.0-2023.03*/_search
+{
+  "query": { 
+    "bool": { 
+      "must": [
+        { "match": { "agent.hostname":"xtjbasecache01"        }}
+            ],
+      "filter": [ 
+                { "term":  { "event.dataset": "redis.slowlog" }},
+                { "range": { "@timestamp": { "gte": "2023-03-01" }}}
+      ]
+    }
+  },
+  "sort": [
+    {"@timestamp":"desc"}
+    ],
+  "_source": [
+  "@timestamp",
+  "redis.slowlog.cmd",
+  "redis.slowlog.key",
+  "redis.slowlog.duration.us"
+  ]
+}
+  
+post /tomcat-access-plm*/_search?size=0
+{
+  "aggs": {
+    "genres": {
+      "terms": {
+        "field": "responsetime",
+        "order": { "_count": "desc"},
+        "size": 123421593
+      }
+    }
+  }
+}
+
+
+
+post /tomcat-access-hr*/_search?size=0
+{
+  "aggs": {
+    "genres": {
+      "terms": {
+        "field": "domain.keyword",
+        "order": { "_count": "desc"},
+        "size": 123421593
+      }
+    }
+  }
+}
+
+2 lucene 查询
+GET /tomcat-access-hr*/_search?q=domain:(mongodb.flownet.efoxconn.com or flownet.efoxconn.com) AND @timestamp:[2023-04-09 TO 2023-04-10]
+
+3 sql查看
+POST /_sql?format=txt
+{
+    "query" : "desc \"tomcat-access-hr-2023.04\""
+}
+
+POST /_sql?format=txt
+{
+    "query" : "select \"@timestamp\",responsetime/1000/1000,url from \"tomcat-access-plm-2023.04\" where domain.keyword = 'cesbgpdm.efoxconn.com' order by responsetime desc"
+}
+
+POST /_sql?format=txt
+{
+    "query" : "select \"@timestamp\",responsetime/1000/1000 as RT,url.keyword from \"tomcat-access-hr-2023.04\"  order by RT desc"
+}
+
+------- 操作索引
+# 创建索引
+PUT /dc_location-1
+{
+    "aliases" : {
+            "datacenter_location" : {}
+        },
+    "mappings": {
+        "properties": {
+		      "@timestamp": {
+                    "type": "date"
+                },
+               "datacenter":{
+                    "type": "text",
+					"fields": {
+                      "keyword": {
+                         "type": "keyword",
+                         "ignore_above": 256
+            }
+          }
+                },
+				"alerts":{
+				    "type": "integer"
+				},
+              "location": {
+                "type": "geo_point"
+              }
+            }
+        }
+}
+# 给索引添加document
+PUT dc_location-1/_doc/1
+{
+  "@timestamp":"2023-04-06T10:44:13Z",
+  "alerts":"50",
+  "datacenter": "TJ",
+     "location": { 
+        "lat": 39.09407,
+        "lon": 117.51061
+      }
+}
+
+PUT dc_location-1/_doc/2
+{
+  "@timestamp":"2023-04-06T10:44:13Z",
+  "alerts":"30",
+  "datacenter": "LH",
+     "location": { 
+        "lat": 22.69236,
+        "lon": 114.05227
+      }
+}
+
+# 修改document
+POST /dc_location/_update/2
+{
+   "doc": {
+    "datacenter": "LH",
+	"location": {
+	    "lat":22.69236,
+		"lon":114.05227
+		}
+	}	   
+}
+
+# 删除索引
+delete /filebeat-7.12.0-2022.10.3*
+
+# rollover索引
+1 创建索引别名
+POST /dc_location-1/_alias/dc_location-rollover
+
+2 设置rollver触发条件
+POST /dc_location-rollover/_rollover
+{
+  "conditions": {
+    "max_docs": 100
+  }
+}
+
+# delete by query
+POST winlogbeat-7.12.0-2022.11.*/_delete_by_query?wait_for_completion=false&scroll_size=10000
+{
+  "query": {
+    "term": {
+	  "agent.hostname": "vSTJEPDIWeb"
+    }
+  }
+}
+
+POST winlogbeat-7.12.0-2022.10.*/_delete_by_query?wait_for_completion=false&scroll_size=10000
+{
+  "query": {
+    "term": {
+	  "agent.hostname": "vSTJEPDIWeb"
+    }
+  }
+}
+
+# 查看docs.deleted
+get _cat/indices?v=true&h=index,health,pri,rep,pri.store.size,docs.count,docs.deleted&s=index:desc
+
+# 查看delete by query的task
+GET _tasks?detailed=true&actions=*/delete/byquery
+
+GET /_tasks/jZf1uR1mQN2JQdNs5kTFng:21058596
+
+# 更改索引setting
+PUT cloudmes-jobs-2023.03/_settings
+{
+  "blocks.write": true
+}
+
+PUT /filebeat-7.12.0-2022.04/_settings
+{
+  "index" : {
+    "refresh_interval" : "-1"
+  }
+}
+
+# split索引
+POST cloudmes-jobs-2023.03/_split/cloudmes-jobs-2023-03
+{
+  "settings": {
+    "index.number_of_shards": 4
+  }
+}
+
+# reindex索引
+POST _reindex
+{
+  "source": {
+    "index": "filebeat-7.12.0-2023.04.1*"
+  },
+  "dest": {
+    "index": "filebeat-7.12.0-2023-04-2"
+  }
+}
+
+# 查看reindex的任务
+GET /_tasks?detailed=true&actions=*reindex&group_by=parents
+
+#分词器
+GET _analyze
+{
+    "analyzer": "whitespace",
+    "text" : "当摆弄索引里面的数据时，我们发现一些奇怪的事情。一些事情看起来被打乱了：在我们的索引中有12条推文，其中只有一条包含日期 2014-09-15 ，但是看一看下面查询命中的 总数。"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
