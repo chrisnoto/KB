@@ -307,6 +307,42 @@ output.kafka:
   compression: gzip
   max_message_bytes: 1000000
   
+######## filebeat上线配置
+[root@xtjcesbglogstash02 ~]# cat /etc/filebeat/filebeat.yml
+filebeat.inputs:
+- type: log
+  enabled: false
+  paths:
+    - /var/log/*.log
+- type: filestream
+  enabled: false
+  paths:
+    - /var/log/*.log
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+filebeat.modules:
+- module: system
+  reload.enabled: false
+setup.template.settings:
+  index.number_of_shards: 1
+setup.kibana:
+output.logstash:
+  hosts: ["xtjcesbglogstash01.cesbg.foxconn:5044","xtjcesbglogstash02.cesbg.foxconn:5044","xtjcesbglogstash03.cesbg.foxconn:5044"]
+  loadbalance: true
+  ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+  - add_kubernetes_metadata: ~
+xpack.monitoring:
+  enabled: true
+  elasticsearch:
+    hosts: ["https://xtjcesbges04.cesbg.foxconn:9200","https://xtjcesbges05.cesbg.foxconn:9200"]
+    ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
+    username: beats_system
+    password: vSTJ456
   
   ###########错误##########
   配置module system时

@@ -364,3 +364,21 @@ dsconf localhost backend create --suffix dc=tj,dc=cesbg --be-name userRoot --cre
 9月 27 09:13:08 ldap.dms.foxconn ns-slapd[1194]: [27/Sep/2022:09:13:08.161834351 +0800] - ERR - log_ber_too_big_error - conn=1 fd=64 Incoming BER Element was 72045495232364532 bytes, max allowable is 2097152 bytes. Change the nsslapd-maxbersize attribute in cn=config to increase.
 9月 27 09:19:28 ldap.dms.foxconn ns-slapd[1194]: [27/Sep/2022:09:19:28.988916407 +0800] - ERR - connection_read_operation - conn=2 received a non-LDAP message (tag 0x3, expected 0x30)
 9月 27 10:48:25 xlhhrldap ns-slapd[1194]: [27/Sep/2022:10:48:25.243304505 +0800] - ERR - log_ber_too_big_error - conn=4 fd=64 Incoming BER Element was 72045495232364532 bytes, max allowable is 2097152 bytes. Change the nsslapd-maxbersize attribute in cn=config to increase.
+
+
+# AD下线，向新的AD申请证书，替换现有证书 2023 07 10
+# windows导出的证书为der格式，二进制，需要转格式为文本  包括ca证书和服务器证书都有进行转格式操作
+openssl x509 -in ca.cer -inform der -outform pem -out ca.cer
+
+# 将server的 cer 和 key 打包成 p12格式
+openssl pkcs12 -export -in lh1.cer -inkey lh1.key -out lh1.p12 -name Server-Cert
+
+# 导入server p12证书及 ca cert格式证书到 nss db
+pk12util -i /etc/pki/CA/lh1.p12 -d /etc/dirsrv/slapd-389server
+certutil -d . -A -n "CA" -t "CT,," -a -i /etc/pki/CA/112CA.cer
+
+# 导入其他有复制关系的server p12证书
+pk12util -i /etc/pki/CA/lh2.p12 -d /etc/dirsrv/slapd-389server
+
+#查看nss db里的证书
+certutil -d /etc/dirsrv/slapd-389server -L

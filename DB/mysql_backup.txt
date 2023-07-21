@@ -83,3 +83,9 @@ Table   Checksum
 grafana.builtin_role    2351006243
 
 
+# mysqldump
+--master-data用于在master端dump资料，用于建立slave
+--dump-slave用于在slave端dump资料，建立类似一主二从
+
+mysql -h10.66.13.27 -uroot -p < mariadb_bk/xtjprometheus02_dbbackup_20230704.sql
+mysqlbinlog --start-position=5606507 master-bin.000010 | mysql -h10.66.13.27 -uroot -p

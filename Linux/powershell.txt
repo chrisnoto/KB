@@ -1,3 +1,110 @@
+# powershell linux版本
+默认缺失wsman模块，需要安装，并且需要安装gssntlmssp包
+[root@repo ~]# rpm -qa |egrep -i 'powershell|gssntlmssp'
+gssntlmssp-1.2.0-2.el7.x86_64
+powershell-7.1.5-1.rhel.7.x86_64
+export https_proxy="http://h7108579:pqhkr99ctw@10.36.6.66:3128"
+pwsh -Command 'Install-Module -Name PSWSMan'
+
+# windows exporter发布
+jenkins调用语句
+/usr/bin/pwsh -f /root/deploy.ps1 -option ${option} -version ${version} -deploy ${deploy}
+
+[root@jenkins-test ~]# cat deploy.ps1
+param (
+  [string]$option,
+  [string]$version,
+  [string]$deploy
+)
+
+$Username = 'deploy'
+$Password = 'Foxconn@1234'
+$Pass = ConvertTo-SecureString $Password -AsPlainText -Force
+$Cred = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Pass
+
+switch ($deploy) {
+  "p10" { $hosts= get-content /root/p10.txt }
+  "p50" { $hosts= get-content /root/p50.txt }
+  "p100" { $hosts= get-content /root/p100.txt }
+}
+
+Invoke-Command -ComputerName $hosts -Filepath /root/winexporter.ps1 -argumentlist "$option","$version" -Credential $Cred
+
+
+
+[root@jenkins-test ~]# cat winexporter.ps1
+param (
+  [string]$option,
+  [string]$version
+)
+
+
+# get version from the windows exporter package
+#$packagename="windows_exporter-0.12.0-amd64.msi"
+#$pattern="(\d+\.\d+\.\d+)"
+#$packageversion=($packagename | where {$_ -match $pattern} | foreach {$Matches[0]})
+
+$packageversion=$version
+$packagename="windows_exporter-" + $packageversion + "-amd64.msi"
+$hname=hostname
+
+
+
+$tmpinstalledversion= Get-ItemProperty HKLM:\Software\Microsoft\Windows\Currentversion\Uninstall\* |where-object {$_.Displ                                                                                                                                                     ayName -eq "windows_exporter"} |select-object Displayversion
+
+Write-output($hname + ":  checking windows exporter version now")
+
+# if windows exporter is installed, get its version
+
+if ($tmpinstalledversion) {
+  $installedversion=$tmpinstalledversion.Displayversion
+  $installedpackage="windows_exporter-" + $installedversion + "-amd64.msi"
+}
+
+# else, install windows exporter
+else {
+  Write-Output "Windows exporter is not installed, now install windows-exporter $packageversion "
+  Write-output "install the version $packageversion"
+}
+
+function do_deploy {
+  if ( $installedversion -eq $packageversion ){
+    Write-output "The current version of windows exporter is the latest version, $packageversion, no need upgrade"
+   }
+  elseif ( $installedversion -lt $packageversion ){
+    Write-output "The current version of windows exporter is $installedversion ,  upgrade the windows exporter to $package                                                                                                                                                     version"
+    Write-output "Start to deploy ..."
+    Write-output "uninstall $installedpackage"
+    Write-output "install $packagename"
+  }
+  else{
+    Write-output "The current version of windows exporter is higher than the one you're going to install, please check the                                                                                                                                                      version you're going to install"
+  }
+}
+
+function do_rollback {
+  if ( $installedversion -gt $packageversion ) {
+    write-output "The current version of windows exporter is $installedversion ,  rollback the windows exporter to $packag                                                                                                                                                     eversion"
+    write-output "Start to rollback ..."
+    Write-output "uninstall $installedpackage"
+    Write-output "install $packagename"
+  }
+  if ( $installedversion -gt $packageversion ) {
+    Write-output "The current version of windows exporter is the latest version, $packageversion, no need to rollback"
+   }
+  else {
+    write-output "The The current version of windows exporter is $installedversion, is lower than $packageversion, please                                                                                                                                                      check if you need to rollback"
+  }
+}
+
+
+switch ($option) {
+  "deploy" {do_deploy}
+  "rollback" {do_rollback}
+}
+
+
+##############################
 列出已安装的软件
 PS C:\Windows\system32> Get-WmiObject -Class Win32_Product |select name,vendor,version
 
@@ -8,3 +115,70 @@ Microsoft Office Office 32-bit Components 2010                                  
 Microsoft Office Shared 32-bit MUI (Chinese (Simplified)) 2010                  Microsoft Corporation      14.0.7015.1000
 Microsoft Office Visio MUI (Chinese (Simplified)) 2010                          Microsoft Corporation      14.0.7015.1000
 Microsoft Office Visio 2010                                                     Microsoft Corporation      14.0.7015.1000
+
+$Username = 'apadmin'
+$Password = 'Foxconn123456'
+$Pass = ConvertTo-SecureString $Password -AsPlainText -Force
+$Cred = New-Object System.Management.Automation.PSCredential -ArgumentList $Username, $Pass
+Invoke-Command -ComputerName your_computer_name -ScriptBlock {Get-WmiObject -Class Win32_Product |select name,vendor,version} -Credential $Cred
+
+invoke-command -computername (get-content servers.txt) -filepath d:\1.ps1| Out-File -filepath logs.txt
+Invoke-Command -ComputerName (get-content server.txt) -ScriptBlock {Get-WmiObject -Class Win32_Product |select name,vendor,version} -Credential $Cred 
+
+
+#查看所有历史记录
+cat (Get-PSReadlineOption).HistorySavePath
+
+#设置http代理
+PS C:\Windows\system32> netsh winhttp import proxy source=ie
+
+当前的 WinHTTP 代理服务器设置:
+
+    代理服务器:  10.36.6.66:3128
+    绕过列表     :  *.foxconn;10.*;*.foxconn.com;*.efoxconn.com;101.foxconn.com;*.mtjade.cloud;*.cluster.local;*.local;<local>
+
+# 文件系统
+[10.67.51.249]: PS C:\Users\Deploy\Downloads> get-volume | where filesystem -eq "NTFS"
+
+DriveLetter FileSystemLabel FileSystem DriveType HealthStatus OperationalStatus SizeRemaining     Size
+----------- --------------- ---------- --------- ------------ ----------------- -------------     ----
+D           新加卷             NTFS       Fixed     Healthy      OK                     73.66 GB   300 GB
+            System Reserved NTFS       Fixed     Healthy      OK                    152.21 MB   500 MB
+C                           NTFS       Fixed     Healthy      OK                     20.65 GB 59.51 GB	
+
+# 内存
+内存加总，有多根内存
+[10.67.51.249]: PS C:\Users\Deploy\Downloads> [math]::Round((get-wmiobject -Class win32_physicalmemory | Measure-Object -property capacity -sum).sum /1GB,2)
+8
+#带单位
+PS C:\Windows\system32> Write-Output([math]::Round((get-wmiobject -Class win32_physicalmemory | Measure-Object -property capacity -sum).sum /1GB,2).tostring() + "GB")
+16GB
+只适合单根内存
+[10.67.51.249]: PS C:\Users\Deploy\Downloads> (get-wmiobject -Class win32_physicalmemory | select @{name="size";expression={$_.capacity/1024/1024/1024}}).size
+8   
+# 带单位，此处size是uint64类型的，要先tostring
+[10.67.51.249]: PS C:\Users\Deploy\Downloads> Write-Output((get-wmiobject -Class win32_physicalmemory | select @{name="size";expression={$_.capacity/1024/1024/1024}}).size.tostring() + "GB")
+8GB
+
+#本机IP地址
+PS C:\> foreach ($ipv4 in (ipconfig) -like '*IPv4*') { ($ipv4 -split ' : ')[1]}
+
+10.67.216.93
+
+# 快速获取IP地址
+PS C:\> Test-Connection -ComputerName (cat .\win.txt) -Count 1 
+
+Source        Destination     IPV4Address      IPV6Address                              Bytes    Time(ms) 
+------        -----------     -----------      -----------                              -----    -------- 
+TJCESIT-150   xtjpcasweb1bak  10.66.13.143                                              32       1        
+TJCESIT-150   xtjpcasweb2bak  10.66.13.188                                              32       1        
+TJCESIT-150   XTJEPDVMISAP1   10.66.19.143                                              32       1        
+TJCESIT-150   xtjepd5mail02   10.66.19.167                                              32       1        
+TJCESIT-150   xtjepd5mail03   10.66.13.6                                                32       1        
+TJCESIT-150   xtjepdvmisap2   10.66.13.72                                               32       14       
+TJCESIT-150   XTJEPDVESD02    10.66.12.252                                              32       1        
+TJCESIT-150   XTJQMSAP1       10.66.13.104                                              32       1        
+TJCESIT-150   XTJQMSAP2       10.66.13.186                                              32       2        
+TJCESIT-150   XTJQMSDB1       10.66.13.140                                              32       1        
+TJCESIT-150   XTJQMSDB2       10.66.13.55                                               32       2        
+TJCESIT-150   XTJWMSWEB01     10.66.13.180                                              32       2        

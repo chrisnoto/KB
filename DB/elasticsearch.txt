@@ -822,9 +822,21 @@ sLZDyxbqROywEOwLwWqHpw 10.67.51.149 10.67.51.149 stjes3 beats_stats.beat.type   
 filebeat-*-2021.02.*
 winlogbeat-*-2021.02.*
 
+curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt -u 'elastic:eSS202304$$' https://xtjcesbges01.cesbg.foxconn:9200/filebeat-7.12.0-2023.06.*/_search -H 'Content-Type: application/json' -d'
+ {"size":"5000",
+ "query":{
+   "wildcard":{
+     "agent.version":"7.*"
+     }
+   },
+  "_source": [
+ "host.ip"
+ ]
+ }
+ ' | jq -r '.hits.hits[]._source.host.ip[0]' | sort -u
 
-curl -XPOST --cacert ~/mycert/certs/ca/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/winlogbeat-7.12.0-2022.02.*/_search -H 'Content-Type: application/json' -d'
- {"size":"500",
+curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt -u elastic https://xtjcesbges01.cesbg.foxconn:9200/winlogbeat-7.12.0-2023.06.*/_search -H 'Content-Type: application/json' -d'
+ {"size":"5000",
  "query":{
    "wildcard":{
      "agent.version":"7.*"

@@ -123,3 +123,44 @@ pipeline {
         
     }
 }
+
+# mariadb verify backup
+pipeline {
+    agent any
+    stages {
+        stage('prepare scripts') {
+            steps {
+
+                git credentialsId: 'git_h7108579', url: 'https://gitlab.ces.efoxconn.com/H7108579/mariadb_verify.git'
+                sh """
+                chmod +x *.sh
+                tar zcvf deploy.tar.gz ./*
+                sshpass -p Foxconn123 scp -o StrictHostKeyChecking=no deploy.tar.gz root@10.66.13.16:/opt
+                sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 '[ -d "/opt/mariadb_verify" ] || mkdir -p /opt/mariadb_verify;tar zxvf /opt/deploy.tar.gz -C /opt/mariadb_verify'
+                rm -f deploy.tar.gz
+                """
+                }
+            }   
+        stage('backup') {
+            steps {
+                sh """
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make backup'
+				"""
+                  } 
+            }  
+        stage('import data') {
+            steps {
+                sh """
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make import'
+				"""
+                  } 
+            }   
+        stage('transfer backup to remote server') {
+            steps {
+                sh """
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make transfer'
+				"""
+                  } 
+            }             
+    }
+}

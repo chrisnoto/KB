@@ -231,3 +231,236 @@ should commit all the changes. Check the last committed value on all nodes after
 ### binlog的删除
 MariaDB [(none)]> purge binary logs before '2022-02-01 08:37:42';
 Query OK, 0 rows affected (1.781 sec)
+
+
+###### 容器版mariadb升级######
+开启mariadb 10.3.34的容器并导入数据
+[root@chens01 ~]# cat grafanadb.sh
+docker run -d \
+ --name grafana_db \
+ -p 3306:3306 \
+ -e 'TZ=Asia/Shanghai' \
+ -e MARIADB_ROOT_PASSWORD="vSTJ456" \
+ -v /data/mysql:/data/mysql \
+ mariadb:10.3.34 \
+ --character-set-server=utf8 \
+ --collation-server=utf8_bin \
+ --datadir=/data/mysql \
+ --socket=/data/mysql/mysql.sock \
+ --default-storage-engine=InnoDB \
+ --innodb-autoinc-lock-mode=2 \
+ --log-error=/data/mysql/error.log \
+ --skip-name-resolve
+ 
+导入数据：
+mysql -h10.66.13.27 -uroot -p < mariadb_bk/xtjprometheus02_dbbackup_20230704.sql 
+
+升级10.3.34 到 10.6.14版本
+##安全关闭mariadb
+ 
+#innodb_fast_shutdown有3个值：
+默认是1 可选0 1 2
+支持全动态局设置
+使用场景：在做数据库关闭升级的时候 set  global innodb_fast_shutdown=0，这个时候能最大保障数据的完整性。
+
+设置为1：关闭MySQL的时候不会做清除脏页和插入缓冲区的合并操作，也不会将脏页刷新到磁盘
+
+设置为0：会做清除脏页和插入缓冲区的合并操作，也会将脏页全部刷新到磁盘上面去，但是这个时候关闭的速度也是最慢的
+
+设置为2：不会做清除脏页和插入缓冲区的合并操作，也不会将脏页刷新到磁盘，但是会刷新到redo log里面，再下次启动mysql的时候恢复
+
+MariaDB [(none)]> select @@innodb_fast_shutdown;
++------------------------+
+| @@innodb_fast_shutdown |
++------------------------+
+|                      1 |
++------------------------+
+1 row in set (0.000 sec)
+
+MariaDB [(none)]> set global innodb_fast_shutdown=0;   
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [(none)]> select @@innodb_fast_shutdown;
++------------------------+
+| @@innodb_fast_shutdown |
++------------------------+
+|                      0 |
++------------------------+
+1 row in set (0.000 sec)
+
+MariaDB [(none)]> Bye
+[root@chens01 ~]# docker stop grafana_db
+grafana_db
+
+[root@chens01 ~]# docker rm -f grafana_db
+grafana_db
+
+如果不做上面fast shutdown的设置，直接docker rm -f 容器的话，会报如下错误
+[ERROR] InnoDB: Upgrade after a crash is not supported. The redo log was created with MariaDB 10.3.34. You must start up and shut down MariaDB 10.4 or earlier on the data directory.
+
+
+[root@chens01 ~]# cat grafanadb.sh
+docker run -d \
+ --name grafana_db \
+ -p 3306:3306 \
+ -e 'TZ=Asia/Shanghai' \
+ -e MARIADB_ROOT_PASSWORD="vSTJ456" \
+ -v /data/mysql:/data/mysql \
+ mariadb:10.6.14 \
+ --character-set-server=utf8 \
+ --collation-server=utf8_bin \
+ --datadir=/data/mysql \
+ --socket=/data/mysql/mysql.sock \
+ --default-storage-engine=InnoDB \
+ --innodb-autoinc-lock-mode=2 \
+ --log-error=/data/mysql/error.log \
+ --skip-name-resolve
+
+开启10.6.14的容器，执行升级  需要带变量MARIADB_AUTO_UPGRADE=1 （可以不用变量，mariadb-upgrade识别不到改变路径的mysql.sock，依然指向/run/mysqld/mysql.sock）
+./grafanadb.sh
+
+手动执行mariadb-upgrade
+[root@chens01 ~]# docker exec -it grafana_db bash
+root@3258741ffa85:/# mariadb-upgrade -S /data/mysql/mysql.sock -uroot -p
+Enter password:
+Major version upgrade detected from 10.3.34-MariaDB to 10.6.14-MariaDB. Check required!
+Phase 1/7: Checking and upgrading mysql database
+Processing databases
+mysql
+mysql.column_stats                                 OK
+mysql.columns_priv                                 OK
+mysql.db                                           OK
+mysql.event                                        OK
+mysql.func                                         OK
+mysql.gtid_slave_pos                               OK
+mysql.help_category                                OK
+mysql.help_keyword                                 OK
+mysql.help_relation                                OK
+mysql.help_topic                                   OK
+mysql.host                                         OK
+mysql.index_stats                                  OK
+mysql.innodb_index_stats                           OK
+mysql.innodb_table_stats                           OK
+mysql.plugin                                       OK
+mysql.proc                                         OK
+mysql.procs_priv                                   OK
+mysql.proxies_priv                                 OK
+mysql.roles_mapping                                OK
+mysql.servers                                      OK
+mysql.table_stats                                  OK
+mysql.tables_priv                                  OK
+mysql.time_zone                                    OK
+mysql.time_zone_leap_second                        OK
+mysql.time_zone_name                               OK
+mysql.time_zone_transition                         OK
+mysql.time_zone_transition_type                    OK
+mysql.transaction_registry                         OK
+mysql.user                                         OK
+Phase 2/7: Installing used storage engines... Skipped
+Phase 3/7: Fixing views
+Phase 4/7: Running 'mysql_fix_privilege_tables'
+Phase 5/7: Fixing table and database names
+Phase 6/7: Checking and upgrading tables
+Processing databases
+alert_api
+alert_api.alert                                    OK
+grafana
+grafana.alert                                      OK
+grafana.alert_configuration                        OK
+grafana.alert_image                                OK
+grafana.alert_instance                             OK
+grafana.alert_notification                         OK
+grafana.alert_notification_state                   OK
+grafana.alert_rule                                 OK
+grafana.alert_rule_tag                             OK
+grafana.alert_rule_version                         OK
+grafana.annotation                                 OK
+grafana.annotation_tag                             OK
+grafana.api_key                                    OK
+grafana.builtin_role                               OK
+grafana.cache_data                                 OK
+grafana.dashboard                                  OK
+grafana.dashboard_acl                              OK
+grafana.dashboard_provisioning                     OK
+grafana.dashboard_public_config                    OK
+grafana.dashboard_snapshot                         OK
+grafana.dashboard_tag                              OK
+grafana.dashboard_version                          OK
+grafana.data_keys                                  OK
+grafana.data_source                                OK
+grafana.entity_event                               OK
+grafana.file                                       OK
+grafana.file_meta                                  OK
+grafana.kv_store                                   OK
+grafana.library_element                            OK
+grafana.library_element_connection                 OK
+grafana.login_attempt                              OK
+grafana.migration_log                              OK
+grafana.ngalert_configuration                      OK
+grafana.org                                        OK
+grafana.org_user                                   OK
+grafana.permission                                 OK
+grafana.playlist                                   OK
+grafana.playlist_item                              OK
+grafana.plugin_setting                             OK
+grafana.preferences                                OK
+grafana.provenance_type                            OK
+grafana.query_history                              OK
+grafana.query_history_star                         OK
+grafana.quota                                      OK
+grafana.role                                       OK
+grafana.secrets                                    OK
+grafana.seed_assignment                            OK
+grafana.server_lock                                OK
+grafana.session                                    OK
+grafana.short_url                                  OK
+grafana.star                                       OK
+grafana.tag                                        OK
+grafana.team                                       OK
+grafana.team_member                                OK
+grafana.team_role                                  OK
+grafana.temp_user                                  OK
+grafana.test_data                                  OK
+grafana.user                                       OK
+grafana.user_auth                                  OK
+grafana.user_auth_token                            OK
+grafana.user_role                                  OK
+information_schema
+performance_schema
+sys
+sys.sys_config                                     OK
+Phase 7/7: Running 'FLUSH PRIVILEGES'
+OK
+
+再执行一遍，确认已经升级完毕
+root@3258741ffa85:/# mariadb-upgrade -S /data/mysql/mysql.sock -uroot -pvSTJ456
+This installation of MariaDB is already upgraded to 10.6.14-MariaDB.
+There is no need to run mysql_upgrade again for 10.6.14-MariaDB.
+
+[root@chens01 ~]# mysql -h10.66.13.27 -uroot -p -e 'select @@event_scheduler'
+Enter password:
++-------------------+
+| @@event_scheduler |
++-------------------+
+| OFF               |
++-------------------+
+[root@chens01 ~]# mysql -h10.66.13.27 -uroot -p
+Enter password:
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 19
+Server version: 10.6.14-MariaDB-1:10.6.14+maria~ubu2004 mariadb.org binary distribution
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]> set global event_scheduler=on;
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [(none)]> select @@event_scheduler;
++-------------------+
+| @@event_scheduler |
++-------------------+
+| ON                |
++-------------------+
+1 row in set (0.000 sec)
