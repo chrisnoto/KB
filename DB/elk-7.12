@@ -1064,3 +1064,57 @@ WantedBy = multi-user.target
 EOF
 
 systemctl enable elasticsearch.service
+
+##### 协调节点
+#!/bin/bash
+name=xtjcesbges04
+cat >/usr/lib/systemd/system/elasticsearch.service <<EOF
+[Unit]
+Description=Elasticsearch Docker Container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+TimeoutStartSec=5m
+ExecStartPre=-/usr/bin/docker rm -f es
+
+ExecStart=/usr/bin/docker run \
+    --name es \
+    --dns 10.66.12.206 \
+    -e node.name=${name}.cesbg.foxconn \
+    -e network.publish_host=${name}.cesbg.foxconn \
+    -e node.master=false \
+    -e node.data=false \
+    -e node.ingest=false \
+    -e cluster.name=elk4Fixo \
+    -e discovery.seed_hosts=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+    -e cluster.initial_master_nodes=xtjcesbges01.cesbg.foxconn,xtjcesbges02.cesbg.foxconn,xtjcesbges03.cesbg.foxconn \
+    -e bootstrap.memory_lock=true \
+    --ulimit memlock=-1:-1 \
+    -e "ES_JAVA_OPTS=-Xms8G -Xmx8G" \
+    -v /data:/usr/share/elasticsearch/data \
+    -e xpack.security.enabled=true \
+    -e xpack.security.http.ssl.enabled=true \
+    -e xpack.security.transport.ssl.enabled=true \
+    -e xpack.security.http.ssl.key=/usr/share/elasticsearch/data/certs/${name}.key \
+    -e xpack.security.http.ssl.certificate=/usr/share/elasticsearch/data/certs/${name}.crt \
+    -e xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/data/certs/ca.crt \
+    -e xpack.security.transport.ssl.key=/usr/share/elasticsearch/data/certs/${name}.key \
+    -e xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/data/certs/${name}.crt \
+    -e xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/data/certs/ca.crt \
+    -e xpack.security.http.ssl.supported_protocols=TLSv1.2 \
+    -p 9200:9200 \
+    -p 9300:9300 \
+    elasticsearch:7.12.0
+
+ExecReload=-/usr/bin/docker stop es
+ExecReload=-/usr/bin/docker rm es
+ExecStop=-/usr/bin/docker stop es
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy = multi-user.target
+
+EOF

@@ -154,13 +154,28 @@ pipeline {
 				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make import'
 				"""
                   } 
-            }   
+            }
+        stage('verify data') {
+            steps {
+                sh """
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make verify'
+				"""
+                  } 
+            }             
         stage('transfer backup to remote server') {
             steps {
                 sh """
 				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make transfer'
 				"""
                   } 
-            }             
+            } 
+        stage('cleanup docker container environment') {
+            steps {
+                sh """
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'cd /opt/mariadb_verify;make down'
+				sshpass -p Foxconn123 ssh -o StrictHostKeyChecking=no root@10.66.13.16 'rm -rf /opt/mariadb_verify /opt/deploy.tar.gz'
+				"""
+                  } 
+            }            
     }
 }

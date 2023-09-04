@@ -57,7 +57,7 @@ xtrabackup: Starting 6 threads for parallel data files transfer
 [04] Copying ./mysql/innodb_table_stats.ibd to /backup/2019-12-20_14-41-59/mysql/innodb_table_stats.ibd
 
 #验证备份数据是否一致
-mysql -uroot -p -B --disable-column-names -e "SELECT CONCAT('CHECKSUM TABLE ', table_schema, '.', table_name, ';') AS statement FROM information_schema.tables WHERE table_schema = 'grafana';" >grafana.sql
+mysql -uroot -p -B --disable-column-names -e "SELECT CONCAT('CHECKSUM TABLE ', table_schema, '.', table_name, ';') AS statement FROM information_schema.tables WHERE table_schema not in ('information_schema','performance_schema','mysql','test')" >grafana.sql
  mysql -uroot -p < grafana.sql
 Table   Checksum
 grafana.alert   0
@@ -86,6 +86,11 @@ grafana.builtin_role    2351006243
 # mysqldump
 --master-data用于在master端dump资料，用于建立slave
 --dump-slave用于在slave端dump资料，建立类似一主二从
+使用--dump-slave=2选项时，它会在备份过程中自动停止从服务器的SQL线程，然后在备份完成后重新启动它。
+此选项还会将主服务器的二进制日志位置和文件名追加到备份数据输出中。如果您将该选项的值设置为1，则会将其作为CHANGE MASTER命令打印到备份数据输出中；
+如果将其设置为2，则该命令将以注释符号为前缀
+--flush-logs和--single-transaction一起配合，保证binlog文件只有一个。flush log只会刷新本机的binlog,假如本机是master，会起作用。如果本机是slave,如果没有设置binlog,则不会有flush log发生。
+
 
 mysql -h10.66.13.27 -uroot -p < mariadb_bk/xtjprometheus02_dbbackup_20230704.sql
 mysqlbinlog --start-position=5606507 master-bin.000010 | mysql -h10.66.13.27 -uroot -p
