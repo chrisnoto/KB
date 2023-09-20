@@ -407,3 +407,10 @@ o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbg
 o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022626] overhead, spent [1.2s] collecting in the last [1.4s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
 o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022627] overhead, spent [1.1s] collecting in the last [1.2s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
 o.e.m.j.JvmGcMonitorService", "cluster.name": "elk4Fixo", "node.name": "xtjcesbges04.cesbg.foxconn", "message": "[gc][27022628] overhead, spent [1.1s] collecting in the last [1.1s]", "cluster.uuid": "hqTGEcs4TYWzK3hfgiapOw", "node.id": "jZf1uR1mQN2JQdNs5kTFng"  }
+
+# 查看unassigned shard
+GET _cluster/allocation/explain
+
+# relocating shards too long问题
+filebeat-7-2023.08.31     0 xtjcesbges01 xtjcesbges02 33.2% 4.9m
+filebeat-7.12.0-2023.02-1 0 xtjcesbges03 xtjcesbges01 10.9% 4.9m

@@ -1,0 +1,121 @@
+##### kernel部分
+
+当前kernel
+[root@orlinux01 entries]# uname -r
+5.15.0-101.103.2.1.el9uek.x86_64
+
+使用grubby查看
+[root@orlinux01 entries]# grubby --default-index
+0
+
+[root@orlinux01 entries]# grubby --default-kernel
+/boot/vmlinuz-5.15.0-101.103.2.1.el9uek.x86_64
+
+[root@orlinux01 entries]# grubby --info=/boot/vmlinuz-5.15.0-101.103.2.1.el9uek.x86_64
+index=0
+kernel="/boot/vmlinuz-5.15.0-101.103.2.1.el9uek.x86_64"
+args="ro crashkernel=1G-64G:448M,64G-:512M rd.lvm.lv=ol/root"
+root="/dev/mapper/ol-root"
+initrd="/boot/initramfs-5.15.0-101.103.2.1.el9uek.x86_64.img"
+title="Oracle Linux Server (5.15.0-101.103.2.1.el9uek.x86_64 with Unbreakable Enterprise Kernel) 9.2"
+id="72a4ed2a76a04f5398d6878bd44d37fb-5.15.0-101.103.2.1.el9uek.x86_64"
+
+
+
+查看所有内核
+[root@orlinux01 entries]# grubby --info=ALL
+index=0
+kernel="/boot/vmlinuz-5.15.0-101.103.2.1.el9uek.x86_64"
+args="ro crashkernel=1G-64G:448M,64G-:512M rd.lvm.lv=ol/root"
+root="/dev/mapper/ol-root"
+initrd="/boot/initramfs-5.15.0-101.103.2.1.el9uek.x86_64.img"
+title="Oracle Linux Server (5.15.0-101.103.2.1.el9uek.x86_64 with Unbreakable Enterprise Kernel) 9.2"
+id="72a4ed2a76a04f5398d6878bd44d37fb-5.15.0-101.103.2.1.el9uek.x86_64"
+index=1
+kernel="/boot/vmlinuz-5.14.0-284.11.1.el9_2.x86_64"
+args="ro crashkernel=1G-64G:448M,64G-:512M rd.lvm.lv=ol/root"
+root="/dev/mapper/ol-root"
+initrd="/boot/initramfs-5.14.0-284.11.1.el9_2.x86_64.img"
+title="Oracle Linux Server (5.14.0-284.11.1.el9_2.x86_64) 9.2"
+id="72a4ed2a76a04f5398d6878bd44d37fb-5.14.0-284.11.1.el9_2.x86_64"
+index=2
+kernel="/boot/vmlinuz-0-rescue-72a4ed2a76a04f5398d6878bd44d37fb"
+args="ro crashkernel=1G-64G:448M,64G-:512M rd.lvm.lv=ol/root"
+root="/dev/mapper/ol-root"
+initrd="/boot/initramfs-0-rescue-72a4ed2a76a04f5398d6878bd44d37fb.img"
+title="Oracle Linux Server (0-rescue-72a4ed2a76a04f5398d6878bd44d37fb with Unbreakable Enterprise Kernel) 9.2"
+id="72a4ed2a76a04f5398d6878bd44d37fb-0-rescue"
+
+# 对某个的内核添加启动参数  
+以selinux为例
+[root@orlinux01 lib]# grubby --update-kernel ALL --args selinux=0
+[root@orlinux01 lib]# getenforce
+Enforcing
+[root@orlinux01 lib]# reboot
+
+$ ssh root@10.67.74.240
+root@10.67.74.240's password:
+Activate the web console with: systemctl enable --now cockpit.socket
+
+Last login: Fri Sep  8 16:16:25 2023
+[root@orlinux01 ~]# getenforce
+Disabled
+
+# 对当前内核禁用ipv6
+grubby --update-kernel DEFAULT --args ipv6.disable=1
+
+# grub.cfg变化
+centos7的bootloader配置在/boot/grub2/grub.cfg里
+oracle linux 9的grub.cfg文件以及没有linux16之类的内容了，bootloader配置放在了/boot/loader/entries
+
+[root@orlinux01 entries]# pwd
+/boot/loader/entries
+
+[root@orlinux01 entries]# cat 72a4ed2a76a04f5398d6878bd44d37fb-5.15.0-101.103.2.1.el9uek.x86_64.conf
+title Oracle Linux Server (5.15.0-101.103.2.1.el9uek.x86_64 with Unbreakable Enterprise Kernel) 9.2
+version 5.15.0-101.103.2.1.el9uek.x86_64
+linux /vmlinuz-5.15.0-101.103.2.1.el9uek.x86_64
+initrd /initramfs-5.15.0-101.103.2.1.el9uek.x86_64.img
+options root=/dev/mapper/ol-root ro crashkernel=1G-64G:448M,64G-:512M rd.lvm.lv=ol/root
+grub_users $grub_users
+grub_arg --unrestricted
+grub_class ol
+
+#网络的变化
+network-scripts已被弃用
+networkmanager配置
+[root@orlinux01 system-connections]# cat /etc/NetworkManager/system-connections/ens4.nmconnection
+[connection]
+id=ens4
+type=ethernet
+autoconnect-priority=-999
+interface-name=ens4
+
+[ethernet]
+
+[ipv4]
+method=manual
+address1=10.67.74.240/24,10.67.74.1
+
+[ipv6]
+addr-gen-mode=eui64
+method=auto
+
+[proxy]
+
+# 网络配置方法
+Use nmcli to configure connections on the command line.
+Use nmtui to configure connections in a text-based user interface.
+Use the GNOME Settings menu or nm-connection-editor application to configure connections in a graphical interface.
+Use nmstatectl to configure connections through the Nmstate API.
+
+# XFS 文件系统
+XFS 文件系统现在支持 bigtime 和 inobtcount 功能
+
+XFS 文件系统现在支持两个新的 on-disk 功能，它们各自在 RHEL 9 的 mkfs.xfs 中被默认启用。这两个新功能包括：
+
+超过 2038 年的时间戳支持（bigtime）。
+索引节点 btree 计数器（inobtcount），以减少大型文件系统的挂载时间。
+在这个版本中，使用默认 mkfs.xfs 参数创建的文件系统无法在 RHEL 8 系统中挂载。
+
+要创建一个与 RHEL 8 内核兼容的新文件系统，请通过在 mkfs.xfs 命令行中添加 -m bigtime=0,inobtcount=0 来禁用这些新功能。以这种方式创建的文件系统将不支持超过 2038 年的时间戳。

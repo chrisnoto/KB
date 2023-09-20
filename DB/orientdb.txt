@@ -1,0 +1,33 @@
+orientdb
+# 新建一个docker容器来连接nexus3的orientdb
+[root@xtjrepo ~]# docker run -it -v /data/nexus-data:/nexus-data  -v /data/nexus/etc/jetty:/opt/sonatype/nexus/etc/jetty czynexus:1.0 /bin/bash
+
+# 在容器里使用jar包打开orient console
+bash-4.4$ java -jar $NEXUS_HOME/lib/support/nexus-orient-console.jar
+
+OrientDB console v.2.2.37 (build a7541e7ceeabf592dd9a7b2928b6c023cbc73193, branch 2.2.x) https://www.orientdb.com
+Type 'help' to display all the supported commands.
+
+# 连接本地数据库
+orientdb> connect plocal:/nexus-data/db/security admin
+
+Disconnecting from the database [null]...OKEnter password:       密码admin
+
+Connecting to database [plocal:/nexus-data/db/security] with user 'admin'...OK
+
+
+orientdb {db=security}> info
+
+Current database: security (url=plocal:/nexus-data/db/security)
+
+
+orientdb {db=security}> select * from user
+
++----+-----+------+------+--------+---------+---------+----------------+---------------------------------------------------------------------------------+
+|#   |@RID |@CLASS|status|lastName|id       |firstName|email           |password                                                                         |
++----+-----+------+------+--------+---------+---------+----------------+---------------------------------------------------------------------------------+
+|0   |#18:0|user  |active|User    |admin    |Admini...|admin@example...|$shiro1$SHA-512$1024$04eHb9TYYeJPgkGIOVJ+jg==$6el4ybCcuYGc78hoWplJprkmXUrQkaqT...|
+|1   |#19:0|user  |active|User    |anonymous|Anonymous|anonymous@exa...|$shiro1$SHA-512$1024$CPJm1XWdYNg5eCAYp4L4HA==$HIGwnJhC07ZpgeVblZcFRD1F6KH+xPG8...|
++----+-----+------+------+--------+---------+---------+----------------+---------------------------------------------------------------------------------+
+
+2 item(s) found. Query executed in 0.004 sec(s).

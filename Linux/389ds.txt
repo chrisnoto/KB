@@ -9,7 +9,9 @@ ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com'
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(uid=h*)" -W |grep dn       #模糊匹配
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com' -s subtree  "(cn=*Managers)" -W |grep dn  #模糊匹配
 
-ldapsearch -H ldap://vstjcesbgdc03.cesbg.foxconn -x -W -D "cn=陳森,ou=tj-fiwo,ou=vdiusers,ou=cesbgusers,dc=cesbg,dc=foxconn" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(sAMAccountName=H7104398)"
+
+ldapsearch -H ldaps://xtjcesbgdc01.cesbg.foxconn -x -W -D "CN=LdapAdmin,OU=System Account,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(cn=tj100)"
+ldapsearch -H ldaps://xtjcesbgdc01.cesbg.foxconn -x -W -D "CN=tj100,OU=test越南,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(cn=tj100)"
 
 显示隐藏属性  Foxconn456&*( 
 root@xygjsldap01:~# ldapsearch -D 'uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii' -b 'dc=cesbg,dc=fii' "(uid=nextcloud)" + -Z -W
@@ -382,3 +384,20 @@ pk12util -i /etc/pki/CA/lh2.p12 -d /etc/dirsrv/slapd-389server
 
 #查看nss db里的证书
 certutil -d /etc/dirsrv/slapd-389server -L
+
+# 389ds设置组及组的ACI
+cat foxconn_readonly.ldif
+dn: cn=foxconn_readonly,dc=cesbg,dc=fii
+changetype: add
+objectClass: top
+objectClass: posixGroup
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames
+objectClass: nsMemberOf
+gidNumber: 3
+description: foxconn readonly group
+
+dn: dc=cesbg,dc=fii
+changetype: modify
+add: aci
+aci: (target = "ldap:///ou=Foxconn,dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search foxconn ou";allow (search,read) (groupdn = "ldap:/// cn=foxconn_readonly,dc=cesbg,dc=fii");)
