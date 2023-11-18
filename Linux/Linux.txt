@@ -1,3 +1,51 @@
+# yum list查看yum源里的kernel版本
+[root@es01 kafka]# yum list kernel --showduplicates
+Loaded plugins: fastestmirror
+Loading mirror speeds from cached hostfile
+Installed Packages
+kernel.x86_64                                                                3.10.0-1127.el7                                                                      installed
+Available Packages
+kernel.x86_64                                                                3.10.0-1160.el7                                                                      base
+kernel.x86_64                                                                3.10.0-1160.el7                                                                      updates
+kernel.x86_64                                                                3.10.0-1160.2.1.el7                                                                  updates
+kernel.x86_64                                                                3.10.0-1160.2.2.el7                                                                  updates
+kernel.x86_64                                                                3.10.0-1160.6.1.el7                                                                  updates
+kernel.x86_64                                                                3.10.0-1160.11.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.15.2.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.21.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.24.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.25.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.31.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.36.2.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.41.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.42.2.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.45.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.49.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.53.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.59.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.62.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.66.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.71.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.76.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.80.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.81.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.83.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.88.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.90.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.92.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.95.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.99.1.el7                                                                 updates
+kernel.x86_64                                                                3.10.0-1160.102.1.el7                                                                updates
+
+
+# debian ufw防火墙
+批量添加多个源ip访问某个port
+list2第一列为源ip，第二列为目标port
+while read sip dport;do ufw allow from ${sip} proto tcp to any port ${dport};done< <(cat list2)
+如要ufw默认并未处理docker容器与主机的通信，加上以下规则，允许docker0网桥上的流量进出
+ufw allow out on docker0 from 172.17.0.0/16
+ufw allow in on docker0 from 172.17.0.0/16
+
 # install命令
 拷贝文件到指定目录并chmod
 [root@bk ~]# install -v -m 644 -D /etc/hosts /etc/passwd /etc/shadow /tmp/
@@ -38,7 +86,7 @@ drwx------ 2 chensen chensen 6 May 17 17:28 /chensen2/a/b/c
 # top只查看redis-server
 top -p $(pgrep -d, redis-server)
 
-=========================================================== python,go,npm设置代理和repository =================================================
+=========================================================== python,go,npm,ssh设置代理和repository =================================================
 #  pip更换源
 pip配置文件的位置
 全局的位于 /etc/pip.conf
@@ -58,6 +106,23 @@ npm config set https-proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
 # git配置dialing
 git config --global http.proxy 10.67.124.99:808
 git config --global https.proxy 10.67.124.99:808
+
+# ssh connect-proxy配置代理
+export HTTP_PROXY_USER=H7108579
+export HTTP_PROXY_PASSWORD=<password>
+cat .ssh/config
+Host 114.116.49.143
+  User root
+  Hostname 114.116.49.143
+  ProxyCommand connect-proxy -H 10.36.6.68:3128 %h %p
+[root@repo .ssh]# ssh 114.116.49.143
+root@114.116.49.143's password:
+Last failed login: Sun Oct 22 22:56:58 CST 2023 from 112.132.249.164 on ssh:notty
+There were 5 failed login attempts since the last successful login.
+Last login: Fri Oct 20 17:09:10 2023 from 121.36.59.153
+
+        Welcome to Huawei Cloud Service
+
 =========================================================== Tips and tricks =================================================
 #  如何直接拷贝单个文件到服务器的任何地方，无视lhadmin没有root权限
 [root@repo ~]# ssh lhadmin@xlhcesbges01 sudo cp /dev/stdin /root/pg.conf <pg.conf

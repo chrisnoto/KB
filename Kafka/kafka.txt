@@ -295,3 +295,12 @@ aclVersion = 0
 ephemeralOwner = 0x301d62c2a380000
 dataLength = 235
 numChildren = 0
+
+
+# docker里做测试
+kafka-topics --create --bootstrap-server kafka-1:9092 --replication-factor 1 --partitions 2 --topic filebeat
+kafka-topics --describe --bootstrap-server kafka-2:9092 --topic filebeat
+kafka-producer-perf-test --topic filebeat --num-records 100000 --record-size 1000 --throughput -1 --producer-props bootstrap.servers=kafka-1:9092 ack=-1 compression.type=lz4
+kafka-console-consumer --bootstrap-server kafka-1:9092 --topic filebeat --from-beginning --max-messages 10
+kafka-console-consumer --bootstrap-server kafka-1:9092 --topic filebeat --partition 0 --offset 10 --max-messages 10
+kafka-console-consumer --bootstrap-server kafka-1:9092 --topic filebeat --partition 1 --offset 10 --max-messages 10

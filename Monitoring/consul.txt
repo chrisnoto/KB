@@ -923,4 +923,17 @@ Local:            false
 Create Time:      2022-08-31 17:08:23.938335791 +0800 CST
 Policies:
    7e910fdf-e004-84dd-e7ff-4920fa162066 - nomad-service
-   
+
+# 在lhes01上登录lhes04上的vault server，并做get, put操作
+ 1001  export VAULT_ADDR='http://10.134.241.90:8200'
+ 1002  export VAULT_TOKEN="hvs.TT5BgZoCQ54bMqWfz7DhX20g"
+ 1003  vault login
+  946  vault kv put -format=json secret/es/masterconfig @es-master-config.json
+  947  vault kv put -format=json secret/es/cordconfig @es-cord-config.json
+  948  vault kv put -format=json secret/es/logstashconfig @es-logstash-config.json
+  907  vault kv put secret/es/instance/cert cert=@instance.crt
+  909  vault kv put secret/es/instance/key cert=@instance.key
+  911  vault kv get secret/es/instance/key
+  913  vault kv put secret/es/instance/pkcs8key cert=@instance.pkcs8.key
+
+ 

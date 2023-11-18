@@ -1,0 +1,19 @@
+drop table user_log if exist;
+create table user_log (
+`id` bigint(20) NOT NULL AUTO_INCREMENT,
+`login` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+`last_seen_at` datetime DEFAULT NULL,
+PRIMARY KEY (`id`)
+)
+
+DELIMITER //
+CREATE TRIGGER update_last_seen
+AFTER UPDATE ON user
+FOR EACH ROW
+BEGIN
+    IF NEW.last_seen_at <> OLD.last_seen_at THEN
+        INSERT INTO user_log(login, last_seen_at)
+        VALUES(NEW.login, NEW.last_seen_at);
+    END IF;
+END; //
+DELIMITER ;

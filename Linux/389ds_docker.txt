@@ -99,6 +99,54 @@ Certificate:
         Serial Number:
             00:be:76:84:df
 
+更换证书
+[root@es01 data]# docker compose exec 389ds dsctl localhost tls import-server-key-cert /data/ldap01.crt /data/ldap01.key
+[root@es01 data]# docker compose exec 389ds dsctl localhost tls import-ca /data/ca.crt 'myfiinet CA'			
+更换完证书后要重启389ds
+验证
+先添加本地解析，然后执行ldapsearch
+[root@es01 data]# ldapsearch -H ldaps://ldap01.ces.myfiinet.com:3636 -D 'cn=Directory manager' -Z -b 'dc=cesbg,dc=fii' -w'Foxconn123' -d 1
+
+配置双向复制
+#es01节点
+[root@es01 389ds]# docker compose exec 389ds dsconf localhost replication create-manager
+Enter replication manager password:
+Confirm replication manager password:
+Successfully created replication manager: cn=replication manager,cn=config
+[root@es01 389ds]# docker compose exec 389ds dsconf localhost replication enable \
+> --suffix dc=cesbg,dc=fii \
+> --role supplier --replica-id 1 --bind-dn "cn=replication manager,cn=config"
+Replication successfully enabled for "dc=cesbg,dc=fii"
+
+# redis01节点
+[root@redis01 389ds]# docker compose exec 389ds dsconf localhost replication create-manager
+Enter replication manager password:
+Confirm replication manager password:
+Successfully created replication manager: cn=replication manager,cn=config
+[root@redis01 389ds]# docker compose exec 389ds dsconf localhost replication enable \
+> --suffix dc=cesbg,dc=fii \
+> --role supplier --replica-id 2 --bind-dn "cn=replication manager,cn=config"
+Replication successfully enabled for "dc=cesbg,dc=fii"
+
+#es01节点
+[root@es01 389ds]# docker compose exec 389ds dsconf localhost repl-agmt create \
+> --suffix dc=cesbg,dc=fii \
+> --host=ldap02.ces.myfiinet.com --port=3636 --conn-protocol LDAPS --bind-dn "cn=replication manager,cn=config" \
+> --bind-passwd 'Foxconn123' --bind-method SIMPLE tj01to02
+Successfully created replication agreement "tj01to02"
+[root@es01 389ds]# docker compose exec 389ds dsconf localhost repl-agmt init \
+> --suffix dc=cesbg,dc=fii tj01to02
+Agreement initialization started...
+[root@es01 389ds]# docker compose exec 389ds dsconf localhost repl-agmt init-status --suffix dc=cesbg,dc=fii tj01to02
+Unknown
+
+
+[root@redis01 389ds]# docker compose exec 389ds dsconf localhost config replace nsslapd-ssl-check-hostname=off
+selinux python module not found, will not relabel files.
+Successfully replaced "nsslapd-ssl-check-hostname"
+[root@redis01 389ds]# docker compose exec 389ds dsconf localhost config get nsslapd-ssl-check-hostname
+nsslapd-ssl-check-hostname: off
+			
 # dsidm命令
 1 account
 root@xygjsldap01:~# dsidm 389server -b "ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii" account get-by-dn "uid=H7108579,ou=[天津]IT系統規劃處_基礎架構規劃部_系統規劃課,ou=[天津]IT系統規劃處_基礎架構規劃部,ou=[天津]IT系統規劃處,ou=資訊管理處_天津,ou=資訊管理處,ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii"
@@ -171,8 +219,14 @@ nsslapd-pluginVersion: 1.4.4.11
 objectClass: top
 objectClass: nsSlapdPlugin
 objectClass: extensibleObject
-	
 
+设置远程ldap	
+root@XTJJSLdap01:/etc/dirsrv/slapd-389server# dsconf ldaps://xtjjsldap02.cesbg.fii:636 config get nsslapd-securePort
+Enter Bind DN: cn=directory manager
+Enter password for cn=directory manager on ldaps://xtjjsldap02.cesbg.fii:636:
+nsslapd-securePort: 636
+
+	
 # memberof
 启用memberof
 sh-4.4# dsconf localhost plugin memberof enable
