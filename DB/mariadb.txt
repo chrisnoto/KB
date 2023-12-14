@@ -1,3 +1,14 @@
+Extra：关于MYSQL如何解析查询的额外信息。坏的例子是Using temporary和Using filesort，
+意思MYSQL根本不能使用索引，结果是检索会很慢
+Range checked for each Record（index map:#）:没有找到理想的索引，因此对于从前面表中来的每一个行组合，
+MYSQL检查使用哪个索引，并用它来从表中返回行。这是使用索引的最慢的连接之一
+
+Using filesort: 看到这个的时候，查询就需要优化了。MYSQL需要进行额外的步骤来发现如何对返回的行排序。
+它根据连接类型以及存储排序键值和匹配条件的全部行的行指针来排序全部行
+
+Using temporary 看到这个的时候，查询需要优化了。这里，MYSQL需要创建一个临时表来存储结果，
+这通常发生在对不同的列集进行ORDER BY上，而不是GROUP BY上
+
 ### 死锁默认的处理及查找
 When deadlock detection is enabled, InnoDB instantly detects it and rolls back one of the transactions. Otherwise, 
 it relies on the innodb_lock_wait_timeout to roll it back. Whatever, you’ll meet the error: “Deadlock found when trying to get lock; 
@@ -480,3 +491,37 @@ MariaDB [(none)]> select @@event_scheduler;
 | ON                |
 +-------------------+
 1 row in set (0.000 sec)
+
+# mysql的connect引擎
+create table linux2 (
+targets varchar(256) jpath='$.targets[*]',
+area char(2) jpath='$.labels.area',
+team char(10) jpath='$.labels.team',
+job char(20) jpath='$.labels.job',
+servicetype char(10) jpath='$.labels.service_type')
+engine=CONNECT table_type=BSON File_name='linux.json';
+
+create table hostemail (
+name varchar(256) jpath='$.email[*].name',
+sa_receiver char(20) jpath='$.email[*].receivers[*].sa_receiver',
+mail char(40) jpath='$.email[*].receivers[*].mail',
+fixed_phone char(20) jpath='$.email[*].receivers[*].fixed_phone',
+mobile_phone char(20) jpath='$.email[*].receivers[*].mobile_phone')
+engine=CONNECT table_type=JSON File_name='host_email.json';
+
+
+
+DECLARE @ThresholdSeconds INT = 5;
+
+SELECT TOP 10
+    t.text AS query_text,
+    qs.total_worker_time / 1000000.0 AS total_worker_time_seconds,
+    qs.execution_count
+FROM 
+    sys.dm_exec_query_stats qs
+CROSS APPLY 
+    sys.dm_exec_sql_text(qs.sql_handle) t
+WHERE 
+    qs.total_worker_time / 1000000.0 >= @ThresholdSeconds
+ORDER BY 
+    qs.total_worker_time DESC;

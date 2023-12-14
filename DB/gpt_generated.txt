@@ -1,0 +1,361 @@
+写一个shell脚本，在centos7系统上安装mariadb数据库。
+脚本有以下要求：
+1 脚本具有幂等性
+2 使用/usr/bin/mysql设置root密码为vSTJ456
+3 使用/usr/bin/mysql创建初始用户chensen,它的密码为vSTJ4567。
+4 脚本开启binlog,error log
+5 脚本配置InnoDB Buffer Pool Size为系统内存的75%
+
+write a python script， to create a ansible dynamic inventory based on mongodb
+
+写一个shell脚本，在三台centos7系统上安装mariadb数据库。
+脚本有以下要求：
+1 脚本具有幂等性
+2 使用/usr/bin/mysql设置root密码为vSTJ456
+3 使用/usr/bin/mysql创建初始用户chensen,它的密码为vSTJ4567。
+4 脚本开启binlog,error log
+5 脚本配置InnoDB Buffer Pool Size为系统内存的75%
+6 脚本配置三台mariadb之间为一主两从
+
+# 安装mariadb数据库
+# 检查mariadb-server是否已经安装，如果没有则安装
+if ! rpm -q mariadb-server; then
+   yum install -y mariadb-server
+fi
+
+# 启动mariadb服务
+systemctl enable --now mariadb
+
+# 登录mariadb，使用/usr/bin/mysql命令
+/usr/bin/mysql<<EOF
+# 更改root密码
+alter user 'root'@'localhost' identified by 'vSTJ456';
+
+# 创建一个新的数据库用户chensen，并设置密码为vSTJ4567。
+# 检查新用户是否已经存在，如果没有则创建；如果存在则修改密码。
+SELECT user FROM mysql.user WHERE user = 'chensen';
+if [ $? -ne 0 ]; then 
+  CREATE USER 'chensen'@'localhost' IDENTIFIED BY 'vSTJ4567';
+else 
+  ALTER USER 'chensen'@'localhost' IDENTIFIED BY 'vSTJ4567';
+fi
+
+# 授予新用户所有权限
+GRANT ALL PRIVILEGES ON *.* TO 'chensen'@'localhost';
+
+# 刷新权限表
+FLUSH PRIVILEGES;
+
+# 退出mariadb
+exit
+EOF
+
+# 用shell脚本实现mariadb数据库开启binlog,error log，并配置InnoDB Buffer Pool Size为系统内存的75%
+
+# 定义一个函数，用于在配置文件中添加内容，如果内容已经存在且相同，则不做任何操作；如果内容不存在或不同，则添加或修改内容，并返回1表示需要重启服务。
+function add_config() {
+  local file=$1 # 配置文件路径
+  local section=$2 # 配置文件段名
+  local key=$3 # 配置文件键名
+  local value=$4 # 配置文件键值
+
+  # 检查配置文件是否存在，如果不存在则创建一个空文件，并返回1表示需要重启服务。
+  if [ ! -f "$file" ]; then
+    touch "$file"
+    echo "[$section]" >> "$file"
+    echo "" >> "$file"
+    echo "$key=$value" >> "$file"
+    echo "" >> "$file"
+    return 1 
+  fi
+
+  # 检查配置文件是否包含指定的段名，如果不存在则在文件末尾添加一个新段名，并换行，并返回1表示需要重启服务。
+  if ! grep -q "^\[$section\]" "$file"; then
+    echo "[$section]" >> "$file"
+    echo "" >> "$file"
+    echo "$key=$value" >> "$file"
+    echo "" >> "$file"
+    return 1 
+  fi
+
+  # 检查配置文件是否包含指定的键名，如果不存在则在指定段名下添加一个新键名和键值，并换行，并返回1表示需要重启服务；如果存在则检查键值是否相同，如果不同则替换为新键值，并换行，并返回1表示需要重启服务；如果相同则不做任何操作。
+  if ! grep -q "^$key=" "$file"; then
+    sed -i "/^\[$section\]/a $key=$value\n" "$file"
+    return 1 
+  else 
+    if ! grep -q "^$key=$value" "$file"; then 
+      sed -i "s/^$key=.*$/$key=$value\n/" "$file"
+      return 1 
+    fi 
+  fi
+
+}
+
+# 调用函数，向mariadb配置文件中添加开启binlog,error log的内容，并配置InnoDB Buffer Pool Size为系统内存的75%
+restart=0 # 定义一个变量，用于记录是否需要重启服务，默认为0表示不需要重启。
+add_config /etc/my.cnf.d/server.cnf mariadb log-bin binlog && restart=1 
+add_config /etc/my.cnf.d/server.cnf mariadb server-id 1 && restart=1 
+add_config /etc/my.cnf.d/server.cnf mariadb log-error error.log && restart=1 
+add_config /etc/my.cnf.d/server.cnf mysqld innodb_buffer_pool_size $(awk '/MemTotal/ {printf "%d\n", $2 * .75}' /proc/meminfo)K && restart=1 
+
+# 检查mariadb服务是否需要重启，如果需要则重启；如果不需要则不做任何操作。
+if [ $restart -eq 1 ]; then 
+  systemctl restart mariadb 
+fi 
+
+
+# 定义巡检相关的变量
+DB_HOST="localhost" # 数据库主机名或IP地址
+DB_PORT="3306" # 数据库端口号
+DB_USER="root" # 数据库用户名
+DB_PASS="vSTJ456" # 数据库密码
+DB_NAME="mysql" # 数据库名称
+LOG_FILE="/tmp/mariadb_check.log" # 巡检日志文件
+REPORT_FILE="/tmp/mariadb_check_report.txt" # 巡检报告文件
+
+# 定义一个函数，用来执行SQL语句，并将结果输出到日志文件中
+function run_sql() {
+  local sql=$1 # SQL语句
+  local title=$2 # SQL语句的标题
+  echo "==== $title ====" >> $LOG_FILE # 输出标题到日志文件中
+  mysql -h$DB_HOST -P$DB_PORT -u$DB_USER -p$DB_PASS -D$DB_NAME -e "$sql" >> $LOG_FILE # 执行SQL语句，并将结果输出到日志文件中
+  echo "" >> $LOG_FILE # 输出空行到日志文件中
+}
+
+# 清空日志文件和报告文件
+echo "" > $LOG_FILE
+echo "" > $REPORT_FILE
+
+# 执行巡检任务
+
+# 检查数据库的基本信息，如版本号、启动时间、数据目录等
+run_sql "SELECT VERSION() AS 'Version', NOW() AS 'Current Time', @@GLOBAL.datadir AS 'Data Directory';" "Basic Information"
+
+# 检查数据库的连接数，如当前连接数、最大连接数等
+run_sql "SHOW STATUS LIKE 'Threads%';" "Connection Status"
+
+# 检查数据库的负载情况，如CPU使用率、内存使用率等
+run_sql "SHOW GLOBAL STATUS LIKE 'Uptime'; SHOW GLOBAL STATUS LIKE '%CPU%'; SHOW GLOBAL STATUS LIKE '%Memory%';" "Load Status"
+
+# 检查数据库的日志情况，如错误日志、慢查询日志等
+run_sql "SHOW VARIABLES LIKE 'log_error'; SHOW VARIABLES LIKE 'slow_query_log%'; SHOW GLOBAL STATUS LIKE 'Slow_queries';" "Log Status"
+
+# 检查数据库的备份情况，如最近一次备份时间、备份文件大小等（需要根据实际情况修改）
+run_sql "SELECT MAX(backup_finish_date) AS 'Last Backup Time', SUM(backup_size/1024/1024) AS 'Backup Size (MB)' FROM mysql.backup_history;" "Backup Status"
+
+# 检查数据库的参数情况，如字符集、时区、隔离级别等
+run_sql "SHOW VARIABLES LIKE 'character_set%'; SHOW VARIABLES LIKE 'time_zone%'; SHOW VARIABLES LIKE 'tx_isolation';" "Parameter Status"
+
+# 检查数据库的表空间情况，如表空间总大小、已用大小、剩余大小等（需要根据实际情况修改）
+run_sql "SELECT table_schema AS 'Database', SUM(data_length+index_length)/1024/1024 AS 'Total Size (MB)', SUM(data_free)/1024/1024 AS 'Free Size (MB)' FROM information_schema.tables GROUP BY table_schema;" "Tablespace Status"
+
+# 检查数据库的索引情况，如重复索引、无用索引等（需要根据实际情况修改）
+run_sql "SELECT * FROM (SELECT table_schema, table_name, index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns FROM information_schema.statistics GROUP BY table_schema, table_name, index_name) t1 INNER JOIN (SELECT table_schema, table_name, index_name, columns FROM (SELECT table_schema, table_name, index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS columns FROM information_schema.statistics GROUP BY table_schema, table_name, index_name) t GROUP BY columns HAVING COUNT(*) > 1) t2 ON t1.columns = t2.columns AND t1.index_name != t2.index_name WHERE t1.table_schema NOT IN ('information_schema', 'mysql', 'performance_schema');" "Duplicate Indexes"
+
+run_sql "SELECT s.* FROM information_schema.statistics s LEFT JOIN information_schema.index_statistics i ON s.table_schema = i.table_schema AND s.table_name = i.table_name AND s.index_name = i.index_name WHERE s.table_schema NOT IN ('information_schema', 'mysql', 'performance_schema') AND i.table_schema IS NULL;" "Unused Indexes"
+
+# 检查数据库的锁情况，如死锁、长事务等（需要根据实际情况修改）
+run_sql "SHOW ENGINE INNODB STATUS\G;" "InnoDB Status"
+run_sql "SELECT * FROM information_schema.innodb_trx ORDER BY trx_started;" "InnoDB Transactions"
+run_sql "SELECT * FROM information_schema.innodb_locks;" "InnoDB Locks"
+run_sql "SELECT * FROM information_schema.innodb_lock_waits;" "InnoDB Lock Waits"
+
+# 生成巡检报告
+
+# 定义一个函数，用来分析日志文件中的内容，并将结果输出到报告文件中
+function analyze_log() {
+  local keyword=$1 # 日志文件中的关键字
+  local title=$2 # 报告文件中的标题
+  local comment=$3 # 报告文件中的注释
+  echo "$title:" >> $REPORT_FILE # 输出标题到报告文件中
+  grep "$keyword" $LOG_FILE >> $REPORT_FILE # 在日志文件中搜索关键字，并将结果输出到报告文件中
+  echo "$comment" >> $REPORT_FILE # 输出注释到报告文件中
+  echo "" >> $REPORT_FILE # 输出空行到报告文件中
+}
+
+# 分析日志文件，并生成报告
+
+# 分析数据库的基本信息，并生成报告
+analyze_log "Basic Information" "Basic Information" ""
+
+# 分析数据库的连接数，并生成报告
+analyze_log "Connection Status" "Connection Status" ""
+
+# 分析数据库的负载情况，并生成报告
+analyze_log "Load Status" "Load Status" ""
+
+# 分析数据库的日志情况，并生成报告
+analyze_log "Log Status" "Log Status" ""
+
+# 分析数据库的备份情况，并生成报告（需要根据实际情况修改）
+analyze_log "Backup Status" "Backup Status" ""
+
+# 分析数据库的参数情况，并生成报告（需要根据实际情况修改）
+analyze_log "Parameter Status" "Parameter Status" ""
+
+# 分析数据库的表空间情况，并生成报告（需要根据实际情况修改）
+analyze_log "Tablespace Status" "Tablespace Status" ""
+
+# 分析数据库的索引情况，并生成报告（需要根据实际情况修改）
+analyze_log "Duplicate Indexes" "Duplicate Indexes" ""
+analyze_log "Unused Indexes" "Unused Indexes" ""
+
+# 分析数据库的锁情况，并生成报告（需要根据实际情况修改）
+analyze_log "---TRANSACTIONS---" "InnoDB Transactions Summary" ""
+analyze_log "---BUFFER POOL AND MEMORY---" "InnoDB Buffer Pool and Memory Summary" ""
+analyze_log "---ROW OPERATIONS---" "InnoDB Row Operations Summary" ""
+analyze_log
+
+
+这是我为您生成的shell脚本：
+
+```bash
+#!/bin/bash
+# 安装mariadb数据库
+sudo yum update -y
+# 检查mariadb-server是否已经安装，如果没有则安装
+if ! rpm -q mariadb-server; then
+  sudo yum install -y mariadb-server
+fi
+
+# 启动mariadb服务
+sudo systemctl enable --now mariadb
+
+# 运行安全初始化脚本
+# 检查root密码是否已经设置，如果没有则设置
+if ! mysqladmin -u root status; then
+  sudo mysql_secure_installation <<EOF
+
+  # 输入root密码和其他选项，使用EOF结束输入
+  y
+  vSTJ456
+  vSTJ456
+  y
+  y
+  y
+  y
+EOF
+fi
+
+# 登录mariadb，使用/usr/bin/mysql命令
+/usr/bin/mysql -u root -p <<EOF
+
+# 输入root密码，使用EOF结束输入
+vSTJ456
+
+# 创建一个新的数据库用户chensen，并设置密码为vSTJ4567。
+# 检查新用户是否已经存在，如果没有则创建；如果存在则修改密码。
+SELECT user FROM mysql.user WHERE user = 'chensen';
+if [ $? -ne 0 ]; then 
+  CREATE USER 'chensen'@'localhost' IDENTIFIED BY 'vSTJ4567';
+else 
+  ALTER USER 'chensen'@'localhost' IDENTIFIED BY 'vSTJ4567';
+fi
+
+# 授予新用户所有权限
+GRANT ALL PRIVILEGES ON *.* TO 'chensen'@'localhost';
+
+# 刷新权限表
+FLUSH PRIVILEGES;
+
+# 退出mariadb
+exit
+EOF
+
+# 用shell脚本实现mariadb数据库开启binlog,error log，并配置InnoDB Buffer Pool Size为系统内存的75%
+
+# 定义一个函数，用于在配置文件中添加内容，如果内容已经存在且相同，则不做任何操作；如果内容不存在或不同，则添加或修改内容，并返回1表示需要重启服务。
+function add_config() {
+  local file=$1 # 配置文件路径
+  local section=$2 # 配置文件段名
+  local key=$3 # 配置文件键名
+  local value=$4 # 配置文件键值
+
+  # 检查配置文件是否存在，如果不存在则创建一个空文件，并返回1表示需要重启服务。
+  if [ ! -f "$file" ]; then
+    touch "$file"
+    echo "[$section]" >> "$file"
+    echo "" >> "$file"
+    echo "$key=$value" >> "$file"
+    echo "" >> "$file"
+    return 1 
+  fi
+
+  # 检查配置文件是否包含指定的段名，如果不存在则在文件末尾添加一个新段名，并换行，并返回1表示需要重启服务。
+  if ! grep -q "^\[$section\]" "$file"; then
+    echo "[$section]" >> "$file"
+    echo "" >> "$file"
+    echo "$key=$value" >> "$file"
+    echo "" >> "$file"
+    return 1 
+  fi
+
+  # 检查配置文件是否包含指定的键名，如果不存在则在指定段名下添加一个新键名和键值，并换行，并返回1表示需要重启服务；如果存在则检查键值是否相同，如果不同则替换为新键值，并换行，并返回1表示需要重启服务；如果相同则不做任何操作。
+  if ! grep -q "^$key=" "$file"; then
+    sed -i "/^\[$section\]/a $key=$value\n" "$file"
+    return 1 
+  else 
+    if ! grep -q "^$key=$value" "$file"; then 
+      sed -i "s/^$key=.*$/$key=$value\n/" "$file"
+      return 1 
+    fi 
+  fi
+
+}
+
+# 调用函数，向mariadb配置文件中添加开启binlog,error log的内容，并配置InnoDB Buffer Pool Size为系统内存的75%
+restart=0 # 定义一个变量，用于记录是否需要重启服务，默认为0表示不需要重启。
+add_config /etc/my.cnf.d/server.cnf mariadb log-bin binlog && restart=1 
+add_config /etc/my.cnf.d/server.cnf mariadb server-id $(hostname -I | awk '{print $NF}' | awk -F"." '{print $NF}') && restart=1 # 设置server-id为主机IP地址的最后一位数字，以区分不同的服务器。
+add_config /etc/my.cnf.d/server.cnf mariadb log-error error.log && restart=1 
+add_config /etc/my.cnf.d/server.cnf mysqld innodb_buffer_pool_size $(awk '/MemTotal/ {printf "%d\n", $2 * .75}' /proc/meminfo)K && restart=1 
+
+# 检查mariadb服务是否需要重启，如果需要则重启；如果不需要则不做任何操作。
+if [ $restart -eq 1 ]; then 
+  sudo systemctl restart mariadb 
+fi 
+
+# 配置三台mariadb之间为一主两从
+
+# 定义三台服务器的IP地址和密码（根据实际情况修改）
+master_ip="192.168.0.10" # 主服务器IP地址
+master_pass="vSTJ456" # 主服务器root密码
+slave1_ip="192.168.0.11" # 第一台从服务器IP地址
+slave1_pass="vSTJ456" # 第一台从服务器root密码
+slave2_ip="192.168.0.12" # 第二台从服务器IP地址
+slave2_pass="vSTJ456" # 第二台从服务器root密码
+
+# 安装expect工具，用于自动化交互（如果已经安装，则跳过）
+sudo yum install -y expect
+
+# 在主服务器上执行以下操作：
+if [ $(hostname -I) == $master_ip ]; then
+  
+  # 登录mariadb，使用/usr/bin/mysql命令  
+  /usr/bin/mysql -u root -p <<EOF
+  
+  # 输入root密码，使用EOF结束输入  
+  vSTJ456
+  
+  # 授予两个从服务器对主服务器的复制权限  
+  GRANT REPLICATION SLAVE ON *.* TO 'replica'@'$slave1_ip' IDENTIFIED BY 'replica';  
+  GRANT REPLICATION SLAVE ON *.* TO 'replica'@'$slave2_ip' IDENTIFIED BY 'replica';  
+  
+  # 刷新权限表  
+  FLUSH PRIVILEGES;  
+  
+  # 查看主服务器的状态信息，记录二进制日志文件名和位置  
+  SHOW MASTER STATUS;  
+  
+EOF
+  
+fi
+
+# 在两个从服务器上执行以下操作：
+if [ $(hostname -I) == $slave1_ip ] || [ $(hostname -I) == $slave2_ip ]; then
+  
+   # 登录mariadb，使用/usr/bin/mysql命令  
+   /usr/bin/mysql -u
+   
+SELECT user,SUBSTRING_INDEX(host, ':', 1) AS host,COALESCE(command, '') AS command,COALESCE(state, '') AS state,COUNT(*) AS processes,SUM(time) AS seconds FROM information_schema.processlist WHERE ID != connection_id() GROUP BY user, SUBSTRING_INDEX(host, ':', 1), command, state;   
+docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Foxconn123" -e "MSSQL_PID=Evaluation" -p 1433:1433  --name sqlpreview --hostname sqlpreview -d mcr.microsoft.com/mssql/server:2022-preview-ubuntu-22.04
