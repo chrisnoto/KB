@@ -1,3 +1,19 @@
+### 死锁默认的处理及查找
+When deadlock detection is enabled, InnoDB instantly detects it and rolls back one of the transactions. Otherwise, 
+it relies on the innodb_lock_wait_timeout to roll it back. Whatever, you’ll meet the error: “Deadlock found when trying to get lock; 
+try restarting transaction”. Note, that even if you don’t run transactions manually it always exists, see how autocommit option works.
+
+If it’s not enough to see the only last deadlock, enable innodb_print_all_deadlocks option and checkout error log:
+
+SET GLOBAL innodb_print_all_deadlocks = 1;
+
+
+MariaDB [(none)]> set global innodb_print_all_deadlocks='ON';
+Query OK, 0 rows affected (0.000 sec)
+
+MariaDB [(none)]> set global innodb_deadlock_detect='ON';
+Query OK, 0 rows affected (0.000 sec)
+
 ### 安装指定版本的mariadb
 [mariadb]
 name = MariaDB-10.3.18

@@ -3,6 +3,16 @@ select hosts.hostid,hosts.host,hosts_groups.groupid,hstgrp.name from hosts
 inner join hosts_groups on hosts.hostid=hosts_groups.hostid
 inner join hstgrp on hosts_groups.groupid=hstgrp.groupid
 
+SELECT 
+    table_schema AS '数据库', 
+    table_name AS '表名', 
+    table_rows AS '记录数'
+FROM 
+    information_schema.tables 
+ORDER BY 
+    table_rows DESC 
+LIMIT 1;
+
 ##### leave statement #######
 Using LEAVE with the LOOP statement:
 

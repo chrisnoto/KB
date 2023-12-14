@@ -1,10 +1,55 @@
-# 负责查询
+# 查询语法
+AND Operation:
+(& (...K1...) (...K2...))   or with more than two criteria:   (& (...K1...) (...K2...) (...K3...) (...K4...))
+
+OR Operation:
+(| (...K1...) (...K2...))   or with more than two criteria:     (| (...K1...) (...K2...) (...K3...) (...K4...)) 
+
+Nested Operation:
+Every AND/OR operation can also be understood as a single criterion:
+
+(|(& (...K1...) (...K2...))(& (...K3...) (...K4...)))        means:        (K1 AND K2) OR (K3 AND K4)
+
+The search criteria consist of a requirement for an LDAP attribute, e.g. (givenName=Sandra). Following rules should be considered:
+
+Equality:	(attribute=abc)     , e.g. (&(objectclass=user)(displayName=Foeckeler)
+Negation:	(!(attribute=abc))     , e.g. (!objectClass=group)
+Presence:	(attribute=*)        , e.g. (mailNickName=*)
+Absence:	(!(attribute=*))        , e.g. (!proxyAddresses=*)
+Greater than:	(attribute>=abc)    , e.g. (mdbStorageQuota>=100000)
+Less than:	(attribute<=abc)    , e.g. (mdbStorageQuota<=100000)
+Proximity:	(attribute~=abc)    , e.g. (displayName~=Foeckeler) Caution: ~= is treated as = in ADS environments !!
+Wildcards:	e.g. (sn=F*) or (mail=*@cerrotorre.de) or (givenName=*Paul*)
+
+# 查询实例
  (|(!(gidNumber=*))(!(mail=*)))
- (!(employeeType=*))
- (&(uid=*)(lastlogintime>=20221127000000Z))
-(&(uid=*)(employeeType=0))
-(|(!(gidNumber=*))(!(mail=*)))(!(employeeType=*))(&(uid=*)(lastlogintime>=20221127000000Z)) 
  
+ (!(employeeType=*))
+ 
+ (&(uid=*)(lastlogintime>=20221127000000Z))
+ 
+(&(uid=*)(employeeType=0))
+
+(|(!(gidNumber=*))(!(mail=*)))(!(employeeType=*))(&(uid=*)(lastlogintime>=20221127000000Z)) 
+
+(&(passwordexpirationtime<=20231228000000Z)(passwordexpirationtime>=20231023000000Z))
+  
+
+lastlogintime30天之外，或者expirationtime在今天之前
+(|(lastlogintime<=20231112000000Z)(passwordexpirationtime<=20231212000000Z))
+
+不存在lastlogintime
+(&(!(lastlogintime=*))(uid=*))
+
+
+(&(uid=*)(modifyTimestamp<=20230301000000Z))
+
+20000000
+
+(&(uid=*)(passwordexpirationtime<=20230726000000Z))
+
+(&(uid=*)(passwordexpirationtime<=20230729000000Z)(passwordexpirationtime>=20230728000000Z))  
+  
 # 修改binddn的查找条目数限制
 dn: uid=sso,ou=user,ou=system,dc=cesbg,dc=fii
 changetype: modify

@@ -1,0 +1,42 @@
+1> use master;
+2> go
+Changed database context to 'master'.
+1> create database ankara;
+2> go
+1> use ankara;
+2> go
+Changed database context to 'ankara'.
+1> set ansi_nulls on;
+2> go
+1> set quoted_identifier on;
+2> go
+1> create login migrator with password = 'Foxconn123';
+2> go
+1> create schema app;
+2> go
+1> go
+1> select * from sys.databases;
+2> go
+1> create user migrator for login migrator with default_schema=[app];
+2> go
+1> exec sp_addrolemember N'db_owner',N'migrator';
+2> go
+查看当前数据库
+1> select db_name()
+2> go
+查看当前schema
+1> select schema_name();
+2> go
+查看当前用户
+1> exec sp_who
+2> go
+或
+1> select current_user
+2> go
+
+查看employ表结构
+1> exec sp_help employ
+2> go
+查看某个schema有哪些表
+1> select * from information_schema.tables where table_schema='app';
+2> go

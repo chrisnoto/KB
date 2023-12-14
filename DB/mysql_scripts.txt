@@ -1,3 +1,4 @@
+# 建trigger，实现跟踪用户访问日志
 drop table user_log if exist;
 create table user_log (
 `id` bigint(20) NOT NULL AUTO_INCREMENT,
@@ -17,3 +18,37 @@ BEGIN
     END IF;
 END; //
 DELIMITER ;
+
+show triggers;
+drop trigger update_last_seen;
+
+
+
+# 列出用户登录列表
+MariaDB [grafana]> select b.name as User,date(a.last_seen_at) as "login date" from user_log as a,user as b where a.login = b.login and a.login != 'admin' group by b.name,date(a.last_seen_at);
++-----------+------------+
+| User      | login date |
++-----------+------------+
+| 于衡      | 2023-11-18 |
+| 于衡      | 2023-11-22 |
+| 孫小翠    | 2023-11-16 |
+| 孫連鵬    | 2023-11-16 |
+| 孫連鵬    | 2023-11-17 |
+| 孫連鵬    | 2023-11-18 |
+| 孫連鵬    | 2023-11-20 |
+| 孫連鵬    | 2023-11-21 |
+| 孫連鵬    | 2023-11-24 |
+| 孫連鵬    | 2023-11-27 |
+| 崔振業    | 2023-11-23 |
+| 崔振業    | 2023-11-24 |
+| 崔振業    | 2023-11-27 |
+| 張家瑋    | 2023-11-22 |
+| 張家瑋    | 2023-11-24 |
+  
+create view view_user_log as
+select b.name as User,date(a.last_seen_at) as "login_date" from user_log as a,user as b 
+where a.login = b.login and a.login != 'admin' group by b.name,date(a.last_seen_at);  
+
+
+show full tables in grafana where Table_Type = 'VIEW';
+drop view view_user_log;

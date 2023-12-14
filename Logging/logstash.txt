@@ -378,3 +378,6 @@ WantedBy = multi-user.target
 EOF
 
 systemctl enable logstash.service
+
+# logstash api
+http://xtjcesbglogstash01.ces.myfiinet.com:9600/_node/stats/pipelines
