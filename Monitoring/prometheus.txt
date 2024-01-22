@@ -770,3 +770,27 @@ BLOCK ULID                  MIN TIME                       MAX TIME             
 01GZPVDW63BQ1EPDTTSCAERE9V  2023-05-05 18:00:00 +0000 UTC  2023-05-05 20:00:00 +0000 UTC  1h59m59.932s   129376932    1082080      1081223      189MiB633KiB320B
 01GZQ29JEM51HT3W6B6TM46HA3  2023-05-05 20:00:00 +0000 UTC  2023-05-05 22:00:00 +0000 UTC  1h59m59.932s   129346400    1081106      1080249      189MiB509KiB332B
 
+#列出所有metrics
+[root@xtjprometheus01 prometheus]# curl -s -u 'prometheus:vSTJ456' 'http://127.0.0.1:9090/api/v1/label/__name__/values' | jq .
+{
+  "status": "success",
+  "data": [
+    "ALERTS",
+    "ALERTS_FOR_STATE",
+    "alertmanager_alerts",
+    "alertmanager_alerts_invalid_total",
+
+#查询某个metric的所有series
+[root@xtjprometheus01 prometheus]# ./promtool query series 'http://127.0.0.1:9090' --match='rabbitmq_up'
+{__name__="rabbitmq_up", app="rabbitmq", area="TJ", cluster="rabbit@xtjbasemqap01", instance="10.66.13.157:9419", ip="10.66.13.157", job="hr_base_rabbitmq", node="rabbit@xtjbasemqap01", team="HR"}
+{__name__="rabbitmq_up", app="rabbitmq", area="TJ", cluster="rabbit@xtjbasemqap03", instance="10.66.13.159:9419", ip="10.66.13.159", job="hr_base_rabbitmq", node="rabbit@xtjbasemqap03", team="HR"}
+
+#查询某个label都有哪些值
+[root@xtjprometheus01 prometheus]# ./promtool query labels 'http://127.0.0.1:9090' 'team'
+DC
+HR
+Mobile
+OPS
+PLM
+SA
+SAP

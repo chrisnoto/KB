@@ -562,3 +562,147 @@ nsslapd-changelogtrim-interval: 30
 objectClass: top
 objectClass: extensibleObject
 
+####搭建389ds
+# 从模板创建ldap instance  将默认开启自签名证书关掉，以后再导入证书
+#生成模板
+dscreate create-template >template.txt
+root@ldap01:~# cat template.txt |egrep -v '#|;|^$' template.txt
+[general]
+full_machine_name = ldap01.test2.com
+strict_host_checking = False
+[slapd]
+instance_name = ldap1
+port = 389
+root_password = Foxconn123
+secure_port = 636
+self_sign_cert = False
+[backend-userroot]
+create_suffix_entry = True
+sample_entries = yes
+suffix = dc=test2,dc=com
+
+使用命令创建instance  dscreate -v from-file template.txt
+删除instance        dsctl ldap1 remove --do-it  #ldap1是instance名称
+
+# 重设NSSDB
+mv *.db /root
+certutil -d . -N
+cat pin.txt
+echo 'Internal (Software) Token:Foxconn123' >pin.txt
+echo 'Internal (Software) Token:Foxconn123' >pwdfile.txt
+
+用 certutil -d . -K  验证新的NSS Certificate DB密码
+# 生成私钥和CSR
+openssl genrsa -out ldap01.key 2048
+openssl req -new -key ldap01.key -out ldap01.csr
+# 向ADCS申请证书
+模板不能是user, webserver，要新创建一个类似computer的模板
+
+#合成p12证书并导入NSSDB
+openssl pkcs12 -export -in ldap01.cer -inkey ldap01.key -out ldap01.p12 -name Server-Cert
+pk12util -i ldap01.p12 -d /etc/dirsrv/slapd-ldap1/
+certutil -d /etc/dirsrv/slapd-ldap1/ -A -n "CA" -t "CT,," -a -i testca.cer
+dsctl ldap1 tls list-ca
+dsctl ldap1 tls show-server-cert
+#开启security
+dsconf ldap1 config replace nsslapd-security=on
+需要重启instance生效
+
+dsconf -D "cn=Directory Manager" ldap://ldap01.test3.com replication \
+enable --suffix="dc=test3,dc=com" --role="supplier" --replica-id=1
+# 建立winsync
+dsconf ldap1 repl-winsync-agmt create --suffix dc=test3,dc=com \
+  --host ad01.test1.com --port 636 --conn-protocol LDAPS \
+  --bind-dn "CN=ldap,OU=User,DC=Test1,DC=com" \
+  --bind-passwd "Foxconn12345" --win-subtree "OU=replication,OU=User,DC=Test1,DC=com" \
+  --ds-subtree ou=repl,ou=people,dc=test3,dc=com --one-way-sync toWindows \
+  --sync-users=on --sync-groups=on --move-action delete \
+  --win-domain test1.com winsync_ad01.test1.com
+# 查看winsync  
+dsconf ldap1 repl-winsync-agmt list --suffix dc=cesbg,dc=fii
+或者
+dsconf -D "cn=Directory Manager" -w 'Foxconn123' ldap://ldap01.test3.com repl-winsync-agmt list --suffix="dc=test3,dc=com"
+# 初始化winsync
+dsconf ldap1 repl-winsync-agmt init --suffix dc=test3,dc=com winsync_ad01.test1.com
+# 查看初始化状态
+[root@ldap01 ~]# dsconf ldap1 repl-winsync-agmt init-status --suffix dc=test3,dc=com winsync_ad01.test1.com
+Agreement successfully initialized.
+# 为winsync agmt添加参数
+dsconf ldap1 repl-winsync-agmt set --sync-interval 10 --suffix dc=test3,dc=com winsync_ad01.test1.com
+# 删除winsync agmt
+[root@ldap01 ~]# dsconf ldap1 repl-winsync-agmt delete --suffix dc=test3,dc=com winsync_ad01.test1.com
+Agreement has been successfully deleted
+
+
+[root@ldap01 ~]# cat full.ldif
+dn: cn=389toad010,ou=repl,ou=people,dc=test3,dc=com
+changetype: add
+objectClass: organizationalPerson
+objectClass: person
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+objectClass: ntUser
+ou: repl
+gidNumber: 199
+cn: 389toad010
+userPassword:: e01ENX1WY3lEWnBLZk9EbXl1TnM4Z1M4bFNnPT0=
+uid: 389toad010
+uidNumber: 947872
+homeDirectory: /var/empty
+givenName:: 6ZKx
+displayName: 389toad010
+sn:: 5Zub5Y2B
+ntUserDomainId: 389toad010
+
+ldapmodify -H ldaps://ldap01.test3.com -D "cn=Directory Manager" -w'Foxconn123' -f full.ldif
+
+# 389-ds-base 2.3.6
+[root@ldap01 ~]# dsconf ldap1 replication get --suffix dc=test4,dc=com
+dn: cn=replica,cn=dc\3Dtest4\2Cdc\3Dcom,cn=mapping tree,cn=config
+cn: replica
+nsDS5Flags: 1
+nsDS5ReplicaBindDN: cn=repl,cn=config
+nsDS5ReplicaId: 1
+nsDS5ReplicaName: b87220c5-b44e11ee-bcadf76d-bf41c028
+nsDS5ReplicaRoot: dc=test4,dc=com
+nsDS5ReplicaType: 3
+nsState:: AQAAAAAAAADzSaZlAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAA==
+nsds5ReplicaChangeCount: 3
+nsds5replicareapactive: 0
+objectClass: top
+objectClass: nsds5Replica
+
+dsconf ldap1 repl-winsync-agmt create --suffix dc=test4,dc=com \
+  --host ad01.test1.com --port 636 --conn-protocol LDAPS \
+  --bind-dn "CN=ldap,OU=User,DC=Test1,DC=com" \
+  --bind-passwd "Foxconn12345" --win-subtree "OU=replication2,OU=User,DC=Test1,DC=com" \
+  --ds-subtree ou=repl,ou=people,dc=test4,dc=com --one-way-sync toWindows \
+  --sync-users=on --sync-groups=on --move-action delete --sync-interval 10 \
+  --win-domain test1.com winsync_ad01.test1.com
+
+# 打开复制 debug信息
+dsconf -D "cn=Directory Manager" ldap://ldap01.test3.com config replace nsslapd-errorlog-level=8192
+
+# 导出changelog
+dsconf ldap1 replication export-changelog to-ldif -d -r "dc=test4,dc=com" -o /tmp/changelog.ldif
+
+#设置不hash密码
+dsconf ldap1 config replace nsslapd-unhashed-pw-switch=on
+uid=jenkins,ou=user,ou=system,dc=cesbg,dc=fii  ext566-32081
+
+ldapmodify -D cn=directory\ manager -w password -h localhost -p 1389
+
+dn: cn=Super,ou=Prod,ou=clients,dc=test,dc=com
+changetype: moddn
+newrdn: uid=SuperUID
+deleteoldrdn: false
+
+# 10.66.13.137设置winsync agmt
+dsconf ldap repl-winsync-agmt create --suffix dc=cesbg,dc=fii \
+  --host ad01.test1.com --port 636 --conn-protocol LDAPS \
+  --bind-dn "CN=ldap,OU=User,DC=Test1,DC=com" \
+  --bind-passwd "Foxconn12345" --win-subtree "OU=[天津]IT系統規劃處_周邊系統部,OU=User,DC=Test1,DC=com" \
+  --ds-subtree "ou=[天津]IT系統規劃處_周邊系統部,ou=[天津]IT系統規劃處,ou=資訊管理處_天津,ou=資訊管理處,ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii" --one-way-sync toWindows \
+  --sync-users=on --sync-groups=on --move-action delete --sync-interval 10 \
+  --win-domain test1.com winsync_ad01.test1.com

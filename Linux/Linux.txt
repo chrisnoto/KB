@@ -37,6 +37,15 @@ kernel.x86_64                                                                3.1
 kernel.x86_64                                                                3.10.0-1160.99.1.el7                                                                 updates
 kernel.x86_64                                                                3.10.0-1160.102.1.el7                                                                updates
 
+# yum源 noproxy配置
+[root@es01 yum.repos.d]# cat centos7.repo
+[OS]
+name=CentOS-7 - OS
+baseurl=https://repo.ces.myfiinet.com:8443/repository/centos7-OS/
+enabled=1
+gpgcheck=0
+proxy=_none_
+这样就可以实现外网、内网源同时使用
 
 # debian ufw防火墙
 批量添加多个源ip访问某个port
@@ -96,6 +105,9 @@ pip配置文件的位置
 [global]
 trusted-host=mirrors.aliyun.com
 index-url=http://mirrors.aliyun.com/pypi/simple
+
+pip3.6 config --global set global.index-url https://repo.ces.myfiinet.com:8443/repository/pip-aliyun/simple/   命令行设置本地源
+pip3.6 install --proxy http://h7108579:R87Ee93G@10.67.9.210:3128 psycopg2-binary                  命令行通过代理安装
 
 # npm配置代理和更换源
 npm config set proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128

@@ -179,3 +179,112 @@ pipeline {
             }            
     }
 }
+
+# 另一种git方式
+pipeline {
+    agent any
+    environment 
+	{        
+		CREDENTID = "25279f6c-58be-4ef5-b25a-473d9f1c624c"    
+		GIT_REPO_API = "https://gitlab.ces.efoxconn.com/mobileapp/youdianapp/youdian_pandian_docker_api.git"
+		GIT_REPO_UPLOAD = "https://gitlab.ces.efoxconn.com/mobileapp/youdianapp/youdian_pandian_docker_file.git"
+		GIT_REPO_WEB = "https://gitlab.ces.efoxconn.com/mobileapp/youdianapp/youdian_old_web.git"
+		DOCKER_REGISTRY = "harbor-test.cesbg.foxconn"
+	} 
+    parameters {
+        string(name: 'DOMAIN', defaultValue: 'localhost', description: 'the domain name of pandian website')
+    }
+    stages {   
+        stage('构建API镜像') {
+            steps {
+			    script {			   
+				     echo "make youdian_api docker images................."
+                     checkout([$class: 'GitSCM', branches: [[name: '*/master']], 
+                     doGenerateSubmoduleConfigurations: false, extensions: [], 
+                     submoduleCfg: [], userRemoteConfigs: [[credentialsId: env.CREDENTID, 
+                     url: env.GIT_REPO_API]]]) 
+                     sh "docker build -f ./youdian/Dockerfile -t ${env.DOCKER_REGISTRY}/youdian/api:1.0 ."
+                     sh "docker push ${env.DOCKER_REGISTRY}/youdian/api:1.0"
+				     sh "rm -rf ./*"
+                } 
+            }  
+	    }
+        stage('构建UPLOAD镜像') {
+            steps {
+			    script {			   
+				     echo "make youdian_upload docker images................."
+                     checkout([$class: 'GitSCM', branches: [[name: '*/master']], 
+                     doGenerateSubmoduleConfigurations: false, extensions: [], 
+                     submoduleCfg: [], userRemoteConfigs: [[credentialsId: env.CREDENTID, 
+                     url: env.GIT_REPO_UPLOAD]]]) 
+                     sh "docker build -f ./upload/Dockerfile -t ${env.DOCKER_REGISTRY}/youdian/upload:1.0 ."
+                     sh "docker push ${env.DOCKER_REGISTRY}/youdian/upload:1.0"
+				     sh "rm -rf ./*"
+                    } 
+                }
+            } 
+        stage('构建WEB镜像') {
+            steps {
+			    script {			   
+				     echo "make youdian_web docker images................."
+                     checkout([$class: 'GitSCM', branches: [[name: '*/master']], 
+                     doGenerateSubmoduleConfigurations: false, extensions: [], 
+                     submoduleCfg: [], userRemoteConfigs: [[credentialsId: env.CREDENTID, 
+                     url: env.GIT_REPO_WEB]]]) 
+                     sh "docker build -f ./docker/Dockerfile -t ${env.DOCKER_REGISTRY}/youdian/web:1.0 ."
+                     sh "docker push ${env.DOCKER_REGISTRY}/youdian/web:1.0"
+				     sh "rm -rf ./*"				  				
+                    } 
+                } 
+            }   
+        stage('构建APK包') {
+            steps {
+				sh "echo ${params.DOMAIN}  ok!"
+                  } 
+            }  
+    }
+    post {
+		success{
+            echo "Program:${env.JOB_BASE_NAME} successfully"
+        }
+        failure{
+            echo "Program:${env.JOB_BASE_NAME} failed"
+        }
+    }
+}
+
+# ldap_exporter
+pipeline {
+    agent any
+    environment
+    {
+        CREDENTIALID = "git_h7108579"
+        GIT_URL = "https://gitlab.ces.myfiinet.com/H7108579/ldap_exporter.git"
+        VER = "1.4.1.4-2"
+    }
+    stages {
+        stage('Build') {
+            steps {
+                checkout([$class: 'GitSCM',branches: [[name: '*/main']],
+                doGenerateSubmoduleConfigurations: false,extensions: [],
+                submoduleCfg: [], userRemoteConfigs: [[credentialsId: env.CREDENTIALID,url:env.GIT_URL]]])
+                sh """
+				docker build --no-cache -t dockerimage-tj.ces.myfiinet.com/prometheus/ldap_exporter:${env.VER} .
+                docker push dockerimage-tj.ces.myfiinet.com/prometheus/ldap_exporter:${env.VER}
+				"""
+                }
+            }   
+        stage('deploy') {
+            steps {
+                sh """
+				cat >start.sh <<-EOF
+				docker rm -f ldap_exporter
+				docker run --pull always --name ldap_exporter  -e 'TZ=Asia/Shanghai' -d --add-host=ldap03.cesbg.fii:10.66.13.137 --restart=always -p 8389:8389 dockerimage-tj.ces.myfiinet.com/prometheus/ldap_exporter:${env.VER}  --url ldap03.cesbg.fii --bind "cn=Directory Manager" --pwd 'Foxconn123'
+				EOF
+                chmod +x start.sh;sshpass -p foxconn scp -o StrictHostKeyChecking=no start.sh root@10.66.13.137:~
+                sshpass -p foxconn ssh -o StrictHostKeyChecking=no root@10.66.13.137 'sh /root/start.sh'
+				"""
+                  } 
+            }  
+    }
+}

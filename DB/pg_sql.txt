@@ -1394,8 +1394,7 @@ Table column	arwx	none	\dp
 TABLESPACE	C	none	\db+
 TYPE	U	U	\dT+
 ————————————————
-版权声明：本文为CSDN博主「zou8944」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
-原文链接：https://blog.csdn.net/zou8944/article/details/121528128
+
 
 #对于非public的schema，要grant user usage on schema xxx的權限，不然要select * from schema_name.table ,不能用搜索路徑
 zabbix=> select * from chensen.test;
@@ -2757,4 +2756,100 @@ postgres=# select inet_server_addr();
  inet_server_addr
 ------------------
  10.152.219.31
+(1 row)
+
+# json
+app_db=# \d node_exporter
+           Table "public.node_exporter"
+ Column  |  Type  | Collation | Nullable | Default
+---------+--------+-----------+----------+---------
+ targets | text[] |           |          |
+ labels  | json   |           |          |
+
+app_db=# select * from node_exporter where labels->>'name'='es';
+       targets       |                            labels
+---------------------+---------------------------------------------------------------
+ {10.66.12.228:9100} | {"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}
+ {10.66.12.214:9100} | {"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}
+ {10.66.12.230:9100} | {"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}
+(3 rows)
+
+app_db=# select * from node_exporter where targets[1]='10.66.12.228:9100';
+       targets       |                            labels
+---------------------+---------------------------------------------------------------
+ {10.66.12.228:9100} | {"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}
+
+# postgrest api用法 
+curl http://10.66.13.16:3000/node_exporter?select=targets,labels 
+
+[root@es01 ~]# curl 'http://10.66.13.16:3000/node_exporter?select=targets,labels&labels->>team=eq.OPS'
+[{"targets":["10.66.12.228:9100"],"labels":{"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}},
+ {"targets":["10.66.12.214:9100"],"labels":{"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}},
+ {"targets":["10.66.12.230:9100"],"labels":{"team":"OPS","name":"es","area":"TJ","job":"OPS_linux_node"}}]
+
+
+create type label as (
+  team varchar,
+  app varchar,
+  nature varchar);
+
+app_db=# select row_to_json(row(alert,expr,duration,row_to_json(cast(row(team,app,nature) as label)))) as rule from alertrule;
+                                                                             rule
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"f1":"instanceDown","f2":"up{team=\\\"SA\\\"} == 0","f3":"5m","f4":{"team":"SA","app":"instancedown","nature":"hostdown"}}
+ {"f1":"HttpFailure","f2":"probe_http_status_code >= 500 and probe_http_status_code < 600","f3":"5m","f4":{"team":"HR","app":"flownet","nature":"prometheus"}}
+(2 rows)
+  
+app_db=# select * from alertrule;
+ id |    alert     |                              expr                              | duration | team |     app      |   nature
+----+--------------+----------------------------------------------------------------+----------+------+--------------+------------
+  1 | instanceDown | up{team=\"SA\"} == 0                                           | 5m       | SA   | instancedown | hostdown
+  2 | HttpFailure  | probe_http_status_code >= 500 and probe_http_status_code < 600 | 5m       | HR   | flownet      | prometheus
+(2 rows)
+
+# json_build_object构建嵌套json
+app_db=# select json_build_object('alert',alert,'expr',expr,'for',duration) from alertrule;
+                                                 json_build_object
+--------------------------------------------------------------------------------------------------------------------
+ {"alert" : "instanceDown", "expr" : "up{team=\\\"SA\\\"} == 0", "for" : "5m"}
+ {"alert" : "HttpFailure", "expr" : "probe_http_status_code >= 500 and probe_http_status_code < 600", "for" : "5m"}
+(2 rows)
+
+app_db=# select json_build_object('alert',alert,'expr',expr,'for',duration,'labels',json_build_object('team',team,'app',app,'nature',nature)) from alertrule;
+                                                                                     json_build_object
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----
+ {"alert" : "instanceDown", "expr" : "up{team=\\\"SA\\\"} == 0", "for" : "5m", "labels" : {"team" : "SA", "app" : "instancedown", "nature" : "hostdown"}}
+ {"alert" : "HttpFailure", "expr" : "probe_http_status_code >= 500 and probe_http_status_code < 600", "for" : "5m", "labels" : {"team" : "HR", "app" : "flownet", "nature" : "prometheu
+s"}}
+(2 rows)
+
+# json_agg 合并多个json成json数组
+app_db=# create view alert as select json_agg(rules) as rules from (select json_build_object('alert',alert,'expr',expr,'for',duration,'labels',json_build_object('team',team,'app',app,'nature',nature)) as rules from alertrule) as foo;
+CREATE VIEW
+app_db=# select * from alert;
+
+            rules
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------
+ [{"alert" : "TCPFailed", "expr" : "probe_success{group=\"tcp\"} == 0", "for" : "5m", "labels" : {"team" : "{{ $labels.team }}", "app" : "{{ $labels.app }}", "nature" : "network"}}, {
+"alert" : "HttpFailure", "expr" : "probe_http_status_code >= 500 and probe_http_status_code < 600", "for" : "5m", "labels" : {"team" : "{{ $labels.team }}", "app" : "{{ $labels.app }}
+", "nature" : "prometheus"}}]
+(1 row)
+
+app_db=# grant select on public.alert to anon;
+GRANT
+app_db=# select * from alert;
+
+            rules
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------
+ [{"alert" : "TCPFailed", "expr" : "probe_success{group=\"tcp\"} == 0", "for" : "5m", "labels" : {"team" : "{{ $labels.team }}", "app" : "{{ $labels.app }}", "nature" : "network"}}, {
+"alert" : "HttpFailure", "expr" : "probe_http_status_code >= 500 and probe_http_status_code < 600", "for" : "5m", "labels" : {"team" : "{{ $labels.team }}", "app" : "{{ $labels.app }}
+", "nature" : "prometheus"}}]
 (1 row)

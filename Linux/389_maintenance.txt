@@ -33,7 +33,8 @@ Wildcards:	e.g. (sn=F*) or (mail=*@cerrotorre.de) or (givenName=*Paul*)
 (|(!(gidNumber=*))(!(mail=*)))(!(employeeType=*))(&(uid=*)(lastlogintime>=20221127000000Z)) 
 
 (&(passwordexpirationtime<=20231228000000Z)(passwordexpirationtime>=20231023000000Z))
-  
+ 
+(&(uid=*)(employeeType=1)(modifiersName=cn=server,cn=plugins,cn=config)(lastlogintime>=20231022014724Z))
 
 lastlogintime30天之外，或者expirationtime在今天之前
 (|(lastlogintime<=20231112000000Z)(passwordexpirationtime<=20231212000000Z))

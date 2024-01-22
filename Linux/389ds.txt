@@ -1,4 +1,11 @@
-########## ldapsearch查询 ########
+######## RHDS和389ds版本对应关系
+RHDS 11 refers to the 389-ds-base-1.4.x series in RHEL 8/CentOS 8
+the 389-ds-base-1.3.x releases were used in Red Hat Directory Server 10 on RHEL 7
+
+RHDS 12 is based of off the 389-ds-base-2.x series
+RHDS 12.0 (389-ds-base-2.0) maps to RHEL/Centos 9.0
+RHDS 12.1 (389-ds-base-2.1) to RHEL/Centos 9.1
+########## ldapsearch查询 ########   -Z starttls
 objectclasses  attributetypes  ldapSyntaxes  matchingRules
 ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'cn=schema' objectclasses -W
 
@@ -11,8 +18,8 @@ ldapsearch -H ldaps://itldap1:636 -D 'cn=Directory Manager' -Z -b 'dc=tj,dc=com'
 
 
 ldapsearch -H ldaps://xtjcesbgdc01.cesbg.foxconn -x -W -D "CN=LdapAdmin,OU=System Account,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(cn=tj100)"
-ldapsearch -H ldaps://xtjcesbgdc01.cesbg.foxconn -x -W -D "CN=tj100,OU=test越南,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'ou=cesbgusers,dc=cesbg,dc=foxconn' "(cn=tj100)"
-
+ldapsearch -H ldaps://xtjcesbgdc02.cesbg.foxconn -x -w'Ldap123#Admin' -D "CN=LdapAdmin,OU=System Account,OU=CESBGUsers,DC=CESBG,DC=FOXCONN" -b 'dc=cesbg,dc=foxconn' "(ou=test_ldap)"
+CN=LdapAdmin,OU=System Account,OU=CESBGUsers,DC=CESBG,DC=FOXCONN
 显示隐藏属性  Foxconn456&*( 
 root@xygjsldap01:~# ldapsearch -D 'uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii' -b 'dc=cesbg,dc=fii' "(uid=nextcloud)" + -Z -W
 Enter LDAP Password:
@@ -197,7 +204,7 @@ objectClass: organizationalPerson
 objectClass: user
 cn: 1038290
 sn: F
-
+张九
 ########### 从NSS DB导出crt 和 key ##########
 certutil -S -n "Server-cert" -s "cn=ldap1.tj.com,ou=389 Directory server" -c "CA certificate" -t "u,u,u" -m 1109 -v 120 -d ./
 pk12util -o ldap1.p12 -d /etc/dirsrv/slapd-itldap1 -n Server-cert
@@ -210,21 +217,7 @@ openssl pkcs12 -in ldap1.p12 -out ca.crt -cacerts -nodes
 certutil -S -n "example.com" -s "CN=example.com,O=foxconn,OU=IT,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1201 -v 120 --extSAN "dns:flownet.example.com,dns:sourcemanager.example.com,dns:hr.example.com,dns:munin.example.com" -d ./
 pk12util -o example.com.p12 -d /etc/dirsrv/slapd-itldap1 -n example.com
 certutil -S -n "example.org" -s "cn=*.example.org,O=foxconn,OU=HR,ST=TJ,C=CN" -c "CA certificate" -t "u,u,u" -m 1202 -v 120 --extSAN "dns:example.org,dns:*.example.org" -d /etc/dirsrv/slapd-itldap1
-############  389DS与AD同步 ########
-1 AD上启用证书服务
-2 AD的DC上装PassSync插件并重启DC	
-3 将itldap1使用的CA的证书导入到AD的DC
-cd "C:\Program Files\389 Directory Password Synchronization"   
-certutil.exe -d . -N
-certutil.exe -d . -A -n "DS CA cert" -t "CT,," -a -i \path\to\dsca.crt
-4 将AD的CA证书导入到389DS的NSS DB里
-5 389DS控制台里配置userroot的同步策略
-multi master
-同步策略中的bind dn为AD域中有权限的用户
-6 策略配置完毕后，发起同步的初始化或者send and receive updates
-可以看到AD的用户和组同步到389DS里对应的OU中
-7 如要是389DS中的用户和组同步到AD，用户需要配置属性"NT Users"，并勾选create user
-确保取消“POSIX account”，这样带有NT user属性及无POSIX user属性的用户才能由389DS同步到AD域中
+
 ##########  同步OU树 ########
 1 从AD导出OU树
 ldifde -f outree.ldif -d "dc=tj,dc=fox" -p subtree -r "(objectCategory=organizationalUnit)" -l "cn,objectclass,ou"
@@ -400,4 +393,120 @@ description: foxconn readonly group
 dn: dc=cesbg,dc=fii
 changetype: modify
 add: aci
-aci: (target = "ldap:///ou=Foxconn,dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search foxconn ou";allow (search,read) (groupdn = "ldap:/// cn=foxconn_readonly,dc=cesbg,dc=fii");)
+aci: (target = "ldap:///ou=Foxconn,dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search foxconn ou";allow (search,read) (groupdn = "ldap:///cn=foxconn_readonly,dc=cesbg,dc=fii");)
+
+
+dn: cn=global_readonly,dc=cesbg,dc=fii
+changetype: add
+objectClass: top
+objectClass: posixGroup
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames
+objectClass: nsMemberOf
+gidNumber: 4
+description: global readonly group
+
+dn: dc=cesbg,dc=fii
+changetype: modify
+add: aci
+aci: (target = "ldap:///dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search global";allow (search,read,compare) (groupdn = "ldap:///cn=global_readonly,dc=cesbg,dc=fii");)
+
+root@XTJJSLdap01:~# ldapmodify -D 'cn=directory manager' -w'FOxCoNN135!24' -f global_readonly.ldif
+adding new entry "cn=global_readonly,dc=cesbg,dc=fii"
+
+modifying entry "dc=cesbg,dc=fii"
+
+# passsync工作原理
+389 Directory Password Synchronization是將密碼從Active Directory (AD)同步到LDAP12。這是一個Active Directory的“插件”，
+它攔截了對AD域控制器進行的密碼更改，並將明文密碼通過加密連接（SSL / TLS）發送到389 DS，以保持密碼同步
+
+# 导出changelog，可查看更改细节
+dsconf -D "cn=Directory Manager" -w 'FOxCoNN135!24' ldap://XTJJSLdap01.cesbg.fii replication export-changelog to-ldif -d -r "dc=cesbg,dc=fii" -o changelog.ldif
+
+已更改密码为例
+changetype: modify
+replgen: 632d6d14000000010000
+csn: 659d15fd000000050000
+nsuniqueid: e1118681-a45d11ee-b0aac00e-6caafc5c
+dn: cn=389toad004,ou=replication,ou=test,dc=cesbg,dc=fii
+change::
+delete: userPassword
+userPassword:: e01ENX1WY3lEWnBLZk9EbXl1TnM4Z1M4bFNnPT0=
+-
+add: userPassword
+userPassword:: e01ENX1NVnovd24zU0hMYXBKd1BLNi9CVllBPT0=
+-
+replace: modifiersname
+modifiersname: cn=directory manager
+-
+replace: modifytimestamp
+modifytimestamp: 20240109014724Z
+-
+
+
+changetype: modify
+replgen: 632d6d14000000010000
+csn: 659d1600000000050000
+nsuniqueid: e1118681-a45d11ee-b0aac00e-6caafc5c
+dn: cn=389toad004,ou=replication,ou=test,dc=cesbg,dc=fii
+change::
+replace: passwordHistory
+passwordHistory: 20230717001123Z{MD5}2imbqP944bYLi0PNElls1w==
+passwordHistory: 20230822010058Z{MD5}AvQeJtWjOemIkQgxXXw4nQ==
+passwordHistory: 20230824075402Z{MD5}U7mulmq2qDdQBzZ+hdBcyg==
+passwordHistory: 20231005001803Z{CRYPT}$5$3.5zOUmo$wYuAIFGlgXrgxDhT3LW9Rt0OWpC
+ mHsPQI9Ehx2MzK81
+passwordHistory: 20231023023259Z{MD5}pb0y+LzCp9DPD4QoK5FVtA==
+passwordHistory: 20231023032706Z{MD5}rs01AheS/mYjbKwY0jF1Sg==
+passwordHistory: 20231219081413Z{MD5}PUTDd93ZeGOFF4RJKR4Qsw==
+passwordHistory: 20231219082339Z{MD5}ECuvFh0akyOdHXLnpSacag==
+passwordHistory: 20231219084253Z{MD5}MO56VDXMn4N6G3RkLeG4zA==
+passwordHistory: 20231227024554Z{MD5}VcyDZpKfODmyuNs8gS8lSg==
+passwordHistory: 20231227024941Z{MD5}ghKeDsNGQ93XZHS/Ry3KCw==
+passwordHistory: 20240109014727Z{MD5}VcyDZpKfODmyuNs8gS8lSg==
+-
+replace: modifiersname
+modifiersname: cn=server,cn=plugins,cn=config
+-
+replace: modifytimestamp
+modifytimestamp: 20240109014727Z
+-
+
+
+changetype: modify
+replgen: 632d6d14000000010000
+csn: 659d1603000000050000
+nsuniqueid: e1118681-a45d11ee-b0aac00e-6caafc5c
+dn: cn=389toad004,ou=replication,ou=test,dc=cesbg,dc=fii
+change::
+replace: pwdUpdateTime
+pwdUpdateTime: 20240109014727Z
+-
+replace: passwordExpirationTime
+passwordExpirationTime: 20240409014727Z
+-
+replace: passwordExpWarned
+passwordExpWarned: 0
+-
+
+# 389ds实例的replica id
+[root@chens01 ~]# ansible ldap -m shell -a "dsconf slapd-389server replication get --suffix dc=cesbg,dc=fii |grep -i replicaid" -b
+10.66.14.163 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 5
+10.66.14.172 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 6
+10.134.241.13 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 3
+10.134.241.33 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 4
+10.62.173.22 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 1
+10.62.173.28 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 2
+10.220.7.156 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 7
+10.220.7.157 | CHANGED | rc=0 >>
+nsDS5ReplicaId: 8
+
+#这个字段说明lastlogintime是自动改，不是手动改
+modifiersName=cn=server,cn=plugins,cn=config
