@@ -1,0 +1,182 @@
+# Mnesia 的 .DCD 文件主要有以下几个作用：
+存储表内容：.DCD 文件在磁盘上存放了表的内容1。这些内容包括了表的所有记录。
+启动时加载数据：当 Mnesia 系统启动时，RAM 表会从其 .DCD 文件中加载初始数据1。这样可以保证系统在重启后能够恢复到之前的状态。
+转储 RAM 表：对于类型为 ram_copies 的表，虽然它们默认只存储在内存中，但可以通过 mnesia:dump_tables(TabList) 函数将所有 RAM 表的副本转储到磁盘，
+即 .DCD 文件1。这样做可以防止因系统故障导致的数据丢失。
+日志转储：Mnesia 会先向 LATEST.LOG 写日志，当日志达到一定的阈值时，会将这些日志操作应用到数据文件上，即 .DCD 文件2。这个过程被称为日志转储。
+总的来说，.DCD 文件在 Mnesia 系统中扮演了非常重要的角色，它不仅用于存储和加载数据，还参与了日志转储和 RAM 表的转储等操作。
+
+# 转储表
+定义上，类型为 ram_copies 的表仅存储在内存中。然而，这些表可以被转储到磁盘，要么在定期间隔，要么在系统关闭之前。函数 mnesia:dump_tables(TabList) 
+将一组 RAM 表的所有副本转储到磁盘。在转储到磁盘时，可以访问这些表。
+要将表转储到磁盘，所有副本必须具有 ram_copies 的存储类型。
+
+表内容被放置在磁盘上的 .DCD 文件中。当 Mnesia 系统启动时，RAM 表最初是从其 .DCD 文件中加载数据的。
+
+在Mnesia数据库中，ram_copies、disc_copies和disc_only_copies是用来定义表的存储类型的1。这三种类型的主要区别如下：
+
+ram_copies：这种类型的表将所有数据存储在RAM中2。这意味着数据的读取和写入速度非常快，但是如果节点关闭或者发生故障，那么所有的数据都会丢失。因此，
+这种类型的表通常用于存储临时数据或者不需要持久化的数据2。
+disc_copies：这种类型的表将所有数据同时存储在RAM和磁盘上12。这意味着即使节点关闭或者发生故障，数据仍然可以从磁盘上恢复。然而，由于需要将数据同时写入RAM和磁盘，
+所以这种类型的表的写入速度可能会比ram_copies慢一些2。
+disc_only_copies：这种类型的表只将数据存储在磁盘上12。这意味着即使节点关闭或者发生故障，数据仍然可以从磁盘上恢复。然而，由于数据不存储在RAM中，
+所以这种类型的表的读取和写入速度可能会比ram_copies和disc_copies慢一些2。此外，disc_only_copies使用的是dets文件，其大小限制为2GB2。
+
+在选择表的存储类型时，需要根据应用的需求和资源的限制来进行选择。
+例如，如果需要快速读写并且数据不需要持久化，那么可以选择ram_copies。
+如果数据需要持久化并且有足够的RAM，那么可以选择disc_copies。
+如果数据需要持久化但是RAM资源有限，那么可以选择disc_only_copies12。但请注意，disc_only_copies的表大小有2GB的限制2。
+
+# 
+所有对磁盘表的操作都存储在磁盘上的日志 ‘LATEST.LOG’ 中，因此如果节点宕机，mnesia 可以重做事务。转储日志意味着 mnesia 将已提交的数据从通用日志移动
+到特定的磁盘存储表。为了避免日志过大，占用大量磁盘空间，并使启动变慢，
+mnesia 在运行期间会转储日志。有两个触发器可以启动日志转储，超时和自上次转储以来的提交次数，这两者都可以由用户配置。
+
+disc_copies类型的表是用两个 disk_log 文件实现的，一个是 ‘table.DCD’（磁盘副本数据），另一个是 ‘table.DCL’（磁盘副本日志）。dcd 包含原始记录，dcl 包含对该表
+的操作，例如 ‘{write, {table, key, value}}’ 或 ‘{delete, {table, key}}’。
+当首次在转储表时找到特定表的记录时，会检查 dcd 和 dcl 文件的大小。如果 sizeof(dcl)/sizeof(dcd) 大于阈值，当前的 RAM 表将被转储到文件 ‘table.DCD’，
+并删除相应的 dcl 文件，所有其他属于该表的通用日志中的记录都将被忽略。
+如果未达到阈值，则将通用日志中对该表的操作追加到 dcl 文件中。在启动时，首先读取两个文件，首先将 dcd 的内容加载到一个 ets 表中，然后通过存储在相应
+ dcl 文件中的操作修改它。
+
+disc_only_copies类型的表在提交数据时直接更新 ‘dets’ 文件，因此在正常的日志转储过程中可以忽略这些条目，它们只在启动时添加到 ‘dets’ 文件中，当 mnesia 不知道磁盘表
+的状态时。
+
+# 启动文件、日志文件、数据文件
+这一部分描述了由 Mnesia 系统创建和维护的内部文件，特别是描述了 Mnesia 日志的工作方式。
+
+启动文件
+启动 Mnesia 需要满足以下前提条件：
+
+必须启动一个 Erlang 会话，并为数据库指定一个 Mnesia 目录。 必须使用函数 mnesia:create_schema/1 初始化一个数据库模式。
+ 以下示例展示了如何执行这些任务：
+
+Step 1: 启动一个 Erlang 会话并为数据库指定一个 Mnesia 目录：
+
+% erl -sname klacke -mnesia dir '"/ldisc/scratch/klacke"'
+Erlang (BEAM) emulator version 4.9
+
+Eshell V4.9  (abort with ^G)
+(klacke@gin)1> mnesia:create_schema([node()]).
+ok
+(klacke@gin)2>
+^Z
+Suspended
+
+Step 2: 你可以查看 Mnesia 目录以查看已创建的文件：
+
+% ls -l /ldisc/scratch/klacke
+-rw-rw-r--   1 klacke   staff       247 Aug 12 15:06 FALLBACK.BUP
+响应显示已创建名为 FALLBACK.BUP 的文件。这被称为备份文件，它包含一个初始模式。如果在函数 mnesia:create_schema/1 中指定了多个节点，
+则在所有节点上都会创建相同的备份文件。
+
+Step 3: 启动Mnesia:
+
+(klacke@gin)3>mnesia:start( ).
+ok
+Step 4: 你可以在 Mnesia 目录中看到以下列表:
+
+-rw-rw-r--   1 klacke   staff         86 May 26 19:03 LATEST.LOG
+-rw-rw-r--   1 klacke   staff      34507 May 26 19:03 schema.DAT
+备份文件 FALLBACK.BUP 中的模式已用于生成文件 schema.DAT。由于没有其他的磁盘驻留表，所以没有创建其他的数据文件。在成功“恢复”后，
+文件 FALLBACK.BUP 被删除。你还可以看到一些由 Mnesia 内部使用的文件。
+
+Step 5: 创建一个表:
+
+(klacke@gin)4> mnesia:create_table(foo,[{disc_copies, [node()]}]).
+{atomic,ok}
+Step 6: 你可以在 Mnesia 目录中看到以下列表:
+
+% ls -l /ldisc/scratch/klacke
+-rw-rw-r-- 1 klacke staff    86 May 26 19:07 LATEST.LOG
+-rw-rw-r-- 1 klacke staff    94 May 26 19:07 foo.DCD
+-rw-rw-r-- 1 klacke staff  6679 May 26 19:07 schema.DAT
+已创建名为 foo.DCD 的文件。这个文件最终将存储写入 foo 表的所有数据。
+
+# 日志文件
+当启动Mnesia时，会在数据库目录中创建一个名为LATEST.LOG的.LOG文件。这个文件被Mnesia用来记录基于磁盘的事务。这包括在存储类型为disc_copies或
+disc_only_copies的表中写入至少一条记录的所有事务。该文件还包括所有操作模式本身的操作，如创建新表。日志格式可以随Mnesia的不同实现而变化。
+Mnesia日志目前在内核的标准库模块m:disk_log中实现。
+
+日志文件会持续增长，必须定期进行转储。"转储日志文件"意味着Mnesia执行日志中列出的所有操作，并将记录放置在相应的.DAT、.DCD和.DCL数据文件中。
+例如，如果日志中列出了"写入记录{foo, 4, elvis, 6}"的操作，Mnesia会将该操作插入到foo.DCL文件中。稍后，当Mnesia认为.DCL文件过大时，数据会被
+移动到.DCD文件中。如果日志大，转储操作可能会耗时。请注意，Mnesia系统在转储日志期间继续运行。
+
+默认情况下，Mnesia在日志中写入了1000条记录或者过去了三分钟时，就会转储日志。这由两个应用参数控制，即-mnesia dump_log_write_threshold WriteOperations
+和-mnesia dump_log_time_threshold MilliSecs。
+
+在转储日志之前，LATEST.LOG文件会被重命名为PREVIOUS.LOG，并创建一个新的LATEST.LOG文件。一旦日志成功转储，PREVIOUS.LOG文件就会被删除。
+
+日志也会在启动时以及每次执行模式操作时转储。
+
+# 数据文件
+目录列表还包含一个.DAT文件，该文件包含schema.DAT文件中的模式本身。DAT文件是索引过的文件，使用特定的键在这些文件中插入和搜索记录是非常高效的。
+.DAT文件用于模式和disc_only_copies表。Mnesia数据文件目前在STDLIB的标准库模块m:dets中实现。
+
+所有可以在dets文件上执行的操作也可以在Mnesia数据文件上执行。例如，dets包含函数dets:traverse/2，可以用来查看Mnesia DAT文件的内容。然而，
+这只能在Mnesia没有运行时做。所以，要查看模式文件，可以按照以下方式操作：
+
+{ok, N} = dets:open_file(schema, [{file, "./schema.DAT"},{repair,false},
+{keypos, 2}]),
+F = fun(X) -> io:format("~p~n", [X]), continue end,
+dets:traverse(N, F),
+dets:close(N).
+
+警告 {: .warning } DAT文件必须始终使用{repair, false}选项打开。这确保这些文件不会自动修复。如果没有这个选项，数据库可能会变得不一致，因为Mnesia可能
+会认为文件已经被正确关闭。有关配置参数auto_repair的信息，请参阅参考手册。
+
+警告 {: .warning } 建议在Mnesia运行时不要篡改数据文件。虽然不禁止，但Mnesia的行为是不可预测的。
+
+disc_copies表存储在磁盘上，使用.DCL和.DCD文件，这些文件是标准的disk_log文件。
+
+# 在启动时加载表 
+在启动时，Mnesia加载表以使其对其应用程序可访问。有时Mnesia决定加载所有本地存在的表，有时直到Mnesia从另一个节点获取表的副本之前，表是不可访问。
+
+要理解Mnesia在启动时的行为，必须理解Mnesia在与另一个节点上的Mnesia失去联系时的反应。在这个阶段，Mnesia无法区分通信失败和“正常”的节点关闭。
+当这种情况发生时，Mnesia假设其他节点不再运行，而实际上，节点之间的通信已经失败。
+
+为了克服这种情况，尝试重新启动正在访问失败节点上的表的进行中的事务，并在日志文件中写入一个mnesia_down条目。
+
+在启动时，注意所有驻留在没有mnesia_down条目的节点上的表可能有更新的副本。他们的副本可能在当前节点上的Mnesia终止后已经更新。为了赶上最新的更新，
+从这些其他“新鲜”的节点之一传输表的副本。如果你不走运，其他节点可能会关闭，你必须等待表在这些节点中的一个上加载，然后才能接收到表的新鲜副本。
+
+在应用程序首次访问表之前，必须执行mnesia:wait_for_tables(TabList, Timeout)以确保表可以从本地节点访问。如果函数超时，应用程序可以选择强制加载本地
+副本mnesia:force_load_table(Tab)，并故意丢失在本地节点关闭时在其他节点上可能已经执行的所有更新。如果Mnesia已经在另一个节点上加载了表，或者打算
+这样做，就从那个节点复制表，以避免不必要的不一致。
+
+警告 {: .warning } 只有一个表由mnesia:force_load_table(Tab)加载。由于已提交的事务可能已经在几个表中引起了更新，因此由于强制加载，表可能会变得不一致。
+
+表的允许的AccessMode可以被定义为read_only或read_write。它可以在运行时使用函数mnesia:change_table_access_mode(Tab, AccessMode)切换。read_only表
+和local_content表总是在本地加载，因为没有必要从其他节点复制表。其他表主要是从其他节点上的活动副本远程加载，如果表已经在那里加载，或者如果正在
+运行的Mnesia已经决定在那里加载表。
+
+在启动时，Mnesia假设其本地副本是最新版本，并在检测到以下任何一种情况时从磁盘加载表：
+
+mnesia_down是从所有其他持有表的磁盘驻留副本的节点返回的。 所有副本都是ram_copies。 这通常是明智的决定，但是如果节点由于通信失败而断开连接，那么
+这可能是灾难性的，因为Mnesia正常的表加载机制无法应对通信失败。
+
+当Mnesia加载许多表时，使用默认的加载顺序。然而，加载顺序可以通过显式地改变表的load_order属性，使用函数mnesia:change_table_load_order(Tab, LoadOrder)
+来影响。LoadOrder默认为所有表的0，但可以设置为任何整数。load_order最高的表首先被加载。改变加载顺序对于需要确保基础表早期可用的应用程序特别有用。
+大型外围表应该有一个低的加载顺序值，可能小于0
+
+# 从通信失败中恢复
+有几种情况下，Mnesia可以检测到网络因通信失败而被分割，例如：
+
+Mnesia已经在运行，Erlang节点重新建立联系。然后Mnesia试图联系另一个节点上的Mnesia，看看它是否也认为网络已经被分割了一段时间。如果两个节点上的Mnesia都
+记录了彼此的mnesia_down条目，Mnesia会生成一个系统事件，称为{inconsistent_database, running_partitioned_network, Node}，该事件被发送到Mnesia事件处理器
+和其他可能的订阅者。默认的事件处理器会向错误记录器报告错误。 如果Mnesia在启动时检测到本地节点和另一个节点都收到了彼此的mnesia_down，Mnesia会生成一个
+{inconsistent_database, starting_partitioned_network, Node}系统事件，并按照前一项中描述的方式行动。 如果应用程序检测到可能已经导致数据库不一致的通信失败，
+它可以使用函数mnesia:set_master_nodes(Tab, Nodes)来确定每个表可以从哪些节点加载。
+
+在启动时，Mnesia正常的表加载算法被绕过，表从为表定义的主节点之一加载，无论日志中是否有潜在的mnesia_down条目。节点只能包含表有副本的节点。如果节点为空，
+特定表的主节点恢复机制将被重置，下次重启时将使用正常的加载机制。
+
+函数mnesia:set_master_nodes(Nodes)为所有表设置主节点。对于每个表，它确定其副本节点，并使用包含在节点列表中的那些副本节点启动mnesia:set_master_nodes(Tab, TabNodes)
+（也就是说，TabNodes是节点和表的副本节点的交集）。如果交集为空，特定表的主节点恢复机制将被重置，下次重启时将使用正常的加载机制。
+
+函数mnesia:system_info(master_node_tables)和mnesia:table_info(Tab, master_nodes)可以用来获取潜在主节点的信息。
+
+确定在通信失败后保留什么数据超出了Mnesia的范围。一种方法是确定哪个“岛屿”包含了大多数节点。对关键表使用选项{majority,true}可以确保不属于“多数岛屿”的节点不能更新那些表。
+注意，这构成了对少数节点服务的减少。这将是为了更高的一致性保证而做的权衡。
+
+函数mnesia:force_load_table(Tab)可以用来强制加载表，无论激活了哪种表加载机制

@@ -16,7 +16,24 @@ success
 
 
 ########### ufw ###########
+设置默认策略
+ufw default allow|deny
 
+允许访问某个端口
+ufw allow 22/tcp
+
+允许某个IP访问某个端口
+ufw allow from 10.66.14.106 proto tcp to any port 636
+
+查看规则，带规则号码
+ufw status numbered
+
+删除规则（注意，如果删除的是靠前的号码，则靠后的号码都会变动）
+ufw delete 39
+
+允许docker容器的流量可以进、出本机
+ufw allow in on docker0 from 172.17.0.0/16
+ufw allow out on docker0 from 172.17.0.0/16
 
 
 

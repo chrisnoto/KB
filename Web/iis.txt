@@ -1,0 +1,36 @@
+system.web节用于配置经典模式下的ASP.NET应用程序，它包含了与应用程序的运行环境和基础设施有关的配置信息。
+例如，sessionState、compilation和authentication等配置都属于system.web节。
+
+而system.webServer节用于配置集成模式下的ASP.NET应用程序，它包含了与IIS服务器以及ASP.NET应用程序集成有关的配置信息。
+例如，handlers、modules和security等配置都属于system.webServer节。
+
+需要注意的是，如果你在Web.config文件中同时使用了system.web和system.webServer节，则以集成模式为准。这意味着，如果你在两个配置节中都指定了相同的配置信息，
+那么以system.webServer节中的配置为准。因此，在使用Web.config文件时，请确保你理解了system.web和system.webServer的区别，以便正确配置你的ASP.NET应用程序。
+
+ASP.NET安全配置
+<system.web>
+    <!-- Hide Server Information -->
+    <httpRuntime targetFramework="*" enableVersionHeader="false" />
+    <!-- Protect Cookie -->
+    <httpCookies httpOnlyCookies="true" requireSSL="true"/>
+    <!-- Disable Debug, Tarce & Enable Custom Errors -->
+    <deployment retail="true" />
+    <!-- Disable Debug in depth-->
+    <compilation debug="false" />
+</system.web>
+
+<system.webServer>
+   <httpProtocol>
+     <customHeaders>
+     <!-- Hide Server Information -->
+      <remove name="X-Powered-By" />
+      <remove name="X-AspNetMvc-Version" />
+      <!-- Referrer Policy -->
+      <add name="Referrer-Policy" value="No-referrer-when-downgrade" />
+      <!-- Anti-Clickjacking-->
+      <add name="X-Frame-Options" value="DENY" />
+      <!-- HSTS -->
+      <add name="Strict-Transport-Security" value="max-age=31536000; includeSubDomains" />
+     </customHeaders>
+   </httpProtocol>
+</system.webServer>

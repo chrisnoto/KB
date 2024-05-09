@@ -313,7 +313,7 @@ uniqueMember: uid=H7114427,ou=people,dc=tj,dc=fii
 sh-4.4# dsidm localhost user get H7114427 |grep memberOf
 memberOf: cn=demo_group,ou=groups,dc=tj,dc=fii
 
-# 配置全局密码策略
+# 配置全局密码策略  
 dsconf localhost pwpolicy set \
   --pwdlocal on \
   --pwdisglobal on \
@@ -325,17 +325,17 @@ dsconf localhost pwpolicy set \
   --pwdhistorycount 12 \
   --pwdtrack on \
   --pwdlockout off \
-  --pwdmaxage 3110400 \
+  --pwdmaxage 7862400 \
   --pwdlockoutduration 1800 \
   --pwdmaxfailure 5 \
   --pwdresetfailcount 600 \
   --pwdchecksyntax off \
   --pwdminlen 12 \
-  --pwdmindigits 1 \
+  --pwdmindigits 0 \
   --pwdminalphas 0 \
-  --pwdminuppers 1 \
+  --pwdminuppers 0 \
   --pwdminlowers 1 \
-  --pwdminspecials 1 
+  --pwdminspecials 0 
 # 配置本地密码策略
 列出本地policy
 root@xygjsldap01:~# dsconf 389server localpwp list
@@ -691,13 +691,39 @@ dsconf ldap1 replication export-changelog to-ldif -d -r "dc=test4,dc=com" -o /tm
 dsconf ldap1 config replace nsslapd-unhashed-pw-switch=on
 uid=jenkins,ou=user,ou=system,dc=cesbg,dc=fii  ext566-32081
 
-ldapmodify -D cn=directory\ manager -w password -h localhost -p 1389
 
-dn: cn=Super,ou=Prod,ou=clients,dc=test,dc=com
-changetype: moddn
-newrdn: uid=SuperUID
-deleteoldrdn: false
+## sample中的内置组  在people OU查看
+# cn=user_private_read
+(targetattr="legalName || telephoneNumber")(targetfilter="(objectClass=nsPerson)")(version 3.0; acl "Enable user legalname read"; allow (read, search, compare)(groupdn="ldap:///cn=user_private_read,ou=permissions,dc=test4,dc=com");)
+# cn=user_admin
+(targetattr="uid || description || displayName || loginShell || uidNumber || gidNumber || gecos || homeDirectory || cn || memberOf || mail || legalName || telephoneNumber || mobile")(targetfilter="(&(objectClass=nsPerson)(objectClass=nsAccount))")(version 3.0; acl "Enable user admin create"; allow (write, add, delete, read)(groupdn="ldap:///cn=user_admin,ou=permissions,dc=test4,dc=com");)
+# cn=user_passwd_reset
+(targetattr="userPassword || nsAccountLock || userCertificate || nsSshPublicKey")(targetfilter="(objectClass=nsAccount)")(version 3.0; acl "Enable user password reset"; allow (write, read)(groupdn="ldap:///cn=user_passwd_reset,ou=permissions,dc=test4,dc=com");)
+# cn=user_modify
+(targetattr="uid || description || displayName || loginShell || uidNumber || gidNumber || gecos || homeDirectory || cn || memberOf || mail || legalName || telephoneNumber || mobile")(targetfilter="(&(objectClass=nsPerson)(objectClass=nsAccount))")(version 3.0; acl "Enable user modify to change users"; allow (write, read)(groupdn="ldap:///cn=user_modify,ou=permissions,dc=test4,dc=com");)
+# 在group OU查看
+# cn=group_admin
+(targetattr="cn || member || gidNumber || description || objectClass")(targetfilter="(objectClass=groupOfNames)")(version 3.0; acl "Enable group_admin to manage groups"; allow (write, add, delete)(groupdn="ldap:///cn=group_admin,ou=permissions,dc=test4,dc=com");)
+# cn=group_modify
+(targetattr="member")(targetfilter="(objectClass=groupOfNames)")(version 3.0; acl "Enable group_modify to alter members"; allow (write)(groupdn="ldap:///cn=group_modify,ou=permissions,dc=test4,dc=com");)
 
+可以使用EOF方式添加dn，不必写在ldif文件中
+ldapmodify -H ldap://ldap01.test4.com -D "cn=Directory Manager" -w'Foxconn123' <<EOF
+dn: cn=readonly,dc=test4,dc=com
+changetype: add
+objectClass: top
+objectClass: posixGroup
+objectClass: groupOfUniqueNames
+objectClass: groupOfNames
+objectClass: nsMemberOf
+gidNumber: 3
+description: readonly group
+
+dn: dc=test4,dc=com
+changetype: modify
+add: aci
+aci: (target = "ldap:///ou=people,dc=test4,dc=com")(targetattr = "*") (version 3.0;acl "Allow user to read and search people ou";allow (search,read,compare) (groupdn = "ldap:///cn=readonly,dc=test4,dc=com");)
+EOF
 # 10.66.13.137设置winsync agmt
 dsconf ldap repl-winsync-agmt create --suffix dc=cesbg,dc=fii \
   --host ad01.test1.com --port 636 --conn-protocol LDAPS \
@@ -706,3 +732,44 @@ dsconf ldap repl-winsync-agmt create --suffix dc=cesbg,dc=fii \
   --ds-subtree "ou=[天津]IT系統規劃處_周邊系統部,ou=[天津]IT系統規劃處,ou=資訊管理處_天津,ou=資訊管理處,ou=F中央周邊,ou=CESBG,ou=互連雲及雲計算及雲端服務(一雲),ou=Foxconn,dc=cesbg,dc=fii" --one-way-sync toWindows \
   --sync-users=on --sync-groups=on --move-action delete --sync-interval 10 \
   --win-domain test1.com winsync_ad01.test1.com
+
+# nginx做负载均衡，安装以下包
+nginx-filesystem-1.20.1-14.el9_2.1.noarch
+nginx-core-1.20.1-14.el9_2.1.x86_64
+nginx-1.20.1-14.el9_2.1.x86_64
+nginx-mod-stream-1.20.1-14.el9_2.1.x86_64
+
+nginx.conf添加如下配置
+stream {
+    include /etc/nginx/conf.d/*.stream;
+    }
+/etc/nginx/conf.d/目录下添加如下配置
+[root@ldap03 conf.d]# cat ldap.stream
+upstream ldap {
+    server 10.66.13.137:389;
+}
+server {
+    listen 1389;
+    proxy_pass ldap;
+}
+[root@ldap03 conf.d]# cat ldaps.stream
+upstream ldaps {
+    server 10.66.13.137:636;
+}
+server {
+    listen 1636;
+    proxy_pass ldaps;
+#    ssl_certificate /etc/nginx/ldap03.cer;
+#    ssl_certificate_key /etc/nginx/ldap03.key;
+}
+重启nginx	
+
+debian 389ds1.4.4差异
+开启replication
+root@ldap11:/home/chensen# dsconf ldap replication create-manager --name "repl"
+Enter replication manager password:
+Confirm replication manager password:
+Successfully created replication manager: cn=repl,cn=config
+
+root@ldap11:/home/chensen# dsconf ldap replication enable --suffix dc=cesbg,dc=fii --role master --replica-id 19 --bind-dn "cn=repl,cn=config"
+Replication successfully enabled for "dc=cesbg,dc=fii"

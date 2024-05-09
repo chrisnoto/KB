@@ -268,3 +268,29 @@ objectClass: nsds5replicationagreement
 [22/Mar/2023:17:19:51.355459605 +0800] conn=72 op=5 SRCH base="cn=server,cn=plugins,cn=config" scope=0 filter="(objectClass=*)" attrs="hasSubordinates objectClass"            对象不存在 noSuchObject
 [22/Mar/2023:17:19:51.355681087 +0800] conn=72 op=5 RESULT err=32 tag=101 nentries=0 wtime=0.000176973 optime=0.000233712 etime=0.000386838
 
+# 同步之后配置account policy，添加config entry报错
+[root@ldap09 ~]# dsconf slapd-ldap plugin account-policy status
+Plugin 'Account Policy Plugin' is disabled
+[root@ldap09 ~]# dsconf slapd-ldap plugin account-policy enable
+Enabled plugin 'Account Policy Plugin'
+[root@ldap09 ~]# dsconf slapd-ldap plugin account-policy \
+config-entry add "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config" \
+--always-record-login yes \
+--state-attr lastLoginTime \
+--alt-state-attr createtimestamp \
+--spec-attr acctPolicySubentry \
+--limit-attr accountInactivityLimit
+Error: 105 - 3 - 68 - Already exists - [] - add_ext_s((dn: cn=config,cn=Account Policy Plugin,cn=plugins,cn=config
+altstateattrname: createtimestamp
+alwaysRecordLogin: yes
+cn: config
+limitattrname: accountInactivityLimit
+objectclass: top
+objectclass: extensibleObject
+specattrname: acctPolicySubentry
+stateattrname: lastLoginTime
+
+,),{'serverctrls': None, 'clientctrls': None, 'escapehatch': 'i am sure'}) on instance ldap
+timed out waiting for input: auto-logout
+timed out waiting for input: auto-logout
+Connection to 10.66.13.205 closed.

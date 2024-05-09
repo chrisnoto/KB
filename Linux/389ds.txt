@@ -393,7 +393,7 @@ description: foxconn readonly group
 dn: dc=cesbg,dc=fii
 changetype: modify
 add: aci
-aci: (target = "ldap:///ou=Foxconn,dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search foxconn ou";allow (search,read) (groupdn = "ldap:///cn=foxconn_readonly,dc=cesbg,dc=fii");)
+aci: (target = "ldap:///ou=Foxconn,dc=cesbg,dc=fii")(targetattr = "*") (version 3.0;acl "Allow user to read and search foxconn ou";allow (search,read,compare) (groupdn = "ldap:///cn=foxconn_readonly,dc=cesbg,dc=fii");)
 
 
 dn: cn=global_readonly,dc=cesbg,dc=fii
@@ -415,6 +415,11 @@ root@XTJJSLdap01:~# ldapmodify -D 'cn=directory manager' -w'FOxCoNN135!24' -f gl
 adding new entry "cn=global_readonly,dc=cesbg,dc=fii"
 
 modifying entry "dc=cesbg,dc=fii"
+
+dn:ou=Foxconn,dc=cesbg,dc=fii
+changetype:modify
+add:aci
+aci: (targetattr = "*") (version 3.0;acl "LDAP Admin";allow (all) (groupdn = "ldap:///cn=admin,dc=cesbg,dc=fii");)
 
 # passsync工作原理
 389 Directory Password Synchronization是將密碼從Active Directory (AD)同步到LDAP12。這是一個Active Directory的“插件”，

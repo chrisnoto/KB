@@ -1,3 +1,22 @@
+# 检查进程最简单的方法
+killall -0 ns-slapd这个命令的含义是检查名为ns-slapd的进程是否存在。
+在这里，-0或者--signal 0是一种特殊的信号，它不会真正地杀死进程，而是检查进程是否存在。
+
+如果ns-slapd进程存在，那么killall -0 ns-slapd命令会返回0，表示成功。
+如果ns-slapd进程不存在，那么命令会返回非0值，表示失败
+
+root@xvnldap01:/etc/network# killall -0 ns-slapd
+root@xvnldap01:/etc/network# echo $?
+0
+root@xvnldap01:/etc/network# ps -ef |grep dirsrv
+dirsrv    160518       1  0 15:46 ?        00:00:10 /usr/sbin/ns-slapd -D /etc/dirsrv/slapd-389server -i /run/dirsrv/slapd-389server.pid
+root      181016  148048  0 16:56 pts/2    00:00:00 grep dirsrv
+root@xvnldap01:/etc/network# killall -0 prometheus
+prometheus: no process found
+root@xvnldap01:/etc/network# echo $?
+1
+
+
 # yum list查看yum源里的kernel版本
 [root@es01 kafka]# yum list kernel --showduplicates
 Loaded plugins: fastestmirror
@@ -38,14 +57,16 @@ kernel.x86_64                                                                3.1
 kernel.x86_64                                                                3.10.0-1160.102.1.el7                                                                updates
 
 # yum源 noproxy配置
-[root@es01 yum.repos.d]# cat centos7.repo
-[OS]
-name=CentOS-7 - OS
-baseurl=https://repo.ces.myfiinet.com:8443/repository/centos7-OS/
+[root@ldap01 yum.repos.d]# cat ops.repo
+[ops]
+name= OPS rpmbuid
+baseurl=https://repo.ces.myfiinet.com:8443/repository/OPS-rpm/Rocky/9/x86/
 enabled=1
-gpgcheck=0
 proxy=_none_
-这样就可以实现外网、内网源同时使用
+sslverify=false
+
+
+这样就可以实现外网、内网源同时使用; 还可以不验证SSL
 
 # debian ufw防火墙
 批量添加多个源ip访问某个port

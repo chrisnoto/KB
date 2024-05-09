@@ -119,4 +119,7 @@ tac /var/lib/dirsrv/slapd-389server/ldif/*.ldif| grep -c 'entry-id'
         "Export failed.",
 
 # changelog		
-changelog manages a list of received and processed changes. It includes client changes and changes received from replication partners.		
+changelog manages a list of received and processed changes. It includes client changes and changes received from replication partners.	
+
+# 389ds之间的复制包括哪些内容
+账号、组、密码、ACI、密码策略(本地、全局)	

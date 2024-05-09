@@ -1054,6 +1054,41 @@ curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesb
   }
 }
 
+# 统计ldap dn的数量，先得出有多少buckets，然后用jq统计buckets数组的数组长度
+bucket实例：
+      "buckets" : [
+        {
+          "key" : "\"uid=nextcloud,ou=user,ou=system,dc=cesbg,dc=fii\"",
+          "doc_count" : 60937
+        },
+        {
+          "key" : "\"uid=h7113850,ou=[天津]it系統規劃處_erp部_gscm課,ou=[天津]it系統規劃處_erp部,ou=[天津]it系統規劃處,ou=資訊管理處_天津,ou=資訊管理處,ou=f中央周邊,ou=cesbg,ou=互連雲及雲計算及雲端服務(一雲),ou=foxconn,dc=cesbg,dc=fii\"",
+          "doc_count" : 1477
+        },
+[root@xtjcesbges01 ~]# curl -s -XPOST -k --cacert /etc/elasticsearch/certs/ca.crt -u 'elastic:eSS202304$$' https://xtjcesbges01.cesbg.foxconn:9200/ldapuser*/_search?size=0 -H 'Content-Type: application/json' -d '
+{
+  "query": {
+    "range" : {
+      "@timestamp" : {
+        "gte" : "now-12h/h",
+        "lt" :  "now/h"
+      }
+    }
+  },  
+  "aggs": {
+    "genres": {
+      "terms": {
+        "field": "dn.keyword",
+        "order": { "_count": "desc"},
+        "size": 123421593
+      }
+    }
+  }
+}
+' | jq '.aggregations.genres.buckets | length'
+4124
+
+
  curl -XPOST --cacert /etc/elasticsearch/certs/ca.crt  -u elastic https://xtjcesbges01.cesbg.foxconn:9200/tomcat-access-2023.01.04/_search -H 'Content-Type: application/json' -d '
 {
      "query": {
