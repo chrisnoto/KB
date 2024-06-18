@@ -122,4 +122,29 @@ tac /var/lib/dirsrv/slapd-389server/ldif/*.ldif| grep -c 'entry-id'
 changelog manages a list of received and processed changes. It includes client changes and changes received from replication partners.	
 
 # 389ds之间的复制包括哪些内容
-账号、组、密码、ACI、密码策略(本地、全局)	
+账号、组、密码、ACI、密码策略(本地)	
+
+# db lockds调整
+日志显示错误：
+[26/May/2024:17:34:11.297689363 +0800] - ERR - libdb - BDB2055 Lock table is out of available lock entries
+[26/May/2024:17:34:11.303918701 +0800] - ERR - bdb_db_compact_one_db - compactdb: failed to compact userRoot; db error - 12 Cannot allocate memory
+查看db locks数量
+root@XTJJSLdap02:~# ldapsearch -D 'cn=directory manager' -b 'cn=config' "(cn=bdb)" nsslapd-db-locks -Z -w'FOxCoNN135!24'
+# extended LDIF
+#
+# LDAPv3
+# base <cn=config> with scope subtree
+# filter: (cn=bdb)
+# requesting: nsslapd-db-locks
+#
+
+# bdb, config, ldbm database, plugins, config
+dn: cn=bdb,cn=config,cn=ldbm database,cn=plugins,cn=config
+nsslapd-db-locks: 10000
+
+# search result
+search: 3
+result: 0 Success
+
+# numResponses: 2
+# numEntries: 1

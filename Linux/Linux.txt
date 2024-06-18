@@ -1,3 +1,73 @@
+# 实现幂等性的例子
+#!/bin/bash
+
+config_file="/etc/nginx/nginx.conf"
+
+# 检查配置文件是否包含我们想要的配置
+if grep -q "client_max_body_size" "$config_file"; then
+    # 如果配置文件中有我们想要的配置，那么更改它
+    sed -i "s/^client_max_body_size .*/client_max_body_size 100M;/" "$config_file"
+else
+    # 如果配置文件中没有我们想要的配置，那么添加它
+    echo "client_max_body_size 100M;" >> "$config_file"
+fi
+
+
+sed -i '/^worker_processes/s/^/#/' /etc/nginx/nginx.conf                    #注释
+sed -i '/^#worker_processes/s/^#//' /etc/nginx/nginx.conf                   #解注释
+
+    # 重启Nginx以应用新的配置
+    systemctl restart nginx
+fi
+
+
+# Rocky9.3內部源
+[root@xygldap01 yum.repos.d]# cat rocky.repo
+[baseos]
+name=Rocky Linux $releasever - BaseOS
+baseurl=https://yum.efoxconn.com/rocky/$releasever/BaseOS/$basearch/os/
+gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
+verifyssl=0
+
+[appstream]
+name=Rocky Linux $releasever - AppStream
+baseurl=https://yum.efoxconn.com/rocky/$releasever/AppStream/$basearch/os/
+gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
+verifyssl=0
+
+[extras]
+name=Rocky Linux $releasever - Extras
+baseurl=https://yum.efoxconn.com/rocky/$releasever/extras/$basearch/os/
+gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
+verifyssl=0
+
+[epel]
+name=Rocky Linux $releasever - epel
+baseurl=https://yum.efoxconn.com/epel/$releasever/Everything/x86_64/
+gpgcheck=0
+enabled=1
+countme=1
+metadata_expire=6h
+verifyssl=0
+[root@xygldap01 yum.repos.d]# cat ops.repo
+[ops]
+name= OPS rpmbuid
+baseurl=https://repo.ces.myfiinet.com:8443/repository/OPS-rpm/Rocky/9/x86/
+enabled=1
+proxy=_none_
+sslverify=false
+gpgcheck=0
+
+
 # 检查进程最简单的方法
 killall -0 ns-slapd这个命令的含义是检查名为ns-slapd的进程是否存在。
 在这里，-0或者--signal 0是一种特殊的信号，它不会真正地杀死进程，而是检查进程是否存在。
@@ -129,6 +199,13 @@ index-url=http://mirrors.aliyun.com/pypi/simple
 
 pip3.6 config --global set global.index-url https://repo.ces.myfiinet.com:8443/repository/pip-aliyun/simple/   命令行设置本地源
 pip3.6 install --proxy http://h7108579:R87Ee93G@10.67.9.210:3128 psycopg2-binary                  命令行通过代理安装
+pip3.6 install psycopg2-binary
+yum install python36
+yum install postgresql14-server
+yum install centos-release-scl
+yum install llvm-toolset-7-clang
+yum install postgresql14.x86_64
+yum install python36-ruamel-yaml
 
 # npm配置代理和更换源
 npm config set proxy http://h7108579:pqhkr99ctw@10.36.6.66:3128
@@ -802,6 +879,10 @@ aptitude autoclean #仅删除过期的包文件
 定期运行这个命令来清除那些已经卸载的软件包的.deb文件。通过这种方式，您可以释放大量的磁盘空间。如果您的需求十分迫切，
 可以使用apt-get clean以释放更多空间。这个命令会将已安装软件包裹的.deb文件一并删除。
 大多数情况下您不会再用到这些.debs文件，因此如果您为磁盘空间不足 而感到焦头烂额，这个办法也许值得一试： apt-get autoclean
+
+# apt忽略证书验证
+apt -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update
+实测 apt -o Acquire::https::Verify-Peer=false update 就可以了
 
 ########### xen server相关 ##########
 xe-toolstack-restart >> will shutdown halted yellow vm and then you could delete it. 

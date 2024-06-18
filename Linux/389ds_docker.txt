@@ -1,3 +1,6 @@
+#为directory manager重设密码
+dsconf 389server directory_manager password_change
+
 # 容器化389ds
 
 1 Dockerfile
@@ -764,6 +767,17 @@ server {
 }
 重启nginx	
 
+验证负载均衡，通过查找主机名的方式
+root@xvnldap01:~# ldapsearch -H ldap://10.81.184.62:1389 -D 'cn=Directory manager' -x -b 'cn=config' "cn=config" "nsslapd-localhost" -w 'Foxconn123'
+# config
+dn: cn=config
+nsslapd-localhost: xvnldap01.cesbg.fii
+
+root@xvnldap01:~# ldapsearch -H ldap://10.81.184.62:1389 -D 'cn=Directory manager' -x -b 'cn=config' "cn=config" "nsslapd-localhost" -w 'Foxconn123'
+# config
+dn: cn=config
+nsslapd-localhost: xvnldap02.cesbg.fii
+
 debian 389ds1.4.4差异
 开启replication
 root@ldap11:/home/chensen# dsconf ldap replication create-manager --name "repl"
@@ -773,3 +787,24 @@ Successfully created replication manager: cn=repl,cn=config
 
 root@ldap11:/home/chensen# dsconf ldap replication enable --suffix dc=cesbg,dc=fii --role master --replica-id 19 --bind-dn "cn=repl,cn=config"
 Replication successfully enabled for "dc=cesbg,dc=fii"
+
+# 设置完同步关系后，
+新ldap还需开启和配置插件memberof和account policy策略
+dsconf 389server plugin memberof enable
+systemctl restart dirsrv@389server.service
+dsconf 389server plugin memberof set --scope dc=cesbg,dc=fii --groupattr uniquemember --autoaddoc nsmemberof
+
+sh-4.4# dsconf 389server plugin account-policy enable
+Enabled plugin 'Account Policy Plugin'
+
+sh-4.4# dsconf 389server plugin account-policy set --config-entry "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config"
+Successfully changed the cn=Account Policy Plugin,cn=plugins,cn=config
+
+dsconf 389server plugin account-policy \
+config-entry set "cn=config,cn=Account Policy Plugin,cn=plugins,cn=config" \
+--always-record-login yes \
+--always-record-login-attr lastlogintime \
+--state-attr lastlogintime \
+--spec-attr acctpolicysubentry \
+--limit-attr accountinactivitylimit
+重启instance

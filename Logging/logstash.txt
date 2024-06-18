@@ -381,3 +381,24 @@ systemctl enable logstash.service
 
 # logstash api
 http://xtjcesbglogstash01.ces.myfiinet.com:9600/_node/stats/pipelines
+
+# ldap replication error解析
+[root@es01 conf.d]# cat 201-ldap-repl-filter.conf
+filter {
+  if [fields][log_type] == "ldap_repl_error" {
+    grok {
+      id => "ldap_repl_error_dn_grok"
+      match => { "message" => "\[%{HTTPDATE:time}\] - %{DATA:loglevel} - %{DATA:plugin} - %{DATA:sync_type} - %{DATA:update} - agmt=\"%{DATA:agmt}\" \(%{DATA:ad_info}\) - %{GREEDYDATA:error} dn=\"%{DATA:dn}\" rc=%{INT:rc} remote_dn = \[%{DATA:remote_dn}\]" }
+    }
+    grok {
+      id => "ldap_repl_error_rdn_grok"
+      match => { "dn" => "%{DATA:rdn},%{GREEDYDATA}" }
+    }
+    mutate {
+      id => "ldap_repl_error_mutate"
+      remove_field => ["[host][os][version]","[host][os][codename]","[host][os][kernel]","[host][os][family]","[host][os][platform]","[host][os][type]","[host][os][name]"]
+      remove_field => ["[host][id]","[host][mac]","[host][name]","[host][architecture]"]
+      remove_field => ["[agent][ephemeral_id]","[agent][id]"]
+    }
+  }
+}

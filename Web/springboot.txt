@@ -1,0 +1,163 @@
+[root@xtjhrpamap01 ~]# cd /usr/java/apache-tomcat-9.0.86/webapps/
+
+[root@xtjhrpamap01 HumanResourcesCompensation]# cd WEB-INF/classes/
+[root@xtjhrpamap01 classes]# ls
+application-dev.yml  application-prod.yml  application-qa.yml  application.yml  com  generatorConfig.xml  logback.xml  Mapper  META-INF  mybatis  sql
+[root@xtjhrpamap01 classes]# cat application.yml
+# 项目相关配置
+# 开发环境配置
+server:
+  # 服务器的HTTP端口，默认为8083
+  port: 81
+  servlet:
+    context-path: /HumanResourcesCompensation
+# Spring配置
+spring:
+  profiles:
+    active: prod
+  # 服务模块
+  devtools:
+    restart:
+      # 热部署开关
+      enabled: false
+ # 文件上传
+  servlet:
+     multipart:
+       # 单个文件大小
+       max-file-size:  1024MB
+       # 设置总上传的文件大小
+       max-request-size:  1024MB
+  jmx:
+   enabled: false
+# MyBatis配置
+mybatis-plus:
+      # 搜索指定包别名
+  typeAliasesPackage: com.foxconn.admin.entity,com.foxconn.admin.form
+  mapper-locations: classpath*:mybatis/**/*.xml,classpath*:/Mapper/*.xml
+logging:
+  level:
+    com.foxconn.HumanResourcesCompensation.Mapper.*: debug
+  config: classpath:logback.xml
+pagehelper:
+  reasonable: false
+  helperDialect: sqlserver
+  supportMethodsArguments: true
+  params: count=countSql
+  page-size-zero: true
+swagger:
+  show: false
+
+
+
+
+
+
+
+
+  [root@xtjhrpamap01 classes]#
+[root@xtjhrpamap01 classes]# ls
+application-dev.yml  application-prod.yml  application-qa.yml  application.yml  com  generatorConfig.xml  logback.xml  Mapper  META-INF  mybatis  sql
+[root@xtjhrpamap01 classes]# cat application-prod.yml
+spring:
+  # 数据源配置
+  datasource:
+    dynamic:
+      primary: master #设置默认的数据源或者数据源组,默认值即为master
+      strict: false #严格匹配数据源,默认false. true未匹配到指定数据源时抛异常,false使用默认数据源
+      datasource:
+        master:
+          url: jdbc:sqlserver://10.67.50.100:3000;DatabaseName=eHR4_Salary
+          username: salaryuser
+          password: salaryFoxconn1234%
+          driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+          type: com.alibaba.druid.pool.DruidDataSource
+          #数据源其他配置
+          initialSize: 5
+          minIdle: 5
+          maxActive: 20
+          maxWait: 60000
+          timeBetweenEvictionRunsMillis: 60000
+          minEvictableIdleTimeMillis: 900000
+          maxEvictableIdleTimeMillis: 1800000
+
+maninfo:
+  ProjectURL: https://hr-salary-api.ces.myfiinet.com/HumanResourcesCompensation
+  client_id: B6317937-28E3-4964-97FE-2CB78DABE94F
+  client_secret: 9ADA673D-B3F0-40B3-A45C-80BCFF85CACF
+  webUrl: https://hr-salary.ces.myfiinet.com
+  hBaseUrl: https://hr-base-api.ces.myfiinet.com/fhr_orgBaseOutput_api
+  ssoUrl: https://sso.ces.myfiinet.com/SSO
+  apiUrl: https://hr-salary-api.ces.myfiinet.com
+  bpmnModelID: EHR4_EducationAndTraining:8:3ba7f571-767b-11eb-a741-b42e99da6671
+  tokenUrl: https://flownet-jwt.ces.myfiinet.com/gettoken
+  mailUrl: https://hr-a2a.ces.myfiinet.com/Email
+  flownetUrl: https://flownet-engin.ces.myfiinet.com
+  flownetWkUrl: https://flownet-api.ces.myfiinet.com
+  initPwd: foxconn123
+  allCanPwd: wfadmin654321
+  systemName: 薪資系統
+
+
+formula:
+  path: /usr/local/formula
+
+excel:
+  tempPath: temp/fail
+  sample: temp/sample
+  applyList: temp/applyList
+
+url:
+  webUrl: http://hrsalary.cesbg.efoxconn.com
+
+
+
+          [root@xtjhrpamap01 classes]# cat application-qa.yml
+spring:
+  # 数据源配置
+  datasource:
+    dynamic:
+      primary: master #设置默认的数据源或者数据源组,默认值即为master
+      strict: false #严格匹配数据源,默认false. true未匹配到指定数据源时抛异常,false使用默认数据源
+      datasource:
+        master:
+          url: jdbc:sqlserver://10.66.14.120:3000;DatabaseName=eHR4_Salary
+          username: Salary
+          password: Foxconn*()123
+          driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+          #数据源其他配置
+          initialSize: 5
+          minIdle: 5
+          maxActive: 20
+          maxWait: 60000
+          timeBetweenEvictionRunsMillis: 60000
+          minEvictableIdleTimeMillis: 900000
+          maxEvictableIdleTimeMillis: 1800000
+
+maninfo:
+  ProjectURL: http://10.67.48.233:8080/super-admin
+  client_id: B6317937-28E3-4964-97FE-2CB78DABE94F
+  client_secret: 9ADA673D-B3F0-40B3-A45C-80BCFF85CACF
+  webUrl: http://10.66.14.114/ehr4_salary_web
+  hBaseUrl: http://10.66.14.111:8084/fhr_orgBaseOutput_api
+  ssoUrl: http://ssoqa.cesbg.efoxconn.com/SSO
+  apiUrl: http://10.67.48.233:8080
+  bpmnModelID: EHR4_EducationAndTraining:8:3ba7f571-767b-11eb-a741-b42e99da6671
+  tokenUrl: http://jwtqa.flownet.efoxconn.com/gettoken
+  mailUrl: http://a2aqa.cesbg.efoxconn.com:8080/Email
+  flownetUrl: http://flowableqa.flownet.efoxconn.com
+  flownetWkUrl: http://apiqa.flownet.efoxconn.com
+  initPwd: foxconn123
+  allCanPwd: wfadmin654321
+  systemName: 薪資系統
+
+
+formula:
+  path: /usr/local/formula
+
+excel:
+  tempPath: temp/fail
+  sample: temp/sample
+  applyList: temp/applyList
+
+url:
+  webUrl: http://10.66.14.114:80/ehr4_salary_web

@@ -515,3 +515,35 @@ nsDS5ReplicaId: 8
 
 #这个字段说明lastlogintime是自动改，不是手动改
 modifiersName=cn=server,cn=plugins,cn=config
+
+####################
+#部分ldap之间的同步关系的建立
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=xvnldap02.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repl,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl60_61
+
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=xygjsldap01.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repl1,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl60_22 
+ 
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=xvnldap01.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repl,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl22_60 
+ 
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=xvnldap01.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repl,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl61_60 
+ 
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=xvnldap02.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repl,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl13_61 
+ 
+dsconf 389server repl-agmt create \
+ --suffix dc=cesbg,dc=fii \
+ --host=XLHJSLdap01.cesbg.fii --port=636 --conn-protocol LDAPS --bind-dn "cn=repllh1,cn=config" \
+ --bind-passwd 'Foxconn123' --bind-method SIMPLE repl61_13 
